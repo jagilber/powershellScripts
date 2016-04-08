@@ -23,9 +23,8 @@
 .NOTES  
    File Name  : logmanWrapper.ps1  
    Author     : jagilber
-   Version    : 160330
-   History    : changed to 24hr dir name
-                changed gather directory to time\machine. 
+   Version    : 160101
+   History    : changed gather directory to time\machine. 
                 changed rds and permanent to switches.
                 added generateConfig to create new logman config xml files
              removed etl processor. Increased run-process waittimeout
@@ -209,7 +208,7 @@ function main()
 function run-commands([ActionType] $currentAction, [string[]] $configFiles)
 {
     
-    $dirName = ([DateTime]::Now).ToString("yyyy-MM-dd-HH-mm-ss")
+    $dirName = ([DateTime]::Now).ToString("yyyy-MM-dd-hh-mm-ss")
  
     foreach($machine in $machines)
     {

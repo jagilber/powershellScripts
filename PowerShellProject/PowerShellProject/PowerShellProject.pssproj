@@ -26,8 +26,13 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <ItemGroup />
   <ItemGroup>
+    <Folder Include="2k12-rds-tracing\" />
+    <Folder Include="2k12-rds-tracing\2k12-configs-all-rds\" />
+    <Folder Include="2k12-rds-tracing\additional-configs\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="2k12-rds-tracing\logman-wrapper.ps1" />
     <Compile Include="az-restart-ara-vm.ps1" />
     <Compile Include="azure-create-rdg-file.ps1" />
     <Compile Include="azure-ilb.ps1" />
@@ -49,7 +54,6 @@
     <Compile Include="get-regPermissions.ps1" />
     <Compile Include="log-merge.ps1" />
     <Compile Include="logman-wrapper-new.ps1" />
-    <Compile Include="logman-wrapper.ps1" />
     <Compile Include="msErrorParser.ps1" />
     <Compile Include="perfmon-counter-action.ps1" />
     <Compile Include="process-monitor.ps1" />
@@ -64,6 +68,68 @@
     <Compile Include="set-regPermissions.ps1" />
     <Compile Include="Umdh-manager.ps1" />
     <Compile Include="Umdh-task-2k8.ps1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\aagcli.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\CAPI2.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\cax.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\cbcli.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\credssp.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\ls.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\lsmrcm.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-cax.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-cbcli.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-cbsrv.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-gpsvc.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-ls.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-lsm.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-pnp.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-prt.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-rap.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-rapclient.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-rcm.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-rdgw.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-tsmf.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-tsmsi.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\man-usrprof.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\manprntspool.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\mmc.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\mstsc.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\prntspool.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\profsvc.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\prt.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\ra.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rail.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rdaudio.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rddb.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rdgw.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rdms.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rdpclip.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rdpdr.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\rfx.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\sd.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\sessenv.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\sessmsg.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\tscpub.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\tswbprxy.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\umstartup.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\vip.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\vm.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\wksprt.xml" />
+    <Content Include="2k12-rds-tracing\2k12-configs-all-rds\WMI.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\hyperv.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\net_winhttp.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\powershell.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\rdv.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\rpc.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\schannel.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\shell_shell32.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\shell_themes.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\SMB.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\vhd.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\vmhostagent.xml" />
+    <Content Include="2k12-rds-tracing\additional-configs\WMI-verbose.xml" />
+    <Content Include="2k12-rds-tracing\logman-wrapper.mgr.bat" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Target Name="Build" />
