@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>6CAFC0C6-A428-4d30-A9F9-700E829FEA51</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyApplication</RootNamespace>
+    <AssemblyName>MyApplication</AssemblyName>
+    <Name>PowerShellProject</Name>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <Compile Include="az-restart-ara-vm.ps1" />
+    <Compile Include="azure-create-rdg-file.ps1" />
+    <Compile Include="azure-ilb.ps1" />
+    <Compile Include="azure-vm-copy.ps1" />
+    <Compile Include="azure-vm-create-internal.ps1" />
+    <Compile Include="azure-vm-shutdown.ps1" />
+    <Compile Include="azure-vm-startup.ps1" />
+    <Compile Include="date-time-difference.ps1" />
+    <Compile Include="deploy-files-task.ps1" />
+    <Compile Include="enum-eventLog-meta.ps1" />
+    <Compile Include="enum-wmi.ps1" />
+    <Compile Include="event-log-manager.ps1" />
+    <Compile Include="event-task-procmon.ps1" />
+    <Compile Include="eventLog-writer.ps1" />
+    <Compile Include="eventTask.ps1" />
+    <Compile Include="file-copy.ps1" />
+    <Compile Include="file-regex-string-compare.ps1" />
+    <Compile Include="find-unique-lines.ps1" />
+    <Compile Include="get-regPermissions.ps1" />
+    <Compile Include="log-merge.ps1" />
+    <Compile Include="logman-wrapper-new.ps1" />
+    <Compile Include="logman-wrapper.ps1" />
+    <Compile Include="msErrorParser.ps1" />
+    <Compile Include="perfmon-counter-action.ps1" />
+    <Compile Include="process-monitor.ps1" />
+    <Compile Include="psremote-win10-IoT.ps1" />
+    <Compile Include="rds-lic-svr-chk.ps1" />
+    <Compile Include="rds-ts-disconnect-reasons-all.ps1" />
+    <Compile Include="rds-ts-disconnect-reasons.ps1" />
+    <Compile Include="rds-wmi-remote-enum.ps1" />
+    <Compile Include="regex.ps1" />
+    <Compile Include="relog-run.ps1" />
+    <Compile Include="Script.ps1" />
+    <Compile Include="set-regPermissions.ps1" />
+    <Compile Include="Umdh-manager.ps1" />
+    <Compile Include="Umdh-task-2k8.ps1" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <Target Name="Build" />
+</Project>
