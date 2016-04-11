@@ -31,8 +31,8 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 160329 original
-   History    : 
+   Version    : 160410 switched to log-merge.ps1
+   History    : 160329 original
 
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
@@ -189,7 +189,9 @@ Param(
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter minutes")]
     [switch] $rds,
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter path for upload directory")]
-    [string] $uploadDir = "c:\upload"
+    [string] $uploadDir = "c:\upload",
+    [parameter(Position=1,Mandatory=$false,HelpMessage="Display merged event results in viewer. Requires log-merge.ps1")]
+    [switch] $displayMergedResults
     )
 
 cls
@@ -207,7 +209,7 @@ $global:eventLogNameSearchPattern = $eventLogNamePattern
 $jobThrottle = 10
 $listenSleepMs = 1000
 $logFile = "event-log-manager.log"
-$logMerge = "logmerge.exe"
+$logMerge = "$($global:originalLocation)\log-merge.ps1"
 $maxSortCount = 100
 $silent = $true
 $startTime = [DateTime]::Now.ToString("yyyy-MM-dd-HH-mm-ss")
@@ -1159,14 +1161,15 @@ function merge-files()
     # run logmerge on all files
     $uploadDir = "$($global:baseDir)\$($startTime)"
 
-    $retval = run-process -processName "cmd.exe" -arguments "/c $($logMerge) $($uploadDir) *.csv $($uploadDir)\events-all.csv" -wait $true -workingDir $global:originalLocation
-    if([IO.File]::Exists("$($uploadDir)\events-all.csv"))
+	if(![IO.File]::Exists("$($logmerge)"))
+	{
+		return 
+	}
+	
+	Invoke-Expression -Command "$($logmerge) $($uploadDir) *.csv $($uploadDir)\events-all.csv" 
+    if($displayMergedResults -and [IO.File]::Exists("$($uploadDir)\events-all.csv"))
     {
-        #& "$($uploadDir)\events-all.csv"
-    }
-    else
-    {
-        log-info "no files exist."
+        & "$($uploadDir)\events-all.csv"
     }
 
     # run logmerge on individual machines
@@ -1175,55 +1178,13 @@ function merge-files()
         log-info "running $($logMerge)"
 
         $uploadDir = "$($global:baseDir)\$($startTime)\$($machine)"
+		Invoke-Expression -Command  "$($logmerge) $($uploadDir) *.csv $($uploadDir)\events-$($machine)-all.csv" 
 
-        $retval = run-process -processName "cmd.exe" -arguments "/c $($logMerge) $($uploadDir) *.csv $($uploadDir)\events-$($machine)-all.csv" -wait $true -workingDir $global:originalLocation
-        if([IO.File]::Exists("$($uploadDir)\events-$($machine)-all.csv"))
+        if($displayMergedResults -and [IO.File]::Exists("$($uploadDir)\events-$($machine)-all.csv"))
         {
-            #& "$($uploadDir)\events-$($machine)-all.csv"
-        }
-        else
-        {
-            log-info "no files exist."
+            & "$($uploadDir)\events-$($machine)-all.csv"
         }
     }
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function run-process([string] $processName, [string] $arguments, [bool] $wait = $false, [string] $workingDir)
-{
-    log-info "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $true
-    $process.StartInfo.RedirectStandardError = $true
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $true
-    $process.StartInfo.WorkingDirectory = $workingDir #get-location
-
-    [void]$process.Start()
-    if($wait -and !$process.HasExited)
-    {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
-
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
-    }
-    elseif($wait)
-    {
-        log-info "Process ended before capturing output."
-    }
-
-    log-info $stdErr
-    return $stdErr
 }
 
 # ----------------------------------------------------------------------------------------------------------------

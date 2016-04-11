@@ -1,3 +1,39 @@
+<#  
+.SYNOPSIS  
+    ARA powershell script ValidateRemoteAppImage to validate OS image before sysprep
+
+.DESCRIPTION  
+	Azure RemoteApp validation script for customer supplied image to be run before sysprep.
+	Only Windows 2012 r2 is supported in Azure RemoteApp for collection VM.
+	Before uploading image, install all rollups and applicable hotfixes.
+	Refer to http://support.microsoft.com/kb/2933664/EN-US for RDS hotfix list.
+
+.NOTES  
+   File Name  : Upload-goldImage.ps1  
+   Author     : ajayku
+   Version    : 151130
+                
+   History    : current 
+
+.EXAMPLE
+    .\Upload-GoldImage.ps1 -validateCurrentOS
+    use validateCurrentOS switch to verify image is ready for sysprep
+
+.PARAMETER uri
+	URI to base image blob in Azure Blog Storage
+	$vhdContext = Add-AzureVhd -Destination ($uri+$sas) -LocalFilePath $vhdPath
+
+.PARAMETER sas
+	Shared Access Signarture (SAS)
+	$vhdContext = Add-AzureVhd -Destination ($uri+$sas) -LocalFilePath $vhdPath
+
+.PARAMETER validateCurrentOS
+    use validateCurrentOS switch to verify image is ready for sysprep
+
+.PARAMETER force
+	bypasses sysprep confirmation prompt
+
+	#>
 param(
     [Parameter(Mandatory=$true, ParameterSetName="UploadVhd")]
     [string] $uri,
@@ -9,7 +45,11 @@ param(
     [string] $vhdPath = $null,
 
     [Parameter(Mandatory=$true, ParameterSetName="ValidateCurrentOS")] 
-    [switch] $validateCurrentOS
+    [switch] $validateCurrentOS,
+
+    [Parameter(Mandatory=$false, ParameterSetName="ValidateCurrentOS")] 
+    [Parameter(Mandatory=$false, ParameterSetName="UploadVhd")] 
+    [switch] $Force
 )
 
 
@@ -52,6 +92,7 @@ $FailedRdpInitVersion                        =    "FailedRdpInitVersion"
 $RdpInitVersionCheckSuccess                  =    "RdpInitVersionCheckSuccess"
 $ImageSizeNotMultipleOfMBs		             =    "ImageSizeNotMultipleOfMBs"
 $ImageSizeGreaterThanMaxSizeLimit	         =    "ImageSizeGreaterThanMaxSizeLimit"
+$ImageSizeLessThanMinSizeLimit   	         =    "ImageSizeLessThanMinSizeLimit"
 $StorageModuleImportFailed                   =    "StorageModuleImportFailed"
 $ImagePartitionStyleNotSupported	         =    "ImagePartitionStyleNotSupported"
 $DiskPartitionStyle			                 =    "DiskPartitionStyle"
@@ -102,6 +143,7 @@ $FailedRdpInitVersion                        =    "!!!!!!!!!RdpInit.exe in the '
 $RdpInitVersionCheckSuccess                  =    "RdpInit.exe in the '\{0}' is up to date."
 $ImageSizeNotMultipleOfMBs		             =    "Size of the specified template image is not a multiple of MBs. Please upload an image whose size is a multiple of 1MB."
 $ImageSizeGreaterThanMaxSizeLimit            =    "Size of the specified template image is greater than 128 GB. Please upload an image whose size is 128 GB or less."
+$ImageSizeLessThanMinSizeLimit               =    "Size of the specified template image is less than 60 GB. Please upload an image whose size is 60 GB or more."
 $StorageModuleImportFailed                   =    "Please close all powershell windows and try executing the script again on a new powershell window. If you are running the script from Azure powershell window, please switch to a Windows powershell window and retry."
 $ImagePartitionStyleNotSupported	         =	  "The template image you are trying to upload does not have 'MBR' partition style. Please re-create the image with 'MBR' partition style and upload again."
 $DiskPartitionStyle                          =    "Template image disk partitioning style is: "
@@ -363,6 +405,13 @@ function Check-VHDSizeAndPartitionStyleRequirements([string] $vhdPath)
             return $false
         }
         
+        # disk size should be greater than 60 GB, to avoid low disk space on the OS Disk
+        if ($disk.Size -lt 60GB)
+        {
+            Write-Error ($CurrentCultureTable[$ImageSizeLessThanMinSizeLimit])
+            $sizeAndPartitionStyleRequirementsSatisfied = $false
+        }
+
         #disk size should be less than 128 GB, this is Azure limit for an OS disk
         if ($disk.Size -gt 128GB)
         {
@@ -786,6 +835,11 @@ if(!($validateCurrentOS))
 
 function Confirm-Sysprep()
 {
+    if($Force)
+    {
+        return 0
+    }
+
     $title = "Launch Sysprep?"
     $message = 'Please select "Yes" if you have completed all the customizations on this machine. Caution: Selecting "Yes" will start sysprep generalize command and automatically shut down this machine.'
 
