@@ -19,6 +19,7 @@ if($activeLicenses.Count -ge 1)
     {
         foreach ($lic in ($activeLicenses| where {$_.sIssuedToComputer -ieq $clientName}))
         {
+            write-host "----------------------------------"
             write-host "removing clientName:$($clientName)"
             $lic.Revoke() | select ReturnValue, RevokableCals, NextRevokeAllowedOn | fl
             break

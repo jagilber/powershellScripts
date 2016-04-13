@@ -1,10 +1,12 @@
 ﻿<#  
 .SYNOPSIS  
     powershell script to enumerate license server connectivity
+    
 .DESCRIPTION  
     This script will enumerate license server configuration off of an RDS server. it will check the known registry locations
     as well as run WMI tests against the configuration. a log file named rds-lic-svr-chk.txt will be generated that should
     be uploaded to support.
+    Written for Windows 2012. Will partially work on Windows 2008 r2 except for registry enumeration.
  
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  

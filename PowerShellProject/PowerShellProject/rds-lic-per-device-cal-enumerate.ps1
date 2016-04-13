@@ -14,6 +14,7 @@ if($activeLicenses.Count -ge 1)
    
     foreach ($lic in $activeLicenses)
     {
+        write-host "----------------------------------"
         write-host "enumerating license:$($lic)"
         write-host $lic | fl *
         #write-host "removing clientName:$($clientName)"
