@@ -9,9 +9,9 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160329
+   Version    : 160412 added Win32_TSDeploymentLicensing 
                 
-   History    : original
+   History    : 160329 original
 
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
