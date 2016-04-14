@@ -34,7 +34,7 @@ $activelicenses = @($licenses | where {
 
 if($activeLicenses.Count -ge 1)
 {
-    if(!((Read-Host "WARNING:This will revoke up to $($activeLicenses.Count), are you sure you want to continue?") -icontains "y"))
+    if(!((Read-Host "WARNING:This will revoke up to $($activeLicenses.Count) cals, are you sure you want to continue?") -icontains "y"))
     {
         return
     }

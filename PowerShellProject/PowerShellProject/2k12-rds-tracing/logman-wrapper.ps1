@@ -1,25 +1,12 @@
 <#  
 .SYNOPSIS  
     powershell script to manage logman ETW tracing
+
 .DESCRIPTION  
     This script will help with the deployment and undeployment of ETW tracing across multiple machines. It will additionally gather the trace files (.etl)
     from remote machine and place them in the 'gather' folder in working directory. Any logman configuration xml files in the configurationFolder (default is 'configs' in working directory) 
     will be deployed. See logman.exe export -? for more information on creating xml files.
     
-    ** Copyright (c) Microsoft Corporation. All rights reserved - 2015.
-    **
-    ** This script is not supported under any Microsoft standard support program or service.
-    ** The script is provided AS IS without warranty of any kind. Microsoft further disclaims all
-    ** implied warranties including, without limitation, any implied warranties of merchantability
-    ** or of fitness for a particular purpose. The entire risk arising out of the use or performance
-    ** of the scripts and documentation remains with you. In no event shall Microsoft, its authors,
-    ** or anyone else involved in the creation, production, or delivery of the script be liable for
-    ** any damages whatsoever (including, without limitation, damages for loss of business profits,
-    ** business interruption, loss of business information, or other pecuniary loss) arising out of
-    ** the use of or inability to use the script or documentation, even if Microsoft has been advised
-    ** of the possibility of such damages.
-    **
- 
 .NOTES  
    File Name  : logmanWrapper.ps1  
    Author     : jagilber
@@ -31,6 +18,7 @@
 			 added working dir to start process
 			 added check for etl file being in use.
                 added option to use single etw session (default)
+
 .EXAMPLE  
     .\logmanwrapper.ps1 -action deploy
     deploy all configuration files in default 'configs' or 'configs_templates' folder to local machine using defalut etl output folder of %systemroot%\temp

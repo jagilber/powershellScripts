@@ -6,20 +6,6 @@
 	
 	*** ALWAYS TEST IN LAB BEFORE USING IN PRODUCTION TO VERIFY FUNCTIONALITY ***        
 	
-    ** Copyright (c) Microsoft Corporation. All rights reserved - 2015.
-    **
-    ** This script is not supported under any Microsoft standard support program or service.
-    ** The script is provided AS IS without warranty of any kind. Microsoft further disclaims all
-    ** implied warranties including, without limitation, any implied warranties of merchantability
-    ** or of fitness for a particular purpose. The entire risk arising out of the use or performance
-    ** of the scripts and documentation remains with you. In no event shall Microsoft, its authors,
-    ** or anyone else involved in the creation, production, or delivery of the script be liable for
-    ** any damages whatsoever (including, without limitation, damages for loss of business profits,
-    ** business interruption, loss of business information, or other pecuniary loss) arising out of
-    ** the use of or inability to use the script or documentation, even if Microsoft has been advised
-    ** of the possibility of such damages.
-    **
- 
 .NOTES  
    File Name  : get-regPermissions.ps1
    Author     : jagilber
