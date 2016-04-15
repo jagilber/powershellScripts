@@ -17,7 +17,7 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 160410 switched to log-merge.ps1
+   Version    : 160415 switched to log-merge.ps1 and fixed -rds
    History    : 160329 original
 
 .EXAMPLE
@@ -369,7 +369,16 @@ function runas-admin()
 function configure-rds($machines,$eventLogNamePattern)
 {
     log-info "setting up for rds environment"
-    $global:eventLogNameSearchPattern = "$($global:eventLogNameSearchPattern)|RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|^Security$|User-Profile-Service" #CAPI
+    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|^Security$|User-Profile-Service" #CAPI
+
+    if(![string]::IsNullOrEmpty($global:eventLogNameSearchPattern))
+    {
+        $global:eventLogNameSearchPattern = "$($global:eventLogNameSearchPattern)|$($baseRDSPattern)"
+    }
+    else
+    {
+        $global:eventLogNameSearchPattern = $baseRDSPattern
+    }
     
     if(!(get-service -DisplayName 'Remote Desktop Connection Broker' -ErrorAction SilentlyContinue))
     {

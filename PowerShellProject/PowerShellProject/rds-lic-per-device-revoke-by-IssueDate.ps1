@@ -1,6 +1,29 @@
-# script to revoke Windows RDS perdevice cal by issue date
-# requires issuedate as parameter
-# any cal with a date greater than provided issuedate will attempt revocation
+<#  
+.SYNOPSIS  
+    script to revoke Windows RDS perdevice cal by issue date
+
+.DESCRIPTION  
+    script to revoke Windows RDS perdevice cal by issue date
+    requires issuedate as parameter
+    to be run on Windows 2012 RDS License server
+    any cal with a date greater than provided issuedate will attempt revocation
+  
+.NOTES  
+   File Name  : rds-lic-per-device-revoke-by-issuedate.ps1  
+   Author     : jagilber
+   Version    : 160414
+                
+   History    :  160414 original
+
+.EXAMPLE  
+    Example: .\rds-lic-per-device-revoke-by-IssueDate.ps1 -issueDate 2/16/2016 -test
+    
+.PARAMETER issueDate
+    IssueDate is any valid date string, example 2/16/2016. Any cal with a date greater then provided date will be revoked!"
+.PARAMETER test
+    use switch test to simulate cal revoke but not perform. it will not however produce next cal revoke date.
+#>  
+
 
 Param(
  
