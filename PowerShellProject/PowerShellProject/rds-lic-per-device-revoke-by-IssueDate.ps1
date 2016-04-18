@@ -93,7 +93,7 @@ if($activeLicenses.Count -ge 1)
                 write-host "next revoke allowed on: $($ret.NextRevokeAllowedOn)"
                 write-host "----------------------------------"
 
-                if($ret.ReturValue -ne 0)
+                if($ret.ReturnValue -ne 0)
                 {
                     if(!((Read-Host "WARNING:error revoking cal, do you you want to continue?") -icontains "y"))
                     {
