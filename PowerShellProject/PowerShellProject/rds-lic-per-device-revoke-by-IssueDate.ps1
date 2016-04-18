@@ -101,7 +101,7 @@ if($activeLicenses.Count -ge 1)
                     }
                 }
 
-                if($ret.RevokableCals -eq 0 -or ($ret.NextRevokeAllowedOn.Substring(0,8) -gt [DateTime]::Now.ToString("yyyMMdd")))
+                if($ret.RevokableCals -eq 0 -or ($ret.NextRevokeAllowedOn.Substring(0,8) -gt [DateTime]::Now.ToString("yyyyMMdd")))
                 {
                     write-host "unable to revoke any more cals until 'NextRevokeAllowedOn'. exiting"
                     return
