@@ -11,7 +11,7 @@
 .NOTES  
    File Name  : rds-lic-per-device-revoke-by-issuedate.ps1  
    Author     : jagilber
-   Version    : 160414
+   Version    : 160418
                 
    History    :  160414 original
 
@@ -36,6 +36,7 @@ Param(
 $ErrorActionPreference = "Stop"
 $activeLicenses = @()
 $error.Clear()
+cls
 
 try
 {
@@ -49,10 +50,21 @@ catch
 
 write-host "converted issueDate: $($issueDate)"
 
+write-host "----------------------------------"
+write-host "key packs:"
+$keyPacks = Get-WmiObject Win32_TSLicenseKeyPack
+foreach($keyPack in $keyPacks)
+{
+    write-host "----------------------------------"
+    $keyPack
+}
+write-host "----------------------------------"
+write-host "----------------------------------"
+
 $licenses = get-wmiobject Win32_TSIssuedLicense
 #licenseStatus = 4 = revoked, 1 = temp, 2 = 2 permanent
 $activelicenses = @($licenses | where {
-    $_.licenseStatus -ne 4 -and $_.IssueDate.SubString(0,8) -ge $issueDate
+    $_.licenseStatus -ne 4 -and $_.IssueDate.SubString(0,8) -le $issueDate
     })
 
 if($activeLicenses.Count -ge 1)
@@ -62,19 +74,52 @@ if($activeLicenses.Count -ge 1)
         return
     }
 
-    foreach ($lic in ($activeLicenses| where {$_.IssueDate.SubString(0,8) -le $issueDate}))
+    foreach ($lic in $activeLicenses)
     {
         write-host "----------------------------------"
-        write-host "removing license:$($lic.sIssuedToComputer) $($lic.sIssuedToUser) $($lic.IssueDate)"
-        if(!$test)
+        $lic
+        write-host "----------------------------------"
+
+        if(($keypacks | Where { $_.KeyPackId -eq $lic.KeyPackId -and $_.ProductType -eq 0 }))
         {
-            $lic.Revoke() | select ReturnValue, RevokableCals, NextRevokeAllowedOn | fl
+            write-host "revoking license:$($lic.sIssuedToComputer) $($lic.sIssuedToUser) $($lic.IssueDate)"
+        
+            if(!$test)
+            {
+                $ret = $lic.Revoke()
+                write-host "----------------------------------"
+                write-host "return value: $($ret.ReturnValue)"
+                write-host "revokableCals: $($ret.RevokableCals)"
+                write-host "next revoke allowed on: $($ret.NextRevokeAllowedOn)"
+                write-host "----------------------------------"
+
+                if($ret.ReturValue -ne 0)
+                {
+                    if(!((Read-Host "WARNING:error revoking cal, do you you want to continue?") -icontains "y"))
+                    {
+                        return
+                    }
+                }
+
+                if($ret.RevokableCals -eq 0 -or ($ret.NextRevokeAllowedOn.Substring(0,8) -gt [DateTime]::Now.ToString("yyyMMdd")))
+                {
+                    write-host "unable to revoke any more cals until 'NextRevokeAllowedOn'. exiting"
+                    return
+                }
+
+            }
         }
+        else
+        {
+            write-host "license is not per device"
+        }
+
     }
 }
 else
 {
     write-host "no licenses to revoke"
 }
- 
+
+write-host "----------------------------------" 
 write-host "finished"
