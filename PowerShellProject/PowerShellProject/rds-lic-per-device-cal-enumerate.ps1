@@ -1,27 +1,20 @@
 <#  
 .SYNOPSIS  
-    script to revoke Windows RDS perdevice cal by issue date
+    script to enumerate Windows RDS perdevice cals
 
 .DESCRIPTION  
-    script to revoke Windows RDS perdevice cal by issue date
-    requires issuedate as parameter
+    script to enumerate Windows RDS perdevice cals
     to be run on Windows 2012 RDS License server
-    any cal with a date greater than provided issuedate will attempt revocation
   
 .NOTES  
-   File Name  : rds-lic-per-device-revoke-by-issuedate.ps1  
+   File Name  : rds-lic-per-device-cal-enumerate.ps1  
    Author     : jagilber
    Version    : 160418
                 
-   History    :  160414 original
+   History    : 160414 original
 
 .EXAMPLE  
-    Example: .\rds-lic-per-device-revoke-by-IssueDate.ps1 -issueDate 2/16/2016 -test
-    
-.PARAMETER issueDate
-    IssueDate is any valid date string, example 2/16/2016. Any cal with a date greater then provided date will be revoked!"
-.PARAMETER test
-    use switch test to simulate cal revoke but not perform. it will not however produce next cal revoke date.
+    Example: .\rds-lic-per-device-cal-enumerate.ps1 
 #>  
 
 
@@ -42,7 +35,7 @@ write-host "----------------------------------"
 write-host "----------------------------------"
 
 $licenses = get-wmiobject Win32_TSIssuedLicense
-#licenseStatus = 4 = revoked, 1 = temp, 2 = 2 permanent
+#licenseStatus = 4 = revoked, 1 = temp, 2 = permanent
 $activelicenses = @($licenses)
 
 if($activeLicenses.Count -ge 1)

@@ -11,9 +11,9 @@
 .NOTES  
    File Name  : rds-lic-per-device-revoke-by-issuedate.ps1  
    Author     : jagilber
-   Version    : 160418
+   Version    : 160418.2
                 
-   History    :  160414 original
+   History    : 160414 original
 
 .EXAMPLE  
     Example: .\rds-lic-per-device-revoke-by-IssueDate.ps1 -issueDate 2/16/2016 -test
@@ -62,10 +62,8 @@ write-host "----------------------------------"
 write-host "----------------------------------"
 
 $licenses = get-wmiobject Win32_TSIssuedLicense
-#licenseStatus = 4 = revoked, 1 = temp, 2 = 2 permanent
-$activelicenses = @($licenses | where {
-    $_.licenseStatus -ne 4 -and $_.IssueDate.SubString(0,8) -le $issueDate
-    })
+#licenseStatus = 4 = revoked, 1 = temp, 2 = permanent
+$activelicenses = @($licenses | where { $_.licenseStatus -ne 4 -and $_.IssueDate.SubString(0,8) -le $issueDate })
 
 if($activeLicenses.Count -ge 1)
 {
