@@ -4,7 +4,7 @@
 
 .DESCRIPTION  
     script to enumerate Windows RDS perdevice cals
-    to be run on Windows 2012 RDS License server
+    tested on Windows 2008 r2 and 2012 RDS License server
   
 .NOTES  
    File Name  : rds-lic-per-device-cal-enumerate.ps1  
@@ -35,6 +35,13 @@ write-host "----------------------------------"
 write-host "----------------------------------"
 
 $licenses = get-wmiobject Win32_TSIssuedLicense
+
+if($licenses -eq $null)
+{
+    write-host "no issued licenses. returning"
+    return
+}
+
 #licenseStatus = 4 = revoked, 1 = temp, 2 = permanent
 $activelicenses = @($licenses)
 

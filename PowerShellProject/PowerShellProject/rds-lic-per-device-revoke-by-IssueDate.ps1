@@ -5,7 +5,7 @@
 .DESCRIPTION  
     script to revoke Windows RDS perdevice cal by issue date
     requires issuedate as parameter
-    to be run on Windows 2012 RDS License server
+    tested on Windows 2008 r2 and 2012 RDS License server
     any cal with a date greater than provided issuedate will attempt revocation
   
 .NOTES  
@@ -62,8 +62,15 @@ write-host "----------------------------------"
 write-host "----------------------------------"
 
 $licenses = get-wmiobject Win32_TSIssuedLicense
+
+if($licenses -eq $null)
+{
+    write-host "no issued licenses. returning"
+    return
+}
+
 #licenseStatus = 4 = revoked, 1 = temp, 2 = permanent
-$activelicenses = @($licenses | where { $_.licenseStatus -ne 4 -and $_.IssueDate.SubString(0,8) -le $issueDate })
+$activelicenses = @($licenses | where { $_.licenseStatus -eq 2 -and $_.IssueDate.SubString(0,8) -le $issueDate })
 
 if($activeLicenses.Count -ge 1)
 {
