@@ -1,17 +1,19 @@
 ﻿<#  
 .SYNOPSIS  
     powershell script to enumerate license server connectivity
+    
 .DESCRIPTION  
     This script will enumerate license server configuration off of an RDS server. it will check the known registry locations
     as well as run WMI tests against the configuration. a log file named rds-lic-svr-chk.txt will be generated that should
     be uploaded to support.
-    
+    Written for Windows 2012. Will partially work on Windows 2008 r2 except for registry enumeration.
+ 
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160329
+   Version    : 160412 added Win32_TSDeploymentLicensing 
                 
-   History    : original
+   History    : 160329 original
 
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
@@ -42,19 +44,41 @@ $licServers = @()
 function main()
 { 
     log-info "-----------------------------------------"
+    log-info "REGISTRY"
+    log-info "-----------------------------------------"
+
+    log-info (read-reg 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM')
+ 
+    log-info (read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicenseServers')
+    log-info (read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicensingMode')
+ 
+    log-info (read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers')
+    log-info (read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\LicensingMode')
+ 
+    log-info (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')
+    log-info (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
+
+    log-info "-----------------------------------------"
     log-info "Win32_TerminalServiceSetting"
     log-info "-----------------------------------------"
  
     $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting
     log-info $rWmi
- 
+    
+    
+    log-info "-----------------------------------------"
+    log-info "Win32_TSDeploymentLicensing"
+    log-info "-----------------------------------------"
+    
+    $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing
+    log-info $rWmiL
+    
     if([string]::IsNullOrEmpty($licServer))
     {
         log-info "checking gpo for lic server"
-        #--> HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers
-        #--> HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers
-        $licServers = @((read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers').ToString().Split(","))
-   
+        $licServers = @(([string](read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
+        $licMode = (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
+        log-info "gpo lic servers: $($licServers) license mode: $($licMode)"
     }
     else
     {
@@ -66,24 +90,17 @@ function main()
     {
         log-info "checking wmi for lic server"
         $licServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
+        $licMode = "$($rWmi.LicensingName) ($($rWmi.LicensingType))"
+        log-info "wmi lic servers: $($licServers) license mode: $($licMode)"
     }
  
     if($licServers.Length -lt 1)
     {
         log-info "checking ps for lic server"
-        $licServers = @((Get-RDLicenseConfiguration).LicenseServer.ToString().Split(","))
+        $licServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
+        $licMode = (Get-RDLicenseConfiguration).Mode
+        log-info "ps lic servers: $($licServers) license mode: $($licMode)"
     }
- 
-    log-info (read-reg 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM')
- 
-    log-info (read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicenseServers')
-    log-info (read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicensingMode')
- 
-    log-info (read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers')
-    log-info (read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\LicensingMode')
- 
-    log-info (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')
-    log-info (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
  
     if($licServers.Length -lt 1)
     {
@@ -93,7 +110,13 @@ function main()
  
     foreach($server in $licServers)
     {
-        check-licenseServer -licserver $server
+        # issue where server name has space in front but not sure why so adding .Trim() for now
+        if($server -ne $server.Trim())
+        {
+           log-info "warning:whitespace characters on server name"    
+        }
+        
+        check-licenseServer -licServer $server.Trim()
     }
 
 
@@ -103,11 +126,11 @@ function main()
 }
 # ----------------------------------------------------------------------------------------------------------------
 
-function check-licenseServer([string] $licserver)
+function check-licenseServer([string] $licServer)
 {
     log-info "-----------------------------------------"
     log-info "-----------------------------------------"
-    log-info "checking license server: $($licServer)"
+    log-info "checking license server: '$($licServer)'"
     log-info "-----------------------------------------" 
 
     try
@@ -195,6 +218,8 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 function read-reg($key)
 {
+    $retVal
+
     log-info "-----------------------------------------" 
     log-info "enumerating $($key)"
     #log-info "-----------------------------------------" 
@@ -220,8 +245,9 @@ function read-reg($key)
                 $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey( `
                                 [Microsoft.Win32.RegistryHive]::LocalMachine, `
                                 [Microsoft.Win32.RegistryView]::Default).OpenSubKey([IO.Path]::GetDirectoryName($key));
-                log-info ([string]::Format("{0,-20}: {1}", [IO.Path]::GetFileName($key) , ($baseKey.GetValue([IO.Path]::GetFileName($key)) -join ",")))
-                return
+                $retVal = ($baseKey.GetValue([IO.Path]::GetFileName($key)) -join ",")
+                log-info ([string]::Format("{0,-20}: {1}", [IO.Path]::GetFileName($key) , $retVal))
+                return $retVal
             }
             catch
             {
@@ -234,8 +260,11 @@ function read-reg($key)
     foreach($valueName in $baseKey.GetValueNames())
     {
         $value = $baseKey.GetValue($valueName)
-        log-info ([string]::Format("{0,-20}: {1}", $valueName, ($value -join ",")))
+        $tempVal = ([string]::Format("{0,-20}: {1}", $valueName, ($value -join ",")))
+        log-info $tempVal
         log-info ""
+
+        $retVal += $tempVal
     }
 
     foreach($subkey in $baseKey.GetSubKeyNames())
@@ -244,6 +273,7 @@ function read-reg($key)
     }
 
     $baseKey.Close();
+    return $retVal
 }
 
 # ----------------------------------------------------------------------------------------------------------------

@@ -26,7 +26,6 @@
 
 
 Param(
- 
     [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the IssueDate. Any cal with a date greater then provided date will be revoked!")]
     [string] $issueDate,
     [parameter(Position=1,Mandatory=$false,HelpMessage="Use -test to test revocation but not perform.")]
@@ -111,7 +110,6 @@ if($activeLicenses.Count -ge 1)
                     write-host "unable to revoke any more cals until 'NextRevokeAllowedOn'. exiting"
                     return
                 }
-
             }
         }
         else

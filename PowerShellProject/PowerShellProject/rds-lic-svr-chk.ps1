@@ -110,7 +110,13 @@ function main()
  
     foreach($server in $licServers)
     {
-        check-licenseServer -licserver $server
+        # issue where server name has space in front but not sure why so adding .Trim() for now
+        if($server -ne $server.Trim())
+        {
+           log-info "warning:whitespace characters on server name"    
+        }
+        
+        check-licenseServer -licServer $server.Trim()
     }
 
 
@@ -120,11 +126,11 @@ function main()
 }
 # ----------------------------------------------------------------------------------------------------------------
 
-function check-licenseServer([string] $licserver)
+function check-licenseServer([string] $licServer)
 {
     log-info "-----------------------------------------"
     log-info "-----------------------------------------"
-    log-info "checking license server: $($licServer)"
+    log-info "checking license server: '$($licServer)'"
     log-info "-----------------------------------------" 
 
     try
