@@ -71,10 +71,8 @@ Param(
     [parameter(Position=4)]
     [string] $configurationFolder = "configs",
     [parameter(Position=5,HelpMessage="Specify to enable tracing for Remote Desktop Services.")]
-    [switch] $rds,
-    [parameter(Position=5,HelpMessage="Specify to create new xml config file.")]
-    [switch] $generateConfig
-    
+    [switch] $rds
+  
     )
  
  

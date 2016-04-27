@@ -11,9 +11,10 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160412 added Win32_TSDeploymentLicensing 
+   Version    : 160425 cleaned ouput. set $retval to $Null in reg read 
                 
-   History    : 160329 original
+   History    : 160412 added Win32_TSDeploymentLicensing
+                160329 original
 
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
@@ -26,9 +27,7 @@
 .PARAMETER licServer
     If specified, all wmi checks will use this server, else it will use enumerated list.
 #>  
- 
- 
- 
+
 Param(
  
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter license server name:")]
@@ -47,17 +46,14 @@ function main()
     log-info "REGISTRY"
     log-info "-----------------------------------------"
 
-    log-info (read-reg 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM')
+    read-reg 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM'
  
-    log-info (read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicenseServers')
-    log-info (read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicensingMode')
+    read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicenseServers'
+    read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicensingMode'
  
-    log-info (read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers')
-    log-info (read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\LicensingMode')
- 
-    log-info (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')
-    log-info (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
-
+    read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
+    read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\LicensingMode'
+    
     log-info "-----------------------------------------"
     log-info "Win32_TerminalServiceSetting"
     log-info "-----------------------------------------"
@@ -73,33 +69,40 @@ function main()
     $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing
     log-info $rWmiL
     
-    if([string]::IsNullOrEmpty($licServer))
-    {
-        log-info "checking gpo for lic server"
-        $licServers = @(([string](read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
-        $licMode = (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
-        log-info "gpo lic servers: $($licServers) license mode: $($licMode)"
-    }
-    else
+    if(![string]::IsNullOrEmpty($licServer))
     {
         $licServers = @($licServer)
     }
 
- 
+    log-info "checking gpo for lic server"
+    $tempServers = @(([string](read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
+    $licMode = (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
+    log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
+
     if($licServers.Length -lt 1)
     {
-        log-info "checking wmi for lic server"
-        $licServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
-        $licMode = "$($rWmi.LicensingName) ($($rWmi.LicensingType))"
-        log-info "wmi lic servers: $($licServers) license mode: $($licMode)"
+        $licServers = $tempServers;
+    }
+
+    log-info "checking wmi for lic server"
+    $tempServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
+    $licMode = "$($rWmi.LicensingName) ($($rWmi.LicensingType))"
+    log-info "wmi lic servers: $($tempServers) license mode: $($licMode)"
+    
+    if($licServers.Length -lt 1)
+    {
+        $licServers = $tempServers;
     }
  
+    
+    log-info "checking ps for lic server"
+    $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
+    $licMode = (Get-RDLicenseConfiguration).Mode
+    log-info "ps lic servers: $($tempServers) license mode: $($licMode)"
+    
     if($licServers.Length -lt 1)
     {
-        log-info "checking ps for lic server"
-        $licServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
-        $licMode = (Get-RDLicenseConfiguration).Mode
-        log-info "ps lic servers: $($licServers) license mode: $($licMode)"
+        $licServers = $tempServers;
     }
  
     if($licServers.Length -lt 1)
@@ -218,7 +221,7 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 function read-reg($key)
 {
-    $retVal
+    $retVal = $null
 
     log-info "-----------------------------------------" 
     log-info "enumerating $($key)"
@@ -234,7 +237,7 @@ function read-reg($key)
     {
         #log-info "read-reg:exception $($error)"
         $error.Clear()
-        return
+        return 
     }
 
      if($baseKey -eq $null)
@@ -246,7 +249,7 @@ function read-reg($key)
                                 [Microsoft.Win32.RegistryHive]::LocalMachine, `
                                 [Microsoft.Win32.RegistryView]::Default).OpenSubKey([IO.Path]::GetDirectoryName($key));
                 $retVal = ($baseKey.GetValue([IO.Path]::GetFileName($key)) -join ",")
-                log-info ([string]::Format("{0,-20}: {1}", [IO.Path]::GetFileName($key) , $retVal))
+                log-info ([string]::Format("{0,-20}:'{1}'", [IO.Path]::GetFileName($key) , $retVal))
                 return $retVal
             }
             catch
@@ -260,11 +263,11 @@ function read-reg($key)
     foreach($valueName in $baseKey.GetValueNames())
     {
         $value = $baseKey.GetValue($valueName)
-        $tempVal = ([string]::Format("{0,-20}: {1}", $valueName, ($value -join ",")))
+        $tempVal = ([string]::Format("{0,-20}:'{1}'", $valueName, ($value -join ",")))
         log-info $tempVal
         log-info ""
 
-        $retVal += $tempVal
+        #$retVal += $tempVal
     }
 
     foreach($subkey in $baseKey.GetSubKeyNames())

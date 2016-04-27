@@ -369,7 +369,7 @@ function runas-admin()
 function configure-rds($machines,$eventLogNamePattern)
 {
     log-info "setting up for rds environment"
-    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|^Security$|User-Profile-Service" #CAPI
+    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|^Security$|User-Profile-Service|CAPI"
 
     if(![string]::IsNullOrEmpty($global:eventLogNameSearchPattern))
     {
