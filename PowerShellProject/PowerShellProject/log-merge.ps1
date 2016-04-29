@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
 
     powershell script to merge multiple csv files with timestamps by timestamp into new file
@@ -54,13 +54,11 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Globalization;
 
-
     public class LogMerge
     {
-
         int precision = 0;
         Dictionary<string, string> outputList = new Dictionary<string, string>();
-        //07/22/2014-14:48:10.909 for etl and 07/22/2014,14:48:10 PM for eventlog
+        // 07/22/2014-14:48:10.909 for etl and 07/22/2014,14:48:10 PM for eventlog
         string datePattern = "(?<DateEtlPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{2,4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{7}) |" +
             "(?<DateEtl>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3}) |" +
             "(?<DateEvt>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
@@ -95,14 +93,12 @@ using System.Globalization;
                     }
 
                     program.ReadFiles(files, args[2]);
-
                 }
                 else
                 {
                     Console.WriteLine("utility combines *fmt.txt files into one file based on timestamp. provide folder and filter args and output file.");
-
-                    Console.WriteLine("LogMerge takes three arguments; source dir, file filter, and output file.");
-                    Console.WriteLine("example: LogMerge f:\\cases *fmt.txt c:\\temp\\all.csv");
+                    Console.WriteLine("log-merge takes three arguments; source dir, file filter, and output file.");
+                    Console.WriteLine("example: log-merge f:\\cases *fmt.txt c:\\temp\\all.csv");
                 }
             }
             catch (Exception e)
@@ -134,8 +130,7 @@ using System.Globalization;
                     while (reader.Peek() >= 0)
                     {
                         line = reader.ReadLine();
-                        //     if(Regex.IsMatch(line,datePattern))
-                        //     {
+
                         if (Regex.IsMatch(line, pidPattern))
                         {
                             lastPidString = Regex.Match(line, pidPattern).Value;
@@ -185,9 +180,7 @@ using System.Globalization;
                             {
                                 lastTicks = date.Ticks;
                                 precision = 0;
-
                             }
-
                         }
                         else if (DateTime.TryParse(traceDate, out date))
                         {
@@ -198,18 +191,14 @@ using System.Globalization;
 
                             }
 
-
                             dateFormat = dateFormatEvt;
-
                         }
                         else
                         {
-                            //      Console.WriteLine("unable to parse date2:{0}:{1}", missedDateCounter, line);
                             // use last date and let it increment to keep in place
                             date = new DateTime(lastTicks);
 
                             // put cpu pid and tid back in
-
                             if (Regex.IsMatch(line, pidPattern))
                             {
                                 line = string.Format("{0}::{1}", lastPidString, line);
@@ -267,14 +256,11 @@ using System.Globalization;
             string key = string.Format("{0}{1}",date.Ticks.ToString(), precision.ToString("D8"));
             if(!outputList.ContainsKey(key))
             {
-             //   Console.WriteLine("debug:list:key:{0} value:{1}", key, line);
                 outputList.Add(key,line);
             }
             else
             {
                 return false;
-               //precision++;
-               //AddToList(date,line);
             }
 
             return true;
@@ -284,7 +270,4 @@ using System.Globalization;
 
 Add-Type $Code
 
-
 [LogMerge]::Start(@($sourceFolder,$filePattern,$outputFile),(get-location))
-
-
