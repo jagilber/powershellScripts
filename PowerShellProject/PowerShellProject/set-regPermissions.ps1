@@ -14,12 +14,21 @@
  
 .EXAMPLE  
     .\set-regPermissions.ps1
-    no arguments. all variables are set inside script
+
+.PARAMETER regKey
+    quoted string key name in format hive:\key. Example: HKLM:\System\CurrentControlSet\Control\Terminal Server
 	
 #>  
- 
-# variables that can be edited
-$regKey = "HKLM:\SYSTEM\CurrentControlSet\services\W32Time"
+
+Param(
+    [parameter(Position=0,Mandatory=$true,HelpMessage="Enter quoted, string key name to set. Example: HKLM:\System\CurrentControlSet\Control\Terminal Server")]
+    [string] $regKey
+)
+
+cls
+$error.Clear()    
+$ErrorActionPreference = "Continue" 
+
 $logFile = "set-regPermissions.log"
  
 $objUser = New-Object System.Security.Principal.NTAccount("everyone") 

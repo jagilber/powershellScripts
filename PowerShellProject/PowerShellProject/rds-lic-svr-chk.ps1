@@ -11,7 +11,7 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160425 cleaned ouput. set $retval to $Null in reg read 
+   Version    : 160425 cleaned output. set $retval to $Null in reg read 
                 
    History    : 160412 added Win32_TSDeploymentLicensing
                 160329 original
@@ -52,8 +52,7 @@ function main()
     read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicensingMode'
  
     read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
-    read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\LicensingMode'
-    
+        
     log-info "-----------------------------------------"
     log-info "Win32_TerminalServiceSetting"
     log-info "-----------------------------------------"
