@@ -14,8 +14,10 @@
  
 .EXAMPLE  
     .\get-regPermissions.ps1
-    no arguments. all variables are  inside script
-	
+    
+.PARAMETER regKeys
+    quoted, comma separated, string array of key names in format hive:\key. Example: HKLM:\System\CurrentControlSet\Control\Terminal Server
+
 #>  
 
 Param(
@@ -25,6 +27,7 @@ Param(
 
 cls
 $error.Clear()    
+$ErrorActionPreference = "Continue" 
 $logFile = "get-regPermissions.log"
  
 # ----------------------------------------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 ﻿<#  
 .SYNOPSIS  
-    powershell script to enumerate license server connectivity
+    powershell script to enumerate license server connectivity.
+    can be used on rdsh server or license server
     
 .DESCRIPTION  
     This script will enumerate license server configuration off of an RDS server. it will check the known registry locations
@@ -11,9 +12,10 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160425 cleaned output. set $retval to $Null in reg read 
+   Version    : 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
                 
-   History    : 160412 added Win32_TSDeploymentLicensing
+   History    : 160425 cleaned output. set $retval to $Null in reg read
+                160412 added Win32_TSDeploymentLicensing
                 160329 original
 
 .EXAMPLE  
@@ -31,17 +33,24 @@
 Param(
  
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter license server name:")]
-    [string] $licServer
+    [string] $licServer,    
+    [parameter(Position=1,Mandatory=$false,HelpMessage="Enter rdsh server name:")]
+    [string] $rdshServer
     )
 $error.Clear()
 cls 
 $ErrorActionPreference = "SilentlyContinue"
 $logFile = "rds-lic-svr-chk.txt"
 $licServers = @()
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-lic-svr-chk.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 { 
+    log-info $MyInvocation.ScriptName
+    # run as administrator
+    runas-admin 
+    get-update -updateUrl $updateUrl
     log-info "-----------------------------------------"
     log-info "REGISTRY"
     log-info "-----------------------------------------"
@@ -53,6 +62,27 @@ function main()
  
     read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
         
+    
+    if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer))
+    {
+        log-info "-----------------------------------------"
+        log-info "Win32_TSLicenseServer"
+        log-info "-----------------------------------------"
+        log-info $rWmiLS
+
+        $wmiClass = ([wmiclass]"Win32_TSLicenseServer")
+        log-info "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
+        log-info "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
+        log-info "is in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
+        log-info "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
+        log-info "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
+        log-info "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
+        log-info "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)"
+        log-info "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)"
+        log-info "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
+    }
+        
+    
     log-info "-----------------------------------------"
     log-info "Win32_TerminalServiceSetting"
     log-info "-----------------------------------------"
@@ -278,6 +308,39 @@ function read-reg($key)
     return $retVal
 }
 
+# ----------------------------------------------------------------------------------------------------------------
+function get-update($updateUrl)
+{
+    try 
+    {
+        $webClient = new-object System.Net.WebClient
+        if($webClient.DownloadData($updateUrl) -ne [IO.File]::ReadAllBytes($MyInvocation.ScriptName))
+        {
+            log-info "downloading updated script"
+            $webClient.DownloadFile($updateUrl, $MyInvocation.ScriptName)
+            log-info "restart script for update"
+            exit
+        }
+        
+        return $true
+        
+    }
+    catch [System.Exception] 
+    {
+        return $false    
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function runas-admin()
+{
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole( `
+        [Security.Principal.WindowsBuiltInRole] "Administrator"))
+    {   
+       log-info "please restart script as administrator. exiting..."
+       exit
+    }
+}
 # ----------------------------------------------------------------------------------------------------------------
 
 main
