@@ -50,7 +50,7 @@ function main()
     log-info $MyInvocation.ScriptName
     # run as administrator
     runas-admin 
-    get-update -updateUrl $updateUrl
+    # get-update -updateUrl $updateUrl
     log-info "-----------------------------------------"
     log-info "REGISTRY"
     log-info "-----------------------------------------"
@@ -314,7 +314,8 @@ function get-update($updateUrl)
     try 
     {
         $webClient = new-object System.Net.WebClient
-        if($webClient.DownloadData($updateUrl) -ne [IO.File]::ReadAllBytes($MyInvocation.ScriptName))
+        $webClient.DownloadFile($updateUrl, "c:\temp\test.ps1")
+        if([IO.File]::ReadAllBytes($MyInvocation.ScriptName) -ne [IO.File]::ReadAllBytes($MyInvocation.ScriptName))
         {
             log-info "downloading updated script"
             $webClient.DownloadFile($updateUrl, $MyInvocation.ScriptName)
