@@ -37,7 +37,9 @@ Param(
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter license server name:")]
     [string] $licServer,    
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter rdsh server name:")]
-    [string] $rdshServer
+    [string] $rdshServer,
+    [switch] $getUpdate
+    
     )
 $error.Clear()
 cls 
@@ -60,7 +62,12 @@ function main()
     log-info $MyInvocation.ScriptName
     # run as administrator
     runas-admin 
-    # get-update -updateUrl $updateUrl
+    
+    if($getUpdate)
+    {
+        get-update -updateUrl $updateUrl
+    }
+    
     log-info "-----------------------------------------"
     log-info "REGISTRY"
     log-info "-----------------------------------------"
@@ -316,11 +323,6 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
             
         $reg = [wmiclass]'\\.\root\default:StdRegprov'
          
-#        if($reg.EnumValues($hive, $key).ReturnValue -ne 0)
-#        {
-#            return   
-#        }
-        
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
@@ -334,17 +336,12 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
             switch ($sTypes[$i])
             {
                 # REG_SZ
-                1 
-                { 
-                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetStringValue($hive, $key, $sNames[$i]).sValue)")
-                    break
-                }
+                1 { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetStringValue($hive, $key, $sNames[$i]).sValue)") }
+                
                 # REG_EXPAND_SZ
                 2 
-                { 
-                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue)")
-                    break
-                }
+                { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue)") }
+                
                 # REG_BINARY
                 3 
                 { 
@@ -359,24 +356,18 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
                     }
                     break
                 }
+                
                 # REG_DWORD
-                4 
-                { 
-                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue)")
-                    break
-                }
+                4 { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue)") }
+                
                 # REG_MULTI_SZ
                 7 
-                { 
-                    [void]$retval.AppendLine("$($sNames[$i]):$((($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ','))")
-                    break;
-                }
+                { [void]$retval.AppendLine("$($sNames[$i]):$((($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ','))") }
+                
                 # REG_QWORD
-                11 
-                { 
-                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue)")
-                    break
-                }
+                11 { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue)") }
+                
+                # ERROR
                 default { [void]$retval.AppendLine("unknown type") }
             }
         }
@@ -412,11 +403,13 @@ function get-update($updateUrl)
     try 
     {
         $webClient = new-object System.Net.WebClient
-        $webClient.DownloadFile($updateUrl, "c:\temp\test.ps1")
-        if([IO.File]::ReadAllBytes($MyInvocation.ScriptName) -ne [IO.File]::ReadAllBytes($MyInvocation.ScriptName))
+        $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
+        if([IO.File]::ReadAllBytes($MyInvocation.ScriptName) -ne [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new"))
         {
             log-info "downloading updated script"
-            $webClient.DownloadFile($updateUrl, $MyInvocation.ScriptName)
+            #$webClient.DownloadFile($updateUrl, $MyInvocation.ScriptName)
+            [IO.File]::Copy("$($MyInvocation.ScriptName).new",$MyInvocation.ScriptName, $true)
+            [IO.File]::Delete("$($MyInvocation.ScriptName).new")
             log-info "restart script for update"
             exit
         }
