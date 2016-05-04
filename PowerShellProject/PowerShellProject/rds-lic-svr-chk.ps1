@@ -51,6 +51,8 @@ $HKLM = 2147483650 #HKEY_LOCAL_MACHINE
 $HKUS = 2147483651 #HKEY_USERS
 $HKCC = 2147483653 #HKEY_CURRENT_CONFIG
 $displayBinaryBlob = $false
+$lsDiscovered = $false
+$appServer = $false
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -65,7 +67,7 @@ function main()
 
     read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
     read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
-    read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList'
+    read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false
     read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
     read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
     
@@ -96,7 +98,36 @@ function main()
     $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting
     log-info $rWmi
     
+    # lsdiag calls this
+    log-info "-----------------------------------------"
+    log-info "Win32_TerminalServiceSetting::FindLicenseServers()"
+    log-info "-----------------------------------------"
+ 
+    $lsList = $rWmi.FindLicenseServers().LicenseServersList
+
     
+    foreach($ls in $lsList)
+    {
+        #lsdiag uses this
+        if(![string]::IsNullOrEmpty($ls.LicenseServer))
+        {
+            $lsDiscovered = $true
+        }
+
+        #lsdiag uses this to determine if app server or admin server
+        if($rWmi.TerminalServerMode -eq 1)
+        {
+            $appServer = $true
+        }
+    
+        log-info "LicenseServer:$($ls.LicenseServer)"
+        log-info "HowDiscovered:$($ls.HowDiscovered)"
+        log-info "IsAdminOnLS:$($ls.IsAdminOnLS)"
+        log-info "IsLSAvailable:$($ls.IsLSAvailable)"
+        log-info "IssuingCals:$($ls.IssuingCals)"
+        log-info "-----------------------------------------"
+    }
+
     log-info "-----------------------------------------"
     log-info "Win32_TSDeploymentLicensing"
     log-info "-----------------------------------------"
@@ -145,7 +176,7 @@ function main()
         log-info "license server has not been configured! exiting"
         exit
     }
- 
+
     foreach($server in $licServers)
     {
         # issue where server name has space in front but not sure why so adding .Trim() for now
@@ -189,14 +220,26 @@ function check-licenseServer([string] $licServer)
     try
     {
         $ret = $rWmi.GetGracePeriodDays()
-        $ret = $ret.DaysLeft
+        $daysLeft = $ret.DaysLeft
     }
     catch
     {
-        $ret = "ERROR"
+        $daysLeft = "ERROR"
     }
  
-    log-info "Grace Period Days: $($ret)"
+    # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
+    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer)
+    {
+        log-info "Server is connected to license server and is NOT in grace"
+    }
+    elseif(!$appServer)
+    {
+        log-info "Server is configured for Remote Administration (2 session limit)"
+    }
+    else
+    {
+        log-info "WARNING:Grace Period Days Left: $($daysLeft)"
+    }
  
     $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
  
@@ -254,7 +297,7 @@ function log-info($data)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function read-reg($hive, $key, $value)
+function read-reg($hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
     if([string]::IsNullOrEmpty($value))
@@ -338,7 +381,7 @@ function read-reg($hive, $key, $value)
             }
         }
         
-        if([string]::IsNullOrEmpty($value))
+        if([string]::IsNullOrEmpty($value) -and $subKeySearch)
         {
             
             foreach($subKey in $reg.EnumKey($hive, $key).sNames)
