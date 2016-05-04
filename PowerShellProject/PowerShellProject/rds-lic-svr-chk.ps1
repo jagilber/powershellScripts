@@ -404,7 +404,7 @@ function get-update($updateUrl)
     {
         $webClient = new-object System.Net.WebClient
         $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
-        if([IO.File]::ReadAllBytes($MyInvocation.ScriptName) -ne [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new"))
+        if([string]::Compare([IO.File]::ReadAllBytes($MyInvocation.ScriptName), [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new")))
         {
             log-info "downloading updated script"
             #$webClient.DownloadFile($updateUrl, $MyInvocation.ScriptName)
@@ -412,6 +412,10 @@ function get-update($updateUrl)
             [IO.File]::Delete("$($MyInvocation.ScriptName).new")
             log-info "restart script for update"
             exit
+        }
+        else
+        {
+            log-info "script is up to date"
         }
         
         return $true
