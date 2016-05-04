@@ -30,6 +30,12 @@
 
 .PARAMETER licServer
     If specified, all wmi checks will use this server, else it will use enumerated list.
+
+.PARAMETER rdshServer
+    If specified, all wmi checks will use this server for testing connectivity from particular rdsh server.
+
+.PARAMETER getUpdate
+    If specified, will check for latest version of script
 #>  
 
 Param(
@@ -320,9 +326,7 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
     
     try
     {
-            
         $reg = [wmiclass]'\\.\root\default:StdRegprov'
-         
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
@@ -406,11 +410,10 @@ function get-update($updateUrl)
         $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
         if([string]::Compare([IO.File]::ReadAllBytes($MyInvocation.ScriptName), [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new")))
         {
-            log-info "downloading updated script"
-            #$webClient.DownloadFile($updateUrl, $MyInvocation.ScriptName)
+            log-info "downloaded new script"
             [IO.File]::Copy("$($MyInvocation.ScriptName).new",$MyInvocation.ScriptName, $true)
             [IO.File]::Delete("$($MyInvocation.ScriptName).new")
-            log-info "restart script for update"
+            log-info "restart to use new script. exiting."
             exit
         }
         else
@@ -423,6 +426,8 @@ function get-update($updateUrl)
     }
     catch [System.Exception] 
     {
+        log-info "get-update:exception: $($error)"
+        $error.Clear()
         return $false    
     }
 }
@@ -430,8 +435,7 @@ function get-update($updateUrl)
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
 {
-    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole( `
-        [Security.Principal.WindowsBuiltInRole] "Administrator"))
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
        log-info "please restart script as administrator. exiting..."
        exit
