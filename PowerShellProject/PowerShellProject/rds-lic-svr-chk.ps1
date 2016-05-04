@@ -7,14 +7,16 @@
     This script will enumerate license server configuration off of an RDS server. it will check the known registry locations
     as well as run WMI tests against the configuration. a log file named rds-lic-svr-chk.txt will be generated that should
     be uploaded to support.
-    Written for Windows 2012. Will partially work on Windows 2008 r2 except for registry enumeration.
+    Tested on windows 2008 r2 and windows 2012 r2
  
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
+   Version    : 160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 
-   History    : 160425 cleaned output. set $retval to $Null in reg read
+   History    : 
+                160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
+                160425 cleaned output. set $retval to $Null in reg read
                 160412 added Win32_TSDeploymentLicensing
                 160329 original
 
@@ -43,6 +45,12 @@ $ErrorActionPreference = "SilentlyContinue"
 $logFile = "rds-lic-svr-chk.txt"
 $licServers = @()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-lic-svr-chk.ps1"
+$HKCR = 2147483648 #HKEY_CLASSES_ROOT
+$HKCU = 2147483649 #HKEY_CURRENT_USER
+$HKLM = 2147483650 #HKEY_LOCAL_MACHINE
+$HKUS = 2147483651 #HKEY_USERS
+$HKCC = 2147483653 #HKEY_CURRENT_CONFIG
+$displayBinaryBlob = $false
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -55,13 +63,11 @@ function main()
     log-info "REGISTRY"
     log-info "-----------------------------------------"
 
-    read-reg 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM'
- 
-    read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicenseServers'
-    read-reg 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList\LicensingMode'
- 
-    read-reg 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
-        
+    read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
+    read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
+    read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList'
+    read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
+    read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
     
     if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer))
     {
@@ -104,8 +110,8 @@ function main()
     }
 
     log-info "checking gpo for lic server"
-    $tempServers = @(([string](read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
-    $licMode = (read-reg 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\LicensingMode')
+    $tempServers = @(([string](read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
+    $licMode = (read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
     log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
 
     if($licServers.Length -lt 1)
@@ -223,7 +229,7 @@ function log-info($data)
     {
         foreach($member in $data| Get-Member)
         {
-            if($member.MemberType.ToString().ToLower().Contains("property"))
+            if($member.MemberType.ToString().ToLower().Contains("property") -and !$member.Name.StartsWith('_'))
             {
                 $tempData = "$($member.Name): $($data.Item($member.Name))"
                 write-host $tempData
@@ -248,19 +254,104 @@ function log-info($data)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function read-reg($key)
+function read-reg($hive, $key, $value)
 {
-    $retVal = $null
-
-    log-info "-----------------------------------------" 
-    log-info "enumerating $($key)"
-    #log-info "-----------------------------------------" 
-
+    $retVal = new-object Text.StringBuilder
+    if([string]::IsNullOrEmpty($value))
+    {
+        [void]$retVal.AppendLine("-----------------------------------------")
+        [void]$retVal.AppendLine("enumerating $($key)")
+    }
+    else
+    {
+        log-info "-----------------------------------------"
+        log-info "enumerating $($key) for value $($value)"
+    }
+    
     try
     {
-        $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey( `
-                        [Microsoft.Win32.RegistryHive]::LocalMachine, `
-                        [Microsoft.Win32.RegistryView]::Default).OpenSubKey($key);
+            
+        $reg = [wmiclass]'\\.\root\default:StdRegprov'
+         
+#        if($reg.EnumValues($hive, $key).ReturnValue -ne 0)
+#        {
+#            return   
+#        }
+        
+        $sNames = $reg.EnumValues($hive, $key).sNames
+        $sTypes = $reg.EnumValues($hive, $key).Types
+        
+        for($i = 0; $i -lt $sNames.count; $i++)
+        {
+            if(![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
+            {
+                continue
+            }
+
+            switch ($sTypes[$i])
+            {
+                # REG_SZ
+                1 
+                { 
+                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetStringValue($hive, $key, $sNames[$i]).sValue)")
+                    break
+                }
+                # REG_EXPAND_SZ
+                2 
+                { 
+                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue)")
+                    break
+                }
+                # REG_BINARY
+                3 
+                { 
+                    if($displayBinaryBlob)
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$((($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ','))")
+                    }
+                    else
+                    {
+                        $blob = $reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue
+                        [void]$retval.AppendLine("$($sNames[$i]):(Binary Blob (length:$($blob.Length)))")
+                    }
+                    break
+                }
+                # REG_DWORD
+                4 
+                { 
+                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue)")
+                    break
+                }
+                # REG_MULTI_SZ
+                7 
+                { 
+                    [void]$retval.AppendLine("$($sNames[$i]):$((($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ','))")
+                    break;
+                }
+                # REG_QWORD
+                11 
+                { 
+                    [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue)")
+                    break
+                }
+                default { [void]$retval.AppendLine("unknown type") }
+            }
+        }
+        
+        if([string]::IsNullOrEmpty($value))
+        {
+            
+            foreach($subKey in $reg.EnumKey($hive, $key).sNames)
+            {
+                if([string]::IsNullOrEmpty($subKey))
+                {
+                    continue
+                }
+                
+                [void]$retval.AppendLine((read-reg -hive $hive -key "$($key)\$($subkey)"))
+            }
+        }
+
     }
     catch
     {
@@ -269,43 +360,7 @@ function read-reg($key)
         return 
     }
 
-     if($baseKey -eq $null)
-     {
-            try
-            {
-                # try as value
-                $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey( `
-                                [Microsoft.Win32.RegistryHive]::LocalMachine, `
-                                [Microsoft.Win32.RegistryView]::Default).OpenSubKey([IO.Path]::GetDirectoryName($key));
-                $retVal = ($baseKey.GetValue([IO.Path]::GetFileName($key)) -join ",")
-                log-info ([string]::Format("{0,-20}:'{1}'", [IO.Path]::GetFileName($key) , $retVal))
-                return $retVal
-            }
-            catch
-            {
-                #log-info "read-reg:exception reading value $($error)"
-                $error.Clear()
-                return
-            }
-    }
-
-    foreach($valueName in $baseKey.GetValueNames())
-    {
-        $value = $baseKey.GetValue($valueName)
-        $tempVal = ([string]::Format("{0,-20}:'{1}'", $valueName, ($value -join ",")))
-        log-info $tempVal
-        log-info ""
-
-        #$retVal += $tempVal
-    }
-
-    foreach($subkey in $baseKey.GetSubKeyNames())
-    {
-        read-reg "$($key)\$($subkey)"
-    }
-
-    $baseKey.Close();
-    return $retVal
+    return $retVal.toString()
 }
 
 # ----------------------------------------------------------------------------------------------------------------

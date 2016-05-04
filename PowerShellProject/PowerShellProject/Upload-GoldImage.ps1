@@ -11,7 +11,7 @@
 .NOTES  
    File Name  : Upload-goldImage.ps1  
    Author     : ajayku
-   Version    : 151130
+   Version    : 160426
                 
    History    : current 
 
@@ -886,3 +886,4 @@ if($null -ne $vhdContext)
     $vhdContext
     Write-Output $CurrentCultureTable[$ImageUploadCompleteScriptText]
 }
+
