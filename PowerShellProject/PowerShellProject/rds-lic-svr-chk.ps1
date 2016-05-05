@@ -12,9 +12,10 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160504 modified reading of registry to use WMI for compatibility with 2k8r2
+   Version    : 160505 added additional checks and better summary. added update switch
                 
    History    : 
+                160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
                 160425 cleaned output. set $retval to $Null in reg read
                 160412 added Win32_TSDeploymentLicensing
@@ -27,6 +28,9 @@
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1 -licServer rds-lic-1
     query for license server rds-lic-1 and use wmi to test functionality
+
+.EXAMPLE  
+    .\rds-lic-svr-chk.ps1 -getUpdate
 
 .PARAMETER licServer
     If specified, all wmi checks will use this server, else it will use enumerated list.
@@ -61,6 +65,8 @@ $HKCC = 2147483653 #HKEY_CURRENT_CONFIG
 $displayBinaryBlob = $false
 $lsDiscovered = $false
 $appServer = $false
+$licenseModeSource = $null
+$licenseMode = 0
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -94,7 +100,7 @@ function main()
         $wmiClass = ([wmiclass]"Win32_TSLicenseServer")
         log-info "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
         log-info "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
-        log-info "is in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
+        log-info "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
         log-info "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
         log-info "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
         log-info "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
@@ -110,6 +116,9 @@ function main()
  
     $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting
     log-info $rWmi
+    
+    # lsdiag uses licensingmode from rcm when not overriden in policy
+    # todo: need to verify if same is true when in collection and when 'centrallicensing' presumably when configuring in gui in 2012
     
     # lsdiag calls this
     log-info "-----------------------------------------"
@@ -153,26 +162,35 @@ function main()
         $licServers = @($licServer)
     }
 
-    log-info "checking gpo for lic server"
-    $tempServers = @(([string](read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
-    $licMode = (read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
-    log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
-
-    if($licServers.Length -lt 1)
-    {
-        $licServers = $tempServers;
-    }
-
     log-info "checking wmi for lic server"
     $tempServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
-    $licMode = "$($rWmi.LicensingName) ($($rWmi.LicensingType))"
+    $licMode = $rWmi.LicensingType
     log-info "wmi lic servers: $($tempServers) license mode: $($licMode)"
+    
+    $licenseModeSource = 'wmi'
+    $licenseMode = $licMode    
     
     if($licServers.Length -lt 1)
     {
         $licServers = $tempServers;
     }
  
+    log-info "checking gpo for lic server"
+    $tempServers = @(([string](read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
+    $licMode = (read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
+    log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
+
+    if($rWmi.PolicySourceLicensingType)
+    {
+        $licenseModeSource = 'policy'
+        $licenseMode = $licMode    
+    }
+    
+    if($rWmi.PolicySourceConfiguredLicenseServers -or $rWmi.PolicySourceDirectConnectLicenseServers)
+    {
+        $licServers = $tempServers;        
+    }
+    
     
     log-info "checking ps for lic server"
     $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
@@ -182,6 +200,12 @@ function main()
     if($licServers.Length -lt 1)
     {
         $licServers = $tempServers;
+    }
+    
+    if($licenseMode -eq 0)
+    {
+        $licenseModeSource = 'powershell'
+        $licenseMode = $licMode -band $licMode
     }
  
     if($licServers.Length -lt 1)
@@ -240,24 +264,8 @@ function check-licenseServer([string] $licServer)
         $daysLeft = "ERROR"
     }
  
-    # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
-    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer)
-    {
-        log-info "Server is connected to license server and is NOT in grace"
-    }
-    elseif(!$appServer)
-    {
-        log-info "Server is configured for Remote Administration (2 session limit)"
-    }
-    else
-    {
-        log-info "WARNING:Grace Period Days Left: $($daysLeft)"
-    }
- 
-    $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
- 
- 
-    switch($ret.TsToLsConnectivityStatus)
+   $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
+   switch($ret.TsToLsConnectivityStatus)
     {
         0 { $retName = "LS_CONNECTABLE_UNKNOWN" }
         1 { $retName = "LS_CONNECTABLE_VALID_WS08R2=1" }
@@ -275,7 +283,34 @@ function check-licenseServer([string] $licServer)
     }
  
     log-info "license connectivity status: $($retName)"
+    
+    # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
+    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5))
+    {
+        log-info "Server is connected to license server and is NOT in grace. ($($daysLeft))"
+    }
+    elseif(!$appServer)
+    {
+        log-info "Server is configured for Remote Administration (2 session limit)"
+    }
+    else
+    {
+        log-info "WARNING:Grace Period Days Left: $($daysLeft)"
+    }
  
+    switch($licenseMode)
+    {
+        0 { $modeString = "0 (should not be set to this!)"}
+        1 { $modeString = "Personal Desktop (admin mode 2 session limit. should not be set to this if rdsh server!)"}
+        2 { $modeString = "Per Device"}
+        4 { $modeString = "Per User"}
+        5 { $modeString = "Not configured (should not be set to this!)"}
+        default { $modeString = "error: $($licenseMode)" }
+    }
+    
+    log-info "current license mode: $($modeString)"
+    log-info "current license mode source: $($licenseModeSource)"
+  
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -406,6 +441,8 @@ function get-update($updateUrl)
 {
     try 
     {
+        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
+        # github can bet set to use WINDOWS style which may prevent this
         $webClient = new-object System.Net.WebClient
         $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
         if([string]::Compare([IO.File]::ReadAllBytes($MyInvocation.ScriptName), [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new")))
