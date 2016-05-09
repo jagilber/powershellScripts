@@ -85,6 +85,9 @@ function main()
     log-info "-----------------------------------------"
 
     read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
+    get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | fl *
+    get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | fl *
+    get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM\GracePeriod" -Audit | fl *
     read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
     read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false
     read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
