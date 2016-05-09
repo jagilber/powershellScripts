@@ -12,9 +12,10 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160505 added additional checks and better summary. added update switch
+   Version    : 160509 fixed read-reg to return just keyvalue
                 
    History    : 
+                160505 added additional checks and better summary. added update switch
                 160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
                 160425 cleaned output. set $retval to $Null in reg read
@@ -225,6 +226,46 @@ function main()
         check-licenseServer -licServer $server.Trim()
     }
 
+        try
+    {
+        $ret = $rWmi.GetGracePeriodDays()
+        $daysLeft = $ret.DaysLeft
+    }
+    catch
+    {
+        $daysLeft = "ERROR"
+    }
+    
+    log-info "-----------------------------------------" 
+    # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
+    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5))
+    {
+        log-info "Server is connected to a license server and is NOT in grace. ($($daysLeft))"
+    }
+    elseif(!$appServer)
+    {
+        log-info "Server is configured for Remote Administration (2 session limit)"
+    }
+    else
+    {
+        log-info "WARNING:Grace Period Days Left: $($daysLeft)"
+    }
+ 
+    switch($licenseMode)
+    {
+        0 { $modeString = "0 (should not be set to this!)"}
+        1 { $modeString = "Personal Desktop (admin mode 2 session limit. should not be set to this if rdsh server!)"}
+        2 { $modeString = "Per Device"}
+        4 { $modeString = "Per User"}
+        5 { $modeString = "Not configured (should not be set to this!)"}
+        default { $modeString = "error: $($licenseMode)" }
+    }
+    
+    
+    log-info "current license mode: $($modeString)"
+    log-info "current license mode source: $($licenseModeSource)"
+  
+
 
     log-info "-----------------------------------------"
     log-info "finished" 
@@ -254,15 +295,7 @@ function check-licenseServer([string] $licServer)
     $ret = $rWmi.CanAccessLicenseServer($licServer)
     log-info "Can access license server? $([bool]$ret.AccessAllowed)"
  
-    try
-    {
-        $ret = $rWmi.GetGracePeriodDays()
-        $daysLeft = $ret.DaysLeft
-    }
-    catch
-    {
-        $daysLeft = "ERROR"
-    }
+   
  
    $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
    switch($ret.TsToLsConnectivityStatus)
@@ -283,34 +316,7 @@ function check-licenseServer([string] $licServer)
     }
  
     log-info "license connectivity status: $($retName)"
-    
-    # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
-    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5))
-    {
-        log-info "Server is connected to license server and is NOT in grace. ($($daysLeft))"
-    }
-    elseif(!$appServer)
-    {
-        log-info "Server is configured for Remote Administration (2 session limit)"
-    }
-    else
-    {
-        log-info "WARNING:Grace Period Days Left: $($daysLeft)"
-    }
- 
-    switch($licenseMode)
-    {
-        0 { $modeString = "0 (should not be set to this!)"}
-        1 { $modeString = "Personal Desktop (admin mode 2 session limit. should not be set to this if rdsh server!)"}
-        2 { $modeString = "Per Device"}
-        4 { $modeString = "Per User"}
-        5 { $modeString = "Not configured (should not be set to this!)"}
-        default { $modeString = "error: $($licenseMode)" }
-    }
-    
-    log-info "current license mode: $($modeString)"
-    log-info "current license mode source: $($licenseModeSource)"
-  
+
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -348,15 +354,18 @@ function log-info($data)
 function read-reg($hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
+    
     if([string]::IsNullOrEmpty($value))
     {
         [void]$retVal.AppendLine("-----------------------------------------")
         [void]$retVal.AppendLine("enumerating $($key)")
+        $enumValue = $false
     }
     else
     {
         log-info "-----------------------------------------"
         log-info "enumerating $($key) for value $($value)"
+        $enumValue = $true
     }
     
     try
@@ -374,37 +383,88 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
 
             switch ($sTypes[$i])
             {
-                # REG_SZ
-                1 { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetStringValue($hive, $key, $sNames[$i]).sValue)") }
-                
-                # REG_EXPAND_SZ
-                2 
-                { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue)") }
-                
-                # REG_BINARY
-                3 
-                { 
-                    if($displayBinaryBlob)
+                # REG_SZ 
+                1{ 
+                    $keyValue = $reg.GetStringValue($hive, $key, $sNames[$i]).sValue
+                    if($enumValue)
                     {
-                        [void]$retval.AppendLine("$($sNames[$i]):$((($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ','))")
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    }
+                }
+                
+                # REG_EXPAND_SZ 
+                2{
+                    $keyValue = $reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }                    
+                    else 
+                    {
+                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                    }
+                }            
+                
+                # REG_BINARY 
+                3{ 
+                    $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
+                    if($enumValue -and $displayBinaryBlob)
+                    {
+                        return $keyValue
+                    }
+                    elseif($displayBinaryBlob)
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
                     }
                     else
                     {
                         $blob = $reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue
                         [void]$retval.AppendLine("$($sNames[$i]):(Binary Blob (length:$($blob.Length)))")
                     }
-                    break
                 }
                 
-                # REG_DWORD
-                4 { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue)") }
+                # REG_DWORD 
+                4{ 
+                    $keyValue = $reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    } 
+                }
                 
-                # REG_MULTI_SZ
-                7 
-                { [void]$retval.AppendLine("$($sNames[$i]):$((($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ','))") }
-                
+                # REG_MULTI_SZ 
+                7{
+                    $keyValue = (($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ',')
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                    }
+                }
+
                 # REG_QWORD
-                11 { [void]$retval.AppendLine("$($sNames[$i]):$($reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue)") }
+                11{ 
+                    $keyValue = $reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    } 
+                }
                 
                 # ERROR
                 default { [void]$retval.AppendLine("unknown type") }
@@ -424,6 +484,7 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
                 [void]$retval.AppendLine((read-reg -hive $hive -key "$($key)\$($subkey)"))
             }
         }
+        
 
     }
     catch
