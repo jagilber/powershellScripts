@@ -12,10 +12,9 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160509 fixed read-reg to return just keyvalue
+   Version    : 160509 fixed read-reg to return just keyvalue. fixed -licServer switch
                 
    History    : 
-                160505 added additional checks and better summary. added update switch
                 160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
                 160425 cleaned output. set $retval to $Null in reg read
@@ -187,7 +186,7 @@ function main()
         $licenseMode = $licMode    
     }
     
-    if($rWmi.PolicySourceConfiguredLicenseServers -or $rWmi.PolicySourceDirectConnectLicenseServers)
+    if([string]::IsNullOrEmpty($licServer) -and ($rWmi.PolicySourceConfiguredLicenseServers -or $rWmi.PolicySourceDirectConnectLicenseServers))
     {
         $licServers = $tempServers;        
     }
