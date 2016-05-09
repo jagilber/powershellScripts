@@ -67,6 +67,8 @@ $lsDiscovered = $false
 $appServer = $false
 $licenseModeSource = $null
 $licenseMode = 0
+$warningDays = 0
+$hasX509 = $false
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -85,6 +87,8 @@ function main()
     log-info "-----------------------------------------"
 
     read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
+    $warningDays = read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value LicensingGracePeriodExpirationWarningDays
+    $hasX509 = (read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value "X509 Certificate").Length -gt 0
     get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | fl *
     get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | fl *
     get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM\GracePeriod" -Audit | fl *
@@ -240,9 +244,21 @@ function main()
     
     log-info "-----------------------------------------" 
     # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
-    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5))
+    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509 -and ($daysLeft -gt $warningDays))
     {
-        log-info "Server is connected to a license server and is NOT in grace. ($($daysLeft))"
+        log-info "Server is connected to a license server and IS in Grace Period. This should be ok. Days Left: $($daysLeft)"
+    }
+    elseif($lsDiscovered -and $daysLeft -eq 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
+    {
+        log-info "Success:Server is connected to a license server and is NOT in grace. ($($daysLeft))"        
+    }
+    elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and $hasX509)
+    {
+        log-info "ERROR:Server has been connected to a license server but is NOT in grace and is NOT currently connected to license server. ($($daysLeft))"        
+    }
+    elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and !$hasX509)
+    {
+        log-info "ERROR:Server is NOT connected to a license server and is NOT in grace. ($($daysLeft))"        
     }
     elseif(!$appServer)
     {
@@ -250,7 +266,7 @@ function main()
     }
     else
     {
-        log-info "WARNING:Grace Period Days Left: $($daysLeft)"
+        log-info "Unknown state. ($($daysLeft))"        
     }
  
     switch($licenseMode)
@@ -311,7 +327,7 @@ function check-licenseServer([string] $licServer)
         6 { $retName = "LS_NOT_CONNECTABLE" }
         7 { $retName = "LS_CONNECTABLE_UNKNOWN_VALIDITY" }
         8 { $retName = "LS_CONNECTABLE_BUT_ACCESS_DENIED" }
-        9 { $retName = "LS_CONNECTABLE_VALID_WS08R2_VDI, //R2 with VDI support (SP1 release)" }
+        9 { $retName = "LS_CONNECTABLE_VALID_WS08R2_VDI, R2 with VDI support (SP1 release)" }
         10 { $retName = "LS_CONNECTABLE_FEATURE_NOT_SUPPORTED" }
         11 { $retName = "LS_CONNECTABLE_VALID_LS" }
         default { $retName = "Unknown $($ret.TsToLsConnectivityStatus)" }
