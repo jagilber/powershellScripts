@@ -12,7 +12,7 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160510 added installed features to list
+   Version    : 160510 added installed features to list. added eventlog search
                 
    History    : 
                 160504 modified reading of registry to use WMI for compatibility with 2k8r2
@@ -72,7 +72,10 @@ function main()
 { 
     log-info $MyInvocation.ScriptName
     # run as administrator
-    runas-admin 
+    if(!runas-admin)
+    {
+        return
+    }
     
     if($getUpdate)
     {
@@ -91,6 +94,12 @@ function main()
     log-info "-----------------------------------------"
     
     Get-WindowsFeature -ComputerName $rdshServer | ? Installed -eq $true
+
+    log-info "-----------------------------------------"
+    log-info "EVENTS $($rdshServer)"
+    log-info "-----------------------------------------"
+
+    Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer
 
     log-info "-----------------------------------------"
     log-info "REGISTRY $($rdshServer)"
@@ -209,7 +218,7 @@ function main()
  
     if($licServers.Length -lt 1)
     {
-        log-info "license server has not been configured! exiting"
+        log-info "license server has not been configured!"
     
     }
     else
@@ -289,8 +298,15 @@ function check-licenseServer([string] $licServer)
     log-info "checking license server: '$($licServer)'"
     log-info "-----------------------------------------" 
 
+    log-info "-----------------------------------------"
+    log-info "EVENTS $($licServer)"
+    log-info "-----------------------------------------"
+
+    Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer
+
     if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
     {
+        log-info "-----------------------------------------"
         log-info "Win32_TSLicenseServer $($licServer)"
         log-info "-----------------------------------------"
         log-info $rWmiLS
@@ -560,8 +576,10 @@ function runas-admin()
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
        log-info "please restart script as administrator. exiting..."
-       exit
+       return false
     }
+
+    return true
 }
 # ----------------------------------------------------------------------------------------------------------------
 
