@@ -13,7 +13,7 @@
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
    Version    : 160510 added installed features to list. added eventlog search
-                
+                    added osversion check and tested against 2k8
    History    : 
                 160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
@@ -72,7 +72,7 @@ function main()
 { 
     log-info $MyInvocation.ScriptName
     # run as administrator
-    if(!runas-admin)
+    if(!(runas-admin))
     {
         return
     }
@@ -87,7 +87,11 @@ function main()
         $licServers = @($licServer)
     }
 
-    
+    log-info "-----------------------------------------"
+    log-info "OS $($rdshServer)"
+    log-info "-----------------------------------------"
+    $osVersion = read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value CurrentVersion
+    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName
 
     log-info "-----------------------------------------"
     log-info "INSTALLED FEATURES $($rdshServer)"
@@ -105,7 +109,7 @@ function main()
     log-info "REGISTRY $($rdshServer)"
     log-info "-----------------------------------------"
 
-    if($rdshServer -ilike $env:COMPUTERNAME)
+    if($rdshServer -ilike $env:COMPUTERNAME -and $osVersion -gt 6.1) # does not like 2k8
     {
         get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | fl *
         get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | fl *
@@ -297,6 +301,18 @@ function check-licenseServer([string] $licServer)
     log-info "-----------------------------------------"
     log-info "checking license server: '$($licServer)'"
     log-info "-----------------------------------------" 
+
+    log-info "-----------------------------------------"
+    log-info "OS $($licServer)"
+    log-info "-----------------------------------------"
+     
+    read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName
+    
+    log-info "-----------------------------------------"
+    log-info "SERVICE $($licServer)"
+    log-info "-----------------------------------------"
+    
+    log-info "License Server Service status: $((Get-Service -Name TermServLicensing -ComputerName $licServer -ErrorAction SilentlyContinue).Status)"
 
     log-info "-----------------------------------------"
     log-info "EVENTS $($licServer)"
@@ -521,7 +537,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                     continue
                 }
                 
-                [void]$retval.AppendLine((read-reg -hive $hive -key "$($key)\$($subkey)"))
+                [void]$retval.AppendLine((read-reg -machine $machine -hive $hive -key "$($key)\$($subkey)"))
             }
         }
         
@@ -576,10 +592,10 @@ function runas-admin()
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
        log-info "please restart script as administrator. exiting..."
-       return false
+       return $false
     }
 
-    return true
+    return $true
 }
 # ----------------------------------------------------------------------------------------------------------------
 
