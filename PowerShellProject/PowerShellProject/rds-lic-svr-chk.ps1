@@ -12,15 +12,13 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160509 fixed read-reg to return just keyvalue. fixed -licServer switch
+   Version    : 160510 added installed features to list
                 
    History    : 
                 160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
-                160425 cleaned output. set $retval to $Null in reg read
-                160412 added Win32_TSDeploymentLicensing
-                160329 original
-
+   Issues     : not everything logged to output file
+   
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
     query for license server configuration and use wmi to test functionality
@@ -39,7 +37,7 @@
     If specified, all wmi checks will use this server for testing connectivity from particular rdsh server.
 
 .PARAMETER getUpdate
-    If specified, will check for latest version of script
+    If specified, will download latest version of script and replace if different.
 #>  
 
 Param(
@@ -47,7 +45,7 @@ Param(
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter license server name:")]
     [string] $licServer,    
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter rdsh server name:")]
-    [string] $rdshServer,
+    [string] $rdshServer = $env:COMPUTERNAME,
     [switch] $getUpdate
     
     )
@@ -67,7 +65,6 @@ $lsDiscovered = $false
 $appServer = $false
 $licenseModeSource = $null
 $licenseMode = 0
-$warningDays = 0
 $hasX509 = $false
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -81,47 +78,44 @@ function main()
     {
         get-update -updateUrl $updateUrl
     }
-    
-    log-info "-----------------------------------------"
-    log-info "REGISTRY"
-    log-info "-----------------------------------------"
 
-    read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
-    $warningDays = read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value LicensingGracePeriodExpirationWarningDays
-    $hasX509 = (read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value "X509 Certificate").Length -gt 0
-    get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | fl *
-    get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | fl *
-    get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM\GracePeriod" -Audit | fl *
-    read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
-    read-reg -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false
-    read-reg -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
-    read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
-    
-    if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer))
+    if(![string]::IsNullOrEmpty($licServer))
     {
-        log-info "-----------------------------------------"
-        log-info "Win32_TSLicenseServer"
-        log-info "-----------------------------------------"
-        log-info $rWmiLS
-
-        $wmiClass = ([wmiclass]"Win32_TSLicenseServer")
-        log-info "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
-        log-info "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
-        log-info "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
-        log-info "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
-        log-info "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
-        log-info "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
-        log-info "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)"
-        log-info "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)"
-        log-info "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
+        $licServers = @($licServer)
     }
-        
+
+    
+
+    log-info "-----------------------------------------"
+    log-info "INSTALLED FEATURES $($rdshServer)"
+    log-info "-----------------------------------------"
+    
+    Get-WindowsFeature -ComputerName $rdshServer | ? Installed -eq $true
+
+    log-info "-----------------------------------------"
+    log-info "REGISTRY $($rdshServer)"
+    log-info "-----------------------------------------"
+
+    if($rdshServer -ilike $env:COMPUTERNAME)
+    {
+        get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | fl *
+        get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | fl *
+        get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM\GracePeriod" -Audit | fl *
+    }
+    
+    $hasX509 = (read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value "X509 Certificate").Length -gt 0
+    read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
+    
+    #read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
+    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false
+    read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
+    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
     
     log-info "-----------------------------------------"
-    log-info "Win32_TerminalServiceSetting"
+    log-info "Win32_TerminalServiceSetting $($rdshServer)"
     log-info "-----------------------------------------"
  
-    $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting
+    $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting -ComputerName $rdshServer
     log-info $rWmi
     
     # lsdiag uses licensingmode from rcm when not overriden in policy
@@ -131,7 +125,7 @@ function main()
     log-info "-----------------------------------------"
     log-info "Win32_TerminalServiceSetting::FindLicenseServers()"
     log-info "-----------------------------------------"
- 
+
     $lsList = $rWmi.FindLicenseServers().LicenseServersList
 
     
@@ -150,7 +144,7 @@ function main()
         }
     
         log-info "LicenseServer:$($ls.LicenseServer)"
-        log-info "HowDiscovered:$($ls.HowDiscovered)"
+        log-info "HowDiscovered:$(if($ls.HowDiscovered) { "Manual" } else { "Auto" })"
         log-info "IsAdminOnLS:$($ls.IsAdminOnLS)"
         log-info "IsLSAvailable:$($ls.IsLSAvailable)"
         log-info "IssuingCals:$($ls.IssuingCals)"
@@ -158,16 +152,12 @@ function main()
     }
 
     log-info "-----------------------------------------"
-    log-info "Win32_TSDeploymentLicensing"
+    log-info "Win32_TSDeploymentLicensing $($rdshServer)"
     log-info "-----------------------------------------"
     
-    $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing
+    $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing -ComputerName $rdshServer
     log-info $rWmiL
     
-    if(![string]::IsNullOrEmpty($licServer))
-    {
-        $licServers = @($licServer)
-    }
 
     log-info "checking wmi for lic server"
     $tempServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
@@ -183,8 +173,8 @@ function main()
     }
  
     log-info "checking gpo for lic server"
-    $tempServers = @(([string](read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
-    $licMode = (read-reg -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
+    $tempServers = @(([string](read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
+    $licMode = (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
     log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
 
     if($rWmi.PolicySourceLicensingType)
@@ -198,11 +188,13 @@ function main()
         $licServers = $tempServers;        
     }
     
-    
-    log-info "checking ps for lic server"
-    $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
-    $licMode = (Get-RDLicenseConfiguration).Mode
-    log-info "ps lic servers: $($tempServers) license mode: $($licMode)"
+    if($rdshServer -ilike $env:COMPUTERNAME)
+    {
+        log-info "checking local ps for lic server"
+        $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
+        $licMode = (Get-RDLicenseConfiguration).Mode
+        log-info "ps lic servers: $($tempServers) license mode: $($licMode)"
+    }
     
     if($licServers.Length -lt 1)
     {
@@ -218,55 +210,57 @@ function main()
     if($licServers.Length -lt 1)
     {
         log-info "license server has not been configured! exiting"
-        exit
+    
     }
-
-    foreach($server in $licServers)
+    else
     {
-        # issue where server name has space in front but not sure why so adding .Trim() for now
-        if($server -ne $server.Trim())
+        foreach($server in $licServers)
         {
-           log-info "warning:whitespace characters on server name"    
-        }
+            # issue where server name has space in front but not sure why so adding .Trim() for now
+            if($server -ne $server.Trim())
+            {
+               log-info "warning:whitespace characters on server name"    
+            }
         
-        check-licenseServer -licServer $server.Trim()
+            check-licenseServer -licServer $server.Trim()
+        }
     }
-
-        try
+    
+    try
     {
         $ret = $rWmi.GetGracePeriodDays()
         $daysLeft = $ret.DaysLeft
     }
     catch
     {
-        $daysLeft = "ERROR"
+        $daysLeft = "NOT_SET"
     }
     
     log-info "-----------------------------------------" 
     # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
-    if($lsDiscovered -and $daysLeft -gt 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509 -and ($daysLeft -gt $warningDays))
+    if($lsDiscovered -and ($daysLeft -notlike "NOT_SET" -and $daysLeft -gt 0) -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
-        log-info "Server is connected to a license server and IS in Grace Period. This should be ok. Days Left: $($daysLeft)"
+        log-info "Success:$($rdshServer) is connected to a license server. Server is in Grace Period, but this is ok. Days Left: $($daysLeft)"
     }
-    elseif($lsDiscovered -and $daysLeft -eq 0 -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
+    elseif($lsDiscovered -and ($daysLeft -eq 0 -or $daysLeft -eq "NOT_SET") -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
-        log-info "Success:Server is connected to a license server and is NOT in grace. ($($daysLeft))"        
+        log-info "Success:$($rdshServer) is connected to a license server and is not in grace. ($($daysLeft))"        
     }
     elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and $hasX509)
     {
-        log-info "ERROR:Server has been connected to a license server but is NOT in grace and is NOT currently connected to license server. ($($daysLeft))"        
+        log-info "ERROR:$($rdshServer) has connected to a license server at some point but is NOT in grace and is NOT currently connected to license server. ($($daysLeft))"        
     }
     elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and !$hasX509)
     {
-        log-info "ERROR:Server is NOT connected to a license server and is NOT in grace. ($($daysLeft))"        
+        log-info "ERROR:$($rdshServer) is NOT connected to a license server and is NOT in grace. ($($daysLeft))"        
     }
     elseif(!$appServer)
     {
-        log-info "Server is configured for Remote Administration (2 session limit)"
+        log-info "ERROR:$($rdshServer) is configured for Remote Administration (2 session limit). ($($daysLeft))"
     }
     else
     {
-        log-info "Unknown state. ($($daysLeft))"        
+        log-info "ERROR:Unknown state. ($($daysLeft))"        
     }
  
     switch($licenseMode)
@@ -279,11 +273,8 @@ function main()
         default { $modeString = "error: $($licenseMode)" }
     }
     
-    
     log-info "current license mode: $($modeString)"
     log-info "current license mode source: $($licenseModeSource)"
-  
-
 
     log-info "-----------------------------------------"
     log-info "finished" 
@@ -298,6 +289,24 @@ function check-licenseServer([string] $licServer)
     log-info "checking license server: '$($licServer)'"
     log-info "-----------------------------------------" 
 
+    if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
+    {
+        log-info "Win32_TSLicenseServer $($licServer)"
+        log-info "-----------------------------------------"
+        log-info $rWmiLS
+
+        $wmiClass = ([wmiclass]"Win32_TSLicenseServer")
+        log-info "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
+        log-info "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
+        log-info "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
+        log-info "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
+        log-info "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
+        log-info "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
+        log-info "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)"
+        log-info "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)"
+        log-info "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
+    }
+    
     try
     {
         $ret = $rWmi.PingLicenseServer($licServer)
@@ -313,10 +322,8 @@ function check-licenseServer([string] $licServer)
     $ret = $rWmi.CanAccessLicenseServer($licServer)
     log-info "Can access license server? $([bool]$ret.AccessAllowed)"
  
-   
- 
-   $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
-   switch($ret.TsToLsConnectivityStatus)
+    $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
+    switch($ret.TsToLsConnectivityStatus)
     {
         0 { $retName = "LS_CONNECTABLE_UNKNOWN" }
         1 { $retName = "LS_CONNECTABLE_VALID_WS08R2=1" }
@@ -334,7 +341,6 @@ function check-licenseServer([string] $licServer)
     }
  
     log-info "license connectivity status: $($retName)"
-
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -369,7 +375,7 @@ function log-info($data)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function read-reg($hive, $key, $value, $subKeySearch = $true)
+function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
     
@@ -388,7 +394,7 @@ function read-reg($hive, $key, $value, $subKeySearch = $true)
     
     try
     {
-        $reg = [wmiclass]'\\.\root\default:StdRegprov'
+        $reg = [wmiclass]"\\$($machine)\root\default:StdRegprov"
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
