@@ -103,7 +103,7 @@ function main()
     log-info "EVENTS $($rdshServer)"
     log-info "-----------------------------------------"
 
-    Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer
+    Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
 
     log-info "-----------------------------------------"
     log-info "REGISTRY $($rdshServer)"
@@ -171,7 +171,7 @@ function main()
     $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing -ComputerName $rdshServer
     log-info $rWmiL
     
-
+    log-info "-----------------------------------------"
     log-info "checking wmi for lic server"
     $tempServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
     $licMode = $rWmi.LicensingType
@@ -185,6 +185,7 @@ function main()
         $licServers = $tempServers;
     }
  
+    log-info "-----------------------------------------"
     log-info "checking gpo for lic server"
     $tempServers = @(([string](read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
     $licMode = (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
@@ -203,6 +204,7 @@ function main()
     
     if($rdshServer -ilike $env:COMPUTERNAME)
     {
+        log-info "-----------------------------------------"
         log-info "checking local ps for lic server"
         $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
         $licMode = (Get-RDLicenseConfiguration).Mode
@@ -227,6 +229,7 @@ function main()
     }
     else
     {
+        $licCheck = $true
         foreach($server in $licServers)
         {
             # issue where server name has space in front but not sure why so adding .Trim() for now
@@ -235,7 +238,7 @@ function main()
                log-info "warning:whitespace characters on server name"    
             }
         
-            check-licenseServer -licServer $server.Trim()
+            $licCheck = $licCheck -band (check-licenseServer -licServer $server.Trim())
         }
     }
     
@@ -251,13 +254,21 @@ function main()
     
     log-info "-----------------------------------------" 
     # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
-    if($lsDiscovered -and ($daysLeft -notlike "NOT_SET" -and $daysLeft -gt 0) -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
+    if($lsDiscovered -and $licCheck -and ($daysLeft -notlike "NOT_SET" -and $daysLeft -gt 0) -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
         log-info "Success:$($rdshServer) is connected to a license server. Server is in Grace Period, but this is ok. Days Left: $($daysLeft)"
     }
-    elseif($lsDiscovered -and ($daysLeft -eq 0 -or $daysLeft -eq "NOT_SET") -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
+    elseif($lsDiscovered -and $licCheck -and ($daysLeft -eq 0 -or $daysLeft -eq "NOT_SET") -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
         log-info "Success:$($rdshServer) is connected to a license server and is not in grace. ($($daysLeft))"        
+    }
+    elseif($lsDiscovered -and !$licCheck -and ($daysLeft -notlike "NOT_SET" -and $daysLeft -gt 0) -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
+    {
+        log-info "Warning:$($rdshServer) has connected to a license server. Server is in Grace Period, but server cannot currently connect to a license server. Days Left: $($daysLeft)"
+    }
+    elseif($lsDiscovered -and !$licCheck -and ($daysLeft -eq 0 -or $daysLeft -eq "NOT_SET") -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
+    {
+        log-info "Warning:$($rdshServer) has connected to a license server and is not in grace but server cannot currently connect to a license server. ($($daysLeft))"        
     }
     elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and $hasX509)
     {
@@ -297,6 +308,8 @@ function main()
 
 function check-licenseServer([string] $licServer)
 {
+    [bool] $retVal = $true
+    
     log-info "-----------------------------------------"
     log-info "-----------------------------------------"
     log-info "checking license server: '$($licServer)'"
@@ -318,7 +331,7 @@ function check-licenseServer([string] $licServer)
     log-info "EVENTS $($licServer)"
     log-info "-----------------------------------------"
 
-    Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer
+    Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
 
     if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
     {
@@ -327,7 +340,7 @@ function check-licenseServer([string] $licServer)
         log-info "-----------------------------------------"
         log-info $rWmiLS
 
-        $wmiClass = ([wmiclass]"Win32_TSLicenseServer")
+        $wmiClass = ([wmiclass]"\\$($licServer)\root\cimv2:Win32_TSLicenseServer")
         log-info "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
         log-info "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
         log-info "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
@@ -348,10 +361,11 @@ function check-licenseServer([string] $licServer)
     {
         $ret = $false
     }
- 
+    $retVal = $retVal -band $ret
     log-info "Can ping license server? $([bool]$ret)"
  
     $ret = $rWmi.CanAccessLicenseServer($licServer)
+    $retVal = $retVal -band $ret
     log-info "Can access license server? $([bool]$ret.AccessAllowed)"
  
     $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
@@ -371,8 +385,11 @@ function check-licenseServer([string] $licServer)
         11 { $retName = "LS_CONNECTABLE_VALID_LS" }
         default { $retName = "Unknown $($ret.TsToLsConnectivityStatus)" }
     }
- 
+    
+    $retVal = $retVal -band ($ret.TsToLsConnectivityStatus -eq 9 -or $ret.TsToLsConnectivityStatus -eq 11)
     log-info "license connectivity status: $($retName)"
+    
+    return $retVal
 }
 
 # ----------------------------------------------------------------------------------------------------------------
