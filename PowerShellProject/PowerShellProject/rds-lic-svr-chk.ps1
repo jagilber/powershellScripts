@@ -119,7 +119,7 @@ function main()
     $hasX509 = (read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value "X509 Certificate").Length -gt 0
     read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
     
-    #read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
+    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
     read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false
     read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
     read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
