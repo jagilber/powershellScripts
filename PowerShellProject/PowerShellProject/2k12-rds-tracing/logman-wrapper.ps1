@@ -10,8 +10,9 @@
 .NOTES  
    File Name  : logmanWrapper.ps1  
    Author     : jagilber
-   Version    : 160101
-   History    : changed gather directory to time\machine. 
+   Version    : 160519
+   History    : added switch verifier
+                changed gather directory to time\machine. 
                 changed rds and permanent to switches.
                 added generateConfig to create new logman config xml files
              removed etl processor. Increased run-process waittimeout
@@ -61,7 +62,7 @@
 Param(
  
     [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the action to take: [deploy|undeploy|generateConfig]")]
-    [string] $action,
+    [string][ValidateSet('Deploy', 'Undeploy', 'GenerateConfig')] $action,
     [parameter(Position=1)]
     [string[]] $machines,
     [parameter(Position=2)]
