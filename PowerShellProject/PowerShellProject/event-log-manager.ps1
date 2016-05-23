@@ -18,7 +18,7 @@
    File Name  : event-log-manager.ps1
    Author     : jagilber
    Version    : 
-                160522 added event log file ($eventLogPath) option.
+                160523 added event log file ($eventLogPath) option.
 
    History    : 
                 160415 switched to log-merge.ps1 and fixed -rds
