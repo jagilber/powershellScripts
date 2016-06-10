@@ -5,10 +5,24 @@
 
 .DESCRIPTION  
         
+    ** Copyright (c) Microsoft Corporation. All rights reserved - 2016.
+    **
+    ** This script is not supported under any Microsoft standard support program or service.
+    ** The script is provided AS IS without warranty of any kind. Microsoft further disclaims all
+    ** implied warranties including, without limitation, any implied warranties of merchantability
+    ** or of fitness for a particular purpose. The entire risk arising out of the use or performance
+    ** of the scripts and documentation remains with you. In no event shall Microsoft, its authors,
+    ** or anyone else involved in the creation, production, or delivery of the script be liable for
+    ** any damages whatsoever (including, without limitation, damages for loss of business profits,
+    ** business interruption, loss of business information, or other pecuniary loss) arising out of
+    ** the use of or inability to use the script or documentation, even if Microsoft has been advised
+    ** of the possibility of such damages.
+    **
+ 
 .NOTES  
    File Name  : log-merge.ps1  
    Author     : jagilber
-   Version    : 160311
+   Version    : 160609
                 
    History    : 
 
@@ -54,21 +68,25 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Globalization;
 
+
     public class LogMerge
     {
+
         int precision = 0;
         Dictionary<string, string> outputList = new Dictionary<string, string>();
-        // 07/22/2014-14:48:10.909 for etl and 07/22/2014,14:48:10 PM for eventlog
+        //07/22/2014-14:48:10.909 for etl and 07/22/2014,14:48:10 PM for eventlog
         string datePattern = "(?<DateEtlPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{2,4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{7}) |" +
             "(?<DateEtl>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3}) |" +
             "(?<DateEvt>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
             "(?<DateEvtSpace>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
-            "(?<DateEvtPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{6} [AP]M)";  
+            "(?<DateEvtPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{6} [AP]M)|" +
+            "(?<DateISO>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}T[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";  
         string dateFormatEtl = "MM/dd/yyyy-HH:mm:ss.fff";
         string dateFormatEtlPrecise = "MM/dd/yy-HH:mm:ss.fffffff";
         string dateFormatEvt = "MM/dd/yyyy,hh:mm:ss tt";
         string dateFormatEvtSpace = "MM/dd/yyyy hh:mm:ss tt";
         string dateFormatEvtPrecise = "MM/dd/yyyy,hh:mm:ss.ffffff tt";
+        string dateFormatISO = "yyyy-MM-ddTHH:mm:ss.ffffff"; // may have additional digits and Z
         
         bool detail = false;
 
@@ -93,12 +111,14 @@ using System.Globalization;
                     }
 
                     program.ReadFiles(files, args[2]);
+
                 }
                 else
                 {
                     Console.WriteLine("utility combines *fmt.txt files into one file based on timestamp. provide folder and filter args and output file.");
-                    Console.WriteLine("log-merge takes three arguments; source dir, file filter, and output file.");
-                    Console.WriteLine("example: log-merge f:\\cases *fmt.txt c:\\temp\\all.csv");
+
+                    Console.WriteLine("LogMerge takes three arguments; source dir, file filter, and output file.");
+                    Console.WriteLine("example: LogMerge f:\\cases *fmt.txt c:\\temp\\all.csv");
                 }
             }
             catch (Exception e)
@@ -130,7 +150,8 @@ using System.Globalization;
                     while (reader.Peek() >= 0)
                     {
                         line = reader.ReadLine();
-
+                        //     if(Regex.IsMatch(line,datePattern))
+                        //     {
                         if (Regex.IsMatch(line, pidPattern))
                         {
                             lastPidString = Regex.Match(line, pidPattern).Value;
@@ -163,6 +184,11 @@ using System.Globalization;
                             dateFormat = dateFormatEvtPrecise;
                             traceDate = matchTraceDate.Groups["DateEvtPrecise"].Value;
                         }
+                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateISO"].Value))
+                        {
+                            dateFormat = dateFormatISO;
+                            traceDate = matchTraceDate.Groups["DateISO"].Value;
+                        }
                         else
                         {
                             if (detail) Console.WriteLine("unable to parse date:{0}:{1}", missedDateCounter, line);
@@ -180,7 +206,9 @@ using System.Globalization;
                             {
                                 lastTicks = date.Ticks;
                                 precision = 0;
+
                             }
+
                         }
                         else if (DateTime.TryParse(traceDate, out date))
                         {
@@ -191,14 +219,18 @@ using System.Globalization;
 
                             }
 
+
                             dateFormat = dateFormatEvt;
+
                         }
                         else
                         {
+                            //      Console.WriteLine("unable to parse date2:{0}:{1}", missedDateCounter, line);
                             // use last date and let it increment to keep in place
                             date = new DateTime(lastTicks);
 
                             // put cpu pid and tid back in
+
                             if (Regex.IsMatch(line, pidPattern))
                             {
                                 line = string.Format("{0}::{1}", lastPidString, line);
@@ -256,11 +288,14 @@ using System.Globalization;
             string key = string.Format("{0}{1}",date.Ticks.ToString(), precision.ToString("D8"));
             if(!outputList.ContainsKey(key))
             {
+             //   Console.WriteLine("debug:list:key:{0} value:{1}", key, line);
                 outputList.Add(key,line);
             }
             else
             {
                 return false;
+               //precision++;
+               //AddToList(date,line);
             }
 
             return true;
@@ -270,4 +305,7 @@ using System.Globalization;
 
 Add-Type $Code
 
+
 [LogMerge]::Start(@($sourceFolder,$filePattern,$outputFile),(get-location))
+
+

@@ -5,10 +5,24 @@
 
 .DESCRIPTION  
         
+    ** Copyright (c) Microsoft Corporation. All rights reserved - 2016.
+    **
+    ** This script is not supported under any Microsoft standard support program or service.
+    ** The script is provided AS IS without warranty of any kind. Microsoft further disclaims all
+    ** implied warranties including, without limitation, any implied warranties of merchantability
+    ** or of fitness for a particular purpose. The entire risk arising out of the use or performance
+    ** of the scripts and documentation remains with you. In no event shall Microsoft, its authors,
+    ** or anyone else involved in the creation, production, or delivery of the script be liable for
+    ** any damages whatsoever (including, without limitation, damages for loss of business profits,
+    ** business interruption, loss of business information, or other pecuniary loss) arising out of
+    ** the use of or inability to use the script or documentation, even if Microsoft has been advised
+    ** of the possibility of such damages.
+    **
+ 
 .NOTES  
    File Name  : log-merge.ps1  
    Author     : jagilber
-   Version    : 160311
+   Version    : 160609
                 
    History    : 
 
@@ -65,12 +79,14 @@ using System.Globalization;
             "(?<DateEtl>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3}) |" +
             "(?<DateEvt>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
             "(?<DateEvtSpace>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
-            "(?<DateEvtPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{6} [AP]M)";  
+            "(?<DateEvtPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{6} [AP]M)|" +
+            "(?<DateISO>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}T[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";  
         string dateFormatEtl = "MM/dd/yyyy-HH:mm:ss.fff";
         string dateFormatEtlPrecise = "MM/dd/yy-HH:mm:ss.fffffff";
         string dateFormatEvt = "MM/dd/yyyy,hh:mm:ss tt";
         string dateFormatEvtSpace = "MM/dd/yyyy hh:mm:ss tt";
         string dateFormatEvtPrecise = "MM/dd/yyyy,hh:mm:ss.ffffff tt";
+        string dateFormatISO = "yyyy-MM-ddTHH:mm:ss.ffffff"; // may have additional digits and Z
         
         bool detail = false;
 
@@ -167,6 +183,11 @@ using System.Globalization;
                         {
                             dateFormat = dateFormatEvtPrecise;
                             traceDate = matchTraceDate.Groups["DateEvtPrecise"].Value;
+                        }
+                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateISO"].Value))
+                        {
+                            dateFormat = dateFormatISO;
+                            traceDate = matchTraceDate.Groups["DateISO"].Value;
                         }
                         else
                         {
