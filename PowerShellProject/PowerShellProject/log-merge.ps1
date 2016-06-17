@@ -4,15 +4,28 @@
     powershell script to merge multiple csv files with timestamps by timestamp into new file
 
 .DESCRIPTION  
-
-    powershell script to merge multiple csv files with timestamps by timestamp into new file
+        
+    ** Copyright (c) Microsoft Corporation. All rights reserved - 2016.
+    **
+    ** This script is not supported under any Microsoft standard support program or service.
+    ** The script is provided AS IS without warranty of any kind. Microsoft further disclaims all
+    ** implied warranties including, without limitation, any implied warranties of merchantability
+    ** or of fitness for a particular purpose. The entire risk arising out of the use or performance
+    ** of the scripts and documentation remains with you. In no event shall Microsoft, its authors,
+    ** or anyone else involved in the creation, production, or delivery of the script be liable for
+    ** any damages whatsoever (including, without limitation, damages for loss of business profits,
+    ** business interruption, loss of business information, or other pecuniary loss) arising out of
+    ** the use of or inability to use the script or documentation, even if Microsoft has been advised
+    ** of the possibility of such damages.
+    **
  
 .NOTES  
    File Name  : log-merge.ps1  
    Author     : jagilber
-   Version    : 160609
-                
+   Version    : 160617 added subDir
+
    History    : 
+                160609 added "o" date format
 
 .EXAMPLE  
 
@@ -41,7 +54,9 @@ Param(
     [parameter(Position=1,Mandatory=$true,HelpMessage="Enter the file filter pattern (dos style *.*):")]
     [string] $filePattern,
     [parameter(Position=2,Mandatory=$true,HelpMessage="Enter the new file name:")]
-    [string] $outputFile = "log-merge.csv"
+    [string] $outputFile = "log-merge.csv",
+    [parameter(Position=3,Mandatory=$false,HelpMessage="Use to enable subdir search")]
+    [switch] $subDir
     )
 
 
@@ -82,7 +97,7 @@ using System.Globalization;
         Int64 missedMatchCounter = 0;
         Int64 missedDateCounter = 0;
         
-        public static void Start(string[] args,string defaultDir)
+        public static void Start(string[] args,string defaultDir,bool subDir)
         {
             LogMerge program = new LogMerge();
             try
@@ -91,7 +106,18 @@ using System.Globalization;
 
                 if (args.Length > 2)
                 {
-                    string[] files = Directory.GetFiles(args[0], args[1], SearchOption.AllDirectories);
+                    System.IO.SearchOption option; 
+
+                    if(subDir)
+                    {
+                        option = System.IO.SearchOption.AllDirectories;
+                    }
+                    else
+                    {
+                        option = System.IO.SearchOption.TopDirectoryOnly;
+                    }
+
+                    string[] files = Directory.GetFiles(args[0], args[1], option);
                     if (files.Length < 1)
                     {
                         Console.WriteLine("unable to find files. returning");
@@ -294,6 +320,6 @@ using System.Globalization;
 Add-Type $Code
 
 
-[LogMerge]::Start(@($sourceFolder,$filePattern,$outputFile),(get-location))
+[LogMerge]::Start(@($sourceFolder,$filePattern,$outputFile),(get-location),$subDir)
 
 
