@@ -29,16 +29,18 @@
  
 Param(
  
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter customer subscription id:")]
+    [parameter(HelpMessage="Enter user name:")]
     [string] $user,
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter customer RemoteApp Id:")]
-    [string] $sis,
-    [parameter(Position=1,Mandatory=$false,HelpMessage="Enter customer RemoteApp Id:")]
-    [string] $machine,
-    [parameter(Position=4,Mandatory=$false,HelpMessage="Enter `$true to prompt / use alternate credentials. Default is `$false")]
+    [parameter(HelpMessage="Enter collection:")]
+    [string] $collection,
+    [parameter(HelpMessage="Enter connection Broker:")]
+    [string] $server = $env:COMPUTERNAME,
+    [parameter(HelpMessage="Enter `$true to prompt / use alternate credentials. Default is `$false")]
     [bool] $useCreds = $false,
-    [parameter(Position=5,Mandatory=$false,HelpMessage="Enter `$true to store alternate credentials. Default is `$false")]
-    [bool] $storeCreds = $false
+    [parameter(HelpMessage="Enter `$true to store alternate credentials. Default is `$false")]
+    [bool] $storeCreds = $false,
+    [parameter(HelpMessage="Select this switch to check for script update")]
+    [switch] $getUpdate
 
     )
 
@@ -48,7 +50,18 @@ $Creds = $null
 # if storing creds, password will have to be saved one time
 $passFile = "securestring.txt" 
 $logFile = "rds-upd-mgr.log"
-
+$deploymentReg = "SYSTEM\CurrentControlSet\Control\Terminal Server\ClusterSettings"
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-upd-mgr.ps1"
+$HKCR = 2147483648 #HKEY_CLASSES_ROOT
+$HKCU = 2147483649 #HKEY_CURRENT_USER
+$HKLM = 2147483650 #HKEY_LOCAL_MACHINE
+$HKUS = 2147483651 #HKEY_USERS
+$HKCC = 2147483653 #HKEY_CURRENT_CONFIG
+$global:broker = [string]::Empty
+$global:brokers = @()
+$global:updShare = [string]::Empty
+$global:updInfo = @{}
+$global:updInfoList = new-object System.Collections.ArrayList
 
 # ---------------------------------------------------------------------------
 function main ()
@@ -57,6 +70,17 @@ function main ()
     $machines = @()
     $userSessions = @{}
 
+    log-info $MyInvocation.ScriptName
+    # run as administrator
+    if(!(runas-admin))
+    {
+        return
+    }
+    
+    if($getUpdate)
+    {
+        get-update -updateUrl $updateUrl
+    }
 
     log-info "============================================="
     log-info "Starting: $(get-date)"
@@ -86,15 +110,13 @@ function main ()
         }
     }
 
-    if([string]::IsNullOrEmpty($machine))
-    {
-        log-info "getting all rds machines from broker, if broker does not exist, query current machine"
-        $machines = get-machines
-    }
-    else
-    {
-        $machines = @($machine)
-    }
+    # look for broker and get machine list
+    $machines = get-machines -server $server
+    
+    # get list of users for upd's using sid from upd name
+    get-upds
+
+    # get list of sessions active, disconnected, connecting 
 
     foreach ($machine in $machines)
     {
@@ -103,7 +125,7 @@ function main ()
         $users = enumerate-users -machine $rdmachine
         $userSids = enumerate-sids -users $users
 
-        $userSessions.Add(
+        #$userSessions.Add(
         enumerate-drives - machine $rdmachine
     }
 
@@ -114,19 +136,53 @@ function main ()
 }
 
 #----------------------------------------------------------------------------
-function get-machines()
+function get-machines($server)
 {
-    $machines = @()
+    $machines = @($server)
     if(!(get-service -DisplayName 'Remote Desktop Connection Broker' -ErrorAction SilentlyContinue))
     {
-        return $machines
+        log-info "$($server) is not a connection broker. trying to find broker."
+        $global:brokers = @((read-reg -machine $server -hive $HKLM -key $deploymentReg -value "SessionDirectoryLocation").Split(';'))
+
+        if($global:brokers.Count -gt 0 -and ![string]::IsNullOrEmpty($global:brokers[0]))
+        {
+            $global:broker = $global:brokers[0]
+        }
+        else
+        {
+            log-info "unable to find broker. exit"
+            exit
+        }
+        
+        $global:updShare = read-reg -machine $server -hive $HKLM -key $deploymentReg -value "UvhdShareUrl"
+
+        if([string]::IsNullOrEmpty($global:updShare))
+        {
+            log-info "server is part of rds deployment, but does not have upd configured. exiting"
+            exit
+        }
+    }
+    else
+    {
+        log-info "$($server) is a connection broker."
+        $global:brokers = get-rdserver -ConnectionBroker $global:broker -Role RDS-CONNECTION-BROKER
+        $global:broker = $server
     }
 
+    #make sure it is active broker
+    $ha = Get-RDConnectionBrokerHighAvailability -ConnectionBroker $global:broker
+    if($ha -ne $null)
+    {
+        log-info $ha
+        $global:broker = $ha.ActiveManagementServer
+    }
+
+    
     try
     {
         
-        # see if it is a connection broker
-        $machines = (Get-RDmachine).machine
+        # get rdsh machines
+        $machines = (Get-RDServer -ConnectionBroker $global:broker -Role RDS-RD-SERVER).Server
         if($machines -ne $null)
         {
             foreach($machine in $machines)
@@ -140,11 +196,64 @@ function get-machines()
                 log-info "adding rds collection machines"
                 $machines = $machines
             }
+            else
+            {
+                return $server
+            }
         }
     }
-    catch {}
+    catch 
+    {
+        log-info "Exception reading machines from broker: $($error)"
+        $error.Clear()
+    }
 
     return $machines
+}
+
+#----------------------------------------------------------------------------
+function get-upds
+{
+    try
+    {
+        return [IO.Directory]::GetFiles($global:updShare, "*.vhdx", [IO.SearchOption]::TopDirectoryOnly)
+    }
+    catch
+    {
+        log-info "Exception querying upd share: $($global:updShare): $($error)"
+        $error.Clear()
+        return [string]::Empty
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function is-fileLocked([string] $file)
+{
+    $fileInfo = New-Object System.IO.FileInfo $file
+ 
+    if ((Test-Path -Path $file) -eq $false)
+    {
+        log-info "File does not exist:$($file)"
+        return $false
+    }
+  
+    try
+    {
+	    $fileStream = $fileInfo.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+	    if ($fileStream)
+	    {
+            $fileStream.Close()
+	    }
+ 
+	    log-info "File is NOT locked:$($file)"
+        return $false
+    }
+    catch
+    {
+        # file is locked by a process.
+        log-info "File is locked:$($file)"
+        return $true
+    }
 }
 
 #----------------------------------------------------------------------------
@@ -229,8 +338,7 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     return $stdOut
 }
 
-
-# ----------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 function manage-wmiExecute([string] $command, [string] $machine)
 {
     log-info "wmiExecute: $($machine) : $($command) : $($workingDir)"
@@ -247,35 +355,29 @@ function manage-wmiExecute([string] $command, [string] $machine)
     
     switch($result.ReturnValue)
     {
-        0
-            {
+        0 {
                 log-info "$($machine) return:success"
-            }
+          }
 
-        2
-            {
+        2 {
                 log-info "$($machine) return:access denied"
-            }
+          }
 
-        3
-            {
+        3 {
                 log-info "$($machine) return:insufficient privilege"
-            }
+          }
         
-        8
-            {
+        8 {
                 log-info "$($machine) return:unknown failure"
-            }
+          }
 
-        9
-            {
+        9 {
                 log-info "$($machine) return:path not found"
-            }
+          }
 
-        21
-            {
+        21 {
                 log-info "$($machine) return:invalid parameter"
-            }
+           }
 
         default
             {
@@ -287,6 +389,198 @@ function manage-wmiExecute([string] $command, [string] $machine)
 
 }
 
+# ---------------------------------------------------------------------------
+function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
+{
+    $retVal = new-object Text.StringBuilder
+    
+    if([string]::IsNullOrEmpty($value))
+    {
+        [void]$retVal.AppendLine("-----------------------------------------")
+        [void]$retVal.AppendLine("enumerating $($key)")
+        $enumValue = $false
+    }
+    else
+    {
+        log-info "-----------------------------------------"
+        log-info "enumerating $($key) for value $($value)"
+        $enumValue = $true
+    }
+    
+    try
+    {
+        $reg = [wmiclass]"\\$($machine)\root\default:StdRegprov"
+        $sNames = $reg.EnumValues($hive, $key).sNames
+        $sTypes = $reg.EnumValues($hive, $key).Types
+        
+        for($i = 0; $i -lt $sNames.count; $i++)
+        {
+            if(![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
+            {
+                continue
+            }
+
+            switch ($sTypes[$i])
+            {
+                # REG_SZ 
+                1{ 
+                    $keyValue = $reg.GetStringValue($hive, $key, $sNames[$i]).sValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    }
+                }
+                
+                # REG_EXPAND_SZ 
+                2{
+                    $keyValue = $reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }                    
+                    else 
+                    {
+                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                    }
+                }            
+                
+                # REG_BINARY 
+                3{ 
+                    $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
+                    if($enumValue -and $displayBinaryBlob)
+                    {
+                        return $keyValue
+                    }
+                    elseif($displayBinaryBlob)
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    }
+                    else
+                    {
+                        $blob = $reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue
+                        [void]$retval.AppendLine("$($sNames[$i]):(Binary Blob (length:$($blob.Length)))")
+                    }
+                }
+                
+                # REG_DWORD 
+                4{ 
+                    $keyValue = $reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    } 
+                }
+                
+                # REG_MULTI_SZ 
+                7{
+                    $keyValue = (($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ',')
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                    }
+                }
+
+                # REG_QWORD
+                11{ 
+                    $keyValue = $reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue
+                    if($enumValue)
+                    {
+                        return $keyValue
+                    }
+                    else 
+                    {
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
+                    } 
+                }
+                
+                # ERROR
+                default { [void]$retval.AppendLine("unknown type") }
+            }
+        }
+        
+        if([string]::IsNullOrEmpty($value) -and $subKeySearch)
+        {
+            
+            foreach($subKey in $reg.EnumKey($hive, $key).sNames)
+            {
+                if([string]::IsNullOrEmpty($subKey))
+                {
+                    continue
+                }
+                
+                [void]$retval.AppendLine((read-reg -machine $machine -hive $hive -key "$($key)\$($subkey)"))
+            }
+        }
+        
+
+    }
+    catch
+    {
+        #log-info "read-reg:exception $($error)"
+        $error.Clear()
+        return 
+    }
+
+    return $retVal.toString()
+}
 
 # ---------------------------------------------------------------------------
+function get-update($updateUrl)
+{
+    try 
+    {
+        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
+        # github can bet set to use WINDOWS style which may prevent this
+        $webClient = new-object System.Net.WebClient
+        $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
+        if([string]::Compare([IO.File]::ReadAllBytes($MyInvocation.ScriptName), [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new")))
+        {
+            log-info "downloaded new script"
+            [IO.File]::Copy("$($MyInvocation.ScriptName).new",$MyInvocation.ScriptName, $true)
+            [IO.File]::Delete("$($MyInvocation.ScriptName).new")
+            log-info "restart to use new script. exiting."
+            exit
+        }
+        else
+        {
+            log-info "script is up to date"
+        }
+        
+        return $true
+        
+    }
+    catch [System.Exception] 
+    {
+        log-info "get-update:exception: $($error)"
+        $error.Clear()
+        return $false    
+    }
+}
+
+# ---------------------------------------------------------------------------
+function runas-admin()
+{
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+    {   
+       log-info "please restart script as administrator. exiting..."
+       return $false
+    }
+
+    return $true
+}
+
+# ---------------------------------------------------------------------------
+
 main

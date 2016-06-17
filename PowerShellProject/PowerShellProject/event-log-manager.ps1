@@ -877,7 +877,7 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
         else
         {
             # query eventlog path
-            $eventLogNames = [IO.Directory]::GetFiles($eventLogPath, "*.evt*")
+            $eventLogNames = [IO.Directory]::GetFiles($eventLogPath, "*.evt*",[IO.SearchOption]::AllDirectories)
         }
     }
 

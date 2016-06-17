@@ -7,7 +7,7 @@
 .NOTES  
    File Name  : enum-wmi.ps1  
    Author     : jagilber
-   Version    : 160414
+   Version    : 160612
                 
    History    :  160414 original
 
@@ -23,12 +23,15 @@
 #>  
 Param(
  
-    [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the namespace. ex: root\cimv2")]
-    [string] $nameSpace = "root\cimv2",
-    [string] $class = ""
+    [parameter(Mandatory=$false,HelpMessage="Enter the namespace. ex: root\cimv2")]
+    [string] $nameSpace = "root\cimv2\TerminalServices",
+    [parameter(Mandatory=$false,HelpMessage="Enter string class filter. ex: Win32_Drive")]
+    [string] $classFilter = ""
     )
-$logFile = "wmi-enumLog.txt"
+
 $ErrorActionPreference = "silentlycontinue"
+$logFile = "wmi-enumLog.txt"
+
 cls
  
 #-----------------------------------------------------------------------------------------------
@@ -36,7 +39,8 @@ function main()
 {
     Stop-Transcript
  
-    
+    $error.Clear()
+        
     Start-Transcript -Path $logfile
     log-info "*******************************************"
     log-info "*******************************************"
@@ -44,43 +48,61 @@ function main()
     log-info "*******************************************"
     log-info "*******************************************"
  
-    $wmiNamespaces = enumerate-namespaces -namespace $nameSpace
+    $wmiNamespaces = enumerate-namespaces -wminamespace $nameSpace
     foreach($wmiNamespace in $wmiNamespaces)
     {
-        log-info ""
-        log-info "*******************************************"
-        log-info "Namespace:$($wmiNamespace)"
-        log-info "*******************************************"
-        log-info ""
+        if($wmiNamespace.Contains("ms_409"))
+        {
+            continue
+        }
+        "*******************************************"
+        "Namespace:$($wmiNamespace)"
+        "*******************************************"
  
         $wmiClasses = Get-CimClass -ClassName * -Namespace $wmiNamespace
         
         foreach ($wmiClass in $wmiClasses)
         {
-            
-            if(![string]::IsNullOrEmpty($class) -and $wmiClass.CimClassName -inotmatch $class)
+            if($wmiClass.CimClassName.Contains("ms_409"))
             {
-                continue
+               continue
             }
- 
+
+            if(![string]::IsNullOrEmpty($classFilter) -and !$wmiClass.CimClassName.ToLower().Contains($classFilter))
+            {
+               continue
+            }
+           
+            if($wmiClass.CimClassMethods.Count -gt 0)
+            {
+                "*******************************************"
+                "Class:$($wmiNamespace)\$($wmiClass.CimClassName) Methods"
+                "*******************************************"
+                foreach($method in $wmiClass.CimClassMethods)
+                {
+                    $method | fl *
+                    #log-info $method
+                }
+
+                "*******************************************"
+            }
+
             if($wmiClass.CimClassName.StartsWith("__") -or $wmiClass.CimClassName.StartsWith("CIM"))
             {
-                continue
+               continue
             }
             else
             {
-                log-info ""
-                log-info "*******************************************"
-                log-info "Class:$($wmiClass.CimClassName)"
-                log-info "*******************************************"
-                log-info ""
- 
+                "*******************************************"
+                "Class:$($wmiNamespace)\$($wmiClass.CimClassName)"
+                "*******************************************"
                 $wmiObj = Get-WmiObject -Namespace $wmiNamespace -Class $wmiClass.CimClassName -Recurse #-ErrorAction SilentlyContinue
                 if($wmiObj -ne $null)
                 {
                     #log-info "Value:`t`t$($wmiObj)"
                     #"`t`t$($wmiObj)"
-                    $wmiObj
+                    $wmiObj#.Properties | fl *
+                    "*******************************************"
                 }
                 #log-info
                 #write-host $wmiObj
@@ -89,7 +111,7 @@ function main()
         }
     }
  
-    log-info "*******************************************"
+    "*******************************************"
     log-info "*******************************************"
     log-info "finished"
     log-info "*******************************************"
@@ -107,7 +129,7 @@ function enumerate-namespaces($wmiNamespace)
     foreach($name in (Get-WmiObject -Namespace $wmiNamespace -Class __NAMESPACE).Name)
     {
         $tempName = "$($wmiNamespace)\$($name)"
-        [void]$wmiRootNamespaces.AddRange(@(enumerate-namespaces($tempName)))
+        [void]$wmiRootNamespaces.AddRange(@(enumerate-namespaces -wminamespace $tempName ))
     }
  
     return $wmiRootNamespaces
