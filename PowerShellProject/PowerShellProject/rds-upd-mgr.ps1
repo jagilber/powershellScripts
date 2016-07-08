@@ -59,7 +59,7 @@ $HKUS = 2147483651 #HKEY_USERS
 $HKCC = 2147483653 #HKEY_CURRENT_CONFIG
 $global:broker = [string]::Empty
 $global:brokers = @()
-$global:updShare = [string]::Empty
+$global:updShares = @()
 $global:updInfo = @{}
 $global:updInfoList = new-object System.Collections.ArrayList
 
@@ -87,6 +87,59 @@ function main ()
     
     $retval
 
+    check-creds
+
+    # look for broker and get machine list
+    $machines = @(get-machines -server $server)
+    
+    # get list of users for upd's using sid from upd name
+    foreach($upd in get-upds -shares $global:updShares)
+    {
+        if([string]::IsNullOrEmpty($upd) -or !$upd.Contains("UVHD-")) 
+        {
+            continue
+        }
+
+        $sid = [IO.Path]::GetFileNameWithoutExtension($upd).Replace("UVHD-","")
+        $userObj = ([wmi]"Win32_SID.SID='$($sid)'")
+
+        $info = @{}
+        $info.File = $upd
+        $info.InUse = is-fileLocked -file $upd
+        $info.InSession = $false
+        $info.DiskAttached = $false
+        $info.Server = ""
+        $info.Sid = $userObj.Sid
+        $info.User = $userObj.AccountName
+        $info.Domain = $userObj.ReferencedDomainName
+
+        $global:updInfo.Add($info.Sid, $info)
+    }
+
+    $global:updInfo.Values | Out-GridView
+
+    # get list of sessions active, disconnected, connecting 
+
+    foreach ($machine in $machines)
+    {
+        
+        manage-wmiExecute -command $command -machine $machine
+        $users = enumerate-users -machine $rdmachine
+        $userSids = enumerate-sids -users $users
+
+        #$userSessions.Add(
+        enumerate-drives - machine $rdmachine
+    }
+
+    
+    
+    log-info "Finished"
+
+}
+
+#----------------------------------------------------------------------------
+function check-creds()
+{
     if($useCreds)
     {
         if((test-path $passFile) -and $storeCreds)
@@ -110,30 +163,8 @@ function main ()
         }
     }
 
-    # look for broker and get machine list
-    $machines = get-machines -server $server
-    
-    # get list of users for upd's using sid from upd name
-    get-upds
-
-    # get list of sessions active, disconnected, connecting 
-
-    foreach ($machine in $machines)
-    {
-        
-        manage-wmiExecute -command $command -machine $machine
-        $users = enumerate-users -machine $rdmachine
-        $userSids = enumerate-sids -users $users
-
-        #$userSessions.Add(
-        enumerate-drives - machine $rdmachine
-    }
-
-    
-    
-    log-info "Finished"
-
 }
+
 
 #----------------------------------------------------------------------------
 function get-machines($server)
@@ -153,21 +184,41 @@ function get-machines($server)
             log-info "unable to find broker. exit"
             exit
         }
-        
-        $global:updShare = read-reg -machine $server -hive $HKLM -key $deploymentReg -value "UvhdShareUrl"
 
-        if([string]::IsNullOrEmpty($global:updShare))
+        # look for upd share in reg in case it rds. only cb can query for upd via ps
+        $global:updShares = @(read-reg -machine $server -hive $HKLM -key $deploymentReg -value "UvhdShareUrl")
+
+        if($global:updShares.Count -lt 1)
         {
             log-info "server is part of rds deployment, but does not have upd configured. exiting"
             exit
         }
+        
     }
     else
     {
         log-info "$($server) is a connection broker."
         $global:brokers = get-rdserver -ConnectionBroker $global:broker -Role RDS-CONNECTION-BROKER
         $global:broker = $server
+
+        foreach($farmSettings in ((Get-WmiObject -Namespace root\cimv2\terminalservices -Class Win32_RDCentralPublishedFarm).VmFarmSettings))
+        {
+            if([string]::IsNullOrEmpty($farmSettings))
+            {
+                continue
+            }
+
+            #$config = (Get-RDSessionCollectionConfiguration -CollectionName $collection)
+            $pattern = 'name="UvhdProfRoamingEnabled" value="True"'
+            if([regex]::IsMatch($farmSettings, $pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase))
+            {
+                $pattern = 'name="UvhdShareUrl" value="(.+?)"'
+                $match = [regex]::Match($farmSettings,$pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                $global:updShares.Add($match.Groups[1].Value)
+            }
+        }
     }
+
 
     #make sure it is active broker
     $ha = Get-RDConnectionBrokerHighAvailability -ConnectionBroker $global:broker
@@ -190,16 +241,16 @@ function get-machines($server)
                 log-info $machine
             }
 
-            $result = Read-Host "do you want to collect data from entire deployment? [y:n]"
-            if([regex]::IsMatch($result, "y",[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
-            {
-                log-info "adding rds collection machines"
-                $machines = $machines
-            }
-            else
-            {
-                return $server
-            }
+#            $result = Read-Host "do you want to collect data from entire deployment? [y:n]"
+#            if([regex]::IsMatch($result, "y",[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
+#            {
+#                log-info "adding rds collection machines"
+#                 return $machines
+#           }
+#            else
+#            {
+#                return $server
+#            }
         }
     }
     catch 
@@ -212,21 +263,27 @@ function get-machines($server)
 }
 
 #----------------------------------------------------------------------------
-function get-upds
+function get-upds([string[]] $shares)
 {
-    try
+    $list = new-object System.Collections.ArrayList
+    foreach($share in $shares)
     {
-        return [IO.Directory]::GetFiles($global:updShare, "*.vhdx", [IO.SearchOption]::TopDirectoryOnly)
+        try
+        {
+            $list.AddRange([IO.Directory]::GetFiles($share, "*.vhdx", [IO.SearchOption]::TopDirectoryOnly))
+        }
+        catch
+        {
+            log-info "Exception querying upd share: $($share): $($error)"
+            $error.Clear()
+            continue
+        }
     }
-    catch
-    {
-        log-info "Exception querying upd share: $($global:updShare): $($error)"
-        $error.Clear()
-        return [string]::Empty
-    }
+
+    return ,$list
 }
 
-# ----------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------
 function is-fileLocked([string] $file)
 {
     $fileInfo = New-Object System.IO.FileInfo $file

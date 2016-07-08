@@ -12,9 +12,10 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160510 added installed features to list. added eventlog search
-                    added osversion check and tested against 2k8
+   Version    : 160625 adding network service
    History    : 
+                160510 added installed features to list. added eventlog search
+                    added osversion check and tested against 2k8
                 160504 modified reading of registry to use WMI for compatibility with 2k8r2
                 160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
    Issues     : not everything logged to output file
@@ -42,11 +43,17 @@
 
 Param(
  
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter license server name:")]
+    [parameter(HelpMessage="Enter license server name:")]
     [string] $licServer,    
-    [parameter(Position=1,Mandatory=$false,HelpMessage="Enter rdsh server name:")]
+    [parameter(HelpMessage="Enter rdsh server name:")]
     [string] $rdshServer = $env:COMPUTERNAME,
-    [switch] $getUpdate
+    [parameter(HelpMessage="Use to check for script update:")]
+    [switch] $getUpdate,
+    [parameter(HelpMessage="Use to run script as network service:")]
+    [switch] $runAsNetworkService,
+    [parameter(HelpMessage="Enter user name to check if per user:")]
+    [string] $checkUser
+ 
     
     )
 $error.Clear()
@@ -80,6 +87,26 @@ function main()
     if($getUpdate)
     {
         get-update -updateUrl $updateUrl
+    }
+
+    if($runAsNetworkService)
+    {
+        $psexec = get-sysInternalsUtility -utilityName "psexec.exe"
+        if(![string]::IsNullOrEmpty($psexec))
+        {
+            run-process -processName $($psexec) -arguments "-accepteula -i -u `"nt authority\network service`" cmd.exe /k powershell.exe -noexit -executionpolicy Bypass -file $($MyInvocation.ScriptName) -checkUser $($env:USERNAME) " -wait $false            
+            return
+        }
+        else
+        {
+            log-info "unable to download utility. exiting"
+            return
+        }
+    }
+
+    if(![string]::IsNullOrEmpty($checkUser))
+    {
+        check-user -user $checkUser
     }
 
     if(![string]::IsNullOrEmpty($licServer))
@@ -394,6 +421,46 @@ function check-licenseServer([string] $licServer)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function check-user ([string] $user)
+{
+    try
+    {
+        $strFilter = "(&(objectCategory=User)(samAccountName=$($user)))"
+
+        $objDomain = New-Object System.DirectoryServices.DirectoryEntry
+
+        $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
+        $objSearcher.SearchRoot = $objDomain
+        $objSearcher.PageSize = 1000
+        $objSearcher.Filter = $strFilter
+        $objSearcher.SearchScope = "Subtree"
+
+        # lic server user attributes for per user
+        $colProplist = "msTSManagingLS","msTSExpireDate" #"name"
+        foreach ($i in $colPropList)
+        {
+            $objSearcher.PropertiesToLoad.Add($i)
+        }
+
+        $colResults = $objSearcher.FindAll()
+
+        foreach ($objResult in $colResults)
+        {
+            log-info "-------------------------------------"
+            log-info "AD user:$($objresult.Properties["adspath"])"
+            log-info "RDS CAL expire date:$($objresult.Properties["mstsexpiredate"])"
+            log-ingo "RDS License Server Identity:$($objresult.Properties["mstsmanagingls"])"
+        }
+        
+        return $true
+    }
+    catch
+    {
+        return $false
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
 {
     if(($data.GetType()).Name -eq "ManagementObject")
@@ -605,9 +672,47 @@ function get-update($updateUrl)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function get-sysInternalsUtility ([string] $utilityName)
+{
+    try
+    {
+        $destFile = "$(get-location)\$utilityName"
+        
+        if(![IO.File]::Exists($destFile))
+        {
+            $sysUrl = "http://live.sysinternals.com/$($utilityName)"
+
+            write-host "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
+            if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
+            {
+                $webClient = new-object System.Net.WebClient
+                $webClient.DownloadFile($sysUrl, $destFile)
+                log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
+            }
+            else
+            {
+                return [string]::Empty
+            }
+        }
+
+        return $destFile
+    }
+    catch
+    {
+        log-info "Exception downloading $($utilityName): $($error)"
+        $error.Clear()
+        return [string]::Empty
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
 {
-    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+    if(([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).Identities.Name -eq "NT AUTHORITY\NETWORK SERVICE")
+    {
+        return $true
+    }
+    elseif (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
        log-info "please restart script as administrator. exiting..."
        return $false
@@ -615,6 +720,62 @@ function runas-admin()
 
     return $true
 }
-# ----------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------
+function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
+{
+    $Error.Clear()
+    log-info "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = !$wait
+    $process.StartInfo.RedirectStandardOutput = $wait
+    $process.StartInfo.RedirectStandardError = $wait
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $wait
+    $process.StartInfo.WorkingDirectory = get-location
+    $process.StartInfo.ErrorDialog = $true
+    $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
+    $process.StartInfo.LoadUserProfile = $false
+    $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
+
+
+ 
+    [void]$process.Start()
+ 
+    if($wait -and !$process.HasExited)
+    {
+ 
+        if($process.StandardOutput.Peek() -gt -1)
+        {
+            $stdOut = $process.StandardOutput.ReadToEnd()
+            log-info $stdOut
+        }
+ 
+ 
+        if($process.StandardError.Peek() -gt -1)
+        {
+            $stdErr = $process.StandardError.ReadToEnd()
+            log-info $stdErr
+            $Error.Clear()
+        }
+            
+    }
+    elseif($wait)
+    {
+        log-info "Error:Process ended before capturing output."
+    }
+    
+ 
+    
+    $exitVal = $process.ExitCode
+ 
+    log-info "Running process exit $($processName) : $($exitVal)"
+    $Error.Clear()
+ 
+    return $stdOut
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 main
