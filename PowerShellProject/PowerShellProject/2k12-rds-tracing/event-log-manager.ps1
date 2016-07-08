@@ -907,13 +907,14 @@ function get-update($updateUrl)
     {
         # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
         # github can bet set to use WINDOWS style which may prevent this
-        $webClient = new-object System.Net.WebClient
-        $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
-        if([string]::Compare([IO.File]::ReadAllBytes($MyInvocation.ScriptName), [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new")))
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl
+        $gitClean = [regex]::Replace($git, '\W+', "")
+        $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
+
+        if(([string]::Compare($gitClean, $fileClean) -ne 0))
         {
-            log-info "downloaded new script"
-            [IO.File]::Copy("$($MyInvocation.ScriptName).new",$MyInvocation.ScriptName, $true)
-            [IO.File]::Delete("$($MyInvocation.ScriptName).new")
+            log-info "updating new script"
+            [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
             log-info "restart to use new script. exiting."
             exit
         }
