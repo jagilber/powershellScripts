@@ -18,9 +18,12 @@
    File Name  : event-log-manager.ps1
    Author     : jagilber
    Version    : 
-                160522 added event log file ($eventLogPath) option.
+                160720 fixed debuglogs count to per machine
 
    History    : 
+                160719 fixed multi machine issue where using global eventlog names instead of machine specific
+                160714 added xml description
+                160522 added event log file ($eventLogPath) option.
                 160415 switched to log-merge.ps1 and fixed -rds
                 160329 original
 
@@ -195,7 +198,6 @@ Param(
 
 cls
 $appendOutputFiles = $false
-$debugLogsEnabled = New-Object Collections.ArrayList
 $debugLogsMax = 100
 $errorActionPreference = "Continue"
 $eventLogLevelQueryString = $null
@@ -527,12 +529,18 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
             $event = $preader.ReadEvent()
             if($event -eq $null)
             {
-                # write-host "skipping eventlog $($eventLogName) as there are 0 events"
+                #log-info "skipping eventlog $($eventLogName) as there are 0 events returned" -debugOnly
                 continue
             }
 
+            log-info "dump-events:machine: $($machine) event log name: $eventLogName old index: $($recordid) new index: $($event.RecordId)" -debugOnly
+            if($recordid -eq $event.RecordId)
+            {
+                #sometimes record id's come back as 0 causing dupes
+                $recordid++
+            }
             $recordid = [Math]::Max($recordid,$event.RecordId)
-            log-info "dump-events:machine: $($machine) event log name: $eventLogName index: $($recordid)" -debugOnly
+            
             ($global:machineRecords[$machine])[$eventLogName] = $recordid
 
             $cleanName = $eventLogName.Replace("/","-").Replace(" ", "-")
@@ -566,6 +574,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
             {
                 if($event -eq $null)
                 {
+                    #log-info "dumpevents:listen: no more events from readevent" -debugOnly
                     break
                 }
                 elseif(![string]::IsNullOrEmpty($event.TimeCreated))
@@ -574,11 +583,15 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     if([string]::IsNullOrEmpty($description))
                     {
                         $description = [string]::Empty
+                        $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                     }
                     else
                     {
                         $description = $description.Replace("`r`n",";")
                     }
+
+                    #capi event log
+                    #$description = "$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
 
                     $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt"))," `
 						+ "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
@@ -676,12 +689,16 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                             $description = $event.FormatDescription()
                             if([string]::IsNullOrEmpty($description))
                             {
-                                $description = [string]::Empty
+                                #$description = [string]::Empty
+                                $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                             }
                             else
                             {
                                 $description = $description.Replace("`r`n",";")
                             }
+                            
+                            #capi event log
+                            #$description = "$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
 
                             $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
 						        + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
@@ -769,6 +786,8 @@ function enable-logs($eventLogNames, $machine)
 {
     log-info "enabling logs on $($machine)"
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
+    $debugLogsEnabled = New-Object Collections.ArrayList
+
     [void]$sb.Appendline("event logs:")
 
     foreach($eventLogName in $eventLogNames)
@@ -985,7 +1004,7 @@ function listen-forEvents()
             {
                 log-info "listen:checking machine $($machine) $([DateTime]::Now)" -debugOnly
 
-                $newEvents = dump-events -eventLogNames $filteredLogs `
+                $newEvents = dump-events -eventLogNames (New-Object Collections.ArrayList($global:machineRecords[$machine].Keys)) `
 				    -machine $machine `
 				    -eventStartTime $eventStartTime `
 				    -eventStopTime $eventStopTime `
@@ -1033,7 +1052,7 @@ function listen-forEvents()
 
 			    # date and time are at start of string separated by commas.
 			    # search for second comma splitting date and time from trace message to extract just date and time
-                $trace = $trace.Substring(0,$trace.IndexOf(",",11))
+                $traceDate = $trace.Substring(0,$trace.IndexOf(",",11))
 
                 if([DateTime]::TryParse($traceDate,[ref] $result))
                 {
@@ -1044,7 +1063,7 @@ function listen-forEvents()
                 {
                     #$pattern = "MM/dd/yyy,hh:mm:ss.ffffff zz"
                     $trace = $unsortedEvents[$i]
-                    $trace = $trace.Substring(0,$trace.IndexOf(",",11))
+                    $traceDate = $trace.Substring(0,$trace.IndexOf(",",11))
 
                     if([DateTime]::TryParse($traceDate,[ref] $result))
                     {
@@ -1227,7 +1246,7 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
                 log-info "dumping events on $($machine)"
             }
 
-            $ret = dump-events -eventLogNames $filteredLogs `
+            $ret = dump-events -eventLogNames (New-Object Collections.ArrayList($global:machineRecords[$machine].Keys)) `
 				-machine $machine `
 				-eventStartTime $eventStartTime `
 				-eventStopTime $eventStopTime `
