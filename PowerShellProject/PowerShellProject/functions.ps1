@@ -1,5 +1,40 @@
 # general functions
 
+# ----------------------------------------------------------------------------------------------------------------
+function get-sysInternalsUtility ([string] $utilityName)
+{
+    try
+    {
+        $destFile = "$(get-location)\$utilityName"
+        
+        if(![IO.File]::Exists($destFile))
+        {
+            $sysUrl = "http://live.sysinternals.com/$($utilityName)"
+
+            write-host "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
+            if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
+            {
+                $webClient = new-object System.Net.WebClient
+                $webClient.DownloadFile($sysUrl, $destFile)
+                log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
+            }
+            else
+            {
+                return [string]::Empty
+            }
+        }
+
+        return $destFile
+    }
+    catch
+    {
+        log-info "Exception downloading $($utilityName): $($error)"
+        $error.Clear()
+        return [string]::Empty
+    }
+}
+
+
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-lic-svr-chk.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
