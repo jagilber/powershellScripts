@@ -18,14 +18,14 @@
    File Name  : event-log-manager.ps1
    Author     : jagilber
    Version    : 
-                160720 fixed debuglogs count to per machine
-
+                160904 removed 'security' from -rds. takes too long
+                160902 changed logmerge to only do 2nd merge if there is more than one machine. added -eventDetails switch to export 'details' tab xml data
+                160830 added -nodynamicpath switch for when calling from other scripts that use a shared directory
    History    : 
+                160828 fixed issue where -enabledebuglogs was allowed to collect logs. enable/disable debug logs should not collect logs
+                160720 fixed debuglogs count to per machine
                 160719 fixed multi machine issue where using global eventlog names instead of machine specific
-                160714 added xml description
-                160522 added event log file ($eventLogPath) option.
-                160415 switched to log-merge.ps1 and fixed -rds
-                160329 original
+                
 
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
@@ -193,7 +193,11 @@ Param(
     [parameter(HelpMessage="Display merged event results in viewer. Requires log-merge.ps1")]
     [switch] $displayMergedResults,
     [parameter(HelpMessage="Select this switch to check for new version of file")]
-    [switch] $getUpdate
+    [switch] $getUpdate,
+    [parameter(HelpMessage="Select this switch force all files to be flat when run on a single machine")]
+    [switch] $nodynamicpath,
+    [parameter(HelpMessage="Select this switch to export event entry details tab")]
+    [switch] $eventDetails
     )
 
 cls
@@ -206,7 +210,7 @@ $global:eventLogFiles = ![string]::IsNullOrEmpty($eventLogPath)
 $global:eventLogNameSearchPattern = $eventLogNamePattern
 $global:jobs = New-Object Collections.ArrayList
 $global:machineRecords = @{}
-$global:uploadDir = ""
+$global:uploadDir = $uploadDir
 $jobThrottle = 10
 $listenSleepMs = 1000
 $logFile = "event-log-manager.log"
@@ -221,13 +225,34 @@ function main()
 {
     $error.Clear()
 
+    log-info "starting $([DateTime]::Now.ToString()) $([Diagnostics.Process]::GetCurrentProcess().StartInfo.Arguments)"
+    log-arguments
+
+    # log arguments
+    log-info $PSCmdlet.MyInvocation.Line;
+    # set upload directory
+    set-uploadDir
+
     # clean up old jobs
     remove-jobs $silent
 
     # some functions require admin
-    if($clearEventLogs -or $enableDebugLogs)
+    if($clearEventLogs -or $enableDebugLogs -or $disableDebugLogs)
     {
         runas-admin
+
+        if($clearEventLogs)
+        {
+            log-info "clearing event logs"
+        }
+        if($enableDebugLogs)
+        {
+            log-info "enabling debug event logs"
+        }
+        if($disableDebugLogs)
+        {
+            log-info "disabling debug event logs"
+        }
     }
 
     # see if new (different) version of file
@@ -235,9 +260,6 @@ function main()
     {
         get-update -updateUrl $updateUrl
     }
-
-    # set upload directory
-    set-uploadDir
 
     # add local machine if empty
     if($machines.Count -lt 1)
@@ -364,7 +386,7 @@ function build-eventLogLevels($eventLogLevels)
 function configure-rds($machines,$eventLogNamePattern)
 {
     log-info "setting up for rds environment"
-    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|^Security$|User-Profile-Service" #CAPI
+    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|User-Profile-Service|CAPI" #^Security$|
 
     if(![string]::IsNullOrEmpty($global:eventLogNameSearchPattern))
     {
@@ -411,7 +433,12 @@ function configure-startTime( $eventStartTime, $eventStopTime, $months, $hours, 
     [DateTime] $time = new-object DateTime
     [void][DateTime]::TryParse($eventStartTime,[ref] $time)
 
-    if($time -eq [DateTime]::MinValue -and [string]::IsNullOrEmpty($eventStopTime) -and ($months + $hours + $days + $minutes -eq 0))
+    if($time -eq [DateTime]::MinValue -and ![string]::IsNullOrEmpty($eventLogPath))
+    {
+        # parsing existing evtx files so do not override $eventStartTime if it was not provided
+        [DateTime] $eventStartTime = $time
+    }
+    elseif($time -eq [DateTime]::MinValue -and [string]::IsNullOrEmpty($eventStopTime) -and ($months + $hours + $days + $minutes -eq 0))
     {
         # default to just today
         $time = [DateTime]::Now.Date
@@ -582,7 +609,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     $description = $event.FormatDescription()
                     if([string]::IsNullOrEmpty($description))
                     {
-                        $description = [string]::Empty
+                       # $description = [string]::Empty
                         $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                     }
                     else
@@ -591,7 +618,10 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     }
 
                     #capi event log
-                    #$description = "$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
+                    if($eventdetails)
+                    {
+                        $description = "$($description)`n$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
+                    }
 
                     $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt"))," `
 						+ "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
@@ -698,7 +728,10 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                             }
                             
                             #capi event log
-                            #$description = "$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
+                            if($eventdetails)
+                            {
+                                $description = "$($description)`n$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
+                            }
 
                             $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
 						        + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
@@ -1110,53 +1143,87 @@ function listen-forEvents()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function log-arguments()
+{
+    log-info "clearEventLogs:$($clearEventLogs)"
+    log-info "clearEventLogsOnGather:$($clearEventLogsOnGather)"
+    log-info "days:$($days)"
+    log-info "debugScript:$($debugScript)"
+    log-info "disableDebugLogs:$($disableDebugLogs)"
+    log-info "displayMergedResults:$($displayMergedResults)"
+    log-info "enableDebugLogs:$($enableDebugLogs)"
+    log-info "eventDetails:$($eventDetails)"
+    log-info "eventLogLevels:$($eventLogLevels -join ",")"
+    log-info "eventLogIds:$($eventLogIds -join ",")"
+    log-info "eventLogNamePattern:$($eventLogNamePattern)"
+    log-info "eventLogPath:$($eventLogPath)"
+    log-info "eventStartTime:$($eventStartTime)"
+    log-info "eventStopTime:$($eventStopTime)"
+    log-info "eventTracePattern:$($eventTracePattern)"
+    log-info "getUpdate:$($getUpdate)"
+    log-info "hours:$($hours)"
+    log-info "listen:$($listen)"
+    log-info "listEventLogs:$($listEventLogs)"
+    log-info "machines:$($machines -join ",")"
+    log-info "minutes:$($minutes)"
+    log-info "months:$($months)"
+    log-info "nodynamicpath:$($nodynamicpath)"
+    log-info "rds:$($rds)"
+    log-info "uploadDir:$($global:uploadDir)"
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $false)
 {
-    if($debugOnly -and !$debugScript)
+    try
     {
-        return
+        if($debugOnly -and !$debugScript)
+        {
+            return
+        }
+
+        $foregroundColor = "White"
+
+        if(!$nocolor)
+        {
+            if($data.ToString().ToLower().Contains("error"))
+            {
+                $foregroundColor = "Red"
+            }
+            elseif($data.ToString().ToLower().Contains("fail"))
+            {
+                $foregroundColor = "Red"
+            }
+            elseif($data.ToString().ToLower().Contains("warning"))
+            {
+                $foregroundColor = "Yellow"
+            }
+            elseif($data.ToString().ToLower().Contains("exception"))
+            {
+                $foregroundColor = "Yellow"
+            }
+            elseif($data.ToString().ToLower().Contains("debug"))
+            {
+                $foregroundColor = "Gray"
+            }
+            elseif($data.ToString().ToLower().Contains("analytic"))
+            {
+                $foregroundColor = "Gray"
+            }
+            elseif($data.ToString().ToLower().Contains("disconnected"))
+            {
+                $foregroundColor = "DarkYellow"
+            }
+            elseif($data.ToString().ToLower().Contains("information"))
+            {
+                $foregroundColor = "Green"
+            }
+        }
+
+        Write-Host $data -ForegroundColor $foregroundColor
+        out-file -Append -InputObject "$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)" -FilePath $logFile
     }
-
-    $foregroundColor = "White"
-
-    if(!$nocolor)
-    {
-        if($data.ToString().ToLower().Contains("error"))
-        {
-            $foregroundColor = "Red"
-        }
-        elseif($data.ToString().ToLower().Contains("fail"))
-        {
-            $foregroundColor = "Red"
-        }
-        elseif($data.ToString().ToLower().Contains("warning"))
-        {
-            $foregroundColor = "Yellow"
-        }
-        elseif($data.ToString().ToLower().Contains("exception"))
-        {
-            $foregroundColor = "Yellow"
-        }
-        elseif($data.ToString().ToLower().Contains("debug"))
-        {
-            $foregroundColor = "Gray"
-        }
-        elseif($data.ToString().ToLower().Contains("analytic"))
-        {
-            $foregroundColor = "Gray"
-        }
-        elseif($data.ToString().ToLower().Contains("disconnected"))
-        {
-            $foregroundColor = "DarkYellow"
-        }
-        elseif($data.ToString().ToLower().Contains("information"))
-        {
-            $foregroundColor = "Green"
-        }
-    }
-
-    Write-Host $data -ForegroundColor $foregroundColor
-    out-file -Append -InputObject $data -FilePath $logFile
+    catch {}
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1176,16 +1243,20 @@ function merge-files()
         & "$($uDir)\events-all.csv"
     }
 
-    # run logmerge on individual machines
-    foreach($machine in $machines)
+    
+    # run logmerge on individual machines if more than one
+    if($machines.Count -gt 1)
     {
-        log-info "running $($logMerge)"
-
-		Invoke-Expression -Command  "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-$($machine)-all.csv`"" 
-
-        if($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
+        foreach($machine in $machines)
         {
-            & "$($uDir)\events-$($machine)-all.csv"
+            log-info "running $($logMerge)"
+
+		    Invoke-Expression -Command  "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-$($machine)-all.csv`"" 
+
+            if($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
+            {
+                & "$($uDir)\events-$($machine)-all.csv"
+            }
         }
     }
 }
@@ -1224,14 +1295,21 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
         }
 
         # export all events from eventlogs
-        if(!$clearEventLogs -and !$enableDebugLogs -and !$disableDebugLogs -and !$listEventLogs)
+        if($clearEventLogs -or $enableDebugLogs -or $disableDebugLogs -or $listEventLogs)
         {
+            $retval = $false
+        }
+        else
+        {
+
             # check upload dir
-            if(!$global:eventLogFiles)
+            if(!$global:eventLogFiles -and !$nodynamicpath)
             {
                 $global:uploadDir = "$($global:uploadDir)\$($startTime)\$($machine)"
             }
             
+            log-info "upload dir:$($global:uploadDir)"
+
             if(!(test-path $global:uploadDir))
             {
                 $ret = New-Item -Type Directory -Path $global:uploadDir
@@ -1252,10 +1330,6 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
 				-eventStopTime $eventStopTime `
 				-eventLogLevelsQuery $eventLogLevelsQuery `
 				-eventLogIdsQuery $eventLogIdsQuery
-        }
-        else
-        {
-            $retval = $false
         }
     }
 
@@ -1344,12 +1418,14 @@ function remove-jobs($silent)
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
 {
+    log-info "checking for admin"
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole( `
         [Security.Principal.WindowsBuiltInRole] "Administrator"))
     {
        log-info "please restart script as administrator. exiting..."
        exit 1
     }
+    log-info "running as admin"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1359,7 +1435,8 @@ function set-uploadDir()
     # set uploaddir
     get-workingDirectory
 
-    if([string]::IsNullOrEmpty($uploadDir) -and $global:eventLogFiles)
+    # if parsing a path for evtx files to convert and no upload path is given then use path of evtx
+    if([string]::IsNullOrEmpty($global:uploadDir) -and $global:eventLogFiles)
     {
         if([IO.Directory]::Exists($eventLogPath))
         {
@@ -1370,13 +1447,9 @@ function set-uploadDir()
             $global:uploadDir = [IO.Path]::GetDirectoryName($eventLogPath)
         }
     }
-    elseif([string]::IsNullOrEmpty($uploadDir))
+    elseif([string]::IsNullOrEmpty($global:uploadDir))
     {
         $global:uploadDir = "$(get-location)\gather"
-    }
-    else
-    {
-        $global:uploadDir = $uploadDir
     }
 
     # make sure directory exists

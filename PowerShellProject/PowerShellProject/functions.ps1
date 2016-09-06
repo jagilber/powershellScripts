@@ -37,30 +37,37 @@ function get-sysInternalsUtility ([string] $utilityName)
 
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-lic-svr-chk.ps1"
 
-# ----------------------------------------------------------------------------------------------------------------
-function get-update($updateUrl)
+#----------------------------------------------------------------------------
+function get-update($updateUrl, $destinationFile)
 {
+    log-info "get-update:checking for updated script: $($updateUrl)"
+    
     try 
     {
-        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
-        # github can bet set to use WINDOWS style which may prevent this
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl
         $gitClean = [regex]::Replace($git, '\W+', "")
-        $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
+
+        if(![IO.File]::Exists($destinationFile))
+        {
+            $fileClean = ""    
+        }
+        else
+        {
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+        }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
         {
-            log-info "updating new script"
-            [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
-            log-info "restart to use new script. exiting."
-            exit
+            log-info "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
         }
         else
         {
             log-info "script is up to date"
         }
         
-        return $true
+        return $false
         
     }
     catch [System.Exception] 

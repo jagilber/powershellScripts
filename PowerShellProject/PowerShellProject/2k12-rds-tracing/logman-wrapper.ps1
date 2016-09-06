@@ -10,15 +10,12 @@
 .NOTES  
    File Name  : logmanWrapper.ps1  
    Author     : jagilber
-   Version    : 160519
-   History    : added switch verifier
+   Version    : 
+                160902 added -nodynamicpath for when being called from another script to centralize all files in common folder
+
+   History    : 
+                160519 added switch verifier
                 changed gather directory to time\machine. 
-                changed rds and permanent to switches.
-                added generateConfig to create new logman config xml files
-             removed etl processor. Increased run-process waittimeout
-			 added working dir to start process
-			 added check for etl file being in use.
-                added option to use single etw session (default)
 
 .EXAMPLE  
     .\logmanwrapper.ps1 -action deploy
@@ -72,7 +69,9 @@ Param(
     [parameter(Position=4)]
     [string] $configurationFolder = "configs",
     [parameter(Position=5,HelpMessage="Specify to enable tracing for Remote Desktop Services.")]
-    [switch] $rds
+    [switch] $rds,
+    [parameter(HelpMessage="Select this switch force all files to be flat when run on a single machine")]
+    [switch] $nodynamicpath
   
     )
  
@@ -218,7 +217,11 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
         }
  
         # store files in computer folder or in root
-        if($gatherFolderFlat)
+        if($nodynamicpath)
+        {
+            $gatherFolder = "$(get-location)\$($defaultGatherFolder)"
+        }
+        elseif($gatherFolderFlat)
         {
             $gatherFolder = "$(get-location)\$($defaultGatherFolder)\$($dirName)"
         }
