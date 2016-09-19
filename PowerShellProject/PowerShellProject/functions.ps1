@@ -11,9 +11,11 @@ function get-sysInternalsUtility ([string] $utilityName)
         {
             $sysUrl = "http://live.sysinternals.com/$($utilityName)"
 
-            write-host "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
+            write-host "Sysinternals process $($utilityName) is needed for this option!" -ForegroundColor Yellow
             if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
             {
+                $webclient.UseDefaultCredentials = $true
+                #$webclient.Credentials = [Net.NetworkCredential](get-credential -UserName "$($env:USERDOMAIN)\$($env:USERNAME)" -Message "AZRDAV Sharepoint")
                 $webClient = new-object System.Net.WebClient
                 $webClient.DownloadFile($sysUrl, $destFile)
                 log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
@@ -37,14 +39,15 @@ function get-sysInternalsUtility ([string] $utilityName)
 
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-lic-svr-chk.ps1"
 
+
 #----------------------------------------------------------------------------
-function get-update($updateUrl, $destinationFile)
+function git-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
-    
+
     try 
     {
-        $git = Invoke-RestMethod -Method Get -Uri $updateUrl
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
         $gitClean = [regex]::Replace($git, '\W+', "")
 
         if(![IO.File]::Exists($destinationFile))
