@@ -11,11 +11,11 @@
    File Name  : remote-manager.ps1  
    Author     : jagilber
    Version    : 
+                160920 changed scheduled task to not use boot time trigger but to instead use registration trigger                
+   History    : 
                 160906 gettask and deletetask were still using .keys, switched to .name
                 160906 added get-workingdirectory for relative path issue
                 160905 added ability to use . in sourcefilespath
-                
-   History    : 
                 160902 added -debugScript switch to clean up output
                 160828 modified jobs for 'enabled' flag
                 160712.1 updated supporting scripts and commands
@@ -715,7 +715,8 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
  
                     $triggers = $TaskDefinition.Triggers
                     #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-                    $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+                    #$trigger = $triggers.Create(8) # Creates a "boot time" trigger
+                    $trigger = $triggers.Create(7) # Creates a "registration" trigger
                     #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
                     $trigger.Enabled = $true
  
