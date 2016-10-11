@@ -17,10 +17,10 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 
-                160919 added max read count, added logic in listen to temporarily remove machines that arent responding
+   Version    : 161010 -eventDetails switch wasnt getting passed to job
 
    History    : 
+                160919 added max read count, added logic in listen to temporarily remove machines that arent responding
                 160904 removed 'security' from -rds. takes too long to export
                 160902 changed logmerge to only do 2nd merge if there is more than one machine. added -eventDetails switch to export 'details' tab xml data
                 160830 added -nodynamicpath switch for when calling from other scripts that use a shared directory
@@ -716,7 +716,8 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                      $queryString,
                      $eventTracePattern,
                      $outputCsv,
-                     $global:eventLogFiles)
+                     $global:eventLogFiles,
+                     $eventDetails)
 
                 try
                 {
@@ -840,7 +841,8 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                $queryString,
                $eventTracePattern,
                $outputCsv,
-               $global:eventLogFiles)
+               $global:eventLogFiles,
+               $eventDetails)
 
             if($job -ne $null)
             {

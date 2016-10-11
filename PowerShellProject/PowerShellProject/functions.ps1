@@ -14,9 +14,9 @@ function get-sysInternalsUtility ([string] $utilityName)
             write-host "Sysinternals process $($utilityName) is needed for this option!" -ForegroundColor Yellow
             if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
             {
+                $webClient = new-object System.Net.WebClient
                 $webclient.UseDefaultCredentials = $true
                 #$webclient.Credentials = [Net.NetworkCredential](get-credential -UserName "$($env:USERDOMAIN)\$($env:USERNAME)" -Message "AZRDAV Sharepoint")
-                $webClient = new-object System.Net.WebClient
                 $webClient.DownloadFile($sysUrl, $destFile)
                 log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
             }

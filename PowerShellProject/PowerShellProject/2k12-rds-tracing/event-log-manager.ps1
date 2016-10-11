@@ -17,15 +17,14 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 
-                160904 removed 'security' from -rds. takes too long
+   Version    : 161010 -eventDetails switch wasnt getting passed to job
+
+   History    : 
+                160919 added max read count, added logic in listen to temporarily remove machines that arent responding
+                160904 removed 'security' from -rds. takes too long to export
                 160902 changed logmerge to only do 2nd merge if there is more than one machine. added -eventDetails switch to export 'details' tab xml data
                 160830 added -nodynamicpath switch for when calling from other scripts that use a shared directory
-   History    : 
                 160828 fixed issue where -enabledebuglogs was allowed to collect logs. enable/disable debug logs should not collect logs
-                160720 fixed debuglogs count to per machine
-                160719 fixed multi machine issue where using global eventlog names instead of machine specific
-                
 
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
@@ -66,7 +65,15 @@
 
 .EXAMPLE
     .\event-log-manager.ps1 –listEventLogs
-    Example command to query all event logs:
+    Example command to query all event log names:
+
+.EXAMPLE
+    .\event-log-manager.ps1 -listen -rds -machines rds-rds-1,rds-rds-2,rds-cb-1
+    Example command to listen to multiple machines for all eventlogs for Remote Desktop Services:
+
+.EXAMPLE
+    .\event-log-manager.ps1 -eventLogPath c:\temp -eventLogNames . 
+    Example command to query path c:\temp for all *.evt* files and convert to csv:
 
 .PARAMETER clearEventLogs
     If specified, will clear all event logs matching 'eventLogNamePattern'
@@ -80,11 +87,17 @@
 .PARAMETER disableDebugLogs
     If specified, will disable the 'analytic and debug' event logs matching 'eventLogNamePattern'
 
+.PARAMETER displayMergedResults
+    If specified, will display merged results in default viewer for .csv files.
+
 .PARAMETER enableDebugLogs
     If specified, will enable the 'analytic and debug' event logs matching 'eventLogNamePattern'
     NOTE: at end of troubleshooting, remember to 'disableEventLogs' as there is disk and cpu overhead for debug logs
     WARNING: enabling too many debug eventlogs can make system non responsive and may make machine unbootable!
     Only enable specific debug logs needed and only while troubleshooting.
+
+.PARAMETER eventDetails
+    If specified, will output event log items including xml data found on 'details' tab.
 
 .PARAMETER eventLogIds
     If specified, a comma separated list of event logs id's to query.
@@ -117,6 +130,9 @@
     If specified, is a string or regex pattern to specify event log traces to query.
     If not specified, all traces matching other criteria are displayed
 
+.PARAMETER getUpdate
+    If specified, will compare the current script against the location in github and will update if different.
+
 .PARAMETER hours
     If specified, is the number of hours to query from the event logs. The number specified is a positive number
 
@@ -136,6 +152,9 @@
 .PARAMETER months
     If specified, is the number of months to query from the event logs. The number specified is a positive number
 
+.PARAMETER noDynamicPath
+    If specifed, will store files in a non-timestamped folder which is useful if calling from another script.
+
 .PARAMETER rds
     If specified, will set the default 'eventLogNamePattern' to "RemoteApp|RemoteDesktop|Terminal" if value not populated
     If specified, will try to enumerate active connection broker cmdlet get-rdservers. If successful, will prompt to optionally enable gathering event logs from entire deployment
@@ -147,18 +166,21 @@
     The default is .\gather
 
 #>
+
 Param(
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to clear events")]
+    [parameter(Position=0,Mandatory=$false,HelpMessage="Select to clear events")]
     [switch] $clearEventLogs,
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to clear events after gather")]
+    [parameter(Position=0,Mandatory=$false,HelpMessage="Select to clear events after gather")]
     [switch] $clearEventLogsOnGather,
     [parameter(HelpMessage="Enter days")]
     [int] $days = 0,
     [parameter(HelpMessage="Enable to debug script")]
     [switch] $debugScript = $false,
-    [parameter(HelpMessage="Enter `$true to disable debug event logs")]
+    [parameter(HelpMessage="Select to disable debug event logs")]
     [switch] $disableDebugLogs,
-    [parameter(HelpMessage="Enter `$true to enable debug event logs")]
+    [parameter(HelpMessage="Display merged event results in viewer. Requires log-merge.ps1")]
+    [switch] $displayMergedResults,
+    [parameter(HelpMessage="Select to enable debug event logs")]
     [switch] $enableDebugLogs,
     [parameter(HelpMessage="Enter comma separated list of event log levels Critical,Error,Warning,Information,Verbose")]
     [string[]] $eventLogLevels = @("critical","error","warning","information","verbose"),
@@ -174,30 +196,28 @@ Param(
     [string] $eventStopTime,
     [parameter(HelpMessage="Enter regex or string pattern for event log trace to match")]
     [string] $eventTracePattern = "",
+    [parameter(HelpMessage="Select this switch to export event entry details tab")]
+    [switch] $eventDetails,
+    [parameter(HelpMessage="Select to check for new version of file")]
+    [switch] $getUpdate,
     [parameter(HelpMessage="Enter hours")]
     [int] $hours = 0,
     [parameter(HelpMessage="Listen to event logs either all or by -eventLogNamePattern")]
     [switch] $listen,
     [parameter(HelpMessage="List event logs either all or by -eventLogNamePattern")]
     [switch] $listEventLogs,
-	[parameter(HelpMessage="Enter comma separated list of machine names")]
+                [parameter(HelpMessage="Enter comma separated list of machine names")]
     [string[]] $machines = @(),
     [parameter(HelpMessage="Enter minutes")]
     [int] $minutes = 0,
     [parameter(HelpMessage="Enter months")]
     [int] $months = 0,
+    [parameter(HelpMessage="Select to force all files to be flat when run on a single machine")]
+    [switch] $nodynamicpath,
     [parameter(HelpMessage="Enter minutes")]
     [switch] $rds,
     [parameter(HelpMessage="Enter path for upload directory")]
-    [string] $uploadDir,
-    [parameter(HelpMessage="Display merged event results in viewer. Requires log-merge.ps1")]
-    [switch] $displayMergedResults,
-    [parameter(HelpMessage="Select this switch to check for new version of file")]
-    [switch] $getUpdate,
-    [parameter(HelpMessage="Select this switch force all files to be flat when run on a single machine")]
-    [switch] $nodynamicpath,
-    [parameter(HelpMessage="Select this switch to export event entry details tab")]
-    [switch] $eventDetails
+    [string] $uploadDir
     )
 
 cls
@@ -212,8 +232,10 @@ $global:jobs = New-Object Collections.ArrayList
 $global:machineRecords = @{}
 $global:uploadDir = $uploadDir
 $jobThrottle = 10
+$listenMachineDisabledCount = 10
+$listenEventReadCount = 100
 $listenSleepMs = 1000
-$logFile = "event-log-manager.log"
+$logFile = "event-log-manager-output.txt"
 $logMerge = ".\log-merge.ps1"
 $maxSortCount = 100
 $silent = $true
@@ -226,10 +248,11 @@ function main()
     $error.Clear()
 
     log-info "starting $([DateTime]::Now.ToString()) $([Diagnostics.Process]::GetCurrentProcess().StartInfo.Arguments)"
-    log-arguments
 
     # log arguments
     log-info $PSCmdlet.MyInvocation.Line;
+    log-arguments
+
     # set upload directory
     set-uploadDir
 
@@ -245,10 +268,12 @@ function main()
         {
             log-info "clearing event logs"
         }
+
         if($enableDebugLogs)
         {
             log-info "enabling debug event logs"
         }
+
         if($disableDebugLogs)
         {
             log-info "disabling debug event logs"
@@ -296,7 +321,7 @@ function main()
         $machines = @($env:COMPUTERNAME)
     }
 
-	# create xml query
+                # create xml query
     [string]$eventLogLevelQueryString = build-eventLogLevels -eventLogLevels $eventLogLevels
     [string]$eventLogIdQueryString = build-eventLogIds -eventLogIds $eventLogIds
 
@@ -324,7 +349,7 @@ function main()
         $origStartTime = $eventStartTime
     }
 
-	# determine start and stop times for xml query
+                # determine start and stop times for xml query
     $eventStartTime = configure-startTime -eventStartTime $eventStartTime `
         -eventStopTime $eventStopTime `
         -months $months `
@@ -372,11 +397,11 @@ function build-eventLogLevels($eventLogLevels)
         switch ($eventLogLevel.ToLower())
         {
             "critical" { [void]$sb.Append("Level=1 or ") }
-			"error" { [void]$sb.Append("Level=2 or ") }
+                                                "error" { [void]$sb.Append("Level=2 or ") }
             "warning" { [void]$sb.Append("Level=3 or ") }
             "information" { [void]$sb.Append("Level=4 or Level=0 or ") }
             "verbose" { [void]$sb.Append("Level=5 or ") }
-        }
+       }
     }
 
     return $sb.ToString().TrimEnd(" or ")
@@ -386,7 +411,7 @@ function build-eventLogLevels($eventLogLevels)
 function configure-rds($machines,$eventLogNamePattern)
 {
     log-info "setting up for rds environment"
-    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|User-Profile-Service|CAPI" #^Security$|
+    $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|User-Profile-Service" #CAPI|^Security$"
 
     if(![string]::IsNullOrEmpty($global:eventLogNameSearchPattern))
     {
@@ -399,6 +424,7 @@ function configure-rds($machines,$eventLogNamePattern)
     
     if(!(get-service -DisplayName 'Remote Desktop Connection Broker' -ErrorAction SilentlyContinue))
     {
+        $error.Clear()
         return $machines
     }
 
@@ -487,7 +513,7 @@ function configure-stopTime($eventStartTime,$eventStopTime,$months,$hours,$days,
         [DateTime] $eventStopTime = $time
     }
 
-    log-info "searching for events older than: $($eventStopTime.ToString("yyyy-MM-ddTHH:mm:sszz"))"
+   log-info "searching for events older than: $($eventStopTime.ToString("yyyy-MM-ddTHH:mm:sszz"))"
     return $eventStopTime
 }
 
@@ -556,21 +582,24 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
             $event = $preader.ReadEvent()
             if($event -eq $null)
             {
-                #log-info "skipping eventlog $($eventLogName) as there are 0 events returned" -debugOnly
                 continue
             }
 
-            log-info "dump-events:machine: $($machine) event log name: $eventLogName old index: $($recordid) new index: $($event.RecordId)" -debugOnly
             if($recordid -eq $event.RecordId)
             {
                 #sometimes record id's come back as 0 causing dupes
                 $recordid++
             }
+
+            $oldrecordid = ($global:machineRecords[$machine])[$eventLogName]
             $recordid = [Math]::Max($recordid,$event.RecordId)
-            
+
+            log-info "dump-events:machine: $($machine) event log name: $eventLogName old index: $($oldRecordid) new index: $($recordId)" -debugOnly
+
             ($global:machineRecords[$machine])[$eventLogName] = $recordid
 
             $cleanName = $eventLogName.Replace("/","-").Replace(" ", "-")
+
             # create csv file name
             if(!$global:eventLogFiles)
             {
@@ -597,11 +626,12 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 
         if($listen)
         {
-            while($true)
+            $count = 0
+
+            while($count++ -le $listenEventReadCount)
             {
                 if($event -eq $null)
                 {
-                    #log-info "dumpevents:listen: no more events from readevent" -debugOnly
                     break
                 }
                 elseif(![string]::IsNullOrEmpty($event.TimeCreated))
@@ -609,7 +639,6 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     $description = $event.FormatDescription()
                     if([string]::IsNullOrEmpty($description))
                     {
-                       # $description = [string]::Empty
                         $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                     }
                     else
@@ -617,23 +646,21 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                         $description = $description.Replace("`r`n",";")
                     }
 
-                    #capi event log
+                    # event log 'details' tab
                     if($eventdetails)
                     {
                         $description = "$($description)`n$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                     }
 
                     $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt"))," `
-						+ "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
-						+ "$($event.ThreadId),$($description)"))
+                                                                                                + "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
+                                                                                                + "$($event.ThreadId),$($description)"))
 
-					if([string]::IsNullOrEmpty($eventTracePattern) -or
-						(![string]::IsNullOrEmpty($eventTracePattern) -and
-							[regex]::IsMatch($outputEntry,$eventTracePattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
-								[Text.RegularExpressions.RegexOptions]::Singleline)))
+                                                                                if([string]::IsNullOrEmpty($eventTracePattern) -or
+                                                                                                (![string]::IsNullOrEmpty($eventTracePattern) -and
+                                                                                                                [regex]::IsMatch($outputEntry,$eventTracePattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+                                                                                                                                [Text.RegularExpressions.RegexOptions]::Singleline)))
                     {
-                        #write-host $outputEntry
-                        #write-host "------------------------------------------"
                         Out-File -Append -FilePath $outputCsv -InputObject $outputEntry
                         [void]$newEvents.Add($outputEntry)
                     }
@@ -644,9 +671,28 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                 }
 
                 ($global:machineRecords[$machine])[$eventLogName] = [Math]::Max(($global:machineRecords[$machine])[$eventLogName],$event.RecordId)
-                # write-host "while $($eventLogName):$($recordid[$eventLogName])"
                 $event = $preader.ReadEvent()
+            } # end while
+
+            while($count -ge $listenEventReadCount)
+            {
+                # to keep listen from getting behind
+                # if there are more records than $listenEventReadCount, read the rest
+                # cant seek in debug logs.
+                # keep reading events but dont process
+                $recordid = $event.RecordId
+               
+                if(!($event = $preader.ReadEvent()))
+                {
+                    log-info "warning: max read count reached, skipping newest $($count - $listenEventReadCount) events." #-debugOnly
+                    break
+                }
+
+                ($global:machineRecords[$machine])[$eventLogName] = $event.RecordId                
+                $count++
             }
+
+            log-info "listen end count: $($count)" -debugOnly
         }
         else
         {
@@ -670,11 +716,11 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                      $queryString,
                      $eventTracePattern,
                      $outputCsv,
-                     $global:eventLogFiles)
+                     $global:eventLogFiles,
+                     $eventDetails)
 
                 try
                 {
-                    # use .net to see if any events as it doesnt throw exception
                     $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
 
                     if(!$global:eventLogFiles)
@@ -710,7 +756,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     {
                         $event = $reader.ReadEvent()
 
-                        if($event -eq $null)
+                       if($event -eq $null)
                         {
                             break
                         }
@@ -719,7 +765,6 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                             $description = $event.FormatDescription()
                             if([string]::IsNullOrEmpty($description))
                             {
-                                #$description = [string]::Empty
                                 $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                             }
                             else
@@ -727,20 +772,20 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                                 $description = $description.Replace("`r`n",";")
                             }
                             
-                            #capi event log
+                            #event log 'details' tab view
                             if($eventdetails)
                             {
                                 $description = "$($description)`n$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                             }
 
                             $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
-						        + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
-						        + "$($description)"))
+                                                                                                        + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
+                                                                                                        + "$($description)"))
 
-					        if([string]::IsNullOrEmpty($eventTracePattern) -or
-						        (![string]::IsNullOrEmpty($eventTracePattern) -and
-							        [regex]::IsMatch($outputEntry,$eventTracePattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
-								        [Text.RegularExpressions.RegexOptions]::Singleline)))
+                                                                                        if([string]::IsNullOrEmpty($eventTracePattern) -or
+                                                                                                        (![string]::IsNullOrEmpty($eventTracePattern) -and
+                                                                                                                        [regex]::IsMatch($outputEntry,$eventTracePattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+                                                                                                                                        [Text.RegularExpressions.RegexOptions]::Singleline)))
                             {
                                 if(![string]::IsNullOrEmpty($eventTracePattern))
                                 {
@@ -796,7 +841,8 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                $queryString,
                $eventTracePattern,
                $outputCsv,
-               $global:eventLogFiles)
+               $global:eventLogFiles,
+               $eventDetails)
 
             if($job -ne $null)
             {
@@ -806,10 +852,10 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
         }
     }
 
-	$preader.CancelReading()
-	$preader.Dispose()
-	$psession.CancelCurrentOperations()
-	$psession.Dispose()
+                $preader.CancelReading()
+                $preader.Dispose()
+                $psession.CancelCurrentOperations()
+                $psession.Dispose()
 
     return ,$newEvents
 }
@@ -870,15 +916,15 @@ function enable-logs($eventLogNames, $machine)
                 [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
                 $debugLogsEnabled.Add($eventLog.LogName)
 
-				if($debugLogsMax -le $debugLogsEnabled.Count)
-				{
-					log-info "Error: too many debug logs enabled ($($debugLogsMax))."
-					log-info "Error: this can cause system performance / stability issues as well as inability to boot!"
-					log-info "Error: rerun script again with these switches: .\event-log-manager.ps1 -listeventlogs -disableDebugLogs"
-					log-info "Error: this will disable all debug logs."
-					log-info "Warning: exiting script."
-					exit 1
-				}
+                                                                if($debugLogsMax -le $debugLogsEnabled.Count)
+                                                                {
+                                                                                log-info "Error: too many debug logs enabled ($($debugLogsMax))."
+                                                                                log-info "Error: this can cause system performance / stability issues as well as inability to boot!"
+                                                                                log-info "Error: rerun script again with these switches: .\event-log-manager.ps1 -listeventlogs -disableDebugLogs"
+                                                                                log-info "Error: this will disable all debug logs."
+                                                                                log-info "Warning: exiting script."
+                                                                                exit 1
+                                                                }
             }
             else
             {
@@ -989,7 +1035,6 @@ function get-update($updateUrl)
 function get-workingDirectory()
 {
     $retVal = [string]::Empty
- 
     if (Test-Path variable:\hostinvocation)
     {
         $retVal = $hostinvocation.MyCommand.Path
@@ -1007,21 +1052,24 @@ function get-workingDirectory()
     {
         $retVal = (Get-Location).path
         log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
     } 
  
-    
     Set-Location $retVal | out-null
- 
     return $retVal
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function listen-forEvents()
 {
-	$unsortedEvents = New-Object Collections.ArrayList
+                $unsortedEvents = New-Object Collections.ArrayList
     $sortedEvents = New-Object Collections.ArrayList
     $newEvents = New-Object Collections.ArrayList
+    $machineList = new-object Collections.ArrayList 
+    
+    foreach($machine in $machines)
+    {
+        $machineList.Add(@{ $machine = @{'Disabled' = $false; 'DisabledCount' = 0}})
+    }
 
     try
     {
@@ -1035,18 +1083,53 @@ function listen-forEvents()
 
             foreach($machine in $machines)
             {
+                if($machineList.$machine.Disabled -and $machineList.$machine.DisabledCount -lt $listenMachineDisabledCount)
+                {
+                    $machineList.$machine.DisabledCount++
+                    log-info "disabled count: $($machine):$($machineList.$machine.DisabledCount)" -debugOnly
+                    continue
+                }
+                elseif($machineList.$machine.Disabled)
+                {
+                    # check connectivity
+                    if(!(test-path "\\$($machine)\admin$"))
+                    {
+                        log-info "unable to connect to machine: $($machine). leaving disabled"
+                        log-info "$($machine) not accessible, skipping."
+                        $machineList.$machine.DisabledCount = 0
+                        continue
+                    }
+                    else
+                    {
+                        log-info "successfully connected to machine: $($machine). enabling..."                        
+                        $machineList.$machine.Disabled = $false
+                        $machineList.$machine.DisabledCount = 0
+                    }
+                }
+
                 log-info "listen:checking machine $($machine) $([DateTime]::Now)" -debugOnly
 
-                $newEvents = dump-events -eventLogNames (New-Object Collections.ArrayList($global:machineRecords[$machine].Keys)) `
-				    -machine $machine `
-				    -eventStartTime $eventStartTime `
-				    -eventStopTime $eventStopTime `
-				    -eventLogLevelsQuery $eventLogLevelsQuery `
-				    -eventLogIdsQuery $eventLogIdsQuery
-
-                if($newEvents.Count -gt 0)
+                try
                 {
-                    [void]$unsortedEvents.AddRange(@($newEvents | sort-object))
+                    $newEvents = dump-events -eventLogNames (New-Object Collections.ArrayList($global:machineRecords[$machine].Keys)) `
+                                                                        -machine $machine `
+                                                                        -eventStartTime $eventStartTime `
+                                                                        -eventStopTime $eventStopTime `
+                                                                        -eventLogLevelsQuery $eventLogLevelsQuery `
+                                                                        -eventLogIdsQuery $eventLogIdsQuery
+
+                    if($newEvents.Count -gt 0)
+                    {
+                        [void]$unsortedEvents.AddRange(@($newEvents | sort-object))
+                    }
+                }
+                catch
+                {
+                    log-info "exception connecting to machine: $($machine). disabling..."
+                    log-info "$($error)"
+                    $machineList.$machine.Disabled = $true
+                    $error.Clear()
+                    continue
                 }
             }
 
@@ -1061,7 +1144,7 @@ function listen-forEvents()
                     foreach($sortedEvent in $sortedEvents)
                     {
                         log-info $sortedEvent -nocolor
-				        #write-host "------------------------------------------"
+                                                                        #write-host "------------------------------------------"
                     }
                 }
 
@@ -1072,7 +1155,7 @@ function listen-forEvents()
                     foreach($sortedEvent in $unsortedEvents)
                     {
                         log-info $sortedEvent -nocolor
-				        #write-host "------------------------------------------"
+                                                                        #write-host "------------------------------------------"
                     }
                 }
 
@@ -1083,8 +1166,8 @@ function listen-forEvents()
                 $result = [DateTime]::MinValue
                 $trace = $sortedEvents[$sortedEvents.Count -1]
 
-			    # date and time are at start of string separated by commas.
-			    # search for second comma splitting date and time from trace message to extract just date and time
+                                                    # date and time are at start of string separated by commas.
+                                                    # search for second comma splitting date and time from trace message to extract just date and time
                 $traceDate = $trace.Substring(0,$trace.IndexOf(",",11))
 
                 if([DateTime]::TryParse($traceDate,[ref] $result))
@@ -1094,7 +1177,6 @@ function listen-forEvents()
 
                 for($i = 0; $i -lt $unsortedEvents.Count; $i++)
                 {
-                    #$pattern = "MM/dd/yyy,hh:mm:ss.ffffff zz"
                     $trace = $unsortedEvents[$i]
                     $traceDate = $trace.Substring(0,$trace.IndexOf(",",11))
 
@@ -1118,22 +1200,21 @@ function listen-forEvents()
                 foreach($sortedEvent in $sortedEvents | Sort-Object)
                 {
                     log-info $sortedEvent
-				    write-host "------------------------------------------"
+                                                                    write-host "------------------------------------------"
                 }
             }
 
             log-info "listen: unsorted count:$($unsortedEvents.Count) sorted count: $($sortedEvents.Count)" -debugOnly
 
-		    if($unsortedEvents.Count -gt 0)
-		    {
-			    # query again without waiting to not get behind
-			    #Start-Sleep -Milliseconds 10
+                                    if($unsortedEvents.Count -gt 0)
+                                    {
+                                                    # query again without waiting to not get behind
                 log-info "***listen:no sleep***" -debugOnly
-		    }
-		    else
-		    {
-			    Start-Sleep -Milliseconds $listenSleepMs
-		    }
+                                    }
+                                    else
+                                    {
+                                                    Start-Sleep -Milliseconds $listenSleepMs
+                                    }
         }
     }
     catch
@@ -1232,12 +1313,12 @@ function merge-files()
     # run logmerge on all files
     $uDir = $global:uploadDir
 
-	if(![IO.File]::Exists("$($logmerge)"))
-	{
-		return 
-	}
-	
-	Invoke-Expression -Command "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-all.csv`""
+                if(![IO.File]::Exists("$($logmerge)"))
+                {
+                                return 
+                }
+                
+                Invoke-Expression -Command "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-all.csv`""
     if($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-all.csv"))
     {
         & "$($uDir)\events-all.csv"
@@ -1251,7 +1332,7 @@ function merge-files()
         {
             log-info "running $($logMerge)"
 
-		    Invoke-Expression -Command  "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-$($machine)-all.csv`"" 
+                                    Invoke-Expression -Command  "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-$($machine)-all.csv`"" 
 
             if($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
             {
@@ -1264,7 +1345,7 @@ function merge-files()
 # ----------------------------------------------------------------------------------------------------------------
 function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLogLevelsQuery, $eventLogIdsQuery )
 {
-    [bool] $retval = $true
+    $retval = $true
     $ret = $null
 
     foreach($machine in $machines)
@@ -1301,7 +1382,6 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
         }
         else
         {
-
             # check upload dir
             if(!$global:eventLogFiles -and !$nodynamicpath)
             {
@@ -1325,24 +1405,24 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
             }
 
             $ret = dump-events -eventLogNames (New-Object Collections.ArrayList($global:machineRecords[$machine].Keys)) `
-				-machine $machine `
-				-eventStartTime $eventStartTime `
-				-eventStopTime $eventStopTime `
-				-eventLogLevelsQuery $eventLogLevelsQuery `
-				-eventLogIdsQuery $eventLogIdsQuery
+                                                                -machine $machine `
+                                                                -eventStartTime $eventStartTime `
+                                                                -eventStopTime $eventStopTime `
+                                                                -eventLogLevelsQuery $eventLogLevelsQuery `
+                                                                -eventLogIdsQuery $eventLogIdsQuery
         }
     }
 
     if($listen)
-	{
+                {
         log-info "listening for events from machines:"
         foreach($machine in $machines)
         {
             log-info "`t$($machine)" -nocolor
         }
 
-		listen-forEvents
-	}
+                                listen-forEvents
+                }
 
     return $retval
 }
@@ -1351,7 +1431,11 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
 function process-machines( $machines, $eventStartTime, $eventStopTime, $eventLogLevelsQuery, $eventLogIdsQuery )
 {
     # process all event logs on all machines
-    if(process-eventLogs -machines $machines -eventStartTime $eventStartTime -eventStopTime $eventStopTime -eventLogLevelsQuery $eventLogLevelQueryString -eventLogIdsQuery $eventLogIdQueryString)
+    if(process-eventLogs -machines $machines `
+        -eventStartTime $eventStartTime `
+        -eventStopTime $eventStopTime `
+        -eventLogLevelsQuery $eventLogLevelQueryString `
+        -eventLogIdsQuery $eventLogIdQueryString)
     {
         log-info "jobs count:$($global:jobs.Count)"
         $count = 0
@@ -1366,7 +1450,12 @@ function process-machines( $machines, $eventStartTime, $eventStopTime, $eventLog
 
                     if($job.State -ieq 'Completed')
                     {
-                        write-host ("$([DateTime]::Now) job completed. job name: $($job.Name) job id:$($job.Id) job state:$($job.State) job error:$($job.Error) job status:$($job.StatusMessage)")
+                        write-host ("$([DateTime]::Now) job completed. job name: $($job.Name) job id:$($job.Id) job state:$($job.State)")
+                        if(![string]::IsNullOrEmpty($job.Error))
+                        {
+                            write-host "job error:$($job.Error) job status:$($job.StatusMessage)"
+                        }
+
                         Remove-Job -Job $job -Force
                         $global:jobs.Remove($job)
                     }
@@ -1375,7 +1464,12 @@ function process-machines( $machines, $eventStartTime, $eventStopTime, $eventLog
                 {
                     if($count -eq 30)
                     {
-                        write-host ("$([DateTime]::Now) job name: $($job.Name) job id:$($job.Id) job state:$($job.State) job error:$($job.Error) job status:$($job.StatusMessage)") -
+                        write-host ("$([DateTime]::Now) job name: $($job.Name) job id:$($job.Id) job state:$($job.State)") 
+                        if(![string]::IsNullOrEmpty($job.Error))
+                        {
+                            write-host "job error:$($job.Error) job status:$($job.StatusMessage)"
+                        }
+
                         $count = 0
                     }
                 }
@@ -1419,12 +1513,11 @@ function remove-jobs($silent)
 function runas-admin()
 {
     log-info "checking for admin"
-    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole( `
-        [Security.Principal.WindowsBuiltInRole] "Administrator"))
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {
        log-info "please restart script as administrator. exiting..."
        exit 1
-    }
+   }
     log-info "running as admin"
 }
 
@@ -1464,3 +1557,4 @@ function set-uploadDir()
 # ----------------------------------------------------------------------------------------------------------------
 
 main
+

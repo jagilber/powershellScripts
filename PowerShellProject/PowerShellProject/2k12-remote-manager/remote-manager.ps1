@@ -11,11 +11,11 @@
    File Name  : remote-manager.ps1  
    Author     : jagilber
    Version    : 
+                160920 changed scheduled task to not use boot time trigger but to instead use registration trigger                
+   History    : 
                 160906 gettask and deletetask were still using .keys, switched to .name
                 160906 added get-workingdirectory for relative path issue
                 160905 added ability to use . in sourcefilespath
-                
-   History    : 
                 160902 added -debugScript switch to clean up output
                 160828 modified jobs for 'enabled' flag
                 160712.1 updated supporting scripts and commands
@@ -90,7 +90,7 @@ function main()
         { 
             $gatherDir = "$(get-Location)\gather\$($nameStamp)" 
         }
-        ELSE
+        else
         {
             $gatherdir = "$($gatherdir)\$($nameStamp)"
         }
@@ -139,6 +139,7 @@ function main()
         {
             $machines += $env:COMPUTERNAME
         }
+
         # when passing comma separated list of machines from bat, it does not get separated correctly
         elseif($machines.length -eq 1 -and $machines[0].Contains(","))
         {
@@ -245,6 +246,7 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
                 {
                     [IO.FileInfo] $dfileInfo = new-object IO.FileInfo ($destinationFile)    
                     [IO.FileInfo] $sfileInfo = new-object IO.FileInfo ($sourceFile)    
+        
                     if($dfileInfo.LastWriteTimeUtc -eq $sfileInfo.LastWriteTimeUtc)
                     {
                         if($debugScript)
@@ -327,6 +329,7 @@ function deploy-files($command, $machine)
         {
             $copyFiles = @{}
             $sourceFilesPath = $sourceFiles
+
             if($sourceFilesPath.StartsWith("."))
             {
                 $sourceFilesPath = [regex]::Replace($sourceFilesPath, "^.", (get-location))
@@ -371,17 +374,13 @@ function deploy-files($command, $machine)
             foreach($file in $files)
             {
                 $destFile = $null
+            
                 if(!$isDir)
                 {
                     $destFile = "\$([IO.Path]::GetFileName($file))"
                 }
 
                 $copyFiles.Add($file, $file.Replace($sourcefilesPath,"\\$($machine)\$($command.destfiles)$($destFile)"))
-            }
-
-            if($debugScript)
-            {
-                $copyfiles | fl *
             }
 
             if($debugScript)
@@ -622,6 +621,7 @@ function log-info($data)
 {
     $dataWritten = $false
     $data = "$([System.DateTime]::Now):$($data)`n"
+    
     if([regex]::IsMatch($data.ToLower(),"error|exception|fail|warning"))
     {
         write-host $data -foregroundcolor Yellow
@@ -644,6 +644,7 @@ function log-info($data)
     }
 
     $counter = 0
+    
     while(!$dataWritten -and $counter -lt 1000)
     {
         try
@@ -715,7 +716,8 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
  
                     $triggers = $TaskDefinition.Triggers
                     #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-                    $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+                    #$trigger = $triggers.Create(8) # Creates a "boot time" trigger
+                    $trigger = $triggers.Create(7) # Creates a "registration" trigger
                     #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
                     $trigger.Enabled = $true
  
@@ -879,7 +881,6 @@ function process-commands($commands, [string] $machine)
 # ----------------------------------------------------------------------------------------------------------------
 function run-wmiCommandJob($command, $machine)
 {
-
     $functions = {
         
         function log-info($data)
@@ -1136,6 +1137,7 @@ function build-jobsList()
         'wait' = $false;
         'command' = "netsh.exe";
         'arguments' = "trace start capture=yes overwrite=yes maxsize=1024 filemode=circular tracefile=c:\windows\temp\net.etl";
+        #'arguments' = "trace start capture=yes Scenario=NetConnection overwrite=yes maxsize=1024 filemode=circular tracefile=c:\\windows\\temp\\net.etl";
         'workingDir' = "c:\windows\temp";
         'sourceFiles' = "";
         'destfiles' = "";

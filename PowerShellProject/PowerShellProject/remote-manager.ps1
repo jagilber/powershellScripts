@@ -11,6 +11,17 @@
    File Name  : remote-manager.ps1  
    Author     : jagilber
    Version    : 
+                Windows Registry Editor Version 5.00
+
+[HKEY_USERS\.Default\Software\Sysinternals\Process Monitor]
+"EulaAccepted"=dword:00000001
+"DbgHelpPath"="C:\\Windows\\SYSTEM32\\dbghelp.dll"
+"Logfile"="c:\\windows\\temp\\procmon.pml"
+"AdvancedMode"=dword:00000000
+"HistoryDepth"=dword:00000001
+"Profiling"=dword:00000000
+"ResolveAddresses"=dword:00000000
+
                 160920 changed scheduled task to not use boot time trigger but to instead use registration trigger                
    History    : 
                 160906 gettask and deletetask were still using .keys, switched to .name

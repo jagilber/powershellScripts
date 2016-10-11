@@ -7,7 +7,10 @@
 .NOTES  
    File Name  : event-task-procmon.ps1  
    Author     : jagilber
-   Version    : 150913
+   Version    : 
+                160920 added -force switch to try delete regardless if open
+   History    :            
+                150913
                 - added process wait and file monitor
                 - added wait for process terminate
 .EXAMPLE  
@@ -22,19 +25,22 @@
     will test script and sent email if settings are configured.
 .PARAMETER workingDir
     working script directory
+.PARAMETER force
+    use to try delete regardless if open
 #>  
  
 Param(
- 
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to install event log monitor")]
+    [parameter(HelpMessage="select to force procmon when pml is around 1GB")]
+    [switch] $circular,
+    [parameter(HelpMessage="select install event log monitor")]
     [switch] $install,
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to uninstall event log monitor")]
+    [parameter(HelpMessage="select to uninstall event log monitor")]
     [switch] $uninstall,
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to test email")]
+    [parameter(HelpMessage="select to test email")]
     [switch] $test,
-    [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to terminate programs")]
+    [parameter(HelpMessage="select to terminate programs")]
     [switch] $terminate,
-    [parameter(Position=1,Mandatory=$false,HelpMessage="Enter working directory")]
+    [parameter(HelpMessage="Enter working directory")]
     [string] $workingDir
     )
  
@@ -77,7 +83,7 @@ $taskInfoUnDeploy.Add("taskdir","%systemroot%\temp")
 $taskInfoUnDeploy.Add("taskarg","-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file %systemroot%\temp\event-task-procmon.ps1 -terminate")
 
 # files to monitor
-$fileMonitorCount = 5
+$fileMonitorCount = 2
 $filesToMonitor = "*.pml"
 
 # email Information
@@ -213,7 +219,7 @@ function monitor-files()
 # ----------------------------------------------------------------------------------------------------------------
 function check-files()
 {
-     if([string]::IsNullOrEmpty($filesToMonitor) -or $fileMonitorCount -lt 1)
+    if([string]::IsNullOrEmpty($filesToMonitor) -or $fileMonitorCount -lt 1)
     {
        log-info "filesToMonitor empty. returning"
        return 
@@ -222,8 +228,8 @@ function check-files()
     # check file count first 
     $directoryInfo = new-object IO.DirectoryInfo (get-workingDirectory)
 
-    while ($true)
-    {
+    #while ($true)
+    #{
         [IO.FileInfo[]] $files = ($directoryInfo.EnumerateFiles($filesToMonitor,[IO.SearchOption]::TopDirectoryOnly)) | sort CreationTime
 
         foreach($file in $files)
@@ -244,8 +250,7 @@ function check-files()
                 return
             }
         }
-    }
-
+    #}
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -690,4 +695,6 @@ function check-processList()
     log-info "check-processList returning:$($retVal)"
     return $retVal
 }
+# ----------------------------------------------------------------------------------------------------------------
+
 main 
