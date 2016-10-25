@@ -17,14 +17,12 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161010 -eventDetails switch wasnt getting passed to job
+   Version    : 161026 added $baseDir to process-eventlogs
 
    History    : 
+                161010 -eventDetails switch wasnt getting passed to job
                 160919 added max read count, added logic in listen to temporarily remove machines that arent responding
                 160904 removed 'security' from -rds. takes too long to export
-                160902 changed logmerge to only do 2nd merge if there is more than one machine. added -eventDetails switch to export 'details' tab xml data
-                160830 added -nodynamicpath switch for when calling from other scripts that use a shared directory
-                160828 fixed issue where -enabledebuglogs was allowed to collect logs. enable/disable debug logs should not collect logs
 
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
@@ -371,6 +369,9 @@ function main()
         -eventLogLevelsQuery $eventLogLevelQueryString `
         -eventLogIdsQuery $eventLogIdQueryString
 
+   start $global:uploadDir
+   
+   log-info "files are located here: $($global:uploadDir)"
    log-info "finished"
 }
 
@@ -1313,12 +1314,13 @@ function merge-files()
     # run logmerge on all files
     $uDir = $global:uploadDir
 
-                if(![IO.File]::Exists("$($logmerge)"))
-                {
-                                return 
-                }
+    if(![IO.File]::Exists("$($logmerge)"))
+    {
+                    return 
+    }
                 
-                Invoke-Expression -Command "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-all.csv`""
+    Invoke-Expression -Command "$($logmerge) `"$($uDir)`" `"*.csv`" `"$($uDir)\events-all.csv`""
+
     if($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-all.csv"))
     {
         & "$($uDir)\events-all.csv"
@@ -1347,6 +1349,7 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
 {
     $retval = $true
     $ret = $null
+    $baseDir = $global:uploadDir
 
     foreach($machine in $machines)
     {
@@ -1385,7 +1388,7 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
             # check upload dir
             if(!$global:eventLogFiles -and !$nodynamicpath)
             {
-                $global:uploadDir = "$($global:uploadDir)\$($startTime)\$($machine)"
+                $global:uploadDir = "$($baseDir)\$($startTime)\$($machine)"
             }
             
             log-info "upload dir:$($global:uploadDir)"
@@ -1414,16 +1417,18 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime, $eventLo
     }
 
     if($listen)
-                {
+    {
         log-info "listening for events from machines:"
+
         foreach($machine in $machines)
         {
             log-info "`t$($machine)" -nocolor
         }
 
-                                listen-forEvents
-                }
+        listen-forEvents
+    }
 
+    $global:uploadDir = $baseDir
     return $retval
 }
 
