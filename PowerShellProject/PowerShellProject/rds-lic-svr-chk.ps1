@@ -12,13 +12,8 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 160625 adding network service
+   Version    : 161206 using transcript file for logging to match console
    History    : 
-                160510 added installed features to list. added eventlog search
-                    added osversion check and tested against 2k8
-                160504 modified reading of registry to use WMI for compatibility with 2k8r2
-                160502 added new methods off of Win32_TSLicenseServer. added $rdshServer argument
-   Issues     : not everything logged to output file
    
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
@@ -77,7 +72,9 @@ $hasX509 = $false
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 { 
-    log-info $MyInvocation.ScriptName
+    Start-Transcript -Path $logFile -Force
+
+    $MyInvocation.ScriptName
     # run as administrator
     if(!(runas-admin))
     {
@@ -99,7 +96,7 @@ function main()
         }
         else
         {
-            log-info "unable to download utility. exiting"
+            "unable to download utility. exiting"
             return
         }
     }
@@ -114,27 +111,27 @@ function main()
         $licServers = @($licServer)
     }
 
-    log-info "-----------------------------------------"
-    log-info "OS $($rdshServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "OS $($rdshServer)"
+    "-----------------------------------------"
     $osVersion = read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value CurrentVersion
     read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName
 
-    log-info "-----------------------------------------"
-    log-info "INSTALLED FEATURES $($rdshServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "INSTALLED FEATURES $($rdshServer)"
+    "-----------------------------------------"
     
     Get-WindowsFeature -ComputerName $rdshServer | ? Installed -eq $true
 
-    log-info "-----------------------------------------"
-    log-info "EVENTS $($rdshServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "EVENTS $($rdshServer)"
+    "-----------------------------------------"
 
     Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
 
-    log-info "-----------------------------------------"
-    log-info "REGISTRY $($rdshServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "REGISTRY $($rdshServer)"
+    "-----------------------------------------"
 
     if($rdshServer -ilike $env:COMPUTERNAME -and $osVersion -gt 6.1) # does not like 2k8
     {
@@ -152,20 +149,20 @@ function main()
     read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
     read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
     
-    log-info "-----------------------------------------"
-    log-info "Win32_TerminalServiceSetting $($rdshServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "Win32_TerminalServiceSetting $($rdshServer)"
+    "-----------------------------------------"
  
     $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting -ComputerName $rdshServer
-    log-info $rWmi
+    $rWmi
     
     # lsdiag uses licensingmode from rcm when not overriden in policy
     # todo: need to verify if same is true when in collection and when 'centrallicensing' presumably when configuring in gui in 2012
     
     # lsdiag calls this
-    log-info "-----------------------------------------"
-    log-info "Win32_TerminalServiceSetting::FindLicenseServers()"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "Win32_TerminalServiceSetting::FindLicenseServers()"
+    "-----------------------------------------"
 
     $lsList = $rWmi.FindLicenseServers().LicenseServersList
 
@@ -184,26 +181,26 @@ function main()
             $appServer = $true
         }
     
-        log-info "LicenseServer:$($ls.LicenseServer)"
-        log-info "HowDiscovered:$(if($ls.HowDiscovered) { "Manual" } else { "Auto" })"
-        log-info "IsAdminOnLS:$($ls.IsAdminOnLS)"
-        log-info "IsLSAvailable:$($ls.IsLSAvailable)"
-        log-info "IssuingCals:$($ls.IssuingCals)"
-        log-info "-----------------------------------------"
+        "LicenseServer:$($ls.LicenseServer)"
+        "HowDiscovered:$(if($ls.HowDiscovered) { "Manual" } else { "Auto" })"
+        "IsAdminOnLS:$($ls.IsAdminOnLS)"
+        "IsLSAvailable:$($ls.IsLSAvailable)"
+        "IssuingCals:$($ls.IssuingCals)"
+        "-----------------------------------------"
     }
 
-    log-info "-----------------------------------------"
-    log-info "Win32_TSDeploymentLicensing $($rdshServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "Win32_TSDeploymentLicensing $($rdshServer)"
+    "-----------------------------------------"
     
     $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing -ComputerName $rdshServer
-    log-info $rWmiL
+    $rWmiL
     
-    log-info "-----------------------------------------"
-    log-info "checking wmi for lic server"
+    "-----------------------------------------"
+    "checking wmi for lic server"
     $tempServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
     $licMode = $rWmi.LicensingType
-    log-info "wmi lic servers: $($tempServers) license mode: $($licMode)"
+    "wmi lic servers: $($tempServers) license mode: $($licMode)"
     
     $licenseModeSource = 'wmi'
     $licenseMode = $licMode    
@@ -213,11 +210,11 @@ function main()
         $licServers = $tempServers;
     }
  
-    log-info "-----------------------------------------"
-    log-info "checking gpo for lic server"
+    "-----------------------------------------"
+    "checking gpo for lic server"
     $tempServers = @(([string](read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
     $licMode = (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
-    log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
+    "gpo lic servers: $($tempServers) license mode: $($licMode)"
 
     if($rWmi.PolicySourceLicensingType)
     {
@@ -232,11 +229,11 @@ function main()
     
     if($rdshServer -ilike $env:COMPUTERNAME)
     {
-        log-info "-----------------------------------------"
-        log-info "checking local ps for lic server"
+        "-----------------------------------------"
+        "checking local ps for lic server"
         $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
         $licMode = (Get-RDLicenseConfiguration).Mode
-        log-info "ps lic servers: $($tempServers) license mode: $($licMode)"
+        "ps lic servers: $($tempServers) license mode: $($licMode)"
     }
     
     if($licServers.Length -lt 1)
@@ -252,7 +249,7 @@ function main()
  
     if($licServers.Length -lt 1)
     {
-        log-info "license server has not been configured!"
+        "license server has not been configured!"
     
     }
     else
@@ -263,7 +260,7 @@ function main()
             # issue where server name has space in front but not sure why so adding .Trim() for now
             if($server -ne $server.Trim())
             {
-               log-info "warning:whitespace characters on server name"    
+               "warning:whitespace characters on server name"    
             }
         
             $licCheck = $licCheck -band (check-licenseServer -licServer $server.Trim())
@@ -280,39 +277,39 @@ function main()
         $daysLeft = "NOT_SET"
     }
     
-    log-info "-----------------------------------------" 
+    "-----------------------------------------" 
     # from lsdiag if findlicenseservers returns server and tsappallowlist\licensetype -ne 5 an daysleft > 0
     if($lsDiscovered -and $licCheck -and ($daysLeft -notlike "NOT_SET" -and $daysLeft -gt 0) -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
-        log-info "Success:$($rdshServer) is connected to a license server. Server is in Grace Period, but this is ok. Days Left: $($daysLeft)"
+        "Success:$($rdshServer) is connected to a license server. Server is in Grace Period, but this is ok. Days Left: $($daysLeft)"
     }
     elseif($lsDiscovered -and $licCheck -and ($daysLeft -eq 0 -or $daysLeft -eq "NOT_SET") -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
-        log-info "Success:$($rdshServer) is connected to a license server and is not in grace. ($($daysLeft))"        
+        "Success:$($rdshServer) is connected to a license server and is not in grace. ($($daysLeft))"        
     }
     elseif($lsDiscovered -and !$licCheck -and ($daysLeft -notlike "NOT_SET" -and $daysLeft -gt 0) -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
-        log-info "Warning:$($rdshServer) has connected to a license server. Server is in Grace Period, but server cannot currently connect to a license server. Days Left: $($daysLeft)"
+        "Warning:$($rdshServer) has connected to a license server. Server is in Grace Period, but server cannot currently connect to a license server. Days Left: $($daysLeft)"
     }
     elseif($lsDiscovered -and !$licCheck -and ($daysLeft -eq 0 -or $daysLeft -eq "NOT_SET") -and $appServer -and ($licenseMode -ne 0 -and $licenseMode -ne 5) -and $hasX509)
     {
-        log-info "Warning:$($rdshServer) has connected to a license server and is not in grace but server cannot currently connect to a license server. ($($daysLeft))"        
+        "Warning:$($rdshServer) has connected to a license server and is not in grace but server cannot currently connect to a license server. ($($daysLeft))"        
     }
     elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and $hasX509)
     {
-        log-info "ERROR:$($rdshServer) has connected to a license server at some point but is NOT in grace and is NOT currently connected to license server. ($($daysLeft))"        
+        "ERROR:$($rdshServer) has connected to a license server at some point but is NOT in grace and is NOT currently connected to license server. ($($daysLeft))"        
     }
     elseif(!$lsDiscovered -and $daysLeft -eq 0 -and $appServer -and !$hasX509)
     {
-        log-info "ERROR:$($rdshServer) is NOT connected to a license server and is NOT in grace. ($($daysLeft))"        
+        "ERROR:$($rdshServer) is NOT connected to a license server and is NOT in grace. ($($daysLeft))"        
     }
     elseif(!$appServer)
     {
-        log-info "ERROR:$($rdshServer) is configured for Remote Administration (2 session limit). ($($daysLeft))"
+        "ERROR:$($rdshServer) is configured for Remote Administration (2 session limit). ($($daysLeft))"
     }
     else
     {
-        log-info "ERROR:Unknown state. ($($daysLeft))"        
+        "ERROR:Unknown state. ($($daysLeft))"        
     }
  
     switch($licenseMode)
@@ -325,12 +322,14 @@ function main()
         default { $modeString = "error: $($licenseMode)" }
     }
     
-    log-info "current license mode: $($modeString)"
-    log-info "current license mode source: $($licenseModeSource)"
+    "current license mode: $($modeString)"
+    "current license mode source: $($licenseModeSource)"
 
-    log-info "-----------------------------------------"
-    log-info "finished" 
- 
+    Stop-Transcript 
+
+    "-----------------------------------------"
+    "finished" 
+    
 }
 # ----------------------------------------------------------------------------------------------------------------
 
@@ -338,46 +337,46 @@ function check-licenseServer([string] $licServer)
 {
     [bool] $retVal = $true
     
-    log-info "-----------------------------------------"
-    log-info "-----------------------------------------"
-    log-info "checking license server: '$($licServer)'"
-    log-info "-----------------------------------------" 
+    "-----------------------------------------"
+    "-----------------------------------------"
+    "checking license server: '$($licServer)'"
+    "-----------------------------------------" 
 
-    log-info "-----------------------------------------"
-    log-info "OS $($licServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "OS $($licServer)"
+    "-----------------------------------------"
      
     read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName
     
-    log-info "-----------------------------------------"
-    log-info "SERVICE $($licServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "SERVICE $($licServer)"
+    "-----------------------------------------"
     
-    log-info "License Server Service status: $((Get-Service -Name TermServLicensing -ComputerName $licServer -ErrorAction SilentlyContinue).Status)"
+    "License Server Service status: $((Get-Service -Name TermServLicensing -ComputerName $licServer -ErrorAction SilentlyContinue).Status)"
 
-    log-info "-----------------------------------------"
-    log-info "EVENTS $($licServer)"
-    log-info "-----------------------------------------"
+    "-----------------------------------------"
+    "EVENTS $($licServer)"
+    "-----------------------------------------"
 
     Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
 
     if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
     {
-        log-info "-----------------------------------------"
-        log-info "Win32_TSLicenseServer $($licServer)"
-        log-info "-----------------------------------------"
-        log-info $rWmiLS
+        "-----------------------------------------"
+        "Win32_TSLicenseServer $($licServer)"
+        "-----------------------------------------"
+        $rWmiLS
 
         $wmiClass = ([wmiclass]"\\$($licServer)\root\cimv2:Win32_TSLicenseServer")
-        log-info "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
-        log-info "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
-        log-info "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
-        log-info "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
-        log-info "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
-        log-info "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
-        log-info "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)"
-        log-info "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)"
-        log-info "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
+        "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)"
+        "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)"
+        "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
+        "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
+        "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
+        "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
+        "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)"
+        "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)"
+        "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
     }
     
     try
@@ -390,11 +389,11 @@ function check-licenseServer([string] $licServer)
         $ret = $false
     }
     $retVal = $retVal -band $ret
-    log-info "Can ping license server? $([bool]$ret)"
+    "Can ping license server? $([bool]$ret)"
  
     $ret = $rWmi.CanAccessLicenseServer($licServer)
     $retVal = $retVal -band $ret
-    log-info "Can access license server? $([bool]$ret.AccessAllowed)"
+    "Can access license server? $([bool]$ret.AccessAllowed)"
  
     $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
     switch($ret.TsToLsConnectivityStatus)
@@ -415,7 +414,7 @@ function check-licenseServer([string] $licServer)
     }
     
     $retVal = $retVal -band ($ret.TsToLsConnectivityStatus -eq 9 -or $ret.TsToLsConnectivityStatus -eq 11)
-    log-info "license connectivity status: $($retName)"
+    "license connectivity status: $($retName)"
     
     return $retVal
 }
@@ -446,9 +445,9 @@ function check-user ([string] $user)
 
         foreach ($objResult in $colResults)
         {
-            log-info "-------------------------------------"
-            log-info "AD user:$($objresult.Properties["adspath"])"
-            log-info "RDS CAL expire date:$($objresult.Properties["mstsexpiredate"])"
+            "-------------------------------------"
+            "AD user:$($objresult.Properties["adspath"])"
+            "RDS CAL expire date:$($objresult.Properties["mstsexpiredate"])"
             log-ingo "RDS License Server Identity:$($objresult.Properties["mstsmanagingls"])"
         }
         
@@ -461,51 +460,20 @@ function check-user ([string] $user)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function log-info($data)
-{
-    if(($data.GetType()).Name -eq "ManagementObject")
-    {
-        foreach($member in $data| Get-Member)
-        {
-            if($member.MemberType.ToString().ToLower().Contains("property") -and !$member.Name.StartsWith('_'))
-            {
-                $tempData = "$($member.Name): $($data.Item($member.Name))"
-                write-host $tempData
-                out-file -Append -InputObject $tempData -FilePath $logFile
-            }
-        }
-    }
-    elseif($data.GetType().BaseType.Name -eq "Array")
-    {
-        foreach($dataitem in $data)
-        {
-            Write-Host "$dataitem"
-            out-file -Append -InputObject $dataitem -FilePath $logFile
-        }
-    }
-    else
-    {
-
-        Write-Host $data
-        out-file -Append -InputObject $data -FilePath $logFile
-	}
-}
-
-# ----------------------------------------------------------------------------------------------------------------
 function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
     
     if([string]::IsNullOrEmpty($value))
     {
-        [void]$retVal.AppendLine("-----------------------------------------")
-        [void]$retVal.AppendLine("enumerating $($key)")
+        write-host "-----------------------------------------"
+        write-host "enumerating $($key)"
         $enumValue = $false
     }
     else
     {
-        log-info "-----------------------------------------"
-        log-info "enumerating $($key) for value $($value)"
+        write-host "-----------------------------------------"
+        write-host "enumerating $($key) for value $($value)"
         $enumValue = $true
     }
     
@@ -630,7 +598,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
     }
     catch
     {
-        #log-info "read-reg:exception $($error)"
+        #"read-reg:exception $($error)"
         $error.Clear()
         return 
     }
@@ -651,14 +619,14 @@ function get-update($updateUrl)
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
         {
-            log-info "updating new script"
+            "updating new script"
             [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
-            log-info "restart to use new script. exiting."
+            "restart to use new script. exiting."
             exit
         }
         else
         {
-            log-info "script is up to date"
+            "script is up to date"
         }
         
         return $true
@@ -666,7 +634,7 @@ function get-update($updateUrl)
     }
     catch [System.Exception] 
     {
-        log-info "get-update:exception: $($error)"
+        "get-update:exception: $($error)"
         $error.Clear()
         return $false    
     }
@@ -688,7 +656,7 @@ function get-sysInternalsUtility ([string] $utilityName)
             {
                 $webClient = new-object System.Net.WebClient
                 $webClient.DownloadFile($sysUrl, $destFile)
-                log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
+                "sysinternals utility $($utilityName) downloaded to $($destFile)"
             }
             else
             {
@@ -700,7 +668,7 @@ function get-sysInternalsUtility ([string] $utilityName)
     }
     catch
     {
-        log-info "Exception downloading $($utilityName): $($error)"
+        "Exception downloading $($utilityName): $($error)"
         $error.Clear()
         return [string]::Empty
     }
@@ -715,7 +683,7 @@ function runas-admin()
     }
     elseif (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
-       log-info "please restart script as administrator. exiting..."
+       "please restart script as administrator. exiting..."
        return $false
     }
 
@@ -726,57 +694,58 @@ function runas-admin()
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
     $Error.Clear()
-    log-info "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = !$wait
-    $process.StartInfo.RedirectStandardOutput = $wait
-    $process.StartInfo.RedirectStandardError = $wait
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $wait
-    $process.StartInfo.WorkingDirectory = get-location
+    "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = !$wait
+    $process.StartInfo.RedirectStandardOutput = $wait
+    $process.StartInfo.RedirectStandardError = $wait
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $wait
+    $process.StartInfo.WorkingDirectory = get-location
     $process.StartInfo.ErrorDialog = $true
     $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
     $process.StartInfo.LoadUserProfile = $false
     $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
 
 
- 
-    [void]$process.Start()
- 
-    if($wait -and !$process.HasExited)
-    {
- 
-        if($process.StandardOutput.Peek() -gt -1)
+ 
+    [void]$process.Start()
+ 
+    if($wait -and !$process.HasExited)
+    {
+ 
+        if($process.StandardOutput.Peek() -gt -1)
         {
-            $stdOut = $process.StandardOutput.ReadToEnd()
-            log-info $stdOut
-        }
- 
- 
+            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut
+        }
+ 
+ 
         if($process.StandardError.Peek() -gt -1)
         {
             $stdErr = $process.StandardError.ReadToEnd()
-            log-info $stdErr
-            $Error.Clear()
-        }
+            $stdErr
+            $Error.Clear()
+        }
             
-    }
-    elseif($wait)
-    {
-        log-info "Error:Process ended before capturing output."
-    }
-    
- 
-    
+    }
+    elseif($wait)
+    {
+        "Error:Process ended before capturing output."
+    }
+    
+ 
+    
     $exitVal = $process.ExitCode
- 
-    log-info "Running process exit $($processName) : $($exitVal)"
-    $Error.Clear()
- 
-    return $stdOut
+ 
+    "Running process exit $($processName) : $($exitVal)"
+    $Error.Clear()
+ 
+    return $stdOut
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 main
+
