@@ -34,6 +34,7 @@ param(
 )
 
 Set-StrictMode -Version "latest"
+import-module RemoteDesktop
 $desktops = @{}
 $virtualizationHosts = @{}
 $sessionHosts = @{}
@@ -83,7 +84,7 @@ function main()
 
     write-host "$(get-date) using active broker: $($activeBroker)"
     $desktopCollections = Get-RDVirtualDesktopCollection -ConnectionBroker $activeBroker
-    $sessionCollections = Get-RDSessionCollection -ConnectionBroker $activeBroker
+    #$sessionCollections = Get-RDSessionCollection -ConnectionBroker $activeBroker
 
     write-host "$(get-date) checking virtualization"
     if(![string]::IsNullOrEmpty($virtualizationHostsFile))
@@ -103,8 +104,15 @@ function main()
         # query deployment
         foreach($desktopCollection in $desktopCollections)
         {
-            foreach($virtualizationHost in (Get-RDVirtualDesktop -CollectionName $desktopCollection.CollectionName -ConnectionBroker $activeBroker).HostName)
+            foreach($virtualizationHostDesktop in (Get-RDVirtualDesktop -CollectionName $desktopCollection.CollectionName -ConnectionBroker $activeBroker))
             {
+                if(!$desktops.ContainsKey($virtualizationHostDesktop.VirtualDesktopName))
+                {
+                    write-host "adding Desktop $($virtualizationHostDesktop.VirtualDesktopName)"
+                    $desktops.Add($virtualizationHostDesktop.VirtualDesktopName,@{})
+                }
+
+                $virtualizationhost = $virtualizationHostDesktop.HostName
                 if(!$virtualizationHosts.ContainsKey($virtualizationHost))
                 {
                     write-host "adding virtualization host $($virtualizationHost)"
@@ -114,56 +122,16 @@ function main()
         }
     }
 
-    write-host "$(get-date) checking session"
-    if(![string]::IsNullOrEmpty($sessionHostsFile))
-    {
-        foreach($sessionHost  in (Get-Content -Raw $sessionHostsFile))
-        {
-            if(!$sessionHosts.ContainsKey($sessionHost))
-            {
-                write-host "adding session host from file $($sessionHost)"
-                $sessionHosts.Add($sessionHost,@{})
-            }
-        }
-    }
-    else
-    {
-        foreach($sessionCollection in $sessionCollections)
-        {
-            foreach($sessionHost in (Get-RDSessionHost -CollectionName $sessionCollection.CollectionName -ConnectionBroker $activeBroker).SessionHost)
-            {
-                if(!$sessionHosts.ContainsKey($sessionHost))
-                {
-                    write-host "adding session host $($sessionHost)"
-                    $sessionHosts.Add($sessionHost,@{})
-                }
-            }
-        }
-    }
-
     write-host "$(get-date) checking desktop"
     if(![string]::IsNullOrEmpty($desktopsFile))
     {
+        $desktops = @{}
         foreach($desktop  in (Get-Content -Raw $desktopsFile))
         {
             if(!$desktops.ContainsKey($desktop))
             {
                 write-host "adding desktop from file $($desktop)"
                 $desktops.Add($desktop,@{})
-            }
-        }
-    }
-    else
-    {
-        foreach($desktopCollection in $desktopCollections)
-        {
-            foreach($desktop in (Get-RDVirtualDesktop -CollectionName $desktopCollection.CollectionName -ConnectionBroker $activeBroker).VirtualDesktopName)
-            {
-                if(!$desktops.ContainsKey($desktop))
-                {
-                    write-host "adding desktop $($desktop)"
-                    $desktops.Add($desktop,@{})
-                }
             }
         }
     }
@@ -251,7 +219,7 @@ function query-desktops([object]$vdesktopList)
             
             if($desktop.Value.RPCAvailable)
             {
-                #$vhost.Value.Vms = get-vm -ComputerName $vhost.Name
+             
             }
             else
             {
@@ -262,7 +230,7 @@ function query-desktops([object]$vdesktopList)
             $desktop.Value.RDPAvailable = (Test-NetConnection -ComputerName $desktop.Name -Port 3389).TcpTestSucceeded
             if($desktop.Value.RDPAvailable)
             {
-                #$vhost.Value.Vms = get-vm -ComputerName $vhost.Name
+             
             }
             else
             {
@@ -276,7 +244,7 @@ function query-desktops([object]$vdesktopList)
             $desktop.Value.QWinstaResults = Invoke-expression "qwinsta.exe /server:$($desktop.Name) /VM"
             if($desktop.Value.QWinstaResults)
             {
-                #$vhost.Value.Vms = get-vm -ComputerName $vhost.Name
+             
             }
             else
             {
@@ -290,7 +258,7 @@ function query-desktops([object]$vdesktopList)
             $desktop.Value.ShareResults = test-path "\\$($desktop.Name)\admin$"
             if($desktop.Value.ShareResults)
             {
-                #$vhost.Value.Vms = get-vm -ComputerName $vhost.Name
+                
             }
             else
             {
@@ -304,7 +272,7 @@ function query-desktops([object]$vdesktopList)
             $desktop.Value.ProcessResults = Invoke-expression "tasklist /s $($desktop.Name) /v"
             if($desktop.Value.ProcessResults)
             {
-                #$vhost.Value.Vms = get-vm -ComputerName $vhost.Name
+                
             }
             else
             {
