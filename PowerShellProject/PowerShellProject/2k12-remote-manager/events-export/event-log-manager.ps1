@@ -369,7 +369,7 @@ function main()
         -eventLogLevelsQuery $eventLogLevelQueryString `
         -eventLogIdsQuery $eventLogIdQueryString
 
-   start $global:uploadDir
+   # start $global:uploadDir
    
    log-info "files are located here: $($global:uploadDir)"
    log-info "finished"

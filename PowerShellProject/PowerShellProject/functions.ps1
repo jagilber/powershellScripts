@@ -1,6 +1,37 @@
 # general functions
 
 # ----------------------------------------------------------------------------------------------------------------
+function get-workingDirectory()
+{
+    $retVal = [string]::Empty
+ 
+    if (Test-Path variable:\hostinvocation)
+    {
+        $retVal = $hostinvocation.MyCommand.Path
+    }
+    else
+    {
+        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    }
+  
+    if (Test-Path $retVal)
+    {
+        $retVal = (Split-Path $retVal)
+    }
+    else
+    {
+        $retVal = (Get-Location).path
+        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
+        
+    } 
+ 
+    
+    Set-Location $retVal | out-null
+ 
+    return $retVal
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function get-sysInternalsUtility ([string] $utilityName)
 {
     try
@@ -78,6 +109,49 @@ function git-update($updateUrl, $destinationFile)
         log-info "get-update:exception: $($error)"
         $error.Clear()
         return $false    
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function log-info($data)
+{
+    $dataWritten = $false
+    $data = "$([System.DateTime]::Now):$($data)`n"
+    if([regex]::IsMatch($data.ToLower(),"error|exception|fail|warning"))
+    {
+        write-host $data -foregroundcolor Yellow
+    }
+    elseif([regex]::IsMatch($data.ToLower(),"running"))
+    {
+       write-host $data -foregroundcolor Green
+    }
+    elseif([regex]::IsMatch($data.ToLower(),"job completed"))
+    {
+       write-host $data -foregroundcolor Cyan
+    }
+    elseif([regex]::IsMatch($data.ToLower(),"starting"))
+    {
+       write-host $data -foregroundcolor Magenta
+    }
+    else
+    {
+        Write-Host $data
+    }
+
+    $counter = 0
+    while(!$dataWritten -and $counter -lt 1000)
+    {
+        try
+        {
+            $ret = out-file -Append -InputObject $data -FilePath $logFile
+            $dataWritten = $true
+        }
+        catch
+        {
+            Start-Sleep -Milliseconds 50
+            $error.Clear()
+            $counter++
+        }
     }
 }
 
@@ -249,3 +323,60 @@ function runas-admin()
     return $true
 }
 # ----------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------
+function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
+{
+    $Error.Clear()
+    log-info "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = !$wait
+    $process.StartInfo.RedirectStandardOutput = $wait
+    $process.StartInfo.RedirectStandardError = $wait
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $wait
+    $process.StartInfo.WorkingDirectory = get-location
+    $process.StartInfo.ErrorDialog = $true
+    $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
+    $process.StartInfo.LoadUserProfile = $false
+    $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
+
+
+ 
+    [void]$process.Start()
+ 
+    if($wait -and !$process.HasExited)
+    {
+ 
+        if($process.StandardOutput.Peek() -gt -1)
+        {
+            $stdOut = $process.StandardOutput.ReadToEnd()
+            log-info $stdOut
+        }
+ 
+ 
+        if($process.StandardError.Peek() -gt -1)
+        {
+            $stdErr = $process.StandardError.ReadToEnd()
+            log-info $stdErr
+            $Error.Clear()
+        }
+            
+    }
+    elseif($wait)
+    {
+        log-info "Error:Process ended before capturing output."
+    }
+    
+ 
+    
+    $exitVal = $process.ExitCode
+ 
+    log-info "Running process exit $($processName) : $($exitVal)"
+    $Error.Clear()
+ 
+    return $stdOut
+}
+
