@@ -179,22 +179,62 @@ function main()
         else
         {
             write-host "error: vhost not available $($vhost.Name)" -ForegroundColor Red
+            continue
         }
+    
+        query-desktops -vdesktoplist $vhost.Value.Vms
     }
 
+    
+
+
+    write-host "$(get-date) exporting data"
+    $sessionHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).sessionhosts.txt")
+    $virtualizationHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).virtualizationhosts.txt")
+    $desktops | ConvertTo-Json -Depth 3 | out-file ("$($outFile).desktops.txt")
+    
+    Stop-Transcript
+    write-host "log is here:$($outFile)"
+    write-host "$(get-date) finished"
+    write-host "----------------------------------------"
+
+}
+
+#----------------------------------------------------------------------------
+function query-desktops([object]$vdesktopList)
+{
     write-host "$(get-date) querying desktops"
-    foreach($desktop in $desktops.GetEnumerator())
+    #foreach($desktop in $desktops.GetEnumerator())
+    foreach($vhostDesktop in $vdesktopList.GetEnumerator())
     {
         # check hyper-v list
-        $vhostDesktop = $virtualizationHosts.Values.Vms | ? Name -imatch $desktop.Name
-
-        #
-
-        if(@($vhostDesktop).Count -gt 1)
+        #$vhostDesktop = $virtualizationHosts.Values.Vms | ? Name -imatch $desktop.Name
+        
+        # check desktops list
+        if($desktops.ContainsKey($vhostDesktop.Name))
         {
-            write-host "error: more that one desktop found in virtualization hosts list $($desktop.Name). skipping." -ForegroundColor Red
+            $desktop = $desktops.GetEnumerator() | ? Name -imatch $vhostDesktop.Name
         }
-        elseif(@($vhostDesktop).Count -lt 1)
+        else
+        {
+            write-host "warning:desktop does not belong to deployment $($vhostDesktop.Name)" -ForegroundColor Yellow
+            continue
+        }
+
+        $desktop.Value.vmState = $vhostDesktop.State
+        $desktop.Value.ProcessResults = $null
+        $desktop.Value.ProcessResultsError = $null
+        $desktop.Value.QwinstaResults = $null
+        $desktop.Value.QwinstaResultsError = $null
+        $desktop.Value.RDPAvailable = $false
+        $desktop.Value.RDPAvailableError = $null
+        $desktop.Value.RPCAvailable = $false
+        $desktop.Value.RPCAvailableError = $null
+        $desktop.Value.ShareResults = $false
+        $desktop.Value.ShareResultsError = $null
+
+
+        if([string]::IsNullOrEmpty($desktop))
         {
             write-host "error: desktop not not found in virtualization hosts list $($desktop.Name). skipping." -ForegroundColor Red
             continue
@@ -205,10 +245,11 @@ function main()
         
         if($vhostDesktop.State -imatch "Running")
         {
-            $desktop.Value.Available = (Test-NetConnection -ComputerName $desktop.Name -Port 135).TcpTestSucceeded
+            $desktop.Value.RPCAvailableError = $null
+            $desktop.Value.RPCAvailable = (Test-NetConnection -ComputerName $desktop.Name -Port 135).TcpTestSucceeded
         
             
-            if($desktop.Value.Available)
+            if($desktop.Value.RPCAvailable)
             {
                 #$vhost.Value.Vms = get-vm -ComputerName $vhost.Name
             }
@@ -227,6 +268,8 @@ function main()
             {
                 # requery?
                 write-host "error: desktop RDP not available $($desktop.Name)" -ForegroundColor Red
+                $desktop.Value.RPCAvailableError = $error
+                $error.Clear()
             }
 
             $desktop.Value.QwinstaResultsError = $null
@@ -274,21 +317,9 @@ function main()
         else
         {
             # requery?
-            write-host "warning:desktop state is not running $($desktop.Name). current state: $($vhostDesktop.State)" -ForegroundColor Yellow
+            write-host "information:desktop state is not running $($desktop.Name). current state: $($vhostDesktop.State)" -ForegroundColor Cyan
         }
     }
-
-
-    write-host "$(get-date) exporting data"
-    $sessionHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).sessionhosts.txt")
-    $virtualizationHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).virtualizationhosts.txt")
-    $desktops | ConvertTo-Json -Depth 3 | out-file ("$($outFile).desktops.txt")
-    
-    Stop-Transcript
-    write-host "log is here:$($outFile)"
-    write-host "$(get-date) finished"
-    write-host "----------------------------------------"
-
 }
 
 #----------------------------------------------------------------------------
