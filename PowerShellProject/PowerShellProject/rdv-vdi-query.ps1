@@ -269,7 +269,7 @@ function start-bgJob([string]$vmname)
     #throttle
     if(@(get-job -Name $jobName).Count -gt 0)
     {
-        while(@((get-job -Name $jobName).Status -eq "Running").Count -gt $jobThrottle)
+        while(@((get-job -Name $jobName).State -eq "Running").Count -gt $jobThrottle)
         {
             write-host "waiting for job resources..."
             start-sleep -Seconds 1    
