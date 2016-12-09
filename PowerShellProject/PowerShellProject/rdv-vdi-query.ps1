@@ -1,10 +1,9 @@
 <#
 .SYNOPSIS  
-    powershell script to rds deployment for virtualization hosts and vdi machines
+    powershell script to query rds/rdv deployment for virtualization hosts and vdi machines
     
-
 .DESCRIPTION  
-    powershell script to rds deployment for virtualization hosts and vdi machines
+    powershell script to rds/rdv deployment for virtualization hosts and vdi machines
     machines that are running will be queried for rdp port, process list, qwinsta, network and share connectivity
 
 .NOTES  
@@ -39,12 +38,12 @@
     optional parameter to specify file containing names of vdi desktops to be queried.
     if blank and used with -update, it will be used as file for complete vdi list from deployment.
 
-.PARAMETER virtualizationhostFile
+.PARAMETER virtualizationhostsFile
     optional parameter to specify file containing names of virtualization hosts to be queried.
     if blank and used with -update, it will be used as file for complete virtualizationhosts list from deployment.
 
 .PARAMETER generateFiles
-    optional parameter to be used with desktopsfile and virtualizationhostFile to generate new files from deployment. slow
+    optional parameter to be used with desktopsfile and virtualizationhostsFile to generate new files from deployment. slow
 
 .PARAMETER update
     optional parameter to check for new version of this script.
@@ -130,7 +129,7 @@ function main()
     }
     else
     {
-        write-host "querying deployment. this make take a while ... use -virtualizationhostfile and -desktopfile arguments with file names to process faster"
+        write-host "querying deployment. this make take a while ... use -virtualizationhostsFile and -desktopsFile arguments with file names to process faster"
         $desktopCollections = Get-RDVirtualDesktopCollection -ConnectionBroker $activeBroker
     }
 
