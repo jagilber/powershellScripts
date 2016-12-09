@@ -9,38 +9,67 @@
 
 .NOTES  
    Author     : jagilber
-   Version    : 161208.1 original
+   Version    : 161208.4 added background jobs to speed up vm querying
    History    : 
 
 .EXAMPLE  
     .\rdv-vdi-query.ps1
-    query for connection broker and run script
+    query for connection broker, hosts, and desktops, and run script. slow
 
 .EXAMPLE  
     .\rdv-vdi-query.ps1 -activeBroker broker01
-    query specific connection broker and run script
+    query specific connection broker, query for hosts, and desktops, and run script. slow
+
+.EXAMPLE  
+    .\rdv-vdi-query.ps1  -activeBroker broker01 -desktopsFile c:\temp\desktops.txt -virtualizationHostsFile c:\temp\hosts.txt
+    query specific connection broker, specific hosts, specific desktops, and run script. fast.
+
+.EXAMPLE  
+    .\rdv-vdi-query.ps1  -activeBroker broker01 -desktopsFile c:\temp\desktops.txt -virtualizationHostsFile c:\temp\hosts.txt -generatefiles
+    query specific connection broker, for specific hosts, for specific desktops, write to specified files, and run script. slow.
+
+.EXAMPLE  
+    .\rdv-vdi-query.ps1  -update
+    check github for updated script file.
  
 .PARAMETER activeBroker
     optional parameter to specify active connection broker
+
+.PARAMETER desktopsFile
+    optional parameter to specify file containing names of vdi desktops to be queried.
+    if blank and used with -update, it will be used as file for complete vdi list from deployment.
+
+.PARAMETER virtualizationhostFile
+    optional parameter to specify file containing names of virtualization hosts to be queried.
+    if blank and used with -update, it will be used as file for complete virtualizationhosts list from deployment.
+
+.PARAMETER generateFiles
+    optional parameter to be used with desktopsfile and virtualizationhostFile to generate new files from deployment. slow
+
+.PARAMETER update
+    optional parameter to check for new version of this script.
 #>
 
 param(
 [Parameter(Mandatory=$false)]
 [string]$activeBroker,
-[string]$sessionHostsFile,
 [string]$virtualizationHostsFile,
 [string]$desktopsFile,
+[switch]$generateFiles,
 [switch]$update
 )
 
 Set-StrictMode -Version "latest"
 import-module RemoteDesktop
-$desktops = @{}
-$virtualizationHosts = @{}
-$sessionHosts = @{}
+$ErrorActionPreference = "SilentlyContinue"
+$global:desktops = @{}
+$global:virtualizationHosts = @{}
 $outFile = "rdv-vdi-query.txt"
 $error.clear()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rdv-vdi-query.ps1"
+$jobName = "vdiquery"
+$jobThrottle = 20
+
 
 #----------------------------------------------------------------------------
 function main()
@@ -51,16 +80,23 @@ function main()
     
     get-workingDirectory
 
+    # clean old jobs
+    get-job -name $jobName | remove-job -force
+
     if($update)
     {
-        if(git-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName)
+        if((git-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName))
         {
             write-host "script updated. restart"
             return
         }
+        else
+        {
+            write-host "no update. continuing"
+        }
     }
 
-
+    # check broker
     if([string]::IsNullOrEmpty($activeBroker))
     {
         if(($availability = Get-RDConnectionBrokerHighAvailability))
@@ -83,19 +119,32 @@ function main()
     }
 
     write-host "$(get-date) using active broker: $($activeBroker)"
-    $desktopCollections = Get-RDVirtualDesktopCollection -ConnectionBroker $activeBroker
-    #$sessionCollections = Get-RDSessionCollection -ConnectionBroker $activeBroker
+
+    if(!$generateFiles -and
+        ![string]::IsNullOrEmpty($desktopsFile) -and 
+        (test-path $desktopsFile) -and 
+        ![string]::IsNullOrEmpty($virtualiazationHostsFile) -and 
+        (test-path $virtualizationHostsFile))
+    {
+        write-host "will use files"
+    }
+    else
+    {
+        write-host "querying deployment. this make take a while ... use -virtualizationhostfile and -desktopfile arguments with file names to process faster"
+        $desktopCollections = Get-RDVirtualDesktopCollection -ConnectionBroker $activeBroker
+    }
+
 
     write-host "$(get-date) checking virtualization"
-    if(![string]::IsNullOrEmpty($virtualizationHostsFile))
+    if(![string]::IsNullOrEmpty($virtualizationHostsFile) -and (test-path $virtualizationHostsFile))
     {
         # read from file
-        foreach($virtualizationhost in (Get-Content -Raw $virtualizationHostsFile))
+        foreach($virtualizationhost in (Get-Content $virtualizationHostsFile))
         {
-            if(!$virtualizationHosts.ContainsKey($virtualizationHost))
+            if(!$global:virtualizationHosts.ContainsKey($virtualizationHost))
             {
                 write-host "adding virtualization host from file $($virtualizationHost)"
-                $virtualizationHosts.Add($virtualizationHost,@{})
+                $global:virtualizationHosts.Add($virtualizationHost,@{})
             }
         }
     }
@@ -106,38 +155,48 @@ function main()
         {
             foreach($virtualizationHostDesktop in (Get-RDVirtualDesktop -CollectionName $desktopCollection.CollectionName -ConnectionBroker $activeBroker))
             {
-                if(!$desktops.ContainsKey($virtualizationHostDesktop.VirtualDesktopName))
+                if(!$global:desktops.ContainsKey($virtualizationHostDesktop.VirtualDesktopName))
                 {
                     write-host "adding Desktop $($virtualizationHostDesktop.VirtualDesktopName)"
-                    $desktops.Add($virtualizationHostDesktop.VirtualDesktopName,@{})
+                    $global:desktops.Add($virtualizationHostDesktop.VirtualDesktopName,@{})
+                    if($generateFiles)
+                    {
+                        out-file -Append -InputObject $virtualizationHostDesktop.VirtualDesktopName -FilePath $desktopsFile
+                    }
                 }
 
                 $virtualizationhost = $virtualizationHostDesktop.HostName
-                if(!$virtualizationHosts.ContainsKey($virtualizationHost))
+                if(!$global:virtualizationHosts.ContainsKey($virtualizationHost))
                 {
                     write-host "adding virtualization host $($virtualizationHost)"
-                    $virtualizationHosts.Add($virtualizationHost,@{})
+                    $global:virtualizationHosts.Add($virtualizationHost,@{})
+                    
+                    if($generateFiles)
+                    {
+                        out-file -Append -InputObject $virtualizationHost -FilePath $virtualizationHostsFile
+                    }
+
                 }
             }
         }
     }
 
     write-host "$(get-date) checking desktop"
-    if(![string]::IsNullOrEmpty($desktopsFile))
+    if(![string]::IsNullOrEmpty($desktopsFile) -and (test-path $desktopsFile))
     {
-        $desktops = @{}
-        foreach($desktop  in (Get-Content -Raw $desktopsFile))
+        $global:desktops = @{}
+        foreach($desktop  in (Get-Content $desktopsFile))
         {
-            if(!$desktops.ContainsKey($desktop))
+            if(!$global:desktops.ContainsKey($desktop))
             {
                 write-host "adding desktop from file $($desktop)"
-                $desktops.Add($desktop,@{})
+                $global:desktops.Add($desktop,@{})
             }
         }
     }
 
     write-host "$(get-date) querying virtualization hosts"
-    foreach($vhost in $virtualizationHosts.GetEnumerator())
+    foreach($vhost in $global:virtualizationHosts.GetEnumerator())
     {
         $vhost.Value.Available = (Test-NetConnection -ComputerName $vhost.Name -Port 135).TcpTestSucceeded
         if($vhost.Value.Available)
@@ -149,17 +208,56 @@ function main()
             write-host "error: vhost not available $($vhost.Name)" -ForegroundColor Red
             continue
         }
-    
-        query-desktops -vdesktoplist $vhost.Value.Vms
+        
+        write-host "querying desktops on host $($vhost.Name)"
+        foreach($vm in $vhost.Value.VMs)
+        {
+            write-host "checking vm $($vm.Name)"
+            
+            if($vm.State -eq "Running" -and $global:desktops.ContainsKey($vm.Name))
+            {
+                start-bgJob -vmname $vm.Name
+            }
+            elseif(!$global:desktops.ContainsKey($vm.Name))
+            {
+                write-host "information:skipping vm $($vm.Name) because it is not not part of desktops list." -ForegroundColor DarkGray
+            }            
+            else
+            {
+                write-host "warning:skipping vm $($vm.Name) because it is not in running state. state: $($vm.State)" -ForegroundColor Yellow
+                continue
+            }
+        }
     }
 
-    
+    while(get-job -name $jobName)
+    {
+        $jobs = get-job -name $jobName 
+        foreach($job in $jobs)
+        {
+            if($job.State -eq "Completed")
+            {
+                $results = $job | receive-job
+                $job | remove-job -force
 
+                if($global:desktops.ContainsKey($results.Name))
+                {
+                    $Global:desktops.Remove($results.Name)
+                }
+                
+                $Global:desktops.Add($results.Name,$results)
+            }
+
+            $job
+        }
+
+        start-sleep -Seconds 1
+    }
 
     write-host "$(get-date) exporting data"
-    $sessionHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).sessionhosts.txt")
-    $virtualizationHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).virtualizationhosts.txt")
-    $desktops | ConvertTo-Json -Depth 3 | out-file ("$($outFile).desktops.txt")
+    
+    $global:virtualizationHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).virtualizationhosts.txt")
+    $global:desktops | ConvertTo-Json -Depth 3 | out-file ("$($outFile).desktops.txt")
     
     Stop-Transcript
     write-host "log is here:$($outFile)"
@@ -169,131 +267,111 @@ function main()
 }
 
 #----------------------------------------------------------------------------
-function query-desktops([object]$vdesktopList)
+function start-bgJob([string]$vmname)
 {
-    write-host "$(get-date) querying desktops"
-    #foreach($desktop in $desktops.GetEnumerator())
-    foreach($vhostDesktop in $vdesktopList.GetEnumerator())
+    #$vdList = query-desktops -vhostDesktop $vhostDesktop -globalDesktopList $global:desktops
+    #throttle
+    if(@(get-job -Name $jobName).Count -gt 0)
     {
-        # check hyper-v list
-        #$vhostDesktop = $virtualizationHosts.Values.Vms | ? Name -imatch $desktop.Name
-        
-        # check desktops list
-        if($desktops.ContainsKey($vhostDesktop.Name))
+        while(@((get-job -Name $jobName).Status -eq "Running").Count -gt $jobThrottle)
         {
-            $desktop = $desktops.GetEnumerator() | ? Name -imatch $vhostDesktop.Name
+            write-host "waiting for job resources..."
+            start-sleep -Seconds 1    
+        }
+    }
+
+    $job = start-job -Name $jobName -ScriptBlock `
+    {
+        param($vm)
+        $desktop = @{}
+        #$desktop = query-desktops -vdesktoplist $vdList -globalList $gdlist
+        write-host "$(get-date) querying desktops"
+
+        $desktop.Name = $vm
+        $desktop.ProcessResults = $null
+        $desktop.ProcessResultsError = $null
+        $desktop.QwinstaResults = $null
+        $desktop.QwinstaResultsError = $null
+        $desktop.RDPAvailable = $false
+        $desktop.RDPAvailableError = $null
+        $desktop.RPCAvailable = $false
+        $desktop.RPCAvailableError = $null
+        $desktop.ShareResults = $false
+        $desktop.ShareResultsError = $null
+        $desktop.RPCAvailableError = $null
+        
+        $desktop.RPCAvailable = (Test-NetConnection -ComputerName $vm -Port 135).TcpTestSucceeded
+        if($desktop.RPCAvailable)
+        {
+            # do additional check?                
         }
         else
         {
-            write-host "warning:desktop does not belong to deployment $($vhostDesktop.Name)" -ForegroundColor Yellow
-            continue
+            write-host "error: desktop not available $($vm)" -ForegroundColor Red
         }
 
-        $desktop.Value.vmState = $vhostDesktop.State
-        $desktop.Value.ProcessResults = $null
-        $desktop.Value.ProcessResultsError = $null
-        $desktop.Value.QwinstaResults = $null
-        $desktop.Value.QwinstaResultsError = $null
-        $desktop.Value.RDPAvailable = $false
-        $desktop.Value.RDPAvailableError = $null
-        $desktop.Value.RPCAvailable = $false
-        $desktop.Value.RPCAvailableError = $null
-        $desktop.Value.ShareResults = $false
-        $desktop.Value.ShareResultsError = $null
-
-
-        if([string]::IsNullOrEmpty($desktop))
+        $desktop.RDPAvailable = (Test-NetConnection -ComputerName $vm -Port 3389).TcpTestSucceeded
+        if($desktop.RDPAvailable)
         {
-            write-host "error: desktop not not found in virtualization hosts list $($desktop.Name). skipping." -ForegroundColor Red
-            continue
+            # do additional check?    
+        }
+        else
+        {
+            write-host "error: desktop RDP not available $($vm)" -ForegroundColor Red
+            $desktop.RPCAvailableError = $error
+            $error.Clear()
         }
 
-        write-host "desktop found in virtualization hosts list $($desktop.Name)" -ForegroundColor Green
-        $vhostDesktop
-        
-        if($vhostDesktop.State -imatch "Running")
+        $desktop.QWinstaResults = Invoke-expression "qwinsta.exe /server:$($vm) /VM"
+        if($desktop.QWinstaResults)
         {
-            $desktop.Value.RPCAvailableError = $null
-            $desktop.Value.RPCAvailable = (Test-NetConnection -ComputerName $desktop.Name -Port 135).TcpTestSucceeded
-        
-            
-            if($desktop.Value.RPCAvailable)
-            {
-             
-            }
-            else
-            {
-                # requery?
-                write-host "error: desktop not available $($desktop.Name)" -ForegroundColor Red
-            }
-
-            $desktop.Value.RDPAvailable = (Test-NetConnection -ComputerName $desktop.Name -Port 3389).TcpTestSucceeded
-            if($desktop.Value.RDPAvailable)
-            {
-             
-            }
-            else
-            {
-                # requery?
-                write-host "error: desktop RDP not available $($desktop.Name)" -ForegroundColor Red
-                $desktop.Value.RPCAvailableError = $error
-                $error.Clear()
-            }
-
-            $desktop.Value.QwinstaResultsError = $null
-            $desktop.Value.QWinstaResults = Invoke-expression "qwinsta.exe /server:$($desktop.Name) /VM"
-            if($desktop.Value.QWinstaResults)
-            {
-             
-            }
-            else
-            {
-                # requery?
-                $desktop.Value.QwinstaResultsError = $error
-                $error.Clear()
-                write-host "error: desktop qwinsta not available $($desktop.Name)" -ForegroundColor Red
-            }
-
-            $desktop.Value.ShareResultsError = $null
-            $desktop.Value.ShareResults = test-path "\\$($desktop.Name)\admin$"
-            if($desktop.Value.ShareResults)
-            {
                 
-            }
-            else
-            {
-                # requery?
-                $desktop.Value.ShareResultsError = $error
-                $error.Clear()
-                write-host "error: desktop share not available $($desktop.Name)" -ForegroundColor Red
-            }
-
-            $desktop.Value.ProcessResultsError = $null
-            $desktop.Value.ProcessResults = Invoke-expression "tasklist /s $($desktop.Name) /v"
-            if($desktop.Value.ProcessResults)
-            {
-                
-            }
-            else
-            {
-                # requery?
-                $desktop.Value.ShareResultsError = $error
-                $error.Clear()
-                write-host "error: desktop share not available $($desktop.Name)" -ForegroundColor Red
-            }
         }
         else
         {
             # requery?
-            write-host "information:desktop state is not running $($desktop.Name). current state: $($vhostDesktop.State)" -ForegroundColor Cyan
+            $desktop.QwinstaResultsError = $error
+            $error.Clear()
+            write-host "error: desktop qwinsta not available $($vm)" -ForegroundColor Red
         }
-    }
+
+        $desktop.ShareResults = test-path "\\$($vm)\admin$"
+        if($desktop.ShareResults)
+        {
+            # do additional check?
+        }
+        else
+        {
+            $desktop.ShareResultsError = $error
+            $error.Clear()
+            write-host "error: desktop share not available $($vm)" -ForegroundColor Red
+        }
+
+        $desktop.ProcessResults = Invoke-expression "tasklist /s $($vm) /v"
+        if($desktop.ProcessResults)
+        {
+            # do additional check?
+        }
+        else
+        {
+            $desktop.ShareResultsError = $error
+            $error.Clear()
+            write-host "error: desktop share not available $($vm)" -ForegroundColor Red
+        }
+    
+        $desktop
+       
+    } -ArgumentList $vmname
+
+    #$Job
+    return $job
 }
+
 
 #----------------------------------------------------------------------------
 function git-update($updateUrl, $destinationFile)
 {
-    log-info "get-update:checking for updated script: $($updateUrl)"
+    write-host "get-update:checking for updated script: $($updateUrl)"
 
     try 
     {
@@ -311,13 +389,13 @@ function git-update($updateUrl, $destinationFile)
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
         {
-            log-info "copying script $($destinationFile)"
+            write-host "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
             return $true
         }
         else
         {
-            log-info "script is up to date"
+            write-host "script is up to date"
         }
         
         return $false
@@ -325,7 +403,7 @@ function git-update($updateUrl, $destinationFile)
     }
     catch [System.Exception] 
     {
-        log-info "get-update:exception: $($error)"
+        write-host "get-update:exception: $($error)"
         $error.Clear()
         return $false    
     }
