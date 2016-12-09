@@ -3,12 +3,12 @@
     powershell script to query rds/rdv deployment for virtualization hosts and vdi machines
     
 .DESCRIPTION  
-    powershell script to rds/rdv deployment for virtualization hosts and vdi machines
+    powershell script to query rds/rdv deployment for virtualization hosts and vdi machines
     machines that are running will be queried for rdp port, process list, qwinsta, network and share connectivity
 
 .NOTES  
    Author     : jagilber
-   Version    : 161208.4 added background jobs to speed up vm querying
+   Version    : 161208.5 added background jobs to speed up vm querying
    History    : 
 
 .EXAMPLE  
@@ -254,7 +254,6 @@ function main()
     }
 
     write-host "$(get-date) exporting data"
-    
     $global:virtualizationHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).virtualizationhosts.txt")
     $global:desktops | ConvertTo-Json -Depth 3 | out-file ("$($outFile).desktops.txt")
     
@@ -262,13 +261,11 @@ function main()
     write-host "log is here:$($outFile)"
     write-host "$(get-date) finished"
     write-host "----------------------------------------"
-
 }
 
 #----------------------------------------------------------------------------
 function start-bgJob([string]$vmname)
 {
-    #$vdList = query-desktops -vhostDesktop $vhostDesktop -globalDesktopList $global:desktops
     #throttle
     if(@(get-job -Name $jobName).Count -gt 0)
     {
@@ -283,7 +280,6 @@ function start-bgJob([string]$vmname)
     {
         param($vm)
         $desktop = @{}
-        #$desktop = query-desktops -vdesktoplist $vdList -globalList $gdlist
         write-host "$(get-date) querying desktops"
 
         $desktop.Name = $vm
@@ -362,10 +358,8 @@ function start-bgJob([string]$vmname)
        
     } -ArgumentList $vmname
 
-    #$Job
     return $job
 }
-
 
 #----------------------------------------------------------------------------
 function git-update($updateUrl, $destinationFile)
@@ -398,7 +392,6 @@ function git-update($updateUrl, $destinationFile)
         }
         
         return $false
-        
     }
     catch [System.Exception] 
     {
@@ -429,8 +422,7 @@ function get-workingDirectory()
     else
     {
         $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
+        write-host "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     } 
  
     Set-Location $retVal | out-null
