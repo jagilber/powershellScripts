@@ -8,9 +8,9 @@
 
 .NOTES  
    Author     : jagilber
-   Version    : 161208.5 added background jobs to speed up vm querying
+   Version    : 161209 
    History    : 
-
+                161208.5 added background jobs to speed up vm querying
 .EXAMPLE  
     .\rdv-vdi-query.ps1
     query for connection broker, hosts, and desktops, and run script. slow
@@ -20,15 +20,15 @@
     query specific connection broker, query for hosts, and desktops, and run script. slow
 
 .EXAMPLE  
-    .\rdv-vdi-query.ps1  -activeBroker broker01 -desktopsFile c:\temp\desktops.txt -virtualizationHostsFile c:\temp\hosts.txt
+    .\rdv-vdi-query.ps1 -activeBroker broker01 -desktopsFile c:\temp\desktops.txt -virtualizationHostsFile c:\temp\hosts.txt
     query specific connection broker, specific hosts, specific desktops, and run script. fast.
 
 .EXAMPLE  
-    .\rdv-vdi-query.ps1  -activeBroker broker01 -desktopsFile c:\temp\desktops.txt -virtualizationHostsFile c:\temp\hosts.txt -generatefiles
+    .\rdv-vdi-query.ps1 -activeBroker broker01 -desktopsFile c:\temp\desktops.txt -virtualizationHostsFile c:\temp\hosts.txt -generatefiles
     query specific connection broker, for specific hosts, for specific desktops, write to specified files, and run script. slow.
 
 .EXAMPLE  
-    .\rdv-vdi-query.ps1  -update
+    .\rdv-vdi-query.ps1 -update
     check github for updated script file.
  
 .PARAMETER activeBroker
@@ -58,8 +58,7 @@ param(
 [switch]$update
 )
 
-Set-StrictMode -Version "latest"
-import-module RemoteDesktop
+Set-StrictMode -Version "Latest"
 $ErrorActionPreference = "SilentlyContinue"
 $global:desktops = @{}
 $global:virtualizationHosts = @{}
@@ -78,6 +77,12 @@ function main()
     write-host "$(get-date) starting"
     
     get-workingDirectory
+    
+    if(!(Import-Module RemoteDesktop))
+    {
+        write-host "error: remotedesktop ps module not available. returning" -ForegroundColor Red
+        return
+    }
 
     # clean old jobs
     get-job -name $jobName | remove-job -force
@@ -107,7 +112,7 @@ function main()
         {
             if((Get-RDServer).roles -eq "RDS-CONNECTION-BROKER") 
             {
-                $activeBroker = (Get-RDServer | ? Roles -eq "RDS-CONNECTION-BROKER").Server
+                $activeBroker = @((Get-RDServer | ? Roles -eq "RDS-CONNECTION-BROKER").Server)[0]
             }
             else
             {
@@ -257,10 +262,10 @@ function main()
     $global:virtualizationHosts | ConvertTo-Json -Depth 3 | out-file ("$($outFile).virtualizationhosts.txt")
     $global:desktops | ConvertTo-Json -Depth 3 | out-file ("$($outFile).desktops.txt")
     
-    Stop-Transcript
-    write-host "log is here:$($outFile)"
     write-host "$(get-date) finished"
     write-host "----------------------------------------"
+    write-host "log is here:$($outFile)"
+    Stop-Transcript
 }
 
 #----------------------------------------------------------------------------
@@ -293,7 +298,6 @@ function start-bgJob([string]$vmname)
         $desktop.RPCAvailableError = $null
         $desktop.ShareResults = $false
         $desktop.ShareResultsError = $null
-        $desktop.RPCAvailableError = $null
         
         $desktop.RPCAvailable = (Test-NetConnection -ComputerName $vm -Port 135).TcpTestSucceeded
         if($desktop.RPCAvailable)
@@ -320,11 +324,10 @@ function start-bgJob([string]$vmname)
         $desktop.QWinstaResults = Invoke-expression "qwinsta.exe /server:$($vm) /VM"
         if($desktop.QWinstaResults)
         {
-                
+            # do additional check?                
         }
         else
         {
-            # requery?
             $desktop.QwinstaResultsError = $error
             $error.Clear()
             write-host "error: desktop qwinsta not available $($vm)" -ForegroundColor Red
@@ -351,7 +354,7 @@ function start-bgJob([string]$vmname)
         {
             $desktop.ShareResultsError = $error
             $error.Clear()
-            write-host "error: desktop share not available $($vm)" -ForegroundColor Red
+            write-host "error: desktop processes not available $($vm)" -ForegroundColor Red
         }
     
         $desktop
