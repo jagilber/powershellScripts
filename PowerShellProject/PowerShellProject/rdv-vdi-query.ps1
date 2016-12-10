@@ -306,7 +306,9 @@ function start-bgJob([string]$vmname)
         }
         else
         {
-            write-host "error: desktop not available $($vm)" -ForegroundColor Red
+            write-host "error: desktop RPC not available $($vm)" -ForegroundColor Red
+            $desktop.RPCAvailableError = $error
+            $error.Clear()
         }
 
         $desktop.RDPAvailable = (Test-NetConnection -ComputerName $vm -Port 3389).TcpTestSucceeded
@@ -317,7 +319,7 @@ function start-bgJob([string]$vmname)
         else
         {
             write-host "error: desktop RDP not available $($vm)" -ForegroundColor Red
-            $desktop.RPCAvailableError = $error
+            $desktop.RDPAvailableError = $error
             $error.Clear()
         }
 
@@ -352,7 +354,7 @@ function start-bgJob([string]$vmname)
         }
         else
         {
-            $desktop.ShareResultsError = $error
+            $desktop.ProcessResultsError = $error
             $error.Clear()
             write-host "error: desktop processes not available $($vm)" -ForegroundColor Red
         }
