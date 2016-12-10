@@ -17,9 +17,10 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161026 added $baseDir to process-eventlogs
+   Version    : 161112 removing connection broker check
 
    History    : 
+                161026 added $baseDir to process-eventlogs
                 161010 -eventDetails switch wasnt getting passed to job
                 160919 added max read count, added logic in listen to temporarily remove machines that arent responding
                 160904 removed 'security' from -rds. takes too long to export
@@ -281,7 +282,7 @@ function main()
     # see if new (different) version of file
     if($getUpdate)
     {
-        get-update -updateUrl $updateUrl
+        get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName
     }
 
     # add local machine if empty
@@ -299,7 +300,7 @@ function main()
     # setup for rds
     if($rds)
     {
-        $machines = configure-rds -machines $machines -eventLogNamePattern $global:eventLogNameSearchPattern
+        configure-rds -machines $machines -eventLogNamePattern $global:eventLogNameSearchPattern
     }
 
     # set default event log names if not specified
@@ -369,7 +370,7 @@ function main()
         -eventLogLevelsQuery $eventLogLevelQueryString `
         -eventLogIdsQuery $eventLogIdQueryString
 
-   # start $global:uploadDir
+   start $global:uploadDir
    
    log-info "files are located here: $($global:uploadDir)"
    log-info "finished"
@@ -413,45 +414,6 @@ function configure-rds($machines,$eventLogNamePattern)
 {
     log-info "setting up for rds environment"
     $baseRDSPattern = "RDMS|RemoteApp|RemoteDesktop|Terminal|VHDMP|^System$|^Application$|User-Profile-Service" #CAPI|^Security$"
-
-    if(![string]::IsNullOrEmpty($global:eventLogNameSearchPattern))
-    {
-        $global:eventLogNameSearchPattern = "$($global:eventLogNameSearchPattern)|$($baseRDSPattern)"
-    }
-    else
-    {
-        $global:eventLogNameSearchPattern = $baseRDSPattern
-    }
-    
-    if(!(get-service -DisplayName 'Remote Desktop Connection Broker' -ErrorAction SilentlyContinue))
-    {
-        $error.Clear()
-        return $machines
-    }
-
-    try
-    {
-        $servers = @()
-        # see if it is a connection broker
-        $servers = (Get-RDServer).Server
-        if($servers -ne $null)
-        {
-            foreach($server in $servers)
-            {
-                log-info $server
-            }
-
-            $result = Read-Host "do you want to collect data from entire deployment? [y:n]"
-            if([regex]::IsMatch($result, "y",[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
-            {
-                log-info "adding rds collection servers"
-                $machines = $servers
-            }
-        }
-    }
-    catch {}
-
-    return $machines
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -999,29 +961,37 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
     return $filteredEventLogs
 }
 
-# ----------------------------------------------------------------------------------------------------------------
-function get-update($updateUrl)
+#----------------------------------------------------------------------------
+function get-update($updateUrl, $destinationFile)
 {
+    log-info "get-update:checking for updated script: $($updateUrl)"
+
     try 
     {
-        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
-        # github can bet set to use WINDOWS style which may prevent this
-        $webClient = new-object System.Net.WebClient
-        $webClient.DownloadFile($updateUrl, "$($MyInvocation.ScriptName).new")
-        if([string]::Compare([IO.File]::ReadAllBytes($MyInvocation.ScriptName), [IO.File]::ReadAllBytes("$($MyInvocation.ScriptName).new")))
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
+        $gitClean = [regex]::Replace($git, '\W+', "")
+
+        if(![IO.File]::Exists($destinationFile))
         {
-            log-info "downloaded new script"
-            [IO.File]::Copy("$($MyInvocation.ScriptName).new",$MyInvocation.ScriptName, $true)
-            [IO.File]::Delete("$($MyInvocation.ScriptName).new")
-            log-info "restart to use new script. exiting."
-            exit
+            $fileClean = ""    
+        }
+        else
+        {
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+        }
+
+        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        {
+            log-info "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
         }
         else
         {
             log-info "script is up to date"
         }
         
-        return $true
+        return $false
         
     }
     catch [System.Exception] 
@@ -1145,7 +1115,7 @@ function listen-forEvents()
                     foreach($sortedEvent in $sortedEvents)
                     {
                         log-info $sortedEvent -nocolor
-                                                                        #write-host "------------------------------------------"
+                        #write-host "------------------------------------------"
                     }
                 }
 
@@ -1156,7 +1126,7 @@ function listen-forEvents()
                     foreach($sortedEvent in $unsortedEvents)
                     {
                         log-info $sortedEvent -nocolor
-                                                                        #write-host "------------------------------------------"
+                        #write-host "------------------------------------------"
                     }
                 }
 
@@ -1201,21 +1171,21 @@ function listen-forEvents()
                 foreach($sortedEvent in $sortedEvents | Sort-Object)
                 {
                     log-info $sortedEvent
-                                                                    write-host "------------------------------------------"
+                    write-host "------------------------------------------"
                 }
             }
 
             log-info "listen: unsorted count:$($unsortedEvents.Count) sorted count: $($sortedEvents.Count)" -debugOnly
 
-                                    if($unsortedEvents.Count -gt 0)
-                                    {
-                                                    # query again without waiting to not get behind
+            if($unsortedEvents.Count -gt 0)
+            {
+                # query again without waiting to not get behind
                 log-info "***listen:no sleep***" -debugOnly
-                                    }
-                                    else
-                                    {
-                                                    Start-Sleep -Milliseconds $listenSleepMs
-                                    }
+            }
+            else
+            {
+                Start-Sleep -Milliseconds $listenSleepMs
+            }
         }
     }
     catch
