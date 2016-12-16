@@ -18,13 +18,12 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161216 changed -eventDetails to export entire xml
+   Version    : 161216 changed -eventDetails to export entire xml formatted
 
    History    : 
                 161212 changed out-file to streamwriter to improve performance
                 161112 removing connection broker check
                 161026 added $baseDir to process-eventlogs
-
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -441,7 +440,7 @@ function build-eventLogLevels($eventLogLevels)
         switch ($eventLogLevel.ToLower())
         {
             "critical" { [void]$sb.Append("Level=1 or ") }
-                                                "error" { [void]$sb.Append("Level=2 or ") }
+            "error" { [void]$sb.Append("Level=2 or ") }
             "warning" { [void]$sb.Append("Level=3 or ") }
             "information" { [void]$sb.Append("Level=4 or Level=0 or ") }
             "verbose" { [void]$sb.Append("Level=5 or ") }
@@ -512,7 +511,7 @@ function configure-stopTime($eventStartTime,$eventStopTime,$months,$hours,$days,
     }
 
    log-info "searching for events older than: $($eventStopTime.ToString("yyyy-MM-ddTHH:mm:sszz"))"
-    return $eventStopTime
+   return $eventStopTime
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -604,7 +603,6 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     })
             }
 
-
             $event = $preader.ReadEvent()
 
             if($event -eq $null)
@@ -622,11 +620,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
             $recordid = [Math]::Max($recordid,$event.RecordId)
 
             log-info "dump-events:machine: $($machine) event log name: $eventLogName old index: $($oldRecordid) new index: $($recordId)" -debugOnly
-
             ($global:machineRecords[$machine])[$eventLogName] = $recordid
-
-            
-
         }
         catch
         {
@@ -794,7 +788,6 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
 
     [void]$sb.AppendLine("filtered logs count: $($filteredEventLogs.Count)")
     log-info $sb.ToString()
-
     return $filteredEventLogs
 }
 
@@ -829,7 +822,6 @@ function get-update($updateUrl, $destinationFile)
         }
         
         return $false
-        
     }
     catch [System.Exception] 
     {
@@ -968,7 +960,6 @@ function listen-forEvents()
             }
 
             log-info "listen: unsorted count:$($unsortedEvents.Count) sorted count: $($sortedEvents.Count)" -debugOnly
-
             Start-Sleep -Milliseconds ($listenSleepMs * 2)
         } # end while
     }
@@ -1145,7 +1136,14 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         # create eventlog list for machine
         foreach($eventLogName in $filteredLogs)
         {
-            ($global:machineRecords[$machine]).Add($eventLogName,0)
+            if(!($global:machineRecords[$machine]).ContainsKey($eventLogName))
+            {
+                ($global:machineRecords[$machine]).Add($eventLogName,0)
+            }
+            else
+            {
+                log-info "warning:eventlog already existsin global list $($eventLogName)" -debugOnly
+            }
         }
 
         # export all events from eventlogs
@@ -1314,7 +1312,6 @@ function runas-admin([bool]$force)
     }
     
     log-info "warning:not running as admin"
-   
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1423,7 +1420,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             write-host "removing existing file: $($outputCsv)"
             Remove-Item -Path $outputCsv -Force
         }
-
         
         $count = 0
         $timer = [DateTime]::Now
@@ -1432,7 +1428,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
 
         while($true)
         {
-
             try
             {
                 $count++
@@ -1587,17 +1582,16 @@ function start-listenJob([hashtable]$jobItem)
                     # check connectivity
                     if(!(test-path "\\$($machine)\admin$"))
                     {
-                        Write-Warning "unable to connect to machine: $($machine). sleeping."
+                        Write-host "$([DateTime]::Now) unable to connect to machine: $($machine). sleeping." -ForegroundColor Red
                         start-sleep -Seconds 30
                         continue
                     }
                     else
                     {
-                        Write-Host "successfully connected to machine: $($machine). enabling..." -ForegroundColor Green
+                        Write-Host "$([DateTime]::Now) successfully connected to machine: $($machine). enabling..." -ForegroundColor Green
                         $checkMachine = $false
                         $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
                     }
-
                 }
     
                 foreach($eventLogItem in $jobItem.EventLogItems.GetEnumerator())
@@ -1646,12 +1640,28 @@ function start-listenJob([hashtable]$jobItem)
                                 }
 
                                 # event log 'details' tab
-                                if($eventdetails)
+                                if($eventdetails -or [string]::IsNullOrEmpty($description))
                                 {
                                     $eventXml = $event.ToXml()
                                     if(![string]::IsNullOrEmpty($eventXml))
                                     {
-                                        $description = "$($description)$($eventXml)"
+                                        if($eventDetails)
+                                        {
+                                            # format xml
+                                            [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
+                                            $xdoc.LoadXml($eventXml)
+                                            [IO.StringWriter] $sw = new-object IO.StringWriter
+                                            [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
+                                            $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
+                                            $xdoc.PreserveWhitespace = $true
+                                            $xdoc.WriteTo($xmlTextWriter)
+                                            $description = "$($description)`n$($sw.ToString())"
+                                        }
+                                        else
+                                        {
+                                            # display xml unformatted
+                                            $description = "$($description)$($eventXml)"
+                                        }
                                     }
                                 }
 
