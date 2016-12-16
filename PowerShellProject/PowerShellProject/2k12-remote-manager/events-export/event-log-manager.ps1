@@ -12,14 +12,16 @@
     For each match, all event logs will be exported to csv format.
     Each export will be in its own file named with the event log name.
     It also has ability to 'listen' to new events by continuously polling configured event logs
+    https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
 
 .NOTES
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161212 changed out-file to streamwriter to improve performance
+   Version    : 161216 changed -eventDetails to export entire xml
 
    History    : 
+                161212 changed out-file to streamwriter to improve performance
                 161112 removing connection broker check
                 161026 added $baseDir to process-eventlogs
 
@@ -402,7 +404,7 @@ function main()
             show-debugWarning -count $global:debugLogsCount
         }
 
-        if(!$listEventLogs)
+        if(!$listEventLogs -and @([IO.Directory]::GetFiles($uploadDir,"*.*")).Count -gt 0)
         {
            start $global:uploadDir
            log-info "files are located here: $($global:uploadDir)"
@@ -1568,7 +1570,7 @@ function start-listenJob([hashtable]$jobItem)
                 $listenEventReadCount,
                 $listenSleepMs
                 )
-        
+  
         $checkMachine = $true
         $session = $null
         $pathType = [Diagnostics.Eventing.Reader.PathType]::LogName
@@ -1646,7 +1648,11 @@ function start-listenJob([hashtable]$jobItem)
                                 # event log 'details' tab
                                 if($eventdetails)
                                 {
-                                    $description = "$($description)`n$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
+                                    $eventXml = $event.ToXml()
+                                    if(![string]::IsNullOrEmpty($eventXml))
+                                    {
+                                        $description = "$($description)$($eventXml)"
+                                    }
                                 }
 
                                 $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt"))," `
@@ -1749,7 +1755,7 @@ function start-listenJob([hashtable]$jobItem)
         $listenSleepMs
         )
 
-    return $job
+    return $job 
 }
 
 # ----------------------------------------------------------------------------------------------------------------
