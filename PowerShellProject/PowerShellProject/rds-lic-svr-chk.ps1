@@ -466,14 +466,14 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
     
     if([string]::IsNullOrEmpty($value))
     {
-        write-host "-----------------------------------------"
-        write-host "enumerating $($key)"
+        [void]$retVal.AppendLine("-----------------------------------------")
+        [void]$retVal.AppendLine("enumerating $($key)")
         $enumValue = $false
     }
     else
     {
-        write-host "-----------------------------------------"
-        write-host "enumerating $($key) for value $($value)"
+        [void]$retVal.AppendLine("-----------------------------------------")
+        [void]$retVal.AppendLine("enumerating $($key) for value $($value)")
         $enumValue = $true
     }
     
@@ -590,15 +590,12 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                     continue
                 }
                 
-                [void]$retval.AppendLine((read-reg -machine $machine -hive $hive -key "$($key)\$($subkey)"))
+                read-reg -machine $machine -hive $hive -key "$($key)\$($subkey)"
             }
         }
-        
-
     }
     catch
     {
-        #"read-reg:exception $($error)"
         $error.Clear()
         return 
     }

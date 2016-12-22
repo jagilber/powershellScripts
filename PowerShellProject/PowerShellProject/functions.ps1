@@ -165,7 +165,6 @@ $HKCC = 2147483653 #HKEY_CURRENT_CONFIG
 # ----------------------------------------------------------------------------------------------------------------
 function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 {
-
     $retVal = new-object Text.StringBuilder
     
     if([string]::IsNullOrEmpty($value))
@@ -176,8 +175,8 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
     }
     else
     {
-        log-info "-----------------------------------------"
-        log-info "enumerating $($key) for value $($value)"
+        [void]$retVal.AppendLine("-----------------------------------------")
+        [void]$retVal.AppendLine("enumerating $($key) for value $($value)")
         $enumValue = $true
     }
     
@@ -294,7 +293,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                     continue
                 }
                 
-                [void]$retval.AppendLine((read-reg -machine $machine -hive $hive -key "$($key)\$($subkey)"))
+                read-reg -machine $machine -hive $hive -key "$($key)\$($subkey)"
             }
         }
         
@@ -302,7 +301,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
     }
     catch
     {
-        #log-info "read-reg:exception $($error)"
+        #"read-reg:exception $($error)"
         $error.Clear()
         return 
     }
