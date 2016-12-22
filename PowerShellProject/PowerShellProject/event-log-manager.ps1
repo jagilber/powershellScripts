@@ -18,12 +18,12 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161216 changed -eventDetails to export entire xml
+   Version    : 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
 
    History    : 
+                161216 changed -eventDetails to export entire xml formatted
                 161212 changed out-file to streamwriter to improve performance
                 161112 removing connection broker check
-                161026 added $baseDir to process-eventlogs
 
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
@@ -412,7 +412,11 @@ function main()
    
         log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds)"
 
-        $global:logStream.Close()
+        if($global:logStream -ne $null)
+        {
+            $global:logStream.Close()
+        }
+
         $global:logTimer.Stop() 
         Unregister-Event logTimer -ErrorAction SilentlyContinue
     }
@@ -441,7 +445,7 @@ function build-eventLogLevels($eventLogLevels)
         switch ($eventLogLevel.ToLower())
         {
             "critical" { [void]$sb.Append("Level=1 or ") }
-                                                "error" { [void]$sb.Append("Level=2 or ") }
+            "error" { [void]$sb.Append("Level=2 or ") }
             "warning" { [void]$sb.Append("Level=3 or ") }
             "information" { [void]$sb.Append("Level=4 or Level=0 or ") }
             "verbose" { [void]$sb.Append("Level=5 or ") }
@@ -512,7 +516,7 @@ function configure-stopTime($eventStartTime,$eventStopTime,$months,$hours,$days,
     }
 
    log-info "searching for events older than: $($eventStopTime.ToString("yyyy-MM-ddTHH:mm:sszz"))"
-    return $eventStopTime
+   return $eventStopTime
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -604,7 +608,6 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                     })
             }
 
-
             $event = $preader.ReadEvent()
 
             if($event -eq $null)
@@ -622,11 +625,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
             $recordid = [Math]::Max($recordid,$event.RecordId)
 
             log-info "dump-events:machine: $($machine) event log name: $eventLogName old index: $($oldRecordid) new index: $($recordId)" -debugOnly
-
             ($global:machineRecords[$machine])[$eventLogName] = $recordid
-
-            
-
         }
         catch
         {
@@ -794,7 +793,6 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
 
     [void]$sb.AppendLine("filtered logs count: $($filteredEventLogs.Count)")
     log-info $sb.ToString()
-
     return $filteredEventLogs
 }
 
@@ -968,7 +966,6 @@ function listen-forEvents()
             }
 
             log-info "listen: unsorted count:$($unsortedEvents.Count) sorted count: $($sortedEvents.Count)" -debugOnly
-
             Start-Sleep -Milliseconds ($listenSleepMs * 2)
         } # end while
     }
@@ -1145,7 +1142,14 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         # create eventlog list for machine
         foreach($eventLogName in $filteredLogs)
         {
-            ($global:machineRecords[$machine]).Add($eventLogName,0)
+            if(!($global:machineRecords[$machine]).ContainsKey($eventLogName))
+            {
+                ($global:machineRecords[$machine]).Add($eventLogName,0)
+            }
+            else
+            {
+                log-info "warning:eventlog already existsin global list $($eventLogName)" -debugOnly
+            }
         }
 
         # export all events from eventlogs
@@ -1352,7 +1356,7 @@ function set-uploadDir()
 function show-debugWarning ($count)
 {
     $machineInfo = [string]::Empty
-    if(($machines.Count -eq 1 -and $machines[0] -ine $env:COMPUTERNAME) -or $machines.Count -gt 1)
+    if((@($machines).Count -eq 1 -and @($machines)[0] -ine $env:COMPUTERNAME) -or @($machines).Count -gt 1)
     {
         $machineInfo = " -machines $([string]::Join(",",$machines))"
     }
@@ -1428,10 +1432,14 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
         $count = 0
         $timer = [DateTime]::Now
         $totalCount = 0
-        $stream = new-object System.IO.StreamWriter ($outputCsv,$true)
+        $stream = $null
 
         while($true)
         {
+            if($stream -eq $null)
+            {
+                $stream = new-object System.IO.StreamWriter ($outputCsv,$true)
+            }
 
             try
             {
@@ -1496,12 +1504,13 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             catch
             {
                 write-host "job exception:$($error)"
-                $stream.Close()
                 $error.Clear()
             }
         }
 
+        $stream.Flush()
         $stream.close()
+        $stream = $null
 
         write-host "finished saving file $($outputCsv)" -for Cyan
         
@@ -1646,12 +1655,28 @@ function start-listenJob([hashtable]$jobItem)
                                 }
 
                                 # event log 'details' tab
-                                if($eventdetails)
+                                if($eventdetails -or [string]::IsNullOrEmpty($description))
                                 {
                                     $eventXml = $event.ToXml()
                                     if(![string]::IsNullOrEmpty($eventXml))
                                     {
-                                        $description = "$($description)$($eventXml)"
+                                        if($eventDetails)
+                                        {
+                                            # format xml
+                                            [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
+                                            $xdoc.LoadXml($eventXml)
+                                            [IO.StringWriter] $sw = new-object IO.StringWriter
+                                            [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
+                                            $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
+                                            $xdoc.PreserveWhitespace = $true
+                                            $xdoc.WriteTo($xmlTextWriter)
+                                            $description = "$($description)`r`n$($sw.ToString())"
+                                        }
+                                        else
+                                        {
+                                            # display xml unformatted
+                                            $description = "$($description)$($eventXml)"
+                                        }
                                     }
                                 }
 
@@ -1712,7 +1737,7 @@ function start-listenJob([hashtable]$jobItem)
                     }
                     catch
                     {
-                        Write-Host "$([DateTime]::Now):$($machine):Job event exception:$($eventLogName) id:$($event.RecordId) error: $($Error)" -ForegroundColor Red
+                        Write-Host "$([DateTime]::Now):$($machine):Job listen event exception:$($eventLogName) id:$($event.RecordId) error: $($Error)" -ForegroundColor Red
                         $eventLogItem.Value.RecordId = [Math]::Max($eventLogItem.RecordId + 1,$event.RecordId)
                         $error.Clear()
                     }
@@ -1720,6 +1745,7 @@ function start-listenJob([hashtable]$jobItem)
                     {
                         if($stream -ne $null)
                         {
+                            $stream.Flush()
                             $stream.close()
                             $stream = $null
                         }
@@ -1737,7 +1763,7 @@ function start-listenJob([hashtable]$jobItem)
             }
             catch
             {
-                Write-Host "$([DateTime]::Now):$($machine):Job exception: $($error)" -ForegroundColor Red
+                Write-Host "$([DateTime]::Now):$($machine):Job listen exception: $($error)" -ForegroundColor Red
                 $checkMachine = $true
                 $error.Clear()
             } # end try

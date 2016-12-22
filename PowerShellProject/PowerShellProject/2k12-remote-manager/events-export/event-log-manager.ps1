@@ -18,12 +18,13 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161216 changed -eventDetails to export entire xml formatted
+   Version    : 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
 
    History    : 
+                161216 changed -eventDetails to export entire xml formatted
                 161212 changed out-file to streamwriter to improve performance
                 161112 removing connection broker check
-                161026 added $baseDir to process-eventlogs
+
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -411,7 +412,11 @@ function main()
    
         log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds)"
 
-        $global:logStream.Close()
+        if($global:logStream -ne $null)
+        {
+            $global:logStream.Close()
+        }
+
         $global:logTimer.Stop() 
         Unregister-Event logTimer -ErrorAction SilentlyContinue
     }
@@ -822,6 +827,7 @@ function get-update($updateUrl, $destinationFile)
         }
         
         return $false
+        
     }
     catch [System.Exception] 
     {
@@ -1312,6 +1318,7 @@ function runas-admin([bool]$force)
     }
     
     log-info "warning:not running as admin"
+   
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1349,7 +1356,7 @@ function set-uploadDir()
 function show-debugWarning ($count)
 {
     $machineInfo = [string]::Empty
-    if(($machines.Count -eq 1 -and $machines[0] -ine $env:COMPUTERNAME) -or $machines.Count -gt 1)
+    if((@($machines).Count -eq 1 -and @($machines)[0] -ine $env:COMPUTERNAME) -or @($machines).Count -gt 1)
     {
         $machineInfo = " -machines $([string]::Join(",",$machines))"
     }
@@ -1420,14 +1427,20 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             write-host "removing existing file: $($outputCsv)"
             Remove-Item -Path $outputCsv -Force
         }
+
         
         $count = 0
         $timer = [DateTime]::Now
         $totalCount = 0
-        $stream = new-object System.IO.StreamWriter ($outputCsv,$true)
+        $stream = $null
 
         while($true)
         {
+            if($stream -eq $null)
+            {
+                $stream = new-object System.IO.StreamWriter ($outputCsv,$true)
+            }
+
             try
             {
                 $count++
@@ -1491,12 +1504,13 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             catch
             {
                 write-host "job exception:$($error)"
-                $stream.Close()
                 $error.Clear()
             }
         }
 
+        $stream.Flush()
         $stream.close()
+        $stream = $null
 
         write-host "finished saving file $($outputCsv)" -for Cyan
         
@@ -1582,16 +1596,17 @@ function start-listenJob([hashtable]$jobItem)
                     # check connectivity
                     if(!(test-path "\\$($machine)\admin$"))
                     {
-                        Write-host "$([DateTime]::Now) unable to connect to machine: $($machine). sleeping." -ForegroundColor Red
+                        Write-Warning "unable to connect to machine: $($machine). sleeping."
                         start-sleep -Seconds 30
                         continue
                     }
                     else
                     {
-                        Write-Host "$([DateTime]::Now) successfully connected to machine: $($machine). enabling..." -ForegroundColor Green
+                        Write-Host "successfully connected to machine: $($machine). enabling..." -ForegroundColor Green
                         $checkMachine = $false
                         $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
                     }
+
                 }
     
                 foreach($eventLogItem in $jobItem.EventLogItems.GetEnumerator())
@@ -1655,7 +1670,7 @@ function start-listenJob([hashtable]$jobItem)
                                             $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
                                             $xdoc.PreserveWhitespace = $true
                                             $xdoc.WriteTo($xmlTextWriter)
-                                            $description = "$($description)`n$($sw.ToString())"
+                                            $description = "$($description)`r`n$($sw.ToString())"
                                         }
                                         else
                                         {
@@ -1722,7 +1737,7 @@ function start-listenJob([hashtable]$jobItem)
                     }
                     catch
                     {
-                        Write-Host "$([DateTime]::Now):$($machine):Job event exception:$($eventLogName) id:$($event.RecordId) error: $($Error)" -ForegroundColor Red
+                        Write-Host "$([DateTime]::Now):$($machine):Job listen event exception:$($eventLogName) id:$($event.RecordId) error: $($Error)" -ForegroundColor Red
                         $eventLogItem.Value.RecordId = [Math]::Max($eventLogItem.RecordId + 1,$event.RecordId)
                         $error.Clear()
                     }
@@ -1730,6 +1745,7 @@ function start-listenJob([hashtable]$jobItem)
                     {
                         if($stream -ne $null)
                         {
+                            $stream.Flush()
                             $stream.close()
                             $stream = $null
                         }
@@ -1747,7 +1763,7 @@ function start-listenJob([hashtable]$jobItem)
             }
             catch
             {
-                Write-Host "$([DateTime]::Now):$($machine):Job exception: $($error)" -ForegroundColor Red
+                Write-Host "$([DateTime]::Now):$($machine):Job listen exception: $($error)" -ForegroundColor Red
                 $checkMachine = $true
                 $error.Clear()
             } # end try
