@@ -215,6 +215,8 @@ $Variable.RDSScale.RDSScaleSettings | ForEach-Object {$_.Variable} | Where-Objec
 #Load RDS ps Module
 Import-Module -Name RemoteDesktop
 
+$computerFqdn = [System.Net.Dns]::GetHostByName(($env:computerName)).HostName
+
 Try 
 { 
   $ConnectionBrokerFQDN = (Get-RDConnectionBrokerHighAvailability -ErrorAction Stop).ActiveManagementServer
@@ -222,18 +224,18 @@ Try
 Catch
 {
   Write-Host "RD Active Management Server unreachable. Setting to the local host."
-  Set-RDActiveManagementServer –ManagementServer "$env:computername.$env:userdnsdomain"
+  Set-RDActiveManagementServer –ManagementServer $computerFqdn
   $ConnectionBrokerFQDN = (Get-RDConnectionBrokerHighAvailability).ActiveManagementServer
 }
 
 If (!$ConnectionBrokerFQDN) 
 { # If null then this must not be a HA RDCB configuration, so assume RDCB is the local host.
-  $ConnectionBrokerFQDN = "$env:computername.$env:userdnsdomain"
+  $ConnectionBrokerFQDN = $computerFqdn
 }
 
 Write-Host "RD Active Management server:" $ConnectionBrokerFQDN
 
-If ("$env:computername.$env:userdnsdomain" -ne $ConnectionBrokerFQDN) 
+If ($computerFqdn -ne $ConnectionBrokerFQDN) 
 {
   Write-Host "RD Active Management Server is not the local host. Exiting."
   Write-Log 1 "RD Active Management Server is not the local host. Exiting." "Info"
