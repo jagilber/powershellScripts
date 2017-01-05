@@ -323,6 +323,31 @@ function runas-admin()
 }
 # ----------------------------------------------------------------------------------------------------------------
 
+$noretry
+# ----------------------------------------------------------------------------------------------------------------
+function runas-admin()
+{
+    write-verbose "checking for admin"
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+    {
+        if(!$noretry)
+        { 
+            write-host "restarting script as administrator."
+            Write-Host "run-process -processName powershell.exe -arguments -ExecutionPolicy Bypass -File $($SCRIPT:MyInvocation.MyCommand.Path) -noretry"
+            run-process -processName "powershell.exe" -arguments "-ExecutionPolicy Bypass -File $($SCRIPT:MyInvocation.MyCommand.Path) -noretry" -wait $true
+        }
+       
+        return $false
+   }
+   else
+   {
+        write-verbose "running as admin"
+
+   }
+
+    return $true   
+}
+
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
