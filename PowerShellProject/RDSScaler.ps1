@@ -166,55 +166,6 @@ param (
     }        
 }
 <#
-.SYNOPSIS
-Function for creating scheduled task to periodically call script
-#>
-function Create-RDSScalerTask {
-    $taskName = "Dynamic RDSH"
-    $file = $script:MyInvocation.MyCommand.ScriptName
-    $process = "powershell.exe"
-    $currentTask = $null
-
-    # authenticate
-    try
-    {
-        Get-AzureRmResourceGroup | Out-Null
-    }
-    catch [System.Management.Automation.CommandNotFoundException]
-    {
-        if((read-host "is it ok to install azurerm sdk?[y|n]") -ieq 'y')
-        {
-            write-host "installing azurerm sdk. this will take a while..."
-            install-module azurerm
-            import-module azurerm
-        }
-        else
-        {
-            write-host "exiting script"
-            return $false
-        }
-    }
-
-    $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if($currentTask -ne $null)
-    {
-        write-host "removing existing task"
-        Unregister-ScheduledTask -TaskName $taskName
-    }
-
-    $action = New-ScheduledTaskAction –Execute $process -Argument "-File $($file)" -WorkingDirectory ([IO.Path]::GetDirectoryName($file))
-    $trigger = New-ScheduledTaskTrigger -once -at 0am -RepetitionInterval (new-timespan -minutes 15)
-
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount
-    #$principal = New-ScheduledTaskPrincipal -UserId (get-credential) -LogonType ServiceAccount
-
-    $settings = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable -MultipleInstances IgnoreNew
-    $task = New-ScheduledTask -Action $action -Principal $principal -Trigger $trigger -Settings $settings -Description $taskName
-    Register-ScheduledTask -InputObject $task -TaskName $taskName
-
-}
-
-<#
 Variables
 #>
 #Current Path
