@@ -26,6 +26,10 @@ During the off-peak hours, the script will shutdown the session hosts and only k
 You can schedule the script to run at a certain time interval on the RD Connection Broker server in your RDS deployment in Azure.
 #>
 
+param(
+[switch]$install
+)
+
 <#
 .SYNOPSIS
 Function for writing the log
@@ -165,6 +169,57 @@ param (
            -ArgumentList $CollectionName, $rdshServer.Name, $NewConnectionAllowed
     }        
 }
+
+<#
+.SYNOPSIS
+Function for creating scheduled task that periodically calls script
+Function will prompt for credentials to store in task for authentication 
+#>
+function Create-RDSScalerTask {
+    $taskName = "Dynamic RDSH"
+    $scriptFile = $script:MyInvocation.MyCommand.Source
+    $process = "powershell.exe"
+    $currentTask = $null
+
+    # authenticate
+    try
+    {
+        Get-AzureRmResourceGroup | Out-Null
+    }
+    catch [System.Management.Automation.CommandNotFoundException]
+    {
+        if((read-host "is it ok to install azurerm sdk?[y|n]") -ieq 'y')
+        {
+            write-host "installing azurerm sdk. this will take a while..."
+            install-module azurerm
+            import-module azurerm
+        }
+        else
+        {
+            write-host "exiting script"
+            return $false
+        }
+    }
+
+    $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if($currentTask -ne $null)
+    {
+        write-host "removing existing task"
+        Unregister-ScheduledTask -TaskName $taskName
+    }
+
+    $action = New-ScheduledTaskAction –Execute $process -Argument "-ExecutionPolicy Bypass -File $($scriptFile)" -WorkingDirectory ([IO.Path]::GetDirectoryName($scriptFile))
+    $trigger = New-ScheduledTaskTrigger -once -at 0am -RepetitionInterval (new-timespan -minutes 15) -RepetitionDuration (new-timespan -minutes 15)
+
+    #$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount
+    $principal = New-ScheduledTaskPrincipal -UserId (get-credential) -LogonType ServiceAccount
+
+    $settings = New-ScheduledTaskSettingsSet -Compatibility Win8 -StartWhenAvailable -MultipleInstances IgnoreNew
+    $task = New-ScheduledTask -Action $action -Principal $principal -Trigger $trigger -Settings $settings -Description $taskName
+    Register-ScheduledTask -InputObject $task -TaskName $taskName
+    Start-ScheduledTask -TaskName $taskName
+}
+
 <#
 Variables
 #>
@@ -180,6 +235,11 @@ $rdslog="$CurrentPath\RDSScale.log"
 #usage log path
 $rdsusagelog="$CurrentPath\RDSUsage.log"
 
+if($install)
+{
+    Create-RDSScalerTask
+    return
+}
 
 ###### Verify XML file ######
 If (Test-Path $XMLPath) 
