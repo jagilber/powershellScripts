@@ -18,9 +18,10 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
+   Version    : 170117 fixed getfiles uploaddir
 
    History    : 
+                161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
                 161216 changed -eventDetails to export entire xml formatted
                 161212 changed out-file to streamwriter to improve performance
                 161112 removing connection broker check
@@ -404,7 +405,7 @@ function main()
             show-debugWarning -count $global:debugLogsCount
         }
 
-        if(!$listEventLogs -and @([IO.Directory]::GetFiles($uploadDir,"*.*")).Count -gt 0)
+        if(!$listEventLogs -and @([IO.Directory]::GetFiles($global:uploadDir,"*.*")).Count -gt 0)
         {
            start $global:uploadDir
            log-info "files are located here: $($global:uploadDir)"
