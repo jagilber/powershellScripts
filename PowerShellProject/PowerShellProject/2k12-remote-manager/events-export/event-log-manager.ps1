@@ -18,9 +18,10 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170117 fixed getfiles uploaddir
+   Version    : 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
 
    History    : 
+                170117 fixed getfiles uploaddir
                 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
                 161216 changed -eventDetails to export entire xml formatted
                 161212 changed out-file to streamwriter to improve performance
@@ -1504,7 +1505,11 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             }
             catch
             {
-                write-host "job exception:$($error)"
+                if($global:debugscript)
+                {
+                    write-host "job exception:$($error)"
+                }
+
                 $error.Clear()
             }
         }
@@ -1514,7 +1519,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
         $stream = $null
 
         write-host "finished saving file $($outputCsv)" -for Cyan
-        
 
         if($clearEventLogsOnGather)
         {
@@ -1578,7 +1582,8 @@ function start-listenJob([hashtable]$jobItem)
                 $eventTracePattern,
                 $eventDetails,
                 $listenEventReadCount,
-                $listenSleepMs
+                $listenSleepMs,
+                $debugscript
                 )
   
         $checkMachine = $true
@@ -1663,15 +1668,23 @@ function start-listenJob([hashtable]$jobItem)
                                     {
                                         if($eventDetails)
                                         {
-                                            # format xml
-                                            [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
-                                            $xdoc.LoadXml($eventXml)
-                                            [IO.StringWriter] $sw = new-object IO.StringWriter
-                                            [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
-                                            $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
-                                            $xdoc.PreserveWhitespace = $true
-                                            $xdoc.WriteTo($xmlTextWriter)
-                                            $description = "$($description)`r`n$($sw.ToString())"
+                                            # $eventxml may not be xml
+                                            try
+                                            {
+                                                # format xml
+                                                [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
+                                                $xdoc.LoadXml($eventXml)
+                                                [IO.StringWriter] $sw = new-object IO.StringWriter
+                                                [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
+                                                $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
+                                                $xdoc.PreserveWhitespace = $true
+                                                $xdoc.WriteTo($xmlTextWriter)
+                                                $description = "$($description)`r`n$($sw.ToString())"
+                                            }
+                                            catch
+                                            {
+                                                $description = "$($description)$($eventXml)"
+                                            }
                                         }
                                         else
                                         {
@@ -1738,7 +1751,11 @@ function start-listenJob([hashtable]$jobItem)
                     }
                     catch
                     {
-                        Write-Host "$([DateTime]::Now):$($machine):Job listen event exception:$($eventLogName) id:$($event.RecordId) error: $($Error)" -ForegroundColor Red
+                        if($debugscript)
+                        {
+                            Write-Host "$([DateTime]::Now):$($machine):Job listen event exception:$($eventLogName) id:$($event.RecordId) error: $($Error)" -ForegroundColor Red
+                        }
+
                         $eventLogItem.Value.RecordId = [Math]::Max($eventLogItem.RecordId + 1,$event.RecordId)
                         $error.Clear()
                     }
@@ -1764,7 +1781,11 @@ function start-listenJob([hashtable]$jobItem)
             }
             catch
             {
-                Write-Host "$([DateTime]::Now):$($machine):Job listen exception: $($error)" -ForegroundColor Red
+                if($debugscript)
+                {
+                    Write-Host "$([DateTime]::Now):$($machine):Job listen exception: $($error)" -ForegroundColor Red
+                }
+
                 $checkMachine = $true
                 $error.Clear()
             } # end try
@@ -1779,7 +1800,8 @@ function start-listenJob([hashtable]$jobItem)
         $eventTracePattern,
         $eventDetails,
         $listenEventReadCount,
-        $listenSleepMs
+        $listenSleepMs,
+        $global:debugscript
         )
 
     return $job 
