@@ -11,7 +11,7 @@
 .NOTES  
    File Name  : rds-lic-per-device-revoke-by-issuedate.ps1  
    Author     : jagilber
-   Version    : 160418.2
+   Version    : 170204 updated help and questions
                 
    History    : 160414 original
 
@@ -19,14 +19,14 @@
     Example: .\rds-lic-per-device-revoke-by-IssueDate.ps1 -issueDate 2/16/2016 -test
     
 .PARAMETER issueDate
-    IssueDate is any valid date string, example 2/16/2016. Any cal with a date older then entered date will be revoked!"
+    IssueDate is any valid date string, example 2/16/2016. Any cal with a issue date older than entered date will be revoked!"
 
 .PARAMETER test
     Use switch test to simulate cal revoke but not perform. it will not however produce next cal revoke date.
 #>  
 
 Param(
-    [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the IssueDate. Any cal with a date greater then provided date will be revoked!")]
+    [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the IssueDate. Any cal with a issue date older than provided date will be revoked!")]
     [string] $issueDate,
     [parameter(Position=1,Mandatory=$false,HelpMessage="Use -test to test revocation but not perform.")]
     [switch] $test
@@ -73,7 +73,7 @@ $activelicenses = @($licenses | where { $_.licenseStatus -eq 2 -and $_.IssueDate
 
 if($activeLicenses.Count -ge 1)
 {
-    if(!((Read-Host "WARNING:This will revoke up to $($activeLicenses.Count) cals, are you sure you want to continue?") -icontains "y"))
+    if(!((Read-Host "WARNING:This will revoke up to $($activeLicenses.Count) cals, are you sure you want to continue?[y|n") -icontains "y"))
     {
         return
     }
@@ -99,7 +99,7 @@ if($activeLicenses.Count -ge 1)
 
                 if($ret.ReturnValue -ne 0)
                 {
-                    if(!((Read-Host "WARNING:error revoking cal, do you you want to continue?") -icontains "y"))
+                    if(!((Read-Host "WARNING:error revoking cal, do you you want to continue?[y|n]") -icontains "y"))
                     {
                         return
                     }
@@ -107,7 +107,7 @@ if($activeLicenses.Count -ge 1)
 
                 if($ret.RevokableCals -eq 0 -or ($ret.NextRevokeAllowedOn.Substring(0,8) -gt [DateTime]::Now.ToString("yyyyMMdd")))
                 {
-                    write-host "unable to revoke any more cals until 'NextRevokeAllowedOn'. exiting"
+                    write-host "unable to revoke any more cals until 'Next Revoke Allowed On' above in format yyyyMMdd. exiting"
                     return
                 }
             }
