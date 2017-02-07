@@ -18,14 +18,12 @@
 
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
+   Version    : 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
 
    History    : 
+                170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
                 170117 fixed getfiles uploaddir
                 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
-                161216 changed -eventDetails to export entire xml formatted
-                161212 changed out-file to streamwriter to improve performance
-                161112 removing connection broker check
 
 .EXAMPLE
     .\event-log-manager.ps1 –rds –minutes 10
@@ -60,7 +58,7 @@
     Example command to clear 'System' event log:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –eventStarTime "12/15/2015 10:00 am"
+    .\event-log-manager.ps1 –eventStartTime "12/15/2015 10:00 am"
     Example command to query for all events after specified time:
 
 .EXAMPLE
@@ -226,7 +224,7 @@ $appendOutputFiles = $false
 $debugLogsMax = 100
 $errorActionPreference = "Continue"
 $global:debugLogsCount = 0
-$global:eventLogLevelQuery = $null
+$global:eventLogLevelsQuery = $null
 $global:eventLogIdsQuery = $null
 $global:eventLogFiles = ![string]::IsNullOrEmpty($eventLogPath)
 $global:eventLogNameSearchPattern = $eventLogNamePattern
@@ -343,8 +341,8 @@ function main()
     }
 
     # create xml query
-    [string]$global:eventLogLevelQuery = build-eventLogLevels -eventLogLevels $eventLogLevels
-    [string]$global:eventLogIdQuery = build-eventLogIds -eventLogIds $eventLogIds
+    [string]$global:eventLogLevelsQuery = build-eventLogLevels -eventLogLevels $eventLogLevels
+    [string]$global:eventLogIdsQuery = build-eventLogIds -eventLogIds $eventLogIds
 
     # make sure start stop and other time range values were not all specified
     if(![string]::IsNullOrEmpty($eventStartTime) -and ![string]::IsNullOrEmpty($eventStopTime) -and ($months + $days + $minutes -gt 0))
@@ -604,6 +602,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                 }
             
                 $listenJobItem.EventLogItems.Add($eventLogName, @{
+                    EventQuery = $eventQuery
                     QueryString = $queryString
                     OutputCsv = $outputCsv
                     RecordId = 0
@@ -1390,8 +1389,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                 $machine,
                 $eventStartTime,
                 $eventStopTime,
-                $eventLogLevelsQuery,
-                $eventLogIdsQuery,
                 $clearEventLogsOnGather,
                 $queryString,
                 $eventTracePattern,
@@ -1430,7 +1427,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             Remove-Item -Path $outputCsv -Force
         }
 
-        
         $count = 0
         $timer = [DateTime]::Now
         $totalCount = 0
@@ -1548,8 +1544,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
         $machine,
         $eventStartTime,
         $eventStopTime,
-        $global:eventLogLevelsQuery,
-        $global:eventLogIdsQuery,
         $clearEventLogsOnGather,
         $queryString,
         $eventTracePattern,
@@ -1577,8 +1571,6 @@ function start-listenJob([hashtable]$jobItem)
         param([hashtable]$jobItem,
                 $logFile,
                 $uploadDir,
-                $eventLogLevelsQuery,
-                $eventLogIdsQuery,
                 $eventTracePattern,
                 $eventDetails,
                 $listenEventReadCount,
@@ -1618,6 +1610,7 @@ function start-listenJob([hashtable]$jobItem)
                 foreach($eventLogItem in $jobItem.EventLogItems.GetEnumerator())
                 {
                     $eventLogName = $eventLogItem.Name
+                    $eventQuery = $eventLogItem.Value.EventQuery
                     $outputCsv = $eventLogItem.Value.OutputCsv
                     $queryString = $eventLogItem.Value.QueryString                
                     $recordId = $eventLogItem.Value.RecordId
@@ -1795,8 +1788,6 @@ function start-listenJob([hashtable]$jobItem)
     } -ArgumentList ($jobItem,
         $logFile,
         $global:uploadDir,
-        $global:eventLogLevelsQuery,
-        $global:eventLogIdsQuery,
         $eventTracePattern,
         $eventDetails,
         $listenEventReadCount,
