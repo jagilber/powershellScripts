@@ -3,70 +3,69 @@
     powershell script to manage event logs on multiple machines
 
 .DESCRIPTION
-
-    Set-ExecutionPolicy Bypass -Force
+    To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
     This script will optionally enable / disable debug and analytic event logs.
     This can be against both local and remote machines.
     It will also take a regex filter pattern for both event log names and traces.
     For each match, all event logs will be exported to csv format.
     Each export will be in its own file named with the event log name.
-    It also has ability to 'listen' to new events by continuously polling configured event logs
+    Script has ability to 'listen' to new events by continuously polling configured event logs.
+
     https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
+    https://aka.ms/event-log-manager.ps1
 
 .NOTES
-
    File Name  : event-log-manager.ps1
    Author     : jagilber
    Version    : 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
-
    History    : 
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
                 170117 fixed getfiles uploaddir
                 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
 
 .EXAMPLE
-    .\event-log-manager.ps1 –rds –minutes 10
+    .\event-log-manager.ps1 â€“rds â€“minutes 10
     Example command to query rds event logs for last 10 minutes.
 
 .EXAMPLE
-    .\event-log-manager.ps1 –minutes 10 -eventLogNamePattern * –machines rds-gw-1,rds-gw-2
+    .\event-log-manager.ps1 â€“minutes 10 -eventLogNamePattern * â€“machines rds-gw-1,rds-gw-2
     Example command to query all event logs. It will query machines rds-gw-1 and rds-gw-2 for all events in last 10 minutes:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –machines rds-gw-1,rds-gw-2
+    .\event-log-manager.ps1 â€“machines rds-gw-1,rds-gw-2
     Example command to query rds event logs. It will query machines rds-gw-1 and rds-gw-2 for events for today from Application and System logs (default logs):
 
 .EXAMPLE
-    .\event-log-manager.ps1 –enableDebugLogs -eventLogNamePattern dns -rds
-    Example command to enable ‘debug and analytic’ event logs for 'rds' event logs and 'dns' event logs:
+    .\event-log-manager.ps1 â€“enableDebugLogs -eventLogNamePattern dns -rds
+    Example command to enable â€˜debug and analyticâ€™ event logs for 'rds' event logs and 'dns' event logs:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –eventLogNamePattern * -eventTracePattern "fail"
+    .\event-log-manager.ps1 â€“eventLogNamePattern * -eventTracePattern "fail"
     Example command to export all event logs entries that have the word 'fail' in the event Message:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –eventLogNamePattern * -eventTracePattern "fail" -eventLogLevel Warning
+    .\event-log-manager.ps1 â€“eventLogNamePattern * -eventTracePattern "fail" -eventLogLevel Warning
     Example command to export all event logs entries that have the word 'fail' in the event Message and log level 'Warning':
 
 .EXAMPLE
-    .\event-log-manager.ps1 -listEventLogs –disableDebugLogs
-    Example command to disable ‘debug and analytic’ event logs:
+    .\event-log-manager.ps1 -listEventLogs â€“disableDebugLogs
+    Example command to disable â€˜debug and analyticâ€™ event logs:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –cleareventlogs -eventLogNamePattern "^system$"
+    .\event-log-manager.ps1 â€“cleareventlogs -eventLogNamePattern "^system$"
     Example command to clear 'System' event log:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –eventStartTime "12/15/2015 10:00 am"
+    .\event-log-manager.ps1 â€“eventStartTime "12/15/2015 10:00 am"
     Example command to query for all events after specified time:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –eventStopTime "12/15/2016 10:00 am"
+    .\event-log-manager.ps1 â€“eventStopTime "12/15/2016 10:00 am"
     Example command to query for all events up to specified time:
 
 .EXAMPLE
-    .\event-log-manager.ps1 –listEventLogs
+    .\event-log-manager.ps1 â€“listEventLogs
     Example command to query all event log names:
 
 .EXAMPLE
@@ -163,7 +162,6 @@
 .PARAMETER uploadDir
     The directory where all files will be created.
     The default is .\gather
-
 #>
 
 Param(
@@ -217,7 +215,7 @@ Param(
     [switch] $rds,
     [parameter(HelpMessage="Enter path for upload directory")]
     [string] $uploadDir
-    )
+)
 
 cls
 $appendOutputFiles = $false
@@ -666,7 +664,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 # ----------------------------------------------------------------------------------------------------------------
 function enable-logs($eventLogNames, $machine)
 {
-    log-info "enabling logs on $($machine)"
+    log-info "enabling logs on $($machine)."
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
     $debugLogsEnabled = New-Object Collections.ArrayList
 
@@ -872,7 +870,6 @@ function listen-forEvents()
     $sortedEvents = New-Object Collections.ArrayList
     $newEvents = New-Object Collections.ArrayList
     
-    
     try
     {
         while($listen)
@@ -882,7 +879,6 @@ function listen-forEvents()
             $sortedEvents = $unsortedEvents.Clone()
             [void]$unsortedEvents.Clear()
             $color = $true
-
 
             # get events from jobs
             $newEvents = get-job * | Receive-Job
@@ -1059,7 +1055,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         if($global:logStream -eq $null)
         {
             $global:logStream = new-object System.IO.StreamWriter ($logFile,$true)
-            $global:logTimer.Interval = 5000 #5 seconds  
+            $global:logTimer.Interval = 5000 #5 secondsÂ  
 
             Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed –SourceIdentifier  logTimer -Action `
             { 
@@ -1072,7 +1068,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         }
 
         # reset timer
-        $global:logTimer.Interval = 5000 #5 seconds  
+        $global:logTimer.Interval = 5000 #5 secondsÂ  
         $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch {}
@@ -1373,13 +1369,13 @@ function show-debugWarning ($count)
 function start-exportJob([string]$machine,[string]$eventLogName,[string]$queryString,[string]$outputCsv)
 {
     log-info "starting export job:$($machine) eventlog:$($eventLogName)" -debugOnly
+
     #throttle
     While((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         receive-backgroundJobs
         Start-Sleep -Milliseconds 100
     }
-
 
     $job = Start-Job -Name "$($machine):$($eventLogName)" -ScriptBlock {
         param($eventLogName,
@@ -1394,7 +1390,8 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                 $eventTracePattern,
                 $outputCsv,
                 $eventLogFiles,
-                $eventDetails)
+                $eventDetails
+        )
 
         try
         {
@@ -1483,7 +1480,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                     
                         $stream.WriteLine($outputEntry)
                     }
-
                     
                     if([DateTime]::Now.Subtract($timer).TotalSeconds -gt 30)
                     {
@@ -1492,7 +1488,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                         $timer = [DateTime]::Now
                         $count = 0
                     }
-
                 }
                 else
                 {
@@ -1538,18 +1533,19 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             }
         }
     } -ArgumentList ($eventLogName,
-        $appendOutputFiles,
-        $logFile,
-        $global:uploadDir,
-        $machine,
-        $eventStartTime,
-        $eventStopTime,
-        $clearEventLogsOnGather,
-        $queryString,
-        $eventTracePattern,
-        $outputCsv,
-        $global:eventLogFiles,
-        $eventDetails)
+            $appendOutputFiles,
+            $logFile,
+            $global:uploadDir,
+            $machine,
+            $eventStartTime,
+            $eventStopTime,
+            $clearEventLogsOnGather,
+            $queryString,
+            $eventTracePattern,
+            $outputCsv,
+            $global:eventLogFiles,
+            $eventDetails
+        )
 
     return $job
 }
@@ -1569,13 +1565,13 @@ function start-listenJob([hashtable]$jobItem)
     $job = Start-Job -Name "$($machine)" -ScriptBlock `
     {
         param([hashtable]$jobItem,
-                $logFile,
-                $uploadDir,
-                $eventTracePattern,
-                $eventDetails,
-                $listenEventReadCount,
-                $listenSleepMs,
-                $debugscript
+                    $logFile,
+                    $uploadDir,
+                    $eventTracePattern,
+                    $eventDetails,
+                    $listenEventReadCount,
+                    $listenSleepMs,
+                    $debugscript
                 )
   
         $checkMachine = $true
@@ -1600,7 +1596,7 @@ function start-listenJob([hashtable]$jobItem)
                     }
                     else
                     {
-                        Write-Host "successfully connected to machine: $($machine). enabling..." -ForegroundColor Green
+                        Write-Host "successfully connected to machine: $($machine). enabling EventLog Session. Type Ctrl-C to stop execution cleanly." -ForegroundColor Green
                         $checkMachine = $false
                         $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
                     }
@@ -1719,10 +1715,8 @@ function start-listenJob([hashtable]$jobItem)
 
                             # prevent recordid 0 duping events
                             $eventLogItem.Value.RecordId = [Math]::Max($eventLogItem.RecordId + 1,$event.RecordId)
-
                             $event = $reader.ReadEvent()
                             [void]$count++
-
                         } # end while
 
                         while($count -ge $listenEventReadCount)
@@ -1786,13 +1780,13 @@ function start-listenJob([hashtable]$jobItem)
             Start-Sleep -Milliseconds $listenSleepMs
         } # end while
     } -ArgumentList ($jobItem,
-        $logFile,
-        $global:uploadDir,
-        $eventTracePattern,
-        $eventDetails,
-        $listenEventReadCount,
-        $listenSleepMs,
-        $global:debugscript
+            $logFile,
+            $global:uploadDir,
+            $eventTracePattern,
+            $eventDetails,
+            $listenEventReadCount,
+            $listenSleepMs,
+            $global:debugscript
         )
 
     return $job 

@@ -3,23 +3,22 @@
     powershell script to manage event logs on multiple machines
 
 .DESCRIPTION
-
-    Set-ExecutionPolicy Bypass -Force
+    To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
     This script will optionally enable / disable debug and analytic event logs.
     This can be against both local and remote machines.
     It will also take a regex filter pattern for both event log names and traces.
     For each match, all event logs will be exported to csv format.
     Each export will be in its own file named with the event log name.
-    It also has ability to 'listen' to new events by continuously polling configured event logs
+    Script has ability to 'listen' to new events by continuously polling configured event logs.
+
     https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
+    https://aka.ms/event-log-manager.ps1
 
 .NOTES
-
    File Name  : event-log-manager.ps1
    Author     : jagilber
    Version    : 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
-
    History    : 
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
                 170117 fixed getfiles uploaddir
@@ -163,7 +162,6 @@
 .PARAMETER uploadDir
     The directory where all files will be created.
     The default is .\gather
-
 #>
 
 Param(
@@ -217,7 +215,7 @@ Param(
     [switch] $rds,
     [parameter(HelpMessage="Enter path for upload directory")]
     [string] $uploadDir
-    )
+)
 
 cls
 $appendOutputFiles = $false
@@ -666,7 +664,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 # ----------------------------------------------------------------------------------------------------------------
 function enable-logs($eventLogNames, $machine)
 {
-    log-info "enabling logs on $($machine)"
+    log-info "enabling logs on $($machine). Type Ctrl-C to stop execution cleanly."
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
     $debugLogsEnabled = New-Object Collections.ArrayList
 
@@ -872,7 +870,6 @@ function listen-forEvents()
     $sortedEvents = New-Object Collections.ArrayList
     $newEvents = New-Object Collections.ArrayList
     
-    
     try
     {
         while($listen)
@@ -882,7 +879,6 @@ function listen-forEvents()
             $sortedEvents = $unsortedEvents.Clone()
             [void]$unsortedEvents.Clear()
             $color = $true
-
 
             # get events from jobs
             $newEvents = get-job * | Receive-Job
@@ -1373,13 +1369,13 @@ function show-debugWarning ($count)
 function start-exportJob([string]$machine,[string]$eventLogName,[string]$queryString,[string]$outputCsv)
 {
     log-info "starting export job:$($machine) eventlog:$($eventLogName)" -debugOnly
+
     #throttle
     While((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         receive-backgroundJobs
         Start-Sleep -Milliseconds 100
     }
-
 
     $job = Start-Job -Name "$($machine):$($eventLogName)" -ScriptBlock {
         param($eventLogName,
@@ -1394,7 +1390,8 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                 $eventTracePattern,
                 $outputCsv,
                 $eventLogFiles,
-                $eventDetails)
+                $eventDetails
+        )
 
         try
         {
@@ -1483,7 +1480,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                     
                         $stream.WriteLine($outputEntry)
                     }
-
                     
                     if([DateTime]::Now.Subtract($timer).TotalSeconds -gt 30)
                     {
@@ -1492,7 +1488,6 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                         $timer = [DateTime]::Now
                         $count = 0
                     }
-
                 }
                 else
                 {
@@ -1538,18 +1533,19 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             }
         }
     } -ArgumentList ($eventLogName,
-        $appendOutputFiles,
-        $logFile,
-        $global:uploadDir,
-        $machine,
-        $eventStartTime,
-        $eventStopTime,
-        $clearEventLogsOnGather,
-        $queryString,
-        $eventTracePattern,
-        $outputCsv,
-        $global:eventLogFiles,
-        $eventDetails)
+            $appendOutputFiles,
+            $logFile,
+            $global:uploadDir,
+            $machine,
+            $eventStartTime,
+            $eventStopTime,
+            $clearEventLogsOnGather,
+            $queryString,
+            $eventTracePattern,
+            $outputCsv,
+            $global:eventLogFiles,
+            $eventDetails
+        )
 
     return $job
 }
@@ -1569,13 +1565,13 @@ function start-listenJob([hashtable]$jobItem)
     $job = Start-Job -Name "$($machine)" -ScriptBlock `
     {
         param([hashtable]$jobItem,
-                $logFile,
-                $uploadDir,
-                $eventTracePattern,
-                $eventDetails,
-                $listenEventReadCount,
-                $listenSleepMs,
-                $debugscript
+                    $logFile,
+                    $uploadDir,
+                    $eventTracePattern,
+                    $eventDetails,
+                    $listenEventReadCount,
+                    $listenSleepMs,
+                    $debugscript
                 )
   
         $checkMachine = $true
@@ -1719,10 +1715,8 @@ function start-listenJob([hashtable]$jobItem)
 
                             # prevent recordid 0 duping events
                             $eventLogItem.Value.RecordId = [Math]::Max($eventLogItem.RecordId + 1,$event.RecordId)
-
                             $event = $reader.ReadEvent()
                             [void]$count++
-
                         } # end while
 
                         while($count -ge $listenEventReadCount)
@@ -1786,13 +1780,13 @@ function start-listenJob([hashtable]$jobItem)
             Start-Sleep -Milliseconds $listenSleepMs
         } # end while
     } -ArgumentList ($jobItem,
-        $logFile,
-        $global:uploadDir,
-        $eventTracePattern,
-        $eventDetails,
-        $listenEventReadCount,
-        $listenSleepMs,
-        $global:debugscript
+            $logFile,
+            $global:uploadDir,
+            $eventTracePattern,
+            $eventDetails,
+            $listenEventReadCount,
+            $listenSleepMs,
+            $global:debugscript
         )
 
     return $job 
