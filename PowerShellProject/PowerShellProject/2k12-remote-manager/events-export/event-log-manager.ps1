@@ -23,49 +23,48 @@
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
                 170117 fixed getfiles uploaddir
                 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
-
 .EXAMPLE
-    .\event-log-manager.ps1 â€“rds â€“minutes 10
+    .\event-log-manager.ps1 "rds "minutes 10
     Example command to query rds event logs for last 10 minutes.
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“minutes 10 -eventLogNamePattern * â€“machines rds-gw-1,rds-gw-2
+    .\event-log-manager.ps1 "minutes 10 -eventLogNamePattern * "machines rds-gw-1,rds-gw-2
     Example command to query all event logs. It will query machines rds-gw-1 and rds-gw-2 for all events in last 10 minutes:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“machines rds-gw-1,rds-gw-2
+    .\event-log-manager.ps1 "machines rds-gw-1,rds-gw-2
     Example command to query rds event logs. It will query machines rds-gw-1 and rds-gw-2 for events for today from Application and System logs (default logs):
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“enableDebugLogs -eventLogNamePattern dns -rds
-    Example command to enable â€˜debug and analyticâ€™ event logs for 'rds' event logs and 'dns' event logs:
+    .\event-log-manager.ps1 "enableDebugLogs -eventLogNamePattern dns -rds
+    Example command to enable "debug and analytic" event logs for 'rds' event logs and 'dns' event logs:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“eventLogNamePattern * -eventTracePattern "fail"
+    .\event-log-manager.ps1 "eventLogNamePattern * -eventTracePattern "fail"
     Example command to export all event logs entries that have the word 'fail' in the event Message:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“eventLogNamePattern * -eventTracePattern "fail" -eventLogLevel Warning
+    .\event-log-manager.ps1 "eventLogNamePattern * -eventTracePattern "fail" -eventLogLevel Warning
     Example command to export all event logs entries that have the word 'fail' in the event Message and log level 'Warning':
 
 .EXAMPLE
-    .\event-log-manager.ps1 -listEventLogs â€“disableDebugLogs
-    Example command to disable â€˜debug and analyticâ€™ event logs:
+    .\event-log-manager.ps1 -listEventLogs "disableDebugLogs
+    Example command to disable "debug and analytic" event logs:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“cleareventlogs -eventLogNamePattern "^system$"
+    .\event-log-manager.ps1 "cleareventlogs -eventLogNamePattern "^system$"
     Example command to clear 'System' event log:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“eventStartTime "12/15/2015 10:00 am"
+    .\event-log-manager.ps1 "eventStartTime "12/15/2015 10:00 am"
     Example command to query for all events after specified time:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“eventStopTime "12/15/2016 10:00 am"
+    .\event-log-manager.ps1 "eventStopTime "12/15/2016 10:00 am"
     Example command to query for all events up to specified time:
 
 .EXAMPLE
-    .\event-log-manager.ps1 â€“listEventLogs
+    .\event-log-manager.ps1 "listEventLogs
     Example command to query all event log names:
 
 .EXAMPLE
@@ -1057,7 +1056,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
             $global:logStream = new-object System.IO.StreamWriter ($logFile,$true)
             $global:logTimer.Interval = 5000 #5 secondsÂ  
 
-            Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed –SourceIdentifier  logTimer -Action `
+            Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed ï¿½SourceIdentifierï¿½ logTimer -Action `
             { 
                 Unregister-Event -SourceIdentifier logTimer
                 $global:logStream.Close() 
