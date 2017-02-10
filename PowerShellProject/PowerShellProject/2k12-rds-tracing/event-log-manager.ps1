@@ -18,53 +18,54 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
+   Version    : 170210 added file use for $machines
    History    : 
+                170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
                 170117 fixed getfiles uploaddir
                 161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
 .EXAMPLE
-    .\event-log-manager.ps1 "rds "minutes 10
+    .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
 
 .EXAMPLE
-    .\event-log-manager.ps1 "minutes 10 -eventLogNamePattern * "machines rds-gw-1,rds-gw-2
+    .\event-log-manager.ps1 -minutes 10 -eventLogNamePattern * -machines rds-gw-1,rds-gw-2
     Example command to query all event logs. It will query machines rds-gw-1 and rds-gw-2 for all events in last 10 minutes:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "machines rds-gw-1,rds-gw-2
+    .\event-log-manager.ps1 -machines rds-gw-1,rds-gw-2
     Example command to query rds event logs. It will query machines rds-gw-1 and rds-gw-2 for events for today from Application and System logs (default logs):
 
 .EXAMPLE
-    .\event-log-manager.ps1 "enableDebugLogs -eventLogNamePattern dns -rds
+    .\event-log-manager.ps1 -enableDebugLogs -eventLogNamePattern dns -rds
     Example command to enable "debug and analytic" event logs for 'rds' event logs and 'dns' event logs:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "eventLogNamePattern * -eventTracePattern "fail"
+    .\event-log-manager.ps1 -eventLogNamePattern * -eventTracePattern "fail"
     Example command to export all event logs entries that have the word 'fail' in the event Message:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "eventLogNamePattern * -eventTracePattern "fail" -eventLogLevel Warning
+    .\event-log-manager.ps1 -eventLogNamePattern * -eventTracePattern "fail" -eventLogLevel Warning
     Example command to export all event logs entries that have the word 'fail' in the event Message and log level 'Warning':
 
 .EXAMPLE
-    .\event-log-manager.ps1 -listEventLogs "disableDebugLogs
+    .\event-log-manager.ps1 -listEventLogs -disableDebugLogs
     Example command to disable "debug and analytic" event logs:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "cleareventlogs -eventLogNamePattern "^system$"
+    .\event-log-manager.ps1 -cleareventlogs -eventLogNamePattern "^system$"
     Example command to clear 'System' event log:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "eventStartTime "12/15/2015 10:00 am"
+    .\event-log-manager.ps1 -eventStartTime "12/15/2015 10:00 am"
     Example command to query for all events after specified time:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "eventStopTime "12/15/2016 10:00 am"
+    .\event-log-manager.ps1 -eventStopTime "12/15/2016 10:00 am"
     Example command to query for all events up to specified time:
 
 .EXAMPLE
-    .\event-log-manager.ps1 "listEventLogs
+    .\event-log-manager.ps1 -listEventLogs
     Example command to query all event log names:
 
 .EXAMPLE
@@ -293,11 +294,18 @@ function main()
     {
         $machines += $env:COMPUTERNAME
     }
-
     # when passing comma separated list of machines from bat, it does not get separated correctly
     elseif($machines.length -eq 1 -and $machines[0].Contains(","))
     {
         $machines = $machines[0].Split(",")
+    }
+    # see if it is a file with machine names
+    elseif($machines.Count -eq 1)
+    {
+        if([IO.File]::Exists($machines[0]))
+        {
+            $machines = [IO.File]::ReadAllLines($machines[0])
+        }
     }
 
     # setup for rds
