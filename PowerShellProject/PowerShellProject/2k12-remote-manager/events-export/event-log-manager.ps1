@@ -18,12 +18,12 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170210 added file use for $machines
+   Version    : 170213 maded eventdetails same in both background jobs
    History    : 
+                170210 added file use for $machines
                 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
-                170117 fixed getfiles uploaddir
-                161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
+
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -99,6 +99,9 @@
 
 .PARAMETER eventDetails
     If specified, will output event log items including xml data found on 'details' tab.
+
+.PARAMETER eventDetailsFormatted
+    If specified, will output event log items including xml data found on 'details' tab with xml formatted.
 
 .PARAMETER eventLogIds
     If specified, a comma separated list of event logs id's to query.
@@ -179,6 +182,10 @@ Param(
     [switch] $displayMergedResults,
     [parameter(HelpMessage="Select to enable debug event logs")]
     [switch] $enableDebugLogs,
+    [parameter(HelpMessage="Select this switch to export event entry details tab")]
+    [switch] $eventDetails,
+    [parameter(HelpMessage="Select this switch to export event entry details tab with xml formatted")]
+    [switch] $eventDetailsFormatted,
     [parameter(HelpMessage="Enter comma separated list of event log levels Critical,Error,Warning,Information,Verbose")]
     [string[]] $eventLogLevels = @("critical","error","warning","information","verbose"),
     [parameter(HelpMessage="Enter comma separated list of event log Id")]
@@ -193,8 +200,6 @@ Param(
     [string] $eventStopTime,
     [parameter(HelpMessage="Enter regex or string pattern for event log trace to match")]
     [string] $eventTracePattern = "",
-    [parameter(HelpMessage="Select this switch to export event entry details tab")]
-    [switch] $eventDetails,
     [parameter(HelpMessage="Select to check for new version of file")]
     [switch] $getUpdate,
     [parameter(HelpMessage="Enter hours")]
@@ -990,6 +995,7 @@ function log-arguments()
     log-info "displayMergedResults:$($displayMergedResults)"
     log-info "enableDebugLogs:$($enableDebugLogs)"
     log-info "eventDetails:$($eventDetails)"
+    log-info "eventDetailsFormatted:$($eventDetailsFormatted)"
     log-info "eventLogLevels:$($eventLogLevels -join ",")"
     log-info "eventLogIds:$($eventLogIds -join ",")"
     log-info "eventLogNamePattern:$($eventLogNamePattern)"
@@ -1397,7 +1403,8 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                 $eventTracePattern,
                 $outputCsv,
                 $eventLogFiles,
-                $eventDetails
+                $eventDetails,
+                $eventDetailsFormatted
         )
 
         try
@@ -1463,11 +1470,39 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
                     {
                         $description = $description.Replace("`r`n",";")
                     }
-                    
-                    #event log 'details' tab view
-                    if($eventdetails)
+
+                    # event log 'details' tab
+                    if($eventdetails -or $eventDetailsFormatted -or [string]::IsNullOrEmpty($description))
                     {
-                        $description = "$($description)`n$($event.FormatDescription().Replace("`r`n",";"));$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
+                        $eventXml = $event.ToXml()
+                        if(![string]::IsNullOrEmpty($eventXml))
+                        {
+                            if($eventDetailsFormatted)
+                            {
+                                # $eventxml may not be xml
+                                try
+                                {
+                                    # format xml
+                                    [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
+                                    $xdoc.LoadXml($eventXml)
+                                    [IO.StringWriter] $sw = new-object IO.StringWriter
+                                    [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
+                                    $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
+                                    $xdoc.PreserveWhitespace = $true
+                                    $xdoc.WriteTo($xmlTextWriter)
+                                    $description = "$($description)`r`n$($sw.ToString())"
+                                }
+                                catch
+                                {
+                                    $description = "$($description)$($eventXml)"
+                                }
+                            }
+                            else
+                            {
+                                # display xml unformatted
+                                $description = "$($description)$($eventXml)"
+                            }
+                        }
                     }
 
                     $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
@@ -1551,7 +1586,8 @@ function start-exportJob([string]$machine,[string]$eventLogName,[string]$querySt
             $eventTracePattern,
             $outputCsv,
             $global:eventLogFiles,
-            $eventDetails
+            $eventDetails,
+            $eventDetailsFormatted
         )
 
     return $job
@@ -1576,6 +1612,7 @@ function start-listenJob([hashtable]$jobItem)
                     $uploadDir,
                     $eventTracePattern,
                     $eventDetails,
+                    $eventDetailsFormatted,
                     $listenEventReadCount,
                     $listenSleepMs,
                     $debugscript
@@ -1657,12 +1694,12 @@ function start-listenJob([hashtable]$jobItem)
                                 }
 
                                 # event log 'details' tab
-                                if($eventdetails -or [string]::IsNullOrEmpty($description))
+                                if($eventdetails -or $eventDetailsFormatted -or [string]::IsNullOrEmpty($description))
                                 {
                                     $eventXml = $event.ToXml()
                                     if(![string]::IsNullOrEmpty($eventXml))
                                     {
-                                        if($eventDetails)
+                                        if($eventDetailsFormatted)
                                         {
                                             # $eventxml may not be xml
                                             try
@@ -1791,6 +1828,7 @@ function start-listenJob([hashtable]$jobItem)
             $global:uploadDir,
             $eventTracePattern,
             $eventDetails,
+            $eventDetailsFormatted,
             $listenEventReadCount,
             $listenSleepMs,
             $global:debugscript
