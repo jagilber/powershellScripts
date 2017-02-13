@@ -48,7 +48,7 @@ function get-sysInternalsUtility ([string] $utilityName)
                 $webClient = new-object System.Net.WebClient
                 $webclient.UseDefaultCredentials = $true
                 #$webclient.Credentials = [Net.NetworkCredential](get-credential -UserName "$($env:USERDOMAIN)\$($env:USERNAME)" -Message "AZRDAV Sharepoint")
-                $webClient.DownloadFile($sysUrl, $destFile)
+                [void]$webClient.DownloadFile($sysUrl, $destFile)
                 log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
             }
             else
