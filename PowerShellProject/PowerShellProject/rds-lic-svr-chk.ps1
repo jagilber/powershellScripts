@@ -12,9 +12,9 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 161206 using transcript file for logging to match console
+   Version    : 170213 fixed issue with -runasnetworkservice
    History    : 
-   
+                161206 using transcript file for logging to match console
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
     query for license server configuration and use wmi to test functionality
@@ -328,6 +328,7 @@ function main()
     Stop-Transcript 
 
     "-----------------------------------------"
+    "log file located here: $(get-location)\$($logFile)"
     "finished" 
     
 }
@@ -652,8 +653,8 @@ function get-sysInternalsUtility ([string] $utilityName)
             if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
             {
                 $webClient = new-object System.Net.WebClient
-                $webClient.DownloadFile($sysUrl, $destFile)
-                "sysinternals utility $($utilityName) downloaded to $($destFile)"
+                [void]$webClient.DownloadFile($sysUrl, $destFile)
+                write-host "sysinternals utility $($utilityName) downloaded to $($destFile)"
             }
             else
             {
