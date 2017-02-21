@@ -18,12 +18,12 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170213 maded eventdetails same in both background jobs
+   Version    : 170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
    History    : 
-                170210 added file use for $machines
                 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
-
+                170117 fixed getfiles uploaddir
+                161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -147,7 +147,8 @@
     If specified, will list all eventlogs matching specified pattern with eventlognamepattern
 
 .PARAMETER machines
-    If specified, will run script against remote machine(s). List is comma separated.
+    If specified, will run script against remote machine(s). List is comma separated. argument also accepts file name and path of text file 
+    with machine names.
     If not specified, script will run against local machine
 
 .PARAMETER minutes
@@ -299,18 +300,15 @@ function main()
     {
         $machines += $env:COMPUTERNAME
     }
-    # when passing comma separated list of machines from bat, it does not get separated correctly
-    elseif($machines.length -eq 1 -and $machines[0].Contains(","))
+    elseif($machines.Count -eq 1 -and $machines[0].Contains(","))
     {
+        # when passing comma separated list of machines from bat, it does not get separated correctly
         $machines = $machines[0].Split(",")
     }
-    # see if it is a file with machine names
-    elseif($machines.Count -eq 1)
+    elseif($machines.Count -eq 1 -and [IO.File]::Exists($machines))
     {
-        if([IO.File]::Exists($machines[0]))
-        {
-            $machines = [IO.File]::ReadAllLines($machines[0])
-        }
+        # file passed in
+        $machines = [IO.File]::ReadAllLines($machines);
     }
 
     # setup for rds
@@ -341,7 +339,7 @@ function main()
     elseif($global:eventLogNameSearchPattern -eq "*")
     {
         # using wildcard to use regex wildcard
-        $global:eventLogNameSearchPattern = "."
+        $global:eventLogNameSearchPattern = ".*"
     }
 
     # set to local host if not specified
@@ -408,6 +406,19 @@ function main()
     {
         # clean up
         get-job | remove-job -Force
+
+        if($listen -and $enableDebugLogs)
+        {
+            $enableDebugLogs = $false
+            $disableDebugLogs = $true
+            $listen = $false
+
+            log-info "disabling debug logs that were enabled while listening"
+            # process all machines
+            process-machines -machines $machines `
+                -eventStartTime $eventStartTime `
+                -eventStopTime $eventStopTime
+        }
         
         if($global:debugLogsCount)
         {
@@ -785,7 +796,7 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
         else
         {
             # query eventlog path
-            $eventLogNames = [IO.Directory]::GetFiles($eventLogPath, "*.evt*",[IO.SearchOption]::AllDirectories)
+            $eventLogNames = [IO.Directory]::GetFiles($eventLogPath, "*.evt*",[IO.SearchOption]::TopDirectoryOnly)
         }
     }
 
@@ -1068,9 +1079,9 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         if($global:logStream -eq $null)
         {
             $global:logStream = new-object System.IO.StreamWriter ($logFile,$true)
-            $global:logTimer.Interval = 5000 #5 secondsÂ  
+            $global:logTimer.Interval = 5000 #5 seconds  
 
-            Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed ï¿½SourceIdentifierï¿½ logTimer -Action `
+            Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
             { 
                 Unregister-Event -SourceIdentifier logTimer
                 $global:logStream.Close() 
@@ -1081,7 +1092,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         }
 
         # reset timer
-        $global:logTimer.Interval = 5000 #5 secondsÂ  
+        $global:logTimer.Interval = 5000 #5 seconds  
         $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch {}
