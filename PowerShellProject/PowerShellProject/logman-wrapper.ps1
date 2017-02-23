@@ -63,7 +63,7 @@ Param(
     [parameter(HelpMessage="Enter single, comma separated, or file name with list of machines to manage")]
     [string[]] $machines,
     [parameter(HelpMessage="Enter output folder where all collected traces will be copied")]
-    [string] $global:outputFolder = ".\gather", 
+    [string] $outputFolder = ".\gather", 
     [parameter(HelpMessage="Enter trace folder where .etl files will be written to while tracing")]
     [string] $traceFolder = "%systemroot%\temp", 
     [parameter(HelpMessage="Specify to enable tracing across reboots.")]
@@ -84,7 +84,8 @@ Param(
  
 # modify
 $defaultEtlFolder = "admin$\temp"
-$global:outputFolderFlat = $false
+$global:defaultFolder = $outputFolder
+$global:outputFolder = $outputFolder
 $useSingleEtwSession = $true
 $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($configurationFile)
 $singleEtwSessionNameFile = $configurationFile
@@ -135,7 +136,7 @@ function main()
         return
     }
 
-    $global:outputFolder = $global:outputFolder.Replace(".\","$(get-location)\")
+    $global:defaultFolder = $global:outputFolder = $global:outputFolder.Replace(".\","$(get-location)\")
  
     # set full paths
     $configurationFile = $configurationFile.Replace(".\","$(get-location)\")
@@ -271,11 +272,11 @@ function check-ProcessOutput([string] $output, [ActionType] $action, [bool] $sho
 
     if($output -imatch $singleEtwSessionName)
     {
-        log-info "$($singleEtwSessionName) is currently running"
+        log-info "$($singleEtwSessionName) etw trace is started"
     }
     else
     {
-        log-info "$($singleEtwSessionName) is not currently running"
+        log-info "$($singleEtwSessionName) etw trace is not started"
     }
 
 
@@ -556,11 +557,11 @@ function log-info($data)
     {
         $foregroundColor = "Green"
     }
-    elseif($data.ToLower().Contains("is currently running"))
+    elseif($data.ToLower().Contains("is started"))
     {
         $foregroundColor = "Green"
     }
-    elseif($data.ToLower().Contains("is not currently running"))
+    elseif($data.ToLower().Contains("is not started"))
     {
         $foregroundColor = "Gray"
     }
@@ -760,16 +761,16 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
         # store files in computer folder or in root
         if($nodynamicpath)
         {
-            $machineFolder = $global:outputFolder = $global:outputFolder
+            $machineFolder = $global:outputFolder
         }
-        elseif($global:outputFolderFlat)
+        elseif($useSingleEtwSession)
         {
-            $machineFolder = $global:outputFolder = "$($global:outputFolder)\$($dirName)"
+            $machineFolder = $global:outputFolder = "$($global:defaultFolder)\$($dirName)"
         }
         else
         {
-            $global:outputFolder = "$($global:outputFolder)\$($dirName)"
-            $machineFolder = "$($global:outputFolder)\$($dirName)\$($machine)"            
+            $global:outputFolder = "$($global:defaultFolder)\$($dirName)"
+            $machineFolder = "$($global:defaultFolder)\$($dirName)\$($machine)"            
         }
  
         if($permanent)
@@ -1053,5 +1054,3 @@ function xml-writer([string] $file, [Xml.XmlDocument] $xdoc)
 # ----------------------------------------------------------------------------------------------------------------
 
 main
- 
-
