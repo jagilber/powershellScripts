@@ -1183,7 +1183,7 @@ function build-jobsList()
         'wait' = $false;
         'command' = "cmd.exe";
         'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat set&&$($managedDirectory)\xperf\xperf.mgr.bat start slowlogon";
-        'workingDir' = $managedDirectory;
+        'workingDir' = "$($managedDirectory)\xperf";
         'sourceFiles' = "$(get-Location)\xperf";
         'destfiles' = "$($managedRemoteDirectory)\xperf";
         'searchSubDir' = $true
@@ -1228,7 +1228,7 @@ function build-jobsList()
         'wait' = $true;
         'command' = "cmd.exe";
         'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat stop slowlogon";
-        'workingDir' = $managedDirectory;
+        'workingDir' = "$($managedDirectory)\xperf";
         'sourceFiles' = "$($managedRemoteDirectory)\*.etl";
         'destfiles' = "";
         'searchSubDir' = $false
