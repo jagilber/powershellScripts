@@ -10,13 +10,12 @@
 .NOTES  
    File Name  : remote-manager.ps1  
    Author     : jagilber
-   Version    : 170219 added -noclean and machine cleanup
+   Version    : 170313 fixed xperf dir
                 
                 
    History    : 
-                160902 added -debugScript switch to clean up output
-                160828 modified jobs for 'enabled' flag
-                160712.1 updated supporting scripts and commands
+                170219 added -noclean and machine cleanup
+
 .EXAMPLE  
     .\remote-manager.ps1 -start
     used to start on local machine
@@ -1229,7 +1228,7 @@ function build-jobsList()
         'command' = "cmd.exe";
         'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat stop slowlogon";
         'workingDir' = "$($managedDirectory)\xperf";
-        'sourceFiles' = "$($managedRemoteDirectory)\*.etl";
+        'sourceFiles' = "$($managedRemoteDirectory)\xperf\*.etl";
         'destfiles' = "";
         'searchSubDir' = $false
     })
