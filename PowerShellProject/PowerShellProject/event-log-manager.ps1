@@ -18,12 +18,12 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
+   Version    : 170315 changed documentation for eventlognamepattern. one example had eventlognames
    History    : 
+                170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
                 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
-                170117 fixed getfiles uploaddir
-                161222 fixed bug in exporting evt to csv where exception would mistakenly close streamwriter
+                
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -73,7 +73,7 @@
     Example command to listen to multiple machines for all eventlogs for Remote Desktop Services:
 
 .EXAMPLE
-    .\event-log-manager.ps1 -eventLogPath c:\temp -eventLogNames *
+    .\event-log-manager.ps1 -eventLogPath c:\temp -eventLogNamePattern *
     Example command to query path c:\temp for all *.evt* files and convert to csv:
 
 .PARAMETER clearEventLogs
