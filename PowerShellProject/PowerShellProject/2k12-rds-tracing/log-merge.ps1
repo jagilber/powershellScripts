@@ -5,27 +5,13 @@
 
 .DESCRIPTION  
         
-    ** Copyright (c) Microsoft Corporation. All rights reserved - 2016.
-    **
-    ** This script is not supported under any Microsoft standard support program or service.
-    ** The script is provided AS IS without warranty of any kind. Microsoft further disclaims all
-    ** implied warranties including, without limitation, any implied warranties of merchantability
-    ** or of fitness for a particular purpose. The entire risk arising out of the use or performance
-    ** of the scripts and documentation remains with you. In no event shall Microsoft, its authors,
-    ** or anyone else involved in the creation, production, or delivery of the script be liable for
-    ** any damages whatsoever (including, without limitation, damages for loss of business profits,
-    ** business interruption, loss of business information, or other pecuniary loss) arising out of
-    ** the use of or inability to use the script or documentation, even if Microsoft has been advised
-    ** of the possibility of such damages.
-    **
- 
 .NOTES  
    File Name  : log-merge.ps1  
    Author     : jagilber
-   Version    : 160617 added subDir
+   Version    : 170111 added date ranges
 
    History    : 
-                160609 added "o" date format
+                160619 added "o" date format
 
 .EXAMPLE  
 
@@ -45,6 +31,12 @@
 
 .PARAMETER outputFile
     Name and location of the new merged file. ex: c:\temp\test.csv
+
+.PARAMETER startDate
+    optional parameter to exclude lines with dates older than given date
+
+.PARAMETER endDate
+    optional parameter to exclude lines with dates newer than given date
 #>  
 
 Param(
@@ -56,7 +48,9 @@ Param(
     [parameter(Position=2,Mandatory=$true,HelpMessage="Enter the new file name:")]
     [string] $outputFile = "log-merge.csv",
     [parameter(Position=3,Mandatory=$false,HelpMessage="Use to enable subdir search")]
-    [switch] $subDir
+    [switch] $subDir,
+    [string] $startDate,
+    [string] $endDate
     )
 
 
@@ -92,19 +86,19 @@ using System.Globalization;
         string dateFormatISO = "yyyy-MM-ddTHH:mm:ss.ffffff"; // may have additional digits and Z
         
         bool detail = false;
-
         CultureInfo culture = new CultureInfo("en-US");
         Int64 missedMatchCounter = 0;
         Int64 missedDateCounter = 0;
         
-        public static void Start(string[] args,string defaultDir,bool subDir)
+        public static void Start(string sourceFolder, string filePattern, string outputFile,string defaultDir,bool subDir,DateTime startDate, DateTime endDate)
         {
             LogMerge program = new LogMerge();
+
             try
             {
                 Directory.SetCurrentDirectory(defaultDir);
 
-                if (args.Length > 2)
+                if (!string.IsNullOrEmpty(sourceFolder) && !string.IsNullOrEmpty(filePattern) && !string.IsNullOrEmpty(outputFile))
                 {
                     System.IO.SearchOption option; 
 
@@ -117,20 +111,18 @@ using System.Globalization;
                         option = System.IO.SearchOption.TopDirectoryOnly;
                     }
 
-                    string[] files = Directory.GetFiles(args[0], args[1], option);
+                    string[] files = Directory.GetFiles(sourceFolder, filePattern, option);
                     if (files.Length < 1)
                     {
                         Console.WriteLine("unable to find files. returning");
                         return;
                     }
 
-                    program.ReadFiles(files, args[2]);
-
+                    program.ReadFiles(files, outputFile, startDate, endDate);
                 }
                 else
                 {
                     Console.WriteLine("utility combines *fmt.txt files into one file based on timestamp. provide folder and filter args and output file.");
-
                     Console.WriteLine("LogMerge takes three arguments; source dir, file filter, and output file.");
                     Console.WriteLine("example: LogMerge f:\\cases *fmt.txt c:\\temp\\all.csv");
                 }
@@ -141,7 +133,7 @@ using System.Globalization;
             }
         }
 
-        bool ReadFiles(string[] files, string outputfile)
+        bool ReadFiles(string[] files, string outputfile, DateTime startDate, DateTime endDate)
         {
             Match match = Match.Empty;
             long lastTicks = 0;
@@ -164,8 +156,7 @@ using System.Globalization;
                     while (reader.Peek() >= 0)
                     {
                         line = reader.ReadLine();
-                        //     if(Regex.IsMatch(line,datePattern))
-                        //     {
+
                         if (Regex.IsMatch(line, pidPattern))
                         {
                             lastPidString = Regex.Match(line, pidPattern).Value;
@@ -209,7 +200,6 @@ using System.Globalization;
                             missedDateCounter++;
                         }
 
-
                         if (DateTime.TryParseExact(traceDate,
                             dateFormat,
                             culture,
@@ -220,9 +210,7 @@ using System.Globalization;
                             {
                                 lastTicks = date.Ticks;
                                 precision = 0;
-
                             }
-
                         }
                         else if (DateTime.TryParse(traceDate, out date))
                         {
@@ -230,16 +218,12 @@ using System.Globalization;
                             {
                                 lastTicks = date.Ticks;
                                 precision = 0;
-
                             }
 
-
                             dateFormat = dateFormatEvt;
-
                         }
                         else
                         {
-                            //      Console.WriteLine("unable to parse date2:{0}:{1}", missedDateCounter, line);
                             // use last date and let it increment to keep in place
                             date = new DateTime(lastTicks);
 
@@ -258,6 +242,10 @@ using System.Globalization;
                             Console.WriteLine("unable to parse time:{0}:{1}", missedMatchCounter, line);
                         }
 
+                        if(!(startDate < date && date < endDate))
+                        {
+                            continue;
+                        }
 
                         while (precision < 99999999)
                         {
@@ -267,9 +255,7 @@ using System.Globalization;
                             }
 
                             precision++;
-
                         }
-
                     }
                 }
 
@@ -302,14 +288,11 @@ using System.Globalization;
             string key = string.Format("{0}{1}",date.Ticks.ToString(), precision.ToString("D8"));
             if(!outputList.ContainsKey(key))
             {
-             //   Console.WriteLine("debug:list:key:{0} value:{1}", key, line);
                 outputList.Add(key,line);
             }
             else
             {
                 return false;
-               //precision++;
-               //AddToList(date,line);
             }
 
             return true;
@@ -319,7 +302,18 @@ using System.Globalization;
 
 Add-Type $Code
 
+[DateTime] $time = new-object DateTime
 
-[LogMerge]::Start(@($sourceFolder,$filePattern,$outputFile),(get-location),$subDir)
+if(![DateTime]::TryParse($startDate,[ref] $time))
+{
+   $startDate = [DateTime]::MinValue
+}
+
+if(![DateTime]::TryParse($endDate,[ref] $time))
+{
+   $endDate = [DateTime]::Now
+}
+
+[LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate)
 
 

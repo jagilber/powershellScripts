@@ -1,4 +1,4 @@
-ï»¿<#
+<#
 .SYNOPSIS
     powershell script to manage event logs on multiple machines
 
@@ -1079,7 +1079,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         if($global:logStream -eq $null)
         {
             $global:logStream = new-object System.IO.StreamWriter ($logFile,$true)
-            $global:logTimer.Interval = 5000 #5 secondsÂ  
+            $global:logTimer.Interval = 5000 #5 seconds  
 
             Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
             { 
@@ -1092,7 +1092,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         }
 
         # reset timer
-        $global:logTimer.Interval = 5000 #5 secondsÂ  
+        $global:logTimer.Interval = 5000 #5 seconds  
         $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch {}
