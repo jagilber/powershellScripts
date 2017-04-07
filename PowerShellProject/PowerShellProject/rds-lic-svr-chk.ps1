@@ -12,9 +12,11 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170213 fixed issue with -runasnetworkservice
+   Version    : 170407 added get-workingdirectory and made logfile and optional argument
    History    : 
+                170213 fixed issue with -runasnetworkservice
                 161206 using transcript file for logging to match console
+
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
     query for license server configuration and use wmi to test functionality
@@ -37,24 +39,17 @@
 #>  
 
 Param(
- 
-    [parameter(HelpMessage="Enter license server name:")]
-    [string] $licServer,    
-    [parameter(HelpMessage="Enter rdsh server name:")]
-    [string] $rdshServer = $env:COMPUTERNAME,
-    [parameter(HelpMessage="Use to check for script update:")]
+    [string] $checkUser = "",
     [switch] $getUpdate,
-    [parameter(HelpMessage="Use to run script as network service:")]
-    [switch] $runAsNetworkService,
-    [parameter(HelpMessage="Enter user name to check if per user:")]
-    [string] $checkUser
- 
-    
-    )
+    [string] $licServer = "",    
+    [string] $logFile = "rds-lic-svr-chk.txt",
+    [string] $rdshServer = $env:COMPUTERNAME,
+    [switch] $runAsNetworkService
+)
+
+clear-Host
 $error.Clear()
-cls 
 $ErrorActionPreference = "SilentlyContinue"
-$logFile = "rds-lic-svr-chk.txt"
 $licServers = @()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/rds-lic-svr-chk.ps1"
 $HKCR = 2147483648 #HKEY_CLASSES_ROOT
@@ -72,6 +67,13 @@ $hasX509 = $false
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 { 
+    get-workingDirectory
+
+    if(!$logFile.Contains("\"))
+    {
+        $logFile = "$(Get-Location)\$($logFile)"
+    }                                       
+
     Start-Transcript -Path $logFile -Force
 
     $MyInvocation.ScriptName
@@ -91,7 +93,7 @@ function main()
         $psexec = get-sysInternalsUtility -utilityName "psexec.exe"
         if(![string]::IsNullOrEmpty($psexec))
         {
-            run-process -processName $($psexec) -arguments "-accepteula -i -u `"nt authority\network service`" cmd.exe /c powershell.exe -noexit -executionpolicy Bypass -file $($MyInvocation.ScriptName) -checkUser $($env:USERNAME) " -wait $false            
+            run-process -processName $($psexec) -arguments "-accepteula -i -u `"nt authority\network service`" cmd.exe /c powershell.exe -noexit -executionpolicy Bypass -file $($MyInvocation.ScriptName) -checkUser `"$($checkUser)`" -logFile `"$($logFile)`" -licServer `"$($licServer)`" -rdshServer `"$($rdshServer)`"" -wait $false
             return
         }
         else
@@ -250,7 +252,6 @@ function main()
     if($licServers.Length -lt 1)
     {
         "license server has not been configured!"
-    
     }
     else
     {
@@ -328,9 +329,8 @@ function main()
     Stop-Transcript 
 
     "-----------------------------------------"
-    "log file located here: $(get-location)\$($logFile)"
+    "log file located here: $([IO.Path]::GetFullPath($logFile))"
     "finished" 
-    
 }
 # ----------------------------------------------------------------------------------------------------------------
 
@@ -423,12 +423,12 @@ function check-licenseServer([string] $licServer)
 # ----------------------------------------------------------------------------------------------------------------
 function check-user ([string] $user)
 {
+    "checking user in AD: $($user)"
+
     try
     {
         $strFilter = "(&(objectCategory=User)(samAccountName=$($user)))"
-
         $objDomain = New-Object System.DirectoryServices.DirectoryEntry
-
         $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
         $objSearcher.SearchRoot = $objDomain
         $objSearcher.PageSize = 1000
@@ -437,26 +437,132 @@ function check-user ([string] $user)
 
         # lic server user attributes for per user
         $colProplist = "msTSManagingLS","msTSExpireDate" #"name"
+
         foreach ($i in $colPropList)
         {
-            $objSearcher.PropertiesToLoad.Add($i)
+            [void]$objSearcher.PropertiesToLoad.Add($i)
         }
 
         $colResults = $objSearcher.FindAll()
+
+        if($colResults.Count -lt 1)
+        {
+            "unable to find user:$($user)"
+            return $false
+        }
 
         foreach ($objResult in $colResults)
         {
             "-------------------------------------"
             "AD user:$($objresult.Properties["adspath"])"
             "RDS CAL expire date:$($objresult.Properties["mstsexpiredate"])"
-            log-ingo "RDS License Server Identity:$($objresult.Properties["mstsmanagingls"])"
+            "RDS License Server Identity:$($objresult.Properties["mstsmanagingls"])"
         }
         
+        "found user:$($user)"
         return $true
     }
     catch
     {
+        "exception trying to find user:$($user)"
+        $error.Clear()
         return $false
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function get-update($updateUrl)
+{
+    try 
+    {
+        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
+        # github can bet set to use WINDOWS style which may prevent this
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl
+        $gitClean = [regex]::Replace($git, '\W+', "")
+        $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
+
+        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        {
+            "updating new script"
+            [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
+            "restart to use new script. exiting."
+            exit
+        }
+        else
+        {
+            "script is up to date"
+        }
+        
+        return $true
+    }
+    catch [System.Exception] 
+    {
+        "get-update:exception: $($error)"
+        $error.Clear()
+        return $false    
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function get-workingDirectory()
+{
+    $retVal = [string]::Empty
+ 
+    if (Test-Path variable:\hostinvocation)
+    {
+        $retVal = $hostinvocation.MyCommand.Path
+    }
+    else
+    {
+        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    }
+  
+    if (Test-Path $retVal)
+    {
+        $retVal = (Split-Path $retVal)
+    }
+    else
+    {
+        $retVal = (Get-Location).path
+        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
+        
+    } 
+    
+    Set-Location $retVal | out-null
+    return $retVal
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function get-sysInternalsUtility ([string] $utilityName)
+{
+    try
+    {
+        $destFile = "$(get-location)\$utilityName"
+        
+        if(![IO.File]::Exists($destFile))
+        {
+            $sysUrl = "http://live.sysinternals.com/$($utilityName)"
+
+            write-host "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
+            if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
+            {
+                $webClient = new-object System.Net.WebClient
+                [void]$webClient.DownloadFile($sysUrl, $destFile)
+                write-host "sysinternals utility $($utilityName) downloaded to $($destFile)"
+            }
+            else
+            {
+                return [string]::Empty
+            }
+        }
+
+        return $destFile
+    }
+    catch
+    {
+        "Exception downloading $($utilityName): $($error)"
+        $error.Clear()
+        return [string]::Empty
     }
 }
 
@@ -605,71 +711,51 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function get-update($updateUrl)
+function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
-    try 
-    {
-        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
-        # github can bet set to use WINDOWS style which may prevent this
-        $git = Invoke-RestMethod -Method Get -Uri $updateUrl
-        $gitClean = [regex]::Replace($git, '\W+', "")
-        $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
+    $Error.Clear()
+    "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = !$wait
+    $process.StartInfo.RedirectStandardOutput = $wait
+    $process.StartInfo.RedirectStandardError = $wait
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $wait
+    $process.StartInfo.WorkingDirectory = get-location
+    $process.StartInfo.ErrorDialog = $true
+    $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
+    $process.StartInfo.LoadUserProfile = $false
+    $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
 
-        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+    [void]$process.Start()
+ 
+    if($wait -and !$process.HasExited)
+    {
+ 
+        if($process.StandardOutput.Peek() -gt -1)
         {
-            "updating new script"
-            [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
-            "restart to use new script. exiting."
-            exit
+            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut
         }
-        else
+ 
+        if($process.StandardError.Peek() -gt -1)
         {
-            "script is up to date"
+            $stdErr = $process.StandardError.ReadToEnd()
+            $stdErr
+            $Error.Clear()
         }
-        
-        return $true
-        
     }
-    catch [System.Exception] 
+    elseif($wait)
     {
-        "get-update:exception: $($error)"
-        $error.Clear()
-        return $false    
+        "Error:Process ended before capturing output."
     }
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function get-sysInternalsUtility ([string] $utilityName)
-{
-    try
-    {
-        $destFile = "$(get-location)\$utilityName"
-        
-        if(![IO.File]::Exists($destFile))
-        {
-            $sysUrl = "http://live.sysinternals.com/$($utilityName)"
-
-            write-host "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
-            if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
-            {
-                $webClient = new-object System.Net.WebClient
-                [void]$webClient.DownloadFile($sysUrl, $destFile)
-                write-host "sysinternals utility $($utilityName) downloaded to $($destFile)"
-            }
-            else
-            {
-                return [string]::Empty
-            }
-        }
-
-        return $destFile
-    }
-    catch
-    {
-        "Exception downloading $($utilityName): $($error)"
-        $error.Clear()
-        return [string]::Empty
-    }
+    
+    $exitVal = $process.ExitCode
+    "Running process exit $($processName) : $($exitVal)"
+    $Error.Clear()
+    return $stdOut
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -689,61 +775,4 @@ function runas-admin()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
-{
-    $Error.Clear()
-    "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = !$wait
-    $process.StartInfo.RedirectStandardOutput = $wait
-    $process.StartInfo.RedirectStandardError = $wait
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $wait
-    $process.StartInfo.WorkingDirectory = get-location
-    $process.StartInfo.ErrorDialog = $true
-    $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
-    $process.StartInfo.LoadUserProfile = $false
-    $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
-
-
- 
-    [void]$process.Start()
- 
-    if($wait -and !$process.HasExited)
-    {
- 
-        if($process.StandardOutput.Peek() -gt -1)
-        {
-            $stdOut = $process.StandardOutput.ReadToEnd()
-            $stdOut
-        }
- 
- 
-        if($process.StandardError.Peek() -gt -1)
-        {
-            $stdErr = $process.StandardError.ReadToEnd()
-            $stdErr
-            $Error.Clear()
-        }
-            
-    }
-    elseif($wait)
-    {
-        "Error:Process ended before capturing output."
-    }
-    
- 
-    
-    $exitVal = $process.ExitCode
- 
-    "Running process exit $($processName) : $($exitVal)"
-    $Error.Clear()
- 
-    return $stdOut
-}
-
-# ----------------------------------------------------------------------------------------------------------------
 main
-
