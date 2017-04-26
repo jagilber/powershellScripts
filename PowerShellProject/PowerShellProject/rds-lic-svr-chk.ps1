@@ -12,8 +12,9 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170425 added rds role check and made summary more descriptive. fixed issue with x509 check
+   Version    : 170426 fixed issue with x509 and for currently configured showing false when it was supposed to be true
    History    : 
+                170425 added rds role check and made summary more descriptive. fixed issue with x509 check
 
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
@@ -366,7 +367,7 @@ function main()
     
     if($isRdshServer)
     {
-        $configuredCorrectly = ($licCheck -or $lsDiscovered) -and $hasX509 -and ($licenseMode -eq 2 -or $licenseMode -eq 4) -and $licServersList.Contains("LS_CONNECTABLE_VALID")
+        $configuredCorrectly = ($licCheck -or $lsDiscovered) -and $hasX509 -and ($licenseMode -eq 2 -or $licenseMode -eq 4) -and $licServersList.Values.Contains("LS_CONNECTABLE_VALID")
     }
     else
     {
@@ -376,11 +377,12 @@ function main()
     write-host "server $($rdshServer) current license mode: $($modeString)`r`n"
     write-host "server $($rdshServer) current license config source: $($licenseConfigSource)`r`n"
     write-host "server $($rdshServer) currently configured correctly for at least one license server? $($configuredCorrectly)`r`n"    
-    write-host "server $($rdshServer) ever connected to license server? $($hasX509)`r`n"
+    write-host "server $($rdshServer) ever connected to license server (has x509 cert)? $($hasX509)`r`n"
     write-host "server $($rdshServer) Grace period days left? $($daysLeft)`r`n"
-    write-host "`tNOTE: Regardless of whether or not an RDSH server is successfully connected to a license server (which is what the grace period is for),`r`n"
-    write-host "`t the internal Grace counter will always start at 120 days when RDSH role is installed and will ALWAYS count down to 0 `r`n"
-    write-host "`t regardless of license server connectivity status or when RDSH server was first connected to license server.`r`n"
+    write-host "`tNOTE: The Grace period is for a license 'grace' during the first 120 days after RDSH role is installed.`r`n"
+    write-host "`t During this time, the RDSH server will allow connections regardless if licensed or not.`r`n"
+    write-host "`t The internal Grace counter will always start at 120 days when RDSH role is installed and will ALWAYS count down to 0.`r`n"
+    write-host "`t This is regardless of license server connectivity status or when RDSH server was first connected to license server.`r`n"
   
     Stop-Transcript 
 
@@ -426,7 +428,7 @@ function check-licenseServer([string] $licServer)
         write-host $rWmiLS
 
         $wmiClass = ([wmiclass]"\\$($licServer)\root\cimv2:Win32_TSLicenseServer")
-        write-host "activation status: $($wmiClass.GetActivationStatus().ActivationStatus)`r`n"
+        write-host "activation status: $($wmiClass.GetActivationStatus().ActivationStatus) (0 = activated, 1 = not activated)`r`n"
         write-host "license server id: $($wmiClass.GetLicenseServerID().sLicenseServerId)`r`n"
         write-host "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)`r`n"
         write-host "is ls on dc: $($wmiClass.IsLSonDC().OnDC)`r`n"
@@ -435,6 +437,15 @@ function check-licenseServer([string] $licServer)
         write-host "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)`r`n"
         write-host "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)`r`n"
         write-host "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)`r`n"
+    }
+
+    if(($rWmiLSKP = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseKeyPack -ComputerName $licServer))
+    {
+        write-host "-----------------------------------------`r`n"
+        write-host "Win32_TSLicenseKeyPack $($licServer)`r`n"
+        write-host "-----------------------------------------`r`n"
+        write-host $rWmiLSKP
+
     }
 
     try
@@ -741,7 +752,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 # REG_BINARY 
                 3{ 
                     $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
-                    if($enumValue -and $displayBinaryBlob)
+                    if($enumValue -or $displayBinaryBlob)
                     {
                         return $keyValue
                     }

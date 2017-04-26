@@ -224,7 +224,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 # REG_BINARY 
                 3{ 
                     $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
-                    if($enumValue -and $displayBinaryBlob)
+                    if($enumValue -or $displayBinaryBlob)
                     {
                         return $keyValue
                     }
@@ -297,7 +297,15 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
         
-
+        if($enumValue)
+        {
+            # no value
+            return $null
+        }
+        else
+        {
+            return $retVal.ToString()
+        }
     }
     catch
     {
@@ -305,8 +313,6 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
         $error.Clear()
         return 
     }
-
-    return $retVal.toString()
 }
 
 
