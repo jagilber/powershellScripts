@@ -12,7 +12,7 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170423 added rds role check and made summary more descriptive. fixed issue with x509 check
+   Version    : 170425 added rds role check and made summary more descriptive. fixed issue with x509 check
    History    : 
 
 .EXAMPLE  
@@ -364,9 +364,18 @@ function main()
         default { $modeString = "error: $($licenseMode)" }
     }
     
-    write-host "current license mode: $($modeString)`r`n"
-    write-host "current license config source: $($licenseConfigSource)`r`n"
-    write-host "server $($rdshServer) currently configured for a license server? $($licCheck -or $lsDiscovered)"    
+    if($isRdshServer)
+    {
+        $configuredCorrectly = ($licCheck -or $lsDiscovered) -and $hasX509 -and ($licenseMode -eq 2 -or $licenseMode -eq 4) -and $licServersList.Contains("LS_CONNECTABLE_VALID")
+    }
+    else
+    {
+        $configuredCorrectly = "n/a (not an rdsh server)"    
+    }
+
+    write-host "server $($rdshServer) current license mode: $($modeString)`r`n"
+    write-host "server $($rdshServer) current license config source: $($licenseConfigSource)`r`n"
+    write-host "server $($rdshServer) currently configured correctly for at least one license server? $($configuredCorrectly)`r`n"    
     write-host "server $($rdshServer) ever connected to license server? $($hasX509)`r`n"
     write-host "server $($rdshServer) Grace period days left? $($daysLeft)`r`n"
     write-host "`tNOTE: Regardless of whether or not an RDSH server is successfully connected to a license server (which is what the grace period is for),`r`n"
@@ -445,10 +454,7 @@ function check-licenseServer([string] $licServer)
     $retVal = $retVal -band $ret
     write-host "Can access license server? $([bool]$ret.AccessAllowed)`r`n"
  
-    
     # check named pipe
-    #    write-host "checking named pipe $($pipeName)`r`n"
-    # todo need to run as job as it will hang indefinitely if unable to connect
     write-host "checking named pipe HYDRALSPIPE. if script hangs here, there is a problem connecting to pipe.`r`n"
     $job = Start-Job -Name "namedpipecheck" -ScriptBlock {
         param($licServer)
@@ -457,11 +463,11 @@ function check-licenseServer([string] $licServer)
             $clientPipe = New-Object IO.Pipes.NamedPipeClientStream($licServer, "HYDRALSPIPE", [IO.Pipes.PipeDirection]::InOut)
             $clientPipe.Connect()
             $pipeReader = New-Object IO.StreamReader($clientPipe)
-            write-host "Can access named pipe? true`r`n"
+            write-host "job:Can access named pipe? true`r`n"
         }
         catch
         {
-            write-host "Can access named pipe? false`r`n"
+            write-host "job:Can access named pipe? false`r`n"
         }
         finally
         {
@@ -495,6 +501,7 @@ function check-licenseServer([string] $licServer)
     }
 
     write-host "checking rpc endpoint mapper`r`n"
+
     if(Test-NetConnection -Port 135 -ComputerName $licServer)
     {
         write-host "Can access rpc port mapper? true`r`n"
@@ -502,20 +509,6 @@ function check-licenseServer([string] $licServer)
     else  
     {
         write-host "Can access rpc port mapper? false`r`n"
-    }
-
-    write-host "checking 10 random ephemeral ports`r`n"
-    # todo: read reg for port range in case its custom
-    foreach($ePort in (get-random -InputObject (49152..65535) -Count 10))
-    {
-        if(Test-NetConnection -Port 135 -ComputerName $licServer)
-        {
-            write-host "`tCan access ephemeral port $($ePort)? true`r`n"
-        }
-        else 
-        {
-            write-host "`tCan access ephemeral port $($ePort)? false`r`n"
-        }
     }
 
     $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
@@ -597,8 +590,6 @@ function get-update($updateUrl)
 {
     try 
     {
-        # will always update once when copying from web page, then running -getUpdate due to CRLF diff between UNIX and WINDOWS
-        # github can bet set to use WINDOWS style which may prevent this
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl
         $gitClean = [regex]::Replace($git, '\W+', "")
         $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
