@@ -21,13 +21,10 @@
 .NOTES  
    File Name  : remote-tracing.ps1  
    Author     : jagilber
-   Version    : 170507 fixed runas and other configurations
+   Version    : 170508 fixed issue with config file path and config file delete
    History    : 
+                170507 fixed runas and other configurations
                 170506 renamed and added netsh
-                170220 added -configurationFile and modified -machines to use file and -continue to continue on errors and -showDetial. cleaned output
-                160902 added -nodynamicpath for when being called from another script to centralize all files in common folder
-                160519 added switch verifier
-
 .EXAMPLE  
     .\remote-tracing.ps1 -action start -configurationFolder .\remoteDesktopServicesConfig 
     deploy ETW configuration file "single-session.xml" generated from configurationFolder ".\remoteDesktopServicesConfig" to local machine
@@ -267,6 +264,7 @@ function main()
     }
  
     # set full paths
+    $defaultConfigurationFile = $defaultConfigurationFile.Replace(".\","$(get-location)\")
     $configurationFile = $configurationFile.Replace(".\","$(get-location)\")
     $configurationFolder = $configurationFolder.Replace(".\","$(get-location)\")
     $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($configurationFile)
@@ -286,13 +284,6 @@ function main()
         $configurationFolder = verify-configFiles
     
         # delete previous singlesessionfile if it exists
-        if($useSingleEtwSession)
-        {
-            if([IO.File]::Exists($singleEtwSessionNameFile))
-            {
-                [IO.File]::Delete($singleEtwSessionNameFile);
-            }
-        }
 
         # enumerate config files
         $global:configurationFiles = [IO.Directory]::GetFiles($configurationFolder,"*.xml",[IO.SearchOption]::AllDirectories)
@@ -300,6 +291,12 @@ function main()
         if($useSingleEtwSession)
         {
             $singleEtwSessionNameFile  = $defaultConfigurationFile 
+
+            if([IO.File]::Exists($singleEtwSessionNameFile))
+            {
+                [IO.File]::Delete($singleEtwSessionNameFile);
+            }
+
             # populate configurationFiles from configuration directory
             populate-configFiles -action $currentAction -configFiles $global:configurationFiles
         }
