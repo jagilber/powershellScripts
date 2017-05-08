@@ -442,7 +442,7 @@ function check-licenseServer([string] $licServer)
     write-host "EVENTS $($licServer)`r`n"
     write-host "-----------------------------------------`r`n"
 
-    Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
+    write-host (Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning") | fl * | out-string)
 
     if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
     {
