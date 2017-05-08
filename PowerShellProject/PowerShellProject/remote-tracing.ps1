@@ -21,7 +21,7 @@
 .NOTES  
    File Name  : remote-tracing.ps1  
    Author     : jagilber
-   Version    : 170508 fixed issue with config file path and config file delete
+   Version    : 170508.1 fixed issue with config file path and config file delete
    History    : 
                 170507 fixed runas and other configurations
                 170506 renamed and added netsh
@@ -1038,7 +1038,7 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
                 'name' = "netsh";
                 'wait' = $true;
                 'command' = "";
-                'workingDir' = $workingDir;
+                'workingDir' = $traceFolder.Replace("$",":");
             }
 
             switch($currentAction)
@@ -1174,7 +1174,7 @@ function run-wmiCommandJob($command, $machine)
 
         try
         {
-            log-info "running wmi command: $($command.command)"
+            log-info "running wmi command: $($command.command) from dir: $($command.workingDir)"
             $startup=[wmiclass]"Win32_ProcessStartup"
             $startup.Properties['ShowWindow'].value=$False
             # $ret = Invoke-WmiMethod -ComputerName $machine -Class Win32_Process -Name Create -Impersonation Impersonate -ArgumentList @($command.command, $command.workingDir, $startup)
