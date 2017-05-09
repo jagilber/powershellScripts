@@ -21,8 +21,9 @@
 .NOTES  
    File Name  : remote-tracing.ps1  
    Author     : jagilber
-   Version    : 170508.1 fixed issue with config file path and config file delete
+   Version    : 170509 fixed issue with etw session name being blank with configurationfolder switch
    History    : 
+                170508.1 fixed issue with config file path and config file delete
                 170507 fixed runas and other configurations
                 170506 renamed and added netsh
 .EXAMPLE  
@@ -267,8 +268,8 @@ function main()
     $defaultConfigurationFile = $defaultConfigurationFile.Replace(".\","$(get-location)\")
     $configurationFile = $configurationFile.Replace(".\","$(get-location)\")
     $configurationFolder = $configurationFolder.Replace(".\","$(get-location)\")
-    $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($configurationFile)
     $singleEtwSessionNameFile = $configurationFile
+    $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($singleEtwSessionNameFile)
 
     # should pass configuration file or folder 
     if(![IO.File]::Exists($configurationFile) -and ![IO.Directory]::Exists($configurationFolder) -and !$network)
@@ -291,6 +292,7 @@ function main()
         if($useSingleEtwSession)
         {
             $singleEtwSessionNameFile  = $defaultConfigurationFile 
+            $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($singleEtwSessionNameFile)
 
             if([IO.File]::Exists($singleEtwSessionNameFile))
             {
@@ -348,7 +350,7 @@ function main()
     # clean up    
     if(get-job)
     {
-        clean-jobs
+        clean-jobs -silent $true
     }
 
     # display file tree
@@ -423,19 +425,24 @@ function check-ProcessOutput([string] $output, [ActionType] $action, [bool] $sho
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function clean-jobs()
+function clean-jobs($silent = $false)
 {
     if(get-job)
     {
-        [string] $ret = read-host -Prompt "There are existing jobs, do you want to clear?[y:n]" 
-        if($ret -ieq "y")
+        if(!$silent)
         {
-            get-job 
-
-            while(get-job)
+            [string] $ret = read-host -Prompt "There are existing jobs, do you want to clear?[y:n]" 
+            if($ret -ieq "n")
             {
-                get-job | remove-job -Force
+                return
             }
+        }
+
+        get-job 
+
+        while(get-job)
+        {
+            get-job | remove-job -Force
         }
     }
 }
@@ -970,13 +977,7 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
  
                         # will start now only for this boot
                         run-logman -arguments "import -n $($loggerName) -ets -s $($machine) -xml $($file)"
-                        #run-logman -arguments "start $($loggerName) -ets -s $($machine)" -shouldHaveSession $true
-                   
-                        # query to see session status. session should be there and running
-                        #if ($showDetail) 
-                        #{
-                            run-logman -arguments "query -ets -s $($machine)" -shouldHaveSession $true -sessionName $loggerName
-                        #}
+                        run-logman -arguments "query -ets -s $($machine)" -shouldHaveSession $true -sessionName $loggerName
                     }
  
                     ([ActionType]::stop) 
@@ -994,13 +995,9 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
                         {
                             run-logman -arguments "delete $($fullloggerName) -ets -s $($machine)"
                         }
- 
-                        # query to verify session does not exist. session should be removed.
-                        #if ($showDetail) 
-                        #{
-                            run-logman -arguments "query -ets -s $($machine)" -shouldNotHaveSession $true -sessionName $loggerName
-                        #}
- 
+
+                        run-logman -arguments "query -ets -s $($machine)" -shouldNotHaveSession $true -sessionName $loggerName
+
                         # add etl files to list for copy back to local machine
                         if([IO.File]::Exists($etlFile))
                         {
@@ -1178,8 +1175,8 @@ function run-wmiCommandJob($command, $machine)
             $startup=[wmiclass]"Win32_ProcessStartup"
             $startup.Properties['ShowWindow'].value=$False
             # $ret = Invoke-WmiMethod -ComputerName $machine -Class Win32_Process -Name Create -Impersonation Impersonate -ArgumentList @($command.command, $command.workingDir, $startup)
-            $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
-            $ret = $wmi.Create($command.command, $command.workingDir, $startup)
+            $wmiP = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
+            $ret = $wmiP.Create($command.command, $command.workingDir, $startup)
     
             if($ret.ReturnValue -ne 0 -or $ret.ProcessId -eq 0)
             {
