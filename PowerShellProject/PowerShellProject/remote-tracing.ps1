@@ -21,11 +21,11 @@
 .NOTES  
    File Name  : remote-tracing.ps1  
    Author     : jagilber
-   Version    : 170509 fixed issue with etw session name being blank with configurationfolder switch
+   Version    : 170510 added get-update
    History    : 
+                170509 fixed issue with etw session name being blank with configurationfolder switch
                 170508.1 fixed issue with config file path and config file delete
                 170507 fixed runas and other configurations
-                170506 renamed and added netsh
 .EXAMPLE  
     .\remote-tracing.ps1 -action start -configurationFolder .\remoteDesktopServicesConfig 
     deploy ETW configuration file "single-session.xml" generated from configurationFolder ".\remoteDesktopServicesConfig" to local machine
@@ -110,6 +110,9 @@
 
 .PARAMETER continue
     if specified, will continue on error
+
+.PARAMETER getUpdate
+    If specified, will compare the current script against the location in github and will update if different.
     
 .PARAMETER machines
     the machine(s) to perform action on. If not specified, the local machine is used. Multiple machines should be separated by comma ',' with no spaces in between. 
@@ -148,6 +151,8 @@ Param(
     [string] $configurationFolder = "",
     [parameter(HelpMessage="Enter false to stop after error.")]
     [bool] $continue = $true,
+    [parameter(HelpMessage="Enter to check for script update.")]
+    [switch] $getUpdate,
     [parameter(HelpMessage="Enter single, comma separated, or file name with list of machines to manage")]
     [string[]] $machines,
     [parameter(HelpMessage="Select this switch to capture network tracing.")]
@@ -196,6 +201,7 @@ $networkEtlFile = "network.etl"
 $networkStartCommand = "netsh.exe trace start capture=yes report=disabled persistent=no filemode=circular overwrite=yes maxsize=1024 tracefile="
 $networkStopCommand = "netsh.exe trace stop"
 $processWaitMs = 10000
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/event-log-manager.ps1"
 $workingDir = ""
 
 add-type -TypeDefinition @'
@@ -229,6 +235,15 @@ function main()
     if(($ret = runas-admin) -eq $false)
     {
         exit 3
+    }
+
+    # see if new (different) version of file
+    if($getUpdate)
+    {
+        if(get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName)
+        {
+            exit
+        }
     }
 
     $workingDir = get-workingDirectory
@@ -629,6 +644,47 @@ function get-workingDirectory()
     
     Set-Location $retVal | out-null
     return $retVal
+}
+
+#----------------------------------------------------------------------------
+function get-update($updateUrl, $destinationFile)
+{
+    log-info "get-update:checking for updated script: $($updateUrl)"
+
+    try 
+    {
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
+        $gitClean = [regex]::Replace($git, '\W+', "")
+
+        if(![IO.File]::Exists($destinationFile))
+        {
+            $fileClean = ""    
+        }
+        else
+        {
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+        }
+
+        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        {
+            log-info "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
+        }
+        else
+        {
+            log-info "script is up to date"
+        }
+        
+        return $false
+        
+    }
+    catch [System.Exception] 
+    {
+        log-info "get-update:exception: $($error)"
+        $error.Clear()
+        return $false    
+    }
 }
 
 # ----------------------------------------------------------------------------------------------------------------
