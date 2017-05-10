@@ -662,7 +662,7 @@ function get-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
@@ -1209,9 +1209,9 @@ function run-wmiCommandJob($command, $machine)
     $functions = {
         function log-info($data)
         {
-            $data = "$([System.DateTime]::Now):$($data)`n"
+Â Â Â          $data = "$([System.DateTime]::Now):$($data)`n"
 
-            Write-Host $data
+Â Â Â          Write-Host $data
         }
     }
 
