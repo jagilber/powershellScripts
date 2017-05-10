@@ -3,7 +3,7 @@
     powershell script to query azure rm logs used with quickstart template deployment
 
 .DESCRIPTION  
-    github: https://raw.githubusercontent.com/Microsoft/AZRDAV/master/Scripts/ARM/azure-rm-log-reader.ps1
+    github: https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-log-reader.ps1
     gallery: https://gallery.technet.microsoft.com/Azure-Resource-Manager-c1ce252c 
 
     script authenticates to azure rm 
@@ -18,8 +18,9 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170102.1 changed output formatting. switched to named pipe 
+   Version    : 170510 updated git links
    History    : 
+                170102.1 changed output formatting. switched to named pipe 
                 161205 v1
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
@@ -94,7 +95,7 @@ $global:scriptName = $null
 $global:subscription = $subscriptionId
 $global:timer = $null
 $global:window = $null
-$updateUrl = "https://raw.githubusercontent.com/Microsoft/AZRDAV/master/Scripts/ARM/azure-rm-log-reader.ps1"
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-log-reader.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()

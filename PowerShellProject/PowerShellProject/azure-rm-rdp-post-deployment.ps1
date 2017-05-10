@@ -18,11 +18,11 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deploy.ps1
-   Version    : 170119 removed 'vm:' entries if ip address is 'not assigned'
+   Version    : 170510 updated git links
    History    : 
+                170119 removed 'vm:' entries if ip address is 'not assigned'
                 161230 changed runas-admin to call powershell with -executionpolicy bypass
-                161227 added logic for when no public ip's are available. modified runas-admin to not 'exit'. added prompts for adding to cert store and modifying hosts entry and -noprompt override
-                161128 changed list format for RDWEB VM or PUBIP
+                
 .EXAMPLE  
     .\azure-rm-rdp-post-deploy.ps1
     query azure rm for all resource groups with for all public ips.
@@ -61,7 +61,7 @@ $ErrorActionPreference = "SilentlyContinue"
 $hostsTag = "added by azure script"
 $hostsFile = "$($env:windir)\system32\drivers\etc\hosts"
 $global:resourceList = @{}
-$updateUrl = "https://raw.githubusercontent.com/Microsoft/AZRDAV/master/Scripts/ARM/azure-rm-rdp-post-deployment.ps1"
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-rdp-post-deployment.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
