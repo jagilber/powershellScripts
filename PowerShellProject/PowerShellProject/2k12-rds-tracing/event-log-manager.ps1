@@ -834,7 +834,7 @@ function get-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
@@ -1079,7 +1079,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         if($global:logStream -eq $null)
         {
             $global:logStream = new-object System.IO.StreamWriter ($logFile,$true)
-            $global:logTimer.Interval = 5000 #5 seconds  
+            $global:logTimer.Interval = 5000 #5 secondsï¿½ 
 
             Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
             { 
@@ -1092,7 +1092,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         }
 
         # reset timer
-        $global:logTimer.Interval = 5000 #5 seconds  
+        $global:logTimer.Interval = 5000 #5 secondsï¿½ 
         $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch {}

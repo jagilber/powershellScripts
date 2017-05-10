@@ -72,7 +72,7 @@ $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/maste
 
 
 #----------------------------------------------------------------------------
-function git-update($updateUrl, $destinationFile)
+function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
 
@@ -87,7 +87,7 @@ function git-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))

@@ -89,7 +89,7 @@ function main()
 
     if($update)
     {
-        if((git-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName))
+        if((get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName))
         {
             write-host "script updated. restart"
             return
@@ -367,7 +367,7 @@ function start-bgJob([string]$vmname)
 }
 
 #----------------------------------------------------------------------------
-function git-update($updateUrl, $destinationFile)
+function get-update($updateUrl, $destinationFile)
 {
     write-host "get-update:checking for updated script: $($updateUrl)"
 
@@ -382,7 +382,7 @@ function git-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))

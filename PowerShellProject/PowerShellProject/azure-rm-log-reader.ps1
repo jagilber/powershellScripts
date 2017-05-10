@@ -181,7 +181,7 @@ function main()
     
     if($update)
     {
-        if((git-update -updateUrl $updateUrl -destinationFile $global:scriptname))
+        if((get-update -updateUrl $updateUrl -destinationFile $global:scriptname))
         {
             write-host "file updated. restart script."
             return
@@ -813,7 +813,7 @@ function get-workingDirectory()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function git-update($updateUrl, $destinationFile)
+function get-update($updateUrl, $destinationFile)
 {
     write-host "get-update:checking for updated script: $($updateUrl)"
 
@@ -828,7 +828,7 @@ function git-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))

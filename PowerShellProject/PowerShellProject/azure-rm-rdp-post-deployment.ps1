@@ -75,7 +75,7 @@ function main()
 
     write-host "starting script $($MyInvocation.ScriptName) to enumerate public ip addresses and RDWeb sites in Azure ARM"
 
-    if($update -and (git-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName))
+    if($update -and (get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName))
     {
         return
     }
@@ -457,7 +457,7 @@ function get-subscriptions()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function git-update($updateUrl, $destinationFile)
+function get-update($updateUrl, $destinationFile)
 {
     write-verbose "get-update:checking for updated script: $($updateUrl)"
 
@@ -472,7 +472,7 @@ function git-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
