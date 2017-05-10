@@ -1209,9 +1209,8 @@ function run-wmiCommandJob($command, $machine)
     $functions = {
         function log-info($data)
         {
-Â Â Â          $data = "$([System.DateTime]::Now):$($data)`n"
-
-Â Â Â          Write-Host $data
+            $data = "$([System.DateTime]::Now):$($data)`n"
+            Write-Host $data
         }
     }
 
