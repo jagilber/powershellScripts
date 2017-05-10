@@ -201,7 +201,7 @@ $networkEtlFile = "network.etl"
 $networkStartCommand = "netsh.exe trace start capture=yes report=disabled persistent=no filemode=circular overwrite=yes maxsize=1024 tracefile="
 $networkStopCommand = "netsh.exe trace stop"
 $processWaitMs = 10000
-$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/event-log-manager.ps1"
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/remote-tracing.ps1"
 $workingDir = ""
 
 add-type -TypeDefinition @'
