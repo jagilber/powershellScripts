@@ -15,21 +15,29 @@
     tries to resolve subject name in dns
     if not the same as public loadbalancer ip address it is added to hosts file
     
+    start with -verbose if you need to troubleshoot script
+
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
-   File Name  : azure-rm-rdp-post-deploy.ps1
-   Version    : 170510 updated git links
+   File Name  : azure-rm-rdp-post-deployment.ps1
+   Version    : 
    History    : 
-                170119 removed 'vm:' entries if ip address is 'not assigned'
+                160405 cleaned up and added -rdWebUrl
                 161230 changed runas-admin to call powershell with -executionpolicy bypass
-                
 .EXAMPLE  
-    .\azure-rm-rdp-post-deploy.ps1
+    .\azure-rm-rdp-post-deployment.ps1
     query azure rm for all resource groups with for all public ips.
+
+.EXAMPLE
+    .\azure-rm-rdp-post-deployment.ps1 -rdWebUrl https://contoso.eastus.cloudapp.azure.com/RDWeb
+    used to bypass Azure enumeration and to copy cert from url to local cert store
 
 .PARAMETER noPrompt
     to not prompt when adding cert to cert store or when modifying hosts file
  
+.PARAMETER rdWebUrl
+    used to pass complete RDWeb url to script to bypass Azure enumeration. will add self-signed cert to cert store.
+
 .PARAMETER resourceManagerName
     optional parameter to specify Resource Group Name
 
@@ -52,16 +60,19 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$publicIpAddressName = ".",
     [Parameter(Mandatory=$false)]
+    [string]$rdWebUrl = "",
+    [Parameter(Mandatory=$false)]
     [string]$resourceGroupName,
     [Parameter(Mandatory=$false)]
     [switch]$update
 )
 
 $ErrorActionPreference = "SilentlyContinue"
+$WarningPreference = "SilentlyContinue"
 $hostsTag = "added by azure script"
 $hostsFile = "$($env:windir)\system32\drivers\etc\hosts"
 $global:resourceList = @{}
-$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-rdp-post-deployment.ps1"
+$updateUrl = "https://aka.ms/azure-rm-rdp-post-deployment.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -80,8 +91,31 @@ function main()
         return
     }
     
+    # need to run as admin
+    if(($ret = runas-admin) -eq $false)
+    {
+        return
+    }
 
+    if(![string]::IsNullOrEmpty($rdWebUrl))
+    {
+        # go directly to url
+        write-host "connecting to rdWebUrl $($rdWebUrl)"
+        $certFile = [IO.Path]::GetFullPath("$($rdWebUrl -replace '\W','').cer")
+        $cert = get-cert -url $rdWebUrl -certFile $certFile
+        $subject = enum-certSubject -cert $cert
+        
+        if(import-cert -cert $cert -certFile $certFile -subject $subject)
+        {
+            # add-hostsEntry -ipAddress $ip -subject $subject
+            open-RdWebSite -site $rdWebUrl
+            return
+        }
+    }
+    
+    # connect to azure
     # make sure at least wmf 5.0 installed
+
     if($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
     {
         write-host "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
@@ -90,33 +124,7 @@ function main()
         return
     }
 
-    if(($ret = runas-admin) -eq $false)
-    {
-        return
-    }
-
-
-    # authenticate
-    try
-    {
-        Get-AzureRmResourceGroup | Out-Null
-    }
-    catch
-    {
-        try
-        {
-            Add-AzureRmAccount
-        }
-        catch [System.Management.Automation.CommandNotFoundException]
-        {
-            write-host "installing azurerm sdk. this will take a while..."
-            
-            install-module azurerm
-            import-module azurerm
-
-            Add-AzureRmAccount
-        }
-    }
+    authenticate-azureRm
 
     foreach($sub in get-subscriptions)
     {
@@ -144,42 +152,32 @@ function main()
                 write-host "public loadbalancer ip address: $($ip.IpAddress)"
                 $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
             }
+                
+            $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
+            $cert = get-cert -url $gatewayUrl -certFile $certFile
+            $subject = enum-certSubject -cert $cert
 
-            # get certificate from RDWeb site
-            $certFile = [IO.Path]::GetFullPath("$($resourceGroup.ResourceGroupName).cer")
-            $cert = get-cert -url $gatewayUrl -fileName $certFile
-
-            if($cert -eq $false -or [string]::IsNullOrEmpty($cert))
+            if($subject -eq $false)
             {
-                write-host "no cert. starting mstsc."
-                # add to nag list
-                New-ItemProperty -Path "HKCU:\Software\Microsoft\Terminal Server Client\LocalDevices" -Name $ip.IpAddress -Value 0xc5 -PropertyType DWORD -Force 
-                run-process -processName "mstsc.exe" -arguments "/v $($ip.IpAddress) /admin" -wait $false
-                return
+                start-mstsc -ip $ip
             }
-
-            $subject = $cert.Subject.Replace("CN=","")   
-        
-            if(![string]::IsNullOrEmpty($subject))
+            else
             {
                 import-cert -cert $cert -certFile $certFile -subject $subject    
                 add-hostsEntry -ipAddress $ip -subject $subject
-                # launch RDWeb site
-                Start-Process "https://$($subject)/RDWeb"
+                open-RdWebSite -site "https://$($subject)/RDWeb"
             }
         }
     }
-
-    write-host "finished"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function add-hostsentry($ipAddress, $subject)
+function add-hostsEntry($ipAddress, $subject)
 {
     # see if it needs to be added to hosts file
     $dnsresolve = (Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue).IPAddress
 
-    if($ip.IpAddress -ne $dnsresolve)
+    if(!(@($dnsresolve).Contains($ip.IpAddress)))
     {
         write-host "$($ip.IpAddress) not same as $($dnsresolve), checking hosts file"
         if(!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress)?[y|n]") -ieq 'n')
@@ -226,11 +224,59 @@ function add-hostsentry($ipAddress, $subject)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function authenticate-azureRm()
+{
+    # authenticate
+    try
+    {
+        Get-AzureRmResourceGroup | Out-Null
+    }
+    catch
+    {
+        try
+        {
+            Add-AzureRmAccount
+        }
+        catch [System.Management.Automation.CommandNotFoundException]
+        {
+            write-host "installing azurerm sdk. this will take a while..."
+            
+            install-module azurerm
+            import-module azurerm
+
+            Add-AzureRmAccount
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function enum-certSubject($cert)
+{
+    # get certificate from RDWeb site
+
+    if($cert -eq $false -or [string]::IsNullOrEmpty($cert))
+    {
+        write-host "no cert!"
+        return $false
+    }
+
+    $subject = $cert.Subject.Replace("CN=","")   
+        
+    if(![string]::IsNullOrEmpty($subject))
+    {
+        return $subject
+    }
+
+    return $false
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function enum-resourcegroup([string] $subid)
 {
     write-verbose "enum-resourcegroup"
     $resourceGroup = $null
     $id = 0
+    $message = ""
 
     try
     {
@@ -252,7 +298,7 @@ function enum-resourcegroup([string] $subid)
             write-verbose "enumerating resourcegroup: $($resourcegroup.ResourceGroupName)"
 
             # check all vm's
-            foreach($vm in (Get-AzureRmVM -ResourceGroupName $resourceGroup.ResourceGroupName -WarningAction SilentlyContinue))
+            foreach($vm in (Get-AzureRmVM -ResourceGroupName $resourceGroup.ResourceGroupName -ErrorAction SilentlyContinue))
             {
                 write-verbose "checking vm: $($vm.Name)"
                        
@@ -261,7 +307,7 @@ function enum-resourcegroup([string] $subid)
                     $interfaceName = [IO.Path]::GetFileName($interface)
                     $publicIp = Get-AzureRmPublicIpAddress -Name $interfaceName -ResourceGroupName $resourceGroup.ResourceGroupName -ErrorAction SilentlyContinue
                     
-                    if([string]::IsNullOrEmpty($publicIp) -or $publicIp.IpAddress -ieq "Not Assigned")
+                    if([string]::IsNullOrEmpty($publicIp))
                     {
                         continue
                     }
@@ -302,9 +348,11 @@ function enum-resourcegroup([string] $subid)
                 $rdwebUrl = "https://$($pubIp.IpAddress)/RDWeb"
                 $message = "`r`n`tResource Group: $($resourceGroup.ResourceGroupName)`r`n`tIP name: $($pubIp.Name)`r`n`tIP address: $($pubIp.IpAddress)"
                 
-                if((get-cert -url $rdwebUrl) -eq $true)
+                $certInfo = (get-cert -url $rdwebUrl)
+
+                if(![string]::IsNullOrEmpty($certInfo) -and $certInfo -ne $false)
                 {
-                    $message = "$($count). RDWEB: $($rdwebUrl)$($message)"
+                    $message = "$($count). RDWEB: $($rdwebUrl)$($message)`r`n`tCert Subject: $($certInfo.Subject)"
                     write-host $message -ForegroundColor Green
                 }
                 else
@@ -352,56 +400,62 @@ function enum-resourcegroup([string] $subid)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function get-cert([string] $url,[string] $fileName)
+function get-cert([string] $url, [string] $certFile)
 {
-    write-verbose "get-cert:$($url) $($fileName)"
-
+    write-verbose "get-cert:$($url) $($certFile)"
+    $error.Clear()
     $webRequest = [Net.WebRequest]::Create($url)
     $webRequest.Timeout = 1000 #ms
 
     try
     { 
         $webRequest.GetResponse() 
-        return $true
+       # return $null
     }
-    catch { }
+    catch 
+    {
+        write-verbose "get-cert:first catch getresponse: $($url) $($certFile) $($error)" 
+        $error.Clear()
+    }
 
     try
     {
         $webRequest = [Net.WebRequest]::Create($url)
-        $cert = $webRequest.ServicePoint.Certificate
-        $bytes = $cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+        $crt = $webRequest.ServicePoint.Certificate
+        Write-Verbose "checking cert: $($crt | fl * | Out-String)"
+
+        $bytes = $crt.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
 
         if($bytes.Length -gt 0)
         {
-            if([string]::IsNullOrEmpty($filename))
+            if([string]::IsNullOrEmpty($certFile))
             {
-                return $true
+               $certFile = "$($url -replace '\W','').cer"
             }
 
-            $fileName = [IO.Path]::GetFullPath($fileName)
+            $certFile = [IO.Path]::GetFullPath($certFile)
 
-            if([IO.File]::Exists($fileName))
+            if([IO.File]::Exists($certFile))
             {
-                [IO.File]::Delete($fileName)
+                [IO.File]::Delete($certFile)
             }
 
-            set-content -value $bytes -encoding byte -path $fileName
-            $crt = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-            $crt.Import($fileName)
+            set-content -value $bytes -encoding byte -path $certFile
+            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+            $cert.Import($certFile)
 
-            return $crt
+            return $cert
         }
         else
         {
-            return $false
+            return $null
         }
     }
     catch
     {
         write-verbose "get-cert:error: $($error)"
         $error.Clear()
-        return $false
+        return $null
     }
 }
 
@@ -488,7 +542,6 @@ function get-update($updateUrl, $destinationFile)
         }
         
         return $false
-        
     }
     catch [System.Exception] 
     {
@@ -502,6 +555,17 @@ function get-update($updateUrl, $destinationFile)
 function import-cert($cert, $certFile, $subject)
 {
     write-verbose "import-cert $($certFile) $($subject)"
+    if([string]::IsNullOrEmpty($subject))
+    {
+        Write-Warning "import-cert:error: subject empty. returning"
+        return $false
+    }
+
+    if(![IO.File]::Exists($certFile))
+    {
+        Write-Warning "import-cert:error: certfile not found. returning"
+        return $false
+    }
 
     $certList = Get-ChildItem -Recurse -Path cert:\ -DnsName "$($subject)"
 
@@ -509,18 +573,17 @@ function import-cert($cert, $certFile, $subject)
     if($cert.Subject -ieq $cert.Issuer)
     {
         # self signed
-        $certStore = "Cert:\$($certLocation)\Root"
+        $certStore = "cert:\$($certLocation)\Root"
         write-host "cert is self-signed."
     }
     else
     {
         # trusted
-        $certStore = "Cert:\$($certLocation)\My"
+        $certStore = "cert:\$($certLocation)\My"
         write-host "cert is trusted. not importing..."
         # shouldnt need to be added
-        return $false    
+        return $true    
     }
-
 
     # see if cert needs to be imported
     if($certList.Count -gt 0)
@@ -547,7 +610,7 @@ function import-cert($cert, $certFile, $subject)
         if($count -gt 2)
         {
             # when importing to LocalMachine it shows up as CurrentUser and LocalMachine
-            write "warning:cert with same thumbprint is in $($count) locations"
+            Write-Warning "warning:cert with same thumbprint is in $($count) locations"
         }
     }
     
@@ -561,11 +624,21 @@ function import-cert($cert, $certFile, $subject)
         }
         else
         {
+            # installs into personal and local when local is set
             write-host "importing certificate:$($subject) into $($certStore)"
-            $certFile = [IO.Path]::GetFullPath("$($resourceGroup.ResourceGroupName).cer")
             $certInfo = Import-Certificate -FilePath $certFile -CertStoreLocation $certStore
+            return $true
         }
     }
+
+    return $true
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function open-RdWebSite($site)
+{
+    # launch RDWeb site
+    Start-Process $site
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -643,7 +716,7 @@ function runas-admin()
         { 
             write-host "restarting script as administrator."
             Write-Host "run-process -processName powershell.exe -arguments -ExecutionPolicy Bypass -File $($SCRIPT:MyInvocation.MyCommand.Path) -noretry"
-            if(($retval = run-process -processName "powershell.exe" -arguments "-ExecutionPolicy Bypass -File $($SCRIPT:MyInvocation.MyCommand.Path) -noretry") -eq $true)
+            if(($retval = run-process -processName "powershell.exe" -arguments "-NoExit -ExecutionPolicy Bypass -File $($SCRIPT:MyInvocation.MyCommand.Path) -noretry") -eq $true)
             {
                 return $false
             }
@@ -667,5 +740,15 @@ function runas-admin()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function start-mstsc($ip)
+{
+    write-host "starting mstsc."
+    # add to nag list
+    New-ItemProperty -Path "HKCU:\Software\Microsoft\Terminal Server Client\LocalDevices" -Name $ip.IpAddress -Value 0xc5 -PropertyType DWORD -Force 
+    run-process -processName "mstsc.exe" -arguments "/v $($ip.IpAddress) /admin" -wait $false
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 main
+write-host "finished"
 
