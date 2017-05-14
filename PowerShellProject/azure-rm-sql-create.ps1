@@ -47,7 +47,7 @@ function main()
         Login-AzureRmAccount
     }
 
-    log-info "checking location"
+    log-info "checking location $($location)"
 
     if(!(Get-AzureRmLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location))
     {
@@ -56,16 +56,7 @@ function main()
         exit 1
     }
 
-    log-info "checking for existing resource group"
-
-    if((Get-AzureRmResourceGroup -Name $resourceGroupName -ErrorAction SilentlyContinue))
-    {
-        # TODO: display object count so user knows there is something in it
-        if((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y')
-        {
-            Remove-AzureRmResourceGroup -Name $resourceGroupName
-        }
-    }
+    log-info "checking for existing resource group $($resourceGroupName)"
 
     # create resource group if it does not exist
     if(!(Get-AzureRmResourceGroup -Name $resourceGroupName -ErrorAction SilentlyContinue))
@@ -73,10 +64,14 @@ function main()
         log-info "creating resource group $($resourceGroupName) in location $($location)"   
         New-AzureRmResourceGroup -Name $resourceGroupName -Location $location
     }
+    else
+    {
+        log-info "resource group $($resourceGroupName) already exists."
+    }
 
     # make sure sql available in region
     $sqlAvailable = Get-AzureRmSqlCapability -LocationName $location
-    log-info "sql server capability in $($location) : $($sqlAvailable)"
+    log-info "sql server capability in $($location) : $($sqlAvailable.Status)"
     if(!$sqlAvailable)
     {
         log-info "sql not available in this region. exiting"
@@ -88,14 +83,14 @@ function main()
 
     if([string]::IsNullOrEmpty($servername))
     {
-        $sqlServersAvailable = Get-AzureRmSqlServer -ResourceGroupName $resourceGroupName
+        $sqlServersAvailable = @(Get-AzureRmSqlServer -ResourceGroupName $resourceGroupName)
     }
     else
     {
-        $sqlServersAvailable = Get-AzureRmSqlServer -ServerName $servername -ResourceGroupName $resourceGroupName
+        $sqlServersAvailable = @(Get-AzureRmSqlServer -ServerName $servername -ResourceGroupName $resourceGroupName)
     }
 
-    if(!$sqlServersAvailable)
+    if($sqlServersAvailable.Count -lt 1)
     {
         if([string]::IsNullOrEmpty($servername))
         {
@@ -106,13 +101,32 @@ function main()
     }
     else
     {
-        log-info "checking sql db $($databaseName) in resource group"
-        $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName -ResourceGroupName $resourceGroupName -ServerName $servername
+        if(![string]::IsNullOrEmpty($servername) -and $sqlServersAvailable.ServerName.Contains($servername))
+        {
+            $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName -ResourceGroupName $resourceGroupName -ServerName $servername
+        }
+        else
+        {
+            foreach($sqlServer in $sqlServersAvailable.ServerName)
+            {
+                log-info "checking sql db $($databaseName) on server $($sqlServer)"
+                $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName -ResourceGroupName $resourceGroupName -ServerName $sqlServer
+                if($sqlDbAvailable)
+                {
+                    break
+                }
+            }
+        }
     }
 
     if(!$sqlDbAvailable)
     {
         $CreateSqlDatabase = $true
+    }
+    else
+    {
+        log-info "database $($databasename) already exists on server $($servername). exiting"
+        return
     }
 
     log-info "using server name $($servername)"
