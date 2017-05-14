@@ -29,7 +29,7 @@ param(
 $erroractionpreference = "Continue"
 $warningPreference = "SilentlyContinue"
 $logFile = "azure-rm-create-sql.log"
-$global:credential
+$global:credential = $null
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -90,34 +90,39 @@ function main()
         $sqlServersAvailable = @(Get-AzureRmSqlServer -ServerName $servername -ResourceGroupName $resourceGroupName)
     }
 
-    if($sqlServersAvailable.Count -lt 1)
+    if([string]::IsNullOrEmpty($servername))
     {
-        if([string]::IsNullOrEmpty($servername))
+        if($sqlServersAvailable.Count -gt 0)
         {
-            $servername = "sql-server-$(Get-Random)"
+            log-info "existing sql servers in resource group:"
+            $sqlServersAvailable.ServerName | fl *
         }
-        
-        $createSqlServer = $true
+
+        $servername = read-host "enter servername to use for new database or leave empty to generate random name"
+    }
+
+    if([string]::IsNullOrEmpty($servername))
+    {
+        $servername = "sql-server-$(Get-Random)"
+    }
+
+    if($sqlServersAvailable.Count -gt 0 -and $sqlServersAvailable.ServerName.Contains($servername))
+    {
+        $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
+            -ResourceGroupName $resourceGroupName `
+            -ServerName $servername `
+            -ErrorAction SilentlyContinue
     }
     else
     {
-        if(![string]::IsNullOrEmpty($servername) -and $sqlServersAvailable.ServerName.Contains($servername))
-        {
-            $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName -ResourceGroupName $resourceGroupName -ServerName $servername
-        }
-        else
-        {
-            foreach($sqlServer in $sqlServersAvailable.ServerName)
-            {
-                log-info "checking sql db $($databaseName) on server $($sqlServer)"
-                $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName -ResourceGroupName $resourceGroupName -ServerName $sqlServer
-                if($sqlDbAvailable)
-                {
-                    break
-                }
-            }
-        }
+        $createSqlServer = $true
     }
+
+    log-info "checking sql db $($databaseName) on server $($servername)"
+    $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
+        -ResourceGroupName $resourceGroupName `
+        -ServerName $servername `
+        -ErrorAction SilentlyContinue
 
     if(!$sqlDbAvailable)
     {
@@ -216,8 +221,7 @@ function main()
     }
 
 
-    log-info "connection string:"
-    log-info "Server=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID={your_username};Password={your_password};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    log-info "connection string:`r`nServer=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID=$($adminUserName);Password=$($adminPassword);MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     log-info "finished"
 }
 
