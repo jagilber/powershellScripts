@@ -1,8 +1,58 @@
-# SCRIPT TO CREATE AZURE SQL DB
-# 170513
-# https://docs.microsoft.com/en-us/azure/sql-database/sql-database-get-started-powershell
+<#  
+.SYNOPSIS  
+    powershell script to create a new Azure SQL server and / or database in Azure Resource Manager
+    
+.DESCRIPTION  
+    powershell script to create a new Azure SQL server and / or database in Azure Resource Manager
+    requires azure powershell sdk (install-module azurerm)
+    script does the following:
+        logs into azure rm
+        checks location for validity and for availability of Azure SQL
+        checks for resource group and creates if not exists
+        checks resource group for azure sql servers
+        if sql server is specified, will query server for existing database
+        will generate / prompt for sql server name if one is not existing / specified
+        checks password for complexity requirements
+        creates sql server and database with firewall rules
+        on success displays connection string info
+    
+    https://docs.microsoft.com/en-us/azure/sql-database/sql-database-get-started-powershell
 
-# Server=tcp:server-1877773027.database.windows.net,1433;Initial Catalog=RdsCbDb;Persist Security Info=False;User ID={your_username};Password={your_password};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
+    minimum parameters : resource group, location, databaseName, adminPassword
+ 
+.NOTES  
+   File Name  : azure-rm-sql-create.ps1
+   Author     : jagilber
+   Version    : 170514 added description
+   History    : 
+
+.EXAMPLE  
+    .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
+    create a new sql database on an existing or new sql server
+
+.PARAMETER resourceGroupName
+    required paramater for the resource group name for new database and sql server
+
+.PARAMETER location
+    required paramater for the resource group name region location
+
+.PARAMETER serverName
+    if specified, will check and if not exists, create new sql server. if named sql server exists, existing sql server will be used. 
+    if not specified, or not exists, will prompt for name or to generate random name.
+
+.PARAMETER adminUserName
+    if specified, will be used for sql administrator logon.
+    if not specified, 'sql-administrator' will be used.
+    NOTE: admin and administrator can NOT be used.
+
+.PARAMETER adminPassword
+    requred parameter for the sql administrator password.
+    will be checked for current azure rm password complexity requirements.
+
+.PARAMETER credentials
+    if specified, will be used for the sql administrator and password credentials
+    NOTE: use (get-credential) as the argument.
+#>  
 
 param(
 [Parameter(Mandatory=$true)]
@@ -23,7 +73,6 @@ param(
 [string]$nsgEndIpAllow = "255.255.255.255",
 [Parameter(Mandatory=$true)]
 [string]$databaseName
-
 )
 
 $erroractionpreference = "Continue"
@@ -72,6 +121,7 @@ function main()
     # make sure sql available in region
     $sqlAvailable = Get-AzureRmSqlCapability -LocationName $location
     log-info "sql server capability in $($location) : $($sqlAvailable.Status)"
+
     if(!$sqlAvailable)
     {
         log-info "sql not available in this region. exiting"
@@ -79,7 +129,6 @@ function main()
     }
 
     log-info "checking for sql servers in resource group $($resourceGroupName)"
-    
 
     if([string]::IsNullOrEmpty($servername))
     {
@@ -144,9 +193,7 @@ function main()
         return
     }
 
-
     log-info "using admin name: $($adminUserName)"
-
     log-info "checking password"
 
     if(!$credentials)
@@ -168,8 +215,8 @@ function main()
 
     $adminUsername = $global:credential.UserName
     $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($global:credential.Password)) 
-
     $count = 0
+
     # uppercase check
     if($adminPassword -match "[A-Z]") { $count++ }
     # lowercase check
@@ -194,10 +241,8 @@ function main()
         exit 1
     }
 
-
     if($createSqlServer)
     {
-
         log-info "create a logical server"
         New-AzureRmSqlServer -ResourceGroupName $resourceGroupName `
             -ServerName $servername `
@@ -219,7 +264,6 @@ function main()
             -DatabaseName $databasename `
             -RequestedServiceObjectiveName "S0"
     }
-
 
     log-info "connection string:`r`nServer=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID=$($adminUserName);Password=$($adminPassword);MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     log-info "finished"
