@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170514 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
+   Version    : 170517v2 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
    History    : 
+                170514 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
                 170405 cleaned up and added -rdWebUrl
                 161230 changed runas-admin to call powershell with -executionpolicy bypass
 .EXAMPLE  
@@ -128,12 +129,12 @@ function main()
 
     foreach($sub in get-subscriptions)
     {
-        if(![string]::IsNullOrEmpty($sub.id))
+        if(![string]::IsNullOrEmpty($sub))
         {
-            Set-AzureRmContext -SubscriptionId $sub.id
-            write-host "enumerating subscription $($sub.name) $($sub.id)"
+            Set-AzureRmContext -SubscriptionId $sub
+            write-host "enumerating subscription $($sub)"
 
-            [int]$id = enum-resourcegroup $sub.id
+            [int]$id = enum-resourcegroup $sub
 
             if($id -eq -1)
             {
@@ -481,72 +482,56 @@ function get-gatewayUrl($resourceGroup)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function create-subscriptionsList($subscriptionListObj)
-{
-    [System.Collections.ArrayList]$subscriptions = New-Object System.Collections.ArrayList
-
-    foreach($sub in $subscriptionListObj)
-    {
-        # breaking change in azurerm.Resources 4.0.0 changed return object type for get-azurermsubscription
-
-        if($sub.Id -eq $null)
-        {
-            $id = $sub.SubscriptionId
-        }
-        else
-        {
-            $id = $sub.Id
-        }
-
-        if($sub.Name -eq $null)
-        {
-            $name = $sub.SubscriptionName
-        }
-        else
-        {
-            $name = $sub.Name
-        }
-
-        [void]$subscriptions.Add(@{
-            'id' = $id;
-            'name' = $name;
-            })
-    }
-
-    return ,$subscriptions
-}
-
-# ----------------------------------------------------------------------------------------------------------------
 function get-subscriptions()
 {
     write-host "enumerating subscriptions"
     $subList = @{}
     $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
-    $subs = create-subscriptionsList -subscriptionListObj $subs
-    
+    $newSubFormat = (get-module AzureRM.Resources).Version.ToString() -ge "4.0.0"
+            
     if($subs.Count -gt 1)
     {
         [int]$count = 1
         foreach($sub in $subs)
         {
-            $message = "$($count). $($sub.name) $($sub.id)"
+           if($newSubFormat)
+           { 
+                $message = "$($count). $($sub.name) $($sub.id)"
+                $id = $sub.id
+           }
+           else
+           {
+                $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
+                $id = $sub.SubscriptionId
+           }
+
             Write-Host $message
-            $subList.Add($count,$sub.id)
+            $subList.Add($count,$id)
             $count++
         }
         
-        [int]$id = Read-Host ("Enter number for subscription to enumerate or 0 to query all:")
+        [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
         Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
 
-        if($id -ne 0)
+        if($id -ne 0 -and $id -le $subs.count)
         {
-            $subs = Get-AzureRmSubscription -SubscriptionId $subList[$id].ToString() -WarningAction SilentlyContinue
-            $subs = create-subscriptionsList -subscriptionListObj $subs
+            return $subList[$id]
+        }
+    }
+    elseif($subs.Count -eq 1)
+    {
+        if($newSubFormat)
+        {
+            $subList.Add("1",$subs.Id)
+        }
+        else
+        {
+            $subList.Add("1",$subs.SubscriptionId)
         }
     }
 
-    write-verbose "enum-resourcegroup returning:$($subs | fl | out-string)"
-    return $subs
+    write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
+    return $subList.Values
 }
 
 # ----------------------------------------------------------------------------------------------------------------
