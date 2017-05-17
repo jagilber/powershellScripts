@@ -20,9 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 
+   Version    : 170514 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
    History    : 
-                160405 cleaned up and added -rdWebUrl
+                170405 cleaned up and added -rdWebUrl
                 161230 changed runas-admin to call powershell with -executionpolicy bypass
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
@@ -128,12 +128,12 @@ function main()
 
     foreach($sub in get-subscriptions)
     {
-        if(![string]::IsNullOrEmpty($sub.SubscriptionId))
+        if(![string]::IsNullOrEmpty($sub.id))
         {
-            Set-AzureRmContext -SubscriptionId $sub.SubscriptionId
-            write-host "enumerating subscription $($sub.SubscriptionName) $($sub.SubscriptionId)"
+            Set-AzureRmContext -SubscriptionId $sub.id
+            write-host "enumerating subscription $($sub.name) $($sub.id)"
 
-            [int]$id = enum-resourcegroup $sub.SubscriptionId
+            [int]$id = enum-resourcegroup $sub.id
 
             if($id -eq -1)
             {
@@ -484,6 +484,8 @@ function get-gatewayUrl($resourceGroup)
 function get-subscriptions()
 {
     write-host "enumerating subscriptions"
+    [System.Collections.ArrayList]$subscriptions = New-Object System.Collections.ArrayList
+
     $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
 
     if($subs.Count -gt 1)
@@ -491,9 +493,9 @@ function get-subscriptions()
         [int]$count = 1
         foreach($sub in $subs)
         {
-            $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
+            $message = "$($count). $($sub.name) $($sub.id)"
             Write-Host $message
-            $subList.Add($count,$sub.SubscriptionId)
+            $subList.Add($count,$sub.id)
             $count++
         }
         
@@ -507,7 +509,36 @@ function get-subscriptions()
     }
 
     write-verbose "enum-resourcegroup returning:$($subs | fl | out-string)"
-    return $subs
+
+    foreach($sub in $subs)
+    {
+        # breaking change in azurerm.Resources 4.0.0 changed return object type for get-azurermsubscription
+
+        if($subs.Id -eq $null)
+        {
+            $id = $sub.SubscriptionId
+        }
+        else
+        {
+            $id = $sub.Id
+        }
+
+        if($subs.Name -eq $null)
+        {
+            $name = $sub.SubscriptionName
+        }
+        else
+        {
+            $name = $sub.Name
+        }
+
+        $subscriptions.Add(@{
+            'id' = $id;
+            'name' = $name;
+            })
+    }
+
+    return $subscriptions
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -751,4 +782,3 @@ function start-mstsc($ip)
 # ----------------------------------------------------------------------------------------------------------------
 main
 write-host "finished"
-
