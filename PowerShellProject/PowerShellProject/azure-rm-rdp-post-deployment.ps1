@@ -84,7 +84,7 @@ function main()
     $subject = $null
     $certInfo = $null
 
-    write-host "starting script $($MyInvocation.ScriptName) to enumerate public ip addresses and RDWeb sites in Azure ARM"
+    write-host "starting script $($MyInvocation.ScriptName) to enumerate public ip addresses and RDWeb sites in Azure RM"
 
     if($update -and (get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName))
     {
@@ -481,13 +481,49 @@ function get-gatewayUrl($resourceGroup)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function create-subscriptionsList($subscriptionListObj)
+{
+    [System.Collections.ArrayList]$subscriptions = New-Object System.Collections.ArrayList
+
+    foreach($sub in $subscriptionListObj)
+    {
+        # breaking change in azurerm.Resources 4.0.0 changed return object type for get-azurermsubscription
+
+        if($sub.Id -eq $null)
+        {
+            $id = $sub.SubscriptionId
+        }
+        else
+        {
+            $id = $sub.Id
+        }
+
+        if($sub.Name -eq $null)
+        {
+            $name = $sub.SubscriptionName
+        }
+        else
+        {
+            $name = $sub.Name
+        }
+
+        [void]$subscriptions.Add(@{
+            'id' = $id;
+            'name' = $name;
+            })
+    }
+
+    return ,$subscriptions
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function get-subscriptions()
 {
     write-host "enumerating subscriptions"
-    [System.Collections.ArrayList]$subscriptions = New-Object System.Collections.ArrayList
-
+    $subList = @{}
     $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
-
+    $subs = create-subscriptionsList -subscriptionListObj $subs
+    
     if($subs.Count -gt 1)
     {
         [int]$count = 1
@@ -505,40 +541,12 @@ function get-subscriptions()
         if($id -ne 0)
         {
             $subs = Get-AzureRmSubscription -SubscriptionId $subList[$id].ToString() -WarningAction SilentlyContinue
+            $subs = create-subscriptionsList -subscriptionListObj $subs
         }
     }
 
     write-verbose "enum-resourcegroup returning:$($subs | fl | out-string)"
-
-    foreach($sub in $subs)
-    {
-        # breaking change in azurerm.Resources 4.0.0 changed return object type for get-azurermsubscription
-
-        if($subs.Id -eq $null)
-        {
-            $id = $sub.SubscriptionId
-        }
-        else
-        {
-            $id = $sub.Id
-        }
-
-        if($subs.Name -eq $null)
-        {
-            $name = $sub.SubscriptionName
-        }
-        else
-        {
-            $name = $sub.Name
-        }
-
-        $subscriptions.Add(@{
-            'id' = $id;
-            'name' = $name;
-            })
-    }
-
-    return $subscriptions
+    return $subs
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -782,3 +790,4 @@ function start-mstsc($ip)
 # ----------------------------------------------------------------------------------------------------------------
 main
 write-host "finished"
+
