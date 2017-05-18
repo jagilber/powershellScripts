@@ -506,13 +506,13 @@ function get-subscriptions()
            }
 
             Write-Host $message
-            $subList.Add($count,$id)
+            [void]$subList.Add($count,$id)
             $count++
         }
         
         [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
-        Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
-
+        $null = Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
+        
         if($id -ne 0 -and $id -le $subs.count)
         {
             return $subList[$id]
@@ -522,11 +522,11 @@ function get-subscriptions()
     {
         if($newSubFormat)
         {
-            $subList.Add("1",$subs.Id)
+            [void]$subList.Add("1",$subs.Id)
         }
         else
         {
-            $subList.Add("1",$subs.SubscriptionId)
+            [void]$subList.Add("1",$subs.SubscriptionId)
         }
     }
 

@@ -23,9 +23,9 @@
 .NOTES  
    File Name  : azure-rm-sql-create.ps1
    Author     : jagilber
-   Version    : 170514 added description
+   Version    : 170516 added -generateUniqueName
    History    : 
-
+                170514 added description
 .EXAMPLE  
     .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
     create a new sql database on an existing or new sql server
@@ -52,6 +52,9 @@
 .PARAMETER credentials
     if specified, will be used for the sql administrator and password credentials
     NOTE: use (get-credential) as the argument.
+
+.PARAMETER generateUniqueName
+    if specified, will generate random sql server name which have to be globally unique
 #>  
 
 param(
@@ -72,7 +75,9 @@ param(
 [Parameter(Mandatory=$false)]
 [string]$nsgEndIpAllow = "255.255.255.255",
 [Parameter(Mandatory=$true)]
-[string]$databaseName
+[string]$databaseName,
+[Parameter(Mandatory=$false)]
+[switch]$generateUniqueName
 )
 
 $erroractionpreference = "Continue"
@@ -130,7 +135,7 @@ function main()
 
     log-info "checking for sql servers in resource group $($resourceGroupName)"
 
-    if([string]::IsNullOrEmpty($servername))
+    if(!$servername)
     {
         $sqlServersAvailable = @(Get-AzureRmSqlServer -ResourceGroupName $resourceGroupName)
     }
@@ -139,23 +144,23 @@ function main()
         $sqlServersAvailable = @(Get-AzureRmSqlServer -ServerName $servername -ResourceGroupName $resourceGroupName)
     }
 
-    if([string]::IsNullOrEmpty($servername))
+    if($sqlServersAvailable.Count -gt 0)
     {
-        if($sqlServersAvailable.Count -gt 0)
-        {
-            log-info "existing sql servers in resource group:"
-            $sqlServersAvailable.ServerName | fl *
-        }
-
+        log-info "existing sql servers in resource group:"
+        $sqlServersAvailable.ServerName | Format-List *
+    }
+    
+    if(!$generateUniqueName -and $sqlServersAvailable.Count -gt 0 -and !$servername)
+    {
         $servername = read-host "enter servername to use for new database or leave empty to generate random name"
     }
 
-    if([string]::IsNullOrEmpty($servername))
+    if(!$servername -and $generateUniqueName)
     {
         $servername = "sql-server-$(Get-Random)"
     }
 
-    if($sqlServersAvailable.Count -gt 0 -and $sqlServersAvailable.ServerName.Contains($servername))
+    if($sqlServersAvailable.Count -gt 0 -and $sqlServersAvailable.ServerName -imatch $servername)
     {
         $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
             -ResourceGroupName $resourceGroupName `
@@ -241,31 +246,42 @@ function main()
         exit 1
     }
 
-    if($createSqlServer)
+    $error.Clear()
+    try
     {
-        log-info "create a logical server"
-        New-AzureRmSqlServer -ResourceGroupName $resourceGroupName `
-            -ServerName $servername `
-            -Location $location `
-            -SqlAdministratorCredentials $global:credential
+        if($createSqlServer)
+        {
+            log-info "create a logical server"
+            New-AzureRmSqlServer -ResourceGroupName $resourceGroupName `
+                -ServerName $servername `
+                -Location $location `
+                -SqlAdministratorCredentials $global:credential
 
-        log-info "configure a server firewall rule"
-        New-AzureRmSqlServerFirewallRule -ResourceGroupName $resourcegroupname `
-            -ServerName $servername `
-            -FirewallRuleName "AllowSome" -StartIpAddress $nsgStartIpAllow -EndIpAddress $nsgEndIpAllow
+            log-info "configure a server firewall rule"
+            New-AzureRmSqlServerFirewallRule -ResourceGroupName $resourcegroupname `
+                -ServerName $servername `
+                -FirewallRuleName "AllowSome" -StartIpAddress $nsgStartIpAllow -EndIpAddress $nsgEndIpAllow
+        }
+
+        if($CreateSqlDatabase)
+        {
+            log-info "create a blank database"
+
+            New-AzureRmSqlDatabase  -ResourceGroupName $resourceGroupName `
+                -ServerName $servername `
+                -DatabaseName $databasename `
+                -RequestedServiceObjectiveName "S0"
+        }
+
+        log-info "connection string ADO:`r`nServer=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID=$($adminUserName);Password=$($adminPassword);MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        log-info "connection string ODBC:`r`nDriver={ODBC Driver 13 for SQL Server};Server=tcp:$($servername).database.windows.net,1433;Database=$($databaseName);Uid=$($adminUserName)@$($servername);Pwd=$($adminPassword);Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+        log-info "connection string ODBC Native client:`r`nDRIVER=SQL Server Native Client 11.0;Server=tcp:$($servername).database.windows.net,1433;Database=$($databaseName);Uid=$($adminUserName)@$($servername);Pwd=$($adminPassword);Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
     }
-
-    if($CreateSqlDatabase)
+    catch
     {
-        log-info "create a blank database"
-
-        New-AzureRmSqlDatabase  -ResourceGroupName $resourceGroupName `
-            -ServerName $servername `
-            -DatabaseName $databasename `
-            -RequestedServiceObjectiveName "S0"
+        log-info "error:$($error)"
     }
-
-    log-info "connection string:`r`nServer=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID=$($adminUserName);Password=$($adminPassword);MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    
     log-info "finished"
 }
 
