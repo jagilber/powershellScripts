@@ -20,7 +20,7 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170517v2 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
+   Version    : 170518 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
    History    : 
                 170514 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
                 170405 cleaned up and added -rdWebUrl
@@ -775,4 +775,3 @@ function start-mstsc($ip)
 # ----------------------------------------------------------------------------------------------------------------
 main
 write-host "finished"
-
