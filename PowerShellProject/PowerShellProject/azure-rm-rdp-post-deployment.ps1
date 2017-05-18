@@ -35,7 +35,7 @@
 
 .PARAMETER noPrompt
     to not prompt when adding cert to cert store or when modifying hosts file
- 
+ 
 .PARAMETER rdWebUrl
     used to pass complete RDWeb url to script to bypass Azure enumeration. will add self-signed cert to cert store.
 
@@ -775,3 +775,4 @@ function start-mstsc($ip)
 # ----------------------------------------------------------------------------------------------------------------
 main
 write-host "finished"
+
