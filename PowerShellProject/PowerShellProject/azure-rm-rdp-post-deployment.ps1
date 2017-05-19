@@ -20,7 +20,7 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170518 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
+   Version    : 170519 fixed issue with idsEntry
    History    : 
                 170514 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
                 170405 cleaned up and added -rdWebUrl
@@ -126,47 +126,103 @@ function main()
     }
 
     authenticate-azureRm
+    $subscriptions = get-subscriptions
+    $redisplay = $true
 
-    foreach($sub in get-subscriptions)
+    while($redisplay)
     {
-        if(![string]::IsNullOrEmpty($sub))
+        foreach($sub in $subscriptions)
         {
+            $global:resourceList.Clear()
+
+            if([string]::IsNullOrEmpty($sub))
+            {
+                continue
+            }
+
             Set-AzureRmContext -SubscriptionId $sub
             write-host "enumerating subscription $($sub)"
 
-            [int]$id = enum-resourcegroup $sub
-
-            if($id -eq -1)
+            if(!(enum-resourcegroup $sub))
             {
-                # no entries found
-                return
+                continue
             }
 
-            $resourceGroup = $global:resourceList[$id].Values
-            $ip = $global:resourceList[$id].Keys
-        
-            # enumerate resource group
-            write-host "provision state: $($resourceGroup.ProvisioningState)"
-
-            if(![string]::IsNullOrEmpty($ip.IpAddress))
+            if($global:resourceList.Count -gt 1)
             {
-                write-host "public loadbalancer ip address: $($ip.IpAddress)"
-                $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
+                $idsEntry = Read-Host ("Enter number for site / ip address to connect to")
             }
-                
-            $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
-            $cert = get-cert -url $gatewayUrl -certFile $certFile
-            $subject = enum-certSubject -cert $cert
-
-            if($subject -eq $false)
+            elseif($global:resourceList.Count -eq 1)
             {
-                start-mstsc -ip $ip
+                $id = 1
             }
             else
             {
-                import-cert -cert $cert -certFile $certFile -subject $subject    
-                add-hostsEntry -ipAddress $ip -subject $subject
-                open-RdWebSite -site "https://$($subject)/RDWeb"
+                write-host "no ip addresses found. returning..."
+
+                exit 1
+            }
+
+            #check ids for comma and range
+            if($idsEntry.ToLower().Contains("c"))
+            {
+                # redisplay list to choose again
+                $idsEntry = $idsEntry.ToLower().Replace("c","")
+            }
+            else
+            {
+                $redisplay = $false
+            }
+
+            if($idsEntry.Contains(","))
+            {
+                $ids = @($idsEntry.Split(","))
+            }
+            else
+            {
+                $ids = @($idsEntry)
+            }
+
+            foreach($id in $ids)
+            {
+                if(!([Convert]::ToInt32($id)) -or $id -gt $global:resourceList.Count -or $id -lt 1)
+                {
+                    write-host "invalid entry $($id)..."
+                    continue
+                }
+
+                [int]$id = [Convert]::ToInt32($id)
+
+                $resourceGroup = Get-AzureRmResourceGroup -Name $global:resourceList[$id].Values.ResourceGroupName -WarningAction SilentlyContinue
+                write-host $resourceGroup.ResourceGroupName
+                write-verbose "enum-resourcegroup returning:$($resourceGroup | fl | out-string)"
+
+                $resourceGroup = $global:resourceList[$id].Values
+                $ip = $global:resourceList[$id].Keys
+        
+                # enumerate resource group
+                write-host "provision state: $($resourceGroup.ProvisioningState)"
+
+                if(![string]::IsNullOrEmpty($ip.IpAddress))
+                {
+                    write-host "public loadbalancer ip address: $($ip.IpAddress)"
+                    $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
+                }
+                
+                $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
+                $cert = get-cert -url $gatewayUrl -certFile $certFile
+                $subject = enum-certSubject -cert $cert
+
+                if($subject -eq $false)
+                {
+                    start-mstsc -ip $ip
+                }
+                else
+                {
+                    import-cert -cert $cert -certFile $certFile -subject $subject    
+                    add-hostsEntry -ipAddress $ip -subject $subject
+                    open-RdWebSite -site "https://$($subject)/RDWeb"
+                }
             }
         }
     }
@@ -366,37 +422,13 @@ function enum-resourcegroup([string] $subid)
             }
         }
 
-        if($global:resourceList.Count -gt 1)
-        {
-            [int]$id = Read-Host ("Enter number for site / ip address to connect to")
-            if($id -isnot [int] -or $id -gt $global:resourceList.Count -or $id -lt 1)
-            {
-                write-host "invalid entry $($id). exiting script"
-                return -1
-            }
-        }
-        elseif($global:resourceList.Count -eq 1)
-        {
-            $id = 1
-        }
-        else
-        {
-            write-host "no ip addresses found. returning..."
-
-            return -1
-        }
-
-        $resourceGroup = Get-AzureRmResourceGroup -Name $global:resourceList[$id].Values.ResourceGroupName -WarningAction SilentlyContinue
-        write-host $resourceGroup.ResourceGroupName
-        write-verbose "enum-resourcegroup returning:$($resourceGroup | fl | out-string)"
-
-        return $id
+        return $true
     }
     catch
     {
         write-host "enum-resourcegroup:exception: $($error)"
         $error.Clear()
-        return -1
+        return $false
     }
 }
 
