@@ -18,12 +18,13 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170315 changed documentation for eventlognamepattern. one example had eventlognames
+   Version    : 170518 added try catch to getlognames(). added -credentials (get-credential)
    History    : 
+                170315 changed documentation for eventlognamepattern. one example had eventlognames
                 170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
                 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
-                
+
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
