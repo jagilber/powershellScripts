@@ -12,8 +12,9 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170426.2 added calpack info to summary
+   Version    : 170519 fixed named pipe job not being removed
    History    : 
+                170426.2 added calpack info to summary
                 170426 fixed issue with x509 and for currently configured showing false when it was supposed to be true
                 170425 added rds role check and made summary more descriptive. fixed issue with x509 check
 
@@ -50,6 +51,10 @@
     If specified, will ask to download psexec if not exists, will start psexec as network service, and will rerun script in that session.
     this is useful as 'network service' is how the rdsh server and license server communicate (as themselves). 
     this may show issues where running under logged on credentials may not.
+
+.PARAMETER showCalInfo
+    If specified, User / Device cal information will be enumerated as well as license report information
+
 #>  
 
 Param(
@@ -58,7 +63,8 @@ Param(
     [string] $licServer = "",    
     [string] $logFile = "rds-lic-svr-chk.txt",
     [string] $rdshServer = $env:COMPUTERNAME,
-    [switch] $runAsNetworkService
+    [switch] $runAsNetworkService,
+    [switch] $showCalInfo
 )
 
 clear-Host
@@ -90,7 +96,7 @@ function main()
         $logFile = "$(Get-Location)\$($logFile)"
     }                                       
 
-    Start-Transcript -Path $logFile -Force
+#    Start-Transcript -Path $logFile -Force
 
     $MyInvocation.ScriptName
     # run as administrator
@@ -117,7 +123,7 @@ function main()
         else
         {
             Stop-Transcript 
-            write-host "unable to download utility. exiting`r`n"
+            log-info "unable to download utility. exiting"
             return
         }
     }
@@ -127,15 +133,15 @@ function main()
         $licServers = @($licServer)
     }
 
-    write-host "-----------------------------------------`r`n"
-    write-host "OS $($rdshServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "OS $($rdshServer)"
+    log-info "-----------------------------------------"
     $osVersion = read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value CurrentVersion
     read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName
 
-    write-host "-----------------------------------------`r`n"
-    write-host "INSTALLED FEATURES $($rdshServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "INSTALLED FEATURES $($rdshServer)"
+    log-info "-----------------------------------------"
     
     $features = Get-WindowsFeature -ComputerName $rdshServer | Where-Object Installed -eq $true
     $features
@@ -150,15 +156,15 @@ function main()
         $isLicServer = $true
     }
 
-    write-host "-----------------------------------------`r`n"
-    write-host "EVENTS $($rdshServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "EVENTS $($rdshServer)"
+    log-info "-----------------------------------------"
 
     Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
 
-    write-host "-----------------------------------------`r`n"
-    write-host "REGISTRY $($rdshServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "REGISTRY $($rdshServer)"
+    log-info "-----------------------------------------"
 
     if($rdshServer -ilike $env:COMPUTERNAME -and $osVersion -gt 6.1) # does not like 2k8
     {
@@ -176,9 +182,9 @@ function main()
     read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
     read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
     
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TerminalServiceSetting $($rdshServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "Win32_TerminalServiceSetting $($rdshServer)"
+    log-info "-----------------------------------------"
  
     $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting -ComputerName $rdshServer
     $rWmi
@@ -187,21 +193,21 @@ function main()
     if($rWmi.TerminalServerMode -eq 1)
     {
         $isRdshServer = $true
-        write-host "TerminalServerMode:1 == Remote Desktop Session Host`r`n"
+        log-info "TerminalServerMode:1 == Remote Desktop Session Host"
     }
     else
     {
         $isRdshServer = $false
-        write-host "TerminalServerMode:$($rWmi.TerminalServerMode) (NOT a Remote desktop Session Host)`r`n"
+        log-info "TerminalServerMode:$($rWmi.TerminalServerMode) (NOT a Remote desktop Session Host)"
     }
     
     # lsdiag uses licensingmode from rcm when not overriden in policy
     # todo: need to verify if same is true when in collection and when 'centrallicensing' presumably when configuring in gui in 2012
     
     # lsdiag calls this
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TerminalServiceSetting::FindLicenseServers()`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "Win32_TerminalServiceSetting::FindLicenseServers()"
+    log-info "-----------------------------------------"
 
     $lsList = $rWmi.FindLicenseServers().LicenseServersList
     
@@ -213,26 +219,26 @@ function main()
             $lsDiscovered = $true
         }
 
-        write-host "LicenseServer:$($ls.LicenseServer)`r`n"
-        write-host "HowDiscovered:$(if($ls.HowDiscovered) { "Manual" } else { "Auto" })`r`n"
-        write-host "IsAdminOnLS:$($ls.IsAdminOnLS)`r`n"
-        write-host "IsLSAvailable:$($ls.IsLSAvailable)`r`n"
-        write-host "IssuingCals:$($ls.IssuingCals)`r`n"
-        write-host "-----------------------------------------`r`n"
+        log-info "LicenseServer:$($ls.LicenseServer)"
+        log-info "HowDiscovered:$(if($ls.HowDiscovered) { "Manual" } else { "Auto" })"
+        log-info "IsAdminOnLS:$($ls.IsAdminOnLS)"
+        log-info "IsLSAvailable:$($ls.IsLSAvailable)"
+        log-info "IssuingCals:$($ls.IssuingCals)"
+        log-info "-----------------------------------------"
     }
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSDeploymentLicensing $($rdshServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "Win32_TSDeploymentLicensing $($rdshServer)"
+    log-info "-----------------------------------------"
     
     $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing -ComputerName $rdshServer
     $rWmiL
     
-    write-host "-----------------------------------------`r`n"
-    write-host "checking wmi for lic server`r`n"
+    log-info "-----------------------------------------"
+    log-info "checking wmi for lic server"
     $tempServers = @($rWmi.GetSpecifiedLicenseServerList().SpecifiedLSList)
     $licMode = $rWmi.LicensingType
-    write-host "wmi lic servers: $($tempServers) license mode: $($licMode)`r`n"
+    log-info "wmi lic servers: $($tempServers) license mode: $($licMode)"
     
     if($tempServers.Length -gt 0)
     {
@@ -246,11 +252,11 @@ function main()
         $licServers = $tempServers;
     }
  
-    write-host "-----------------------------------------`r`n"
-    write-host "checking gpo for lic server`r`n"
+    log-info "-----------------------------------------"
+    log-info "checking gpo for lic server"
     $tempServers = @(([string](read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
     $licMode = (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
-    write-host "gpo lic servers: $($tempServers) license mode: $($licMode)`r`n"
+    log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
 
     if($rWmi.PolicySourceLicensingType)
     {
@@ -265,11 +271,11 @@ function main()
     
     if($rdshServer -ilike $env:COMPUTERNAME)
     {
-        write-host "-----------------------------------------`r`n"
-        write-host "checking local powershell for license server`r`n"
+        log-info "-----------------------------------------"
+        log-info "checking local powershell for license server"
         $tempServers = @(([string]((Get-RDLicenseConfiguration).LicenseServer)).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
         $licMode = (Get-RDLicenseConfiguration).Mode
-        write-host "powershell license servers: $($tempServers) license mode: $($licMode)`r`n"
+        log-info "powershell license servers: $($tempServers) license mode: $($licMode)"
 
         if($tempServers.Length -gt 0)
         {
@@ -289,14 +295,14 @@ function main()
 
     if(![string]::IsNullOrEmpty($checkUser))
     {
-        write-host "-----------------------------------------`r`n"
+        log-info "-----------------------------------------"
         check-user -user $checkUser
-        write-host "-----------------------------------------`r`n"
+        log-info "-----------------------------------------"
     }
  
     if($licServers.Length -lt 1)
     {
-        write-host "license server has not been configured!`r`n"
+        log-info "license server has not been configured for remote desktop services for this server!"
     }
     else
     {
@@ -306,11 +312,17 @@ function main()
             # issue where server name has space in front but not sure why so adding .Trim() for now
             if($server -ne $server.Trim())
             {
-                write-host "warning:whitespace characters on server name"    
+                log-info "warning:whitespace characters on server name"    
             }
 
             $licServersList.Add($server.Trim(),(check-licenseServer -licServer $server.Trim()))
         }
+    }
+
+    # show license info if this server is a license server
+    if($isLicServer -and !$licServersList.Contains($rdshServer))
+    {
+        $licServersList.Add($rdshServer,(check-licenseServer -licServer $rdshServer))
     }
 
     try
@@ -323,15 +335,15 @@ function main()
         $daysLeft = "NOT_SET"
     }
     
-    write-host "-----------------------------------------`r`n"
-    write-host "*** SUMMARY ***`r`n"
-    write-host "server $($rdshServer) is rdsh server? $($isRdshServer)`r`n"
-    write-host "server $($rdshServer) is license server? $($isLicServer)`r`n"
-    write-host "license server info:`r`n"
+    log-info "-----------------------------------------"
+    log-info "*** SUMMARY ***"
+    log-info "server $($rdshServer) is rdsh server? $($isRdshServer)"
+    log-info "server $($rdshServer) is license server? $($isLicServer)"
+    log-info "license server info:"
 
     foreach($serverInfo in $licServersList.GetEnumerator())
     {
-        write-host "license server name: $($serverInfo.Key)"
+        log-info "license server name: $($serverInfo.Key)"
         $serverInfo.Value.GetEnumerator() | sort-object Name | Format-Table
     }
 
@@ -377,22 +389,23 @@ function main()
         $configuredCorrectly = "n/a (not an rdsh server)"    
     }
 
-    write-host "server $($rdshServer) current license mode: $($modeString)`r`n"
-    write-host "server $($rdshServer) current license config source: $($licenseConfigSource)`r`n"
-    write-host "server $($rdshServer) currently configured correctly for at least one license server? $($configuredCorrectly)`r`n"    
-    write-host "server $($rdshServer) ever connected to license server (has x509 cert)? $($hasX509)`r`n"
-    write-host "server $($rdshServer) Grace period days left? $($daysLeft)`r`n"
-    write-host "`tNOTE: The Grace period is for a license 'grace' during the first 120 days after RDSH role is installed.`r`n"
-    write-host "`t During this time, the RDSH server will allow connections regardless if licensed or not.`r`n"
-    write-host "`t The internal Grace counter will ALWAYS count down to 0.`r`n"
-    write-host "`t This is regardless of RDSH server connectivity status to license server.`r`n"
+    log-info "server $($rdshServer) current license mode: $($modeString)"
+    log-info "server $($rdshServer) current license config source: $($licenseConfigSource)"
+    log-info "server $($rdshServer) currently configured correctly for at least one license server? $($configuredCorrectly)"    
+    log-info "server $($rdshServer) ever connected to license server (has x509 cert)? $($hasX509)"
+    log-info "server $($rdshServer) Grace period days left? $($daysLeft)"
+    log-info "`tNOTE: The Grace period is for a license 'grace' during the first 120 days after RDSH role is installed."
+    log-info "`t During this time, the RDSH server will allow connections regardless if licensed or not."
+    log-info "`t The internal Grace counter will ALWAYS count down to 0."
+    log-info "`t This is regardless of RDSH server connectivity status to license server."
   
-    Stop-Transcript 
+ #   Stop-Transcript 
 
-    write-host "-----------------------------------------`r`n"
-    write-host "log file located here: $([IO.Path]::GetFullPath($logFile))`r`n"
+    log-info "-----------------------------------------"
+    log-info "log file located here: $([IO.Path]::GetFullPath($logFile))"
     . $([IO.Path]::GetFullPath($logFile))
-    write-host "finished`r`n"
+    log-info "finished"
+
 }
 # ----------------------------------------------------------------------------------------------------------------
 
@@ -419,112 +432,127 @@ function check-licenseServer([string] $licServer)
     $licServerResult.CalsPerUserUsed = 0
 
 
-    write-host "-----------------------------------------`r`n"
-    write-host "-----------------------------------------`r`n"
-    write-host "checking license server: '$($licServer)'`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "-----------------------------------------"
+    log-info "checking license server: '$($licServer)'"
+    log-info "-----------------------------------------"
 
-    write-host "-----------------------------------------`r`n"
-    write-host "OS $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "OS $($licServer)"
+    log-info "-----------------------------------------"
      
     $licServerResult.OS = (read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName)
-    write-host "$($licServerResult.OS)`r`n"
+    log-info "$($licServerResult.OS)"
     
-    write-host "-----------------------------------------`r`n"
-    write-host "SERVICE $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "SERVICE $($licServer)"
+    log-info "-----------------------------------------"
     
     $licServerResult.ServiceStatus = (Get-Service -Name TermServLicensing -ComputerName $licServer -ErrorAction SilentlyContinue).Status
-    write-host "License Server Service status: $($licServerResult.ServiceStatus)`r`n"
+    log-info "License Server Service status: $($licServerResult.ServiceStatus)"
 
-    write-host "-----------------------------------------`r`n"
-    write-host "EVENTS $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
+    log-info "-----------------------------------------"
+    log-info "EVENTS $($licServer)"
+    log-info "-----------------------------------------"
 
-    write-host (Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning") | fl * | out-string)
+    log-info (Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning") | fl * | out-string)
 
     if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
     {
-        write-host "-----------------------------------------`r`n"
-        write-host "Win32_TSLicenseServer $($licServer)`r`n"
-        write-host "-----------------------------------------`r`n"
-        write-host "$($rWmiLS | fl * | out-string)`r`n"
+        log-info "-----------------------------------------"
+        log-info "Win32_TSLicenseServer $($licServer)"
+        log-info "-----------------------------------------"
+        log-info "$($rWmiLS | fl * | out-string)"
 
         $wmiClass = ([wmiclass]"\\$($licServer)\root\cimv2:Win32_TSLicenseServer")
         
         $licServerResult.LicenseServerActivated = $wmiClass.GetActivationStatus().ActivationStatus
-        write-host "activation status: $($licServerResult.LicenseServerActivated) (0 = activated, 1 = not activated)`r`n"
+        log-info "activation status: $($licServerResult.LicenseServerActivated) (0 = activated, 1 = not activated)"
         $licServerResult.LicenseServerActivated = ![bool]$wmiClass.GetActivationStatus().ActivationStatus
 
         $licServerResult.LicenseServerId = $wmiClass.GetLicenseServerID().sLicenseServerId
-        write-host "license server id: $($licServerResult.LicenseServerId)`r`n"
-        write-host "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)`r`n"
-        write-host "is ls on dc: $($wmiClass.IsLSonDC().OnDC)`r`n"
-        write-host "is ls published in AD: $($wmiClass.IsLSPublished().Published)`r`n"
-        write-host "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)`r`n"
-        write-host "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)`r`n"
-        write-host "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)`r`n"
-        write-host "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)`r`n"
-    }
-
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSIssuedLicense $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSIssuedLicense -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
-
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseKeyPack $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseKeyPack -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
-    $licServerResult.KeyPacksCount = ($rWmiLS | ? TypeAndModel -Cmatch "RDS Per ").Count
-    #$licServerResult.CalsPerUserTotal = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per User").TotalLicenses | measure-object -Sum).Sum
-    $licServerResult.CalsPerUserAvailable = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per User").AvailableLicenses | measure-object -Sum).Sum
-    $licServerResult.CalsPerUserUsed = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per User").IssuedLicenses | measure-object -Sum).Sum 
-    $licServerResult.CalsPerUserTotal = $licServerResult.CalsPerUserAvailable + $licServerResult.CalsPerUserUsed
+        log-info "license server id: $($licServerResult.LicenseServerId)"
+        log-info "is ls in ts ls group in AD: $($wmiClass.IsLSinTSLSGroup([System.Environment]::UserDomainName).IsMember)"
+        log-info "is ls on dc: $($wmiClass.IsLSonDC().OnDC)"
+        log-info "is ls published in AD: $($wmiClass.IsLSPublished().Published)"
+        log-info "is ls registered to SCP: $($wmiClass.IsLSRegisteredToSCP().Registered)"
+        log-info "is ls security group enabled: $($wmiClass.IsLSSecGrpGPEnabled().Enabled)"
+        log-info "is ls secure access allowed: $($wmiClass.IsSecureAccessAllowed($rdshServer).Allowed)"
+        log-info "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
     
-    #$licServerResult.CalsPerDeviceTotal = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").TotalLicenses | measure-object -Sum).Sum
-    $licServerResult.CalsPerDeviceAvailable = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").AvailableLicenses | measure-object -Sum).Sum
-    $licServerResult.CalsPerDeviceUsed = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").IssuedLicenses | measure-object -Sum).Sum
-    $licServerResult.CalsPerDeviceTotal = $licServerResult.CalsPerDeviceAvailable + $licServerResult.CalsPerDeviceUsed
+        $dbPath = "\\$licServer\admin$\system32\lserver"
+        if(test-path $dbPath)
+        {
+            log-info "-----------------------------------------"
+            log-info "License Database $($licServer)"
+            log-info "-----------------------------------------"
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseReport $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReport -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
+            log-info "$(Get-ChildItem -Path $dbPath -Recurse | out-string)"
+            log-info "$(icacls $dbPath /T /C | out-string)"
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseReportEntry $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportEntry -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
+        }
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseReportFailedPerUserEntry $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportFailedPerUserEntry -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
+        log-info "-----------------------------------------"
+        log-info "Win32_TSLicenseKeyPack $($licServer)"
+        log-info "-----------------------------------------"
+        $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseKeyPack -ComputerName $licServer
+        log-info "$($rWmiLS | fl * | out-string)"
+        $licServerResult.KeyPacksCount = ($rWmiLS | ? TypeAndModel -Cmatch "RDS Per ").Count
+        #$licServerResult.CalsPerUserTotal = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per User").TotalLicenses | measure-object -Sum).Sum
+        $licServerResult.CalsPerUserAvailable = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per User").AvailableLicenses | measure-object -Sum).Sum
+        $licServerResult.CalsPerUserUsed = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per User").IssuedLicenses | measure-object -Sum).Sum 
+        $licServerResult.CalsPerUserTotal = $licServerResult.CalsPerUserAvailable + $licServerResult.CalsPerUserUsed
+    
+        #$licServerResult.CalsPerDeviceTotal = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").TotalLicenses | measure-object -Sum).Sum
+        $licServerResult.CalsPerDeviceAvailable = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").AvailableLicenses | measure-object -Sum).Sum
+        $licServerResult.CalsPerDeviceUsed = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").IssuedLicenses | measure-object -Sum).Sum
+        $licServerResult.CalsPerDeviceTotal = $licServerResult.CalsPerDeviceAvailable + $licServerResult.CalsPerDeviceUsed
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseReportFailedPerUserSummaryEntry $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportFailedPerUserSummaryEntry -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
+        if($showCalInfo)
+        {
+            log-info "-----------------------------------------"
+            log-info "Win32_TSIssuedLicense $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSIssuedLicense -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseReportPerDeviceEntry $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportPerDeviceEntry -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
+            log-info "-----------------------------------------"
+            log-info "Win32_TSLicenseReport $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReport -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
 
-    write-host "-----------------------------------------`r`n"
-    write-host "Win32_TSLicenseReportSummaryEntry $($licServer)`r`n"
-    write-host "-----------------------------------------`r`n"
-    $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportSummaryEntry -ComputerName $licServer
-    write-host "$($rWmiLS | fl * | out-string)`r`n"
+            log-info "-----------------------------------------"
+            log-info "Win32_TSLicenseReportEntry $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportEntry -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
+
+            log-info "-----------------------------------------"
+            log-info "Win32_TSLicenseReportFailedPerUserEntry $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportFailedPerUserEntry -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
+
+            log-info "-----------------------------------------"
+            log-info "Win32_TSLicenseReportFailedPerUserSummaryEntry $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportFailedPerUserSummaryEntry -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
+
+            log-info "-----------------------------------------"
+            log-info "Win32_TSLicenseReportPerDeviceEntry $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportPerDeviceEntry -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
+
+            log-info "-----------------------------------------"
+            log-info "Win32_TSLicenseReportSummaryEntry $($licServer)"
+            log-info "-----------------------------------------"
+            $rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseReportSummaryEntry -ComputerName $licServer
+            log-info "$($rWmiLS | fl * | out-string)"
+        }
+    }
 
     try
     {
@@ -537,14 +565,14 @@ function check-licenseServer([string] $licServer)
     }
 
     $retVal = $retVal -band $licServerResult.CanPingLicenseServer
-    write-host "Can ping license server? $([bool]$ret)`r`n"
+    log-info "Can ping license server? $([bool]$ret)"
  
     $licServerResult.CanAccessLicenseServer = [bool]$rWmi.CanAccessLicenseServer($licServer).AccessAllowed
     $retVal = $retVal -band $licServerResult.CanAccessLicenseServer
-    write-host "Can access license server? $($licServerResult.CanAccessLicenseServer)`r`n"
+    log-info "Can access license server? $($licServerResult.CanAccessLicenseServer)"
  
     # check named pipe
-    write-host "checking named pipe HYDRALSPIPE. if script hangs here, there is a problem connecting to pipe.`r`n"
+    log-info "checking named pipe HYDRALSPIPE. if script hangs here, there is a problem connecting to pipe."
     $job = Start-Job -Name "namedpipecheck" -ScriptBlock {
         param($licServer)
         try
@@ -552,11 +580,11 @@ function check-licenseServer([string] $licServer)
             $clientPipe = New-Object IO.Pipes.NamedPipeClientStream($licServer, "HYDRALSPIPE", [IO.Pipes.PipeDirection]::InOut)
             $clientPipe.Connect()
             $pipeReader = New-Object IO.StreamReader($clientPipe)
-            write-host "job:Can access named pipe? true`r`n"
+            log-info "job:Can access named pipe? true"
         }
         catch
         {
-            write-host "job:Can access named pipe? false`r`n"
+            log-info "job:Can access named pipe? false"
         }
         finally
         {
@@ -566,7 +594,7 @@ function check-licenseServer([string] $licServer)
     } -ArgumentList ($licServer)
 
     $count = 0
-    while($true -and $job -and $job.State -ne "Completed" -and $count -lt 5)
+    while($job -and $job.State -ne "Completed" -and $count -lt 5)
     {
         $jobInfo = get-job -Name $job.Name
         receive-job -Job $jobInfo | Out-Null
@@ -576,9 +604,7 @@ function check-licenseServer([string] $licServer)
 
     if($count -eq 5)
     {
-        # pipe failed. cleanup
-        $jobInfo = get-job -Name $job.Name
-        Remove-Job -Job $jobInfo -Force
+        # pipe failed.
         $licServerResult.CanAccessNamedPipe = $false
     }
     else
@@ -586,9 +612,15 @@ function check-licenseServer([string] $licServer)
         $licServerResult.CanAccessNamedPipe = $true
     }
 
-    write-host "Can access named pipe? $($licServerResult.CanAccessNamedPipe)`r`n"
+    if($jobInfo = get-job -Name $job.Name)
+    {
+        Stop-Job -Job $jobInfo
+        Remove-Job -Job $jobInfo -Force
+    }
 
-    write-host "checking rpc endpoint mapper`r`n"
+    log-info "Can access named pipe? $($licServerResult.CanAccessNamedPipe)"
+
+    log-info "checking rpc endpoint mapper"
 
     if(Test-NetConnection -Port 135 -ComputerName $licServer)
     {
@@ -599,7 +631,7 @@ function check-licenseServer([string] $licServer)
         $licServerResult.CanAccessRpcEpt = $false
     }
 
-    write-host "Can access rpc port mapper? $($licServerResult.CanAccessRpcEpt)`r`n"
+    log-info "Can access rpc port mapper? $($licServerResult.CanAccessRpcEpt)"
 
     $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
     switch($ret.TsToLsConnectivityStatus)
@@ -621,7 +653,7 @@ function check-licenseServer([string] $licServer)
     
     $licServerResult.TsToLsConnectivityStatus = $retName
     $licServerResult.Result = [bool]($retVal -band ($ret.TsToLsConnectivityStatus -eq 9 -or $ret.TsToLsConnectivityStatus -eq 11))
-    write-host "license connectivity status: $($licServerResult.Result)`r`n"
+    log-info "license connectivity status: $($licServerResult.Result)"
     
     return $licServerResult
 }
@@ -629,7 +661,7 @@ function check-licenseServer([string] $licServer)
 # ----------------------------------------------------------------------------------------------------------------
 function check-user ([string] $user)
 {
-    write-host "checking user in AD: $($user)`r`n"
+    log-info "checking user in AD: $($user)"
 
     try
     {
@@ -653,24 +685,24 @@ function check-user ([string] $user)
 
         if($colResults.Count -lt 1)
         {
-            write-host "unable to find user:$($user)`r`n"
+            log-info "unable to find user:$($user)"
             return $false
         }
 
         foreach ($objResult in $colResults)
         {
-            write-host "-----------------------------------------`r`n"
-            write-host "AD user:$($objresult.Properties["adspath"])`r`n"
-            write-host "RDS CAL expire date:$($objresult.Properties["mstsexpiredate"])`r`n"
-            write-host "RDS License Server Identity:$($objresult.Properties["mstsmanagingls"])`r`n"
+            log-info "-----------------------------------------"
+            log-info "AD user:$($objresult.Properties["adspath"])"
+            log-info "RDS CAL expire date:$($objresult.Properties["mstsexpiredate"])"
+            log-info "RDS License Server Identity:$($objresult.Properties["mstsmanagingls"])"
         }
         
-        write-host "found user:$($user)`r`n"
+        log-info "found user:$($user)"
         return $true
     }
     catch
     {
-        write-host "exception trying to find user:$($user)`r`n"
+        log-info "exception trying to find user:$($user)"
         $error.Clear()
         return $false
     }
@@ -687,21 +719,21 @@ function get-update($updateUrl)
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
         {
-            write-host "updating new script`r`n"
+            log-info "updating new script"
             [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
-            write-host "restart to use new script. exiting.`r`n"
+            log-info "restart to use new script. exiting."
             exit
         }
         else
         {
-            write-host "script is up to date`r`n"
+            log-info "script is up to date"
         }
         
         return $true
     }
     catch [System.Exception] 
     {
-        write-host "get-update:exception: $($error)`r`n"
+        log-info "get-update:exception: $($error)"
         $error.Clear()
         return $false    
     }
@@ -728,7 +760,7 @@ function get-workingDirectory()
     else
     {
         $retVal = (Get-Location).path
-        write-host "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used.`r`n"
+        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
         
     } 
     
@@ -747,12 +779,12 @@ function get-sysInternalsUtility ([string] $utilityName)
         {
             $sysUrl = "http://live.sysinternals.com/$($utilityName)"
 
-            write-host "Sysinternals process psexec.exe is needed for this option!`r`n" -ForegroundColor Yellow
+            log-info "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
             if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
             {
                 $webClient = new-object System.Net.WebClient
                 [void]$webClient.DownloadFile($sysUrl, $destFile)
-                write-host "sysinternals utility $($utilityName) downloaded to $($destFile)`r`n"
+                log-info "sysinternals utility $($utilityName) downloaded to $($destFile)"
             }
             else
             {
@@ -764,7 +796,7 @@ function get-sysInternalsUtility ([string] $utilityName)
     }
     catch
     {
-        write-host "Exception downloading $($utilityName): $($error)`r`n"
+        log-info "Exception downloading $($utilityName): $($error)"
         $error.Clear()
         return [string]::Empty
     }
@@ -926,7 +958,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
     $Error.Clear()
-    write-host "Running process $processName $arguments`r`n"
+    log-info "Running process $processName $arguments"
     $exitVal = 0
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo.UseShellExecute = !$wait
@@ -961,14 +993,22 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     }
     elseif($wait)
     {
-        write-host "Error:Process ended before capturing output.`r`n"
+        log-info "Error:Process ended before capturing output."
     }
     
     $exitVal = $process.ExitCode
-    write-host "Running process exit $($processName) : $($exitVal)`r`n"
+    log-info "Running process exit $($processName) : $($exitVal)"
     $Error.Clear()
     return $stdOut
 }
+# ----------------------------------------------------------------------------------------------------------------
+function log-info($data)
+{
+    $data = "$([DateTime]::Now):$($data)"
+    write-host ($data | out-string)
+    out-file -Append -InputObject ($data | out-string) -FilePath $logFile
+}
+
 
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
@@ -979,7 +1019,7 @@ function runas-admin()
     }
     elseif (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
-        write-host "please restart script as administrator. exiting...`r`n"
+        log-info "please restart script as administrator. exiting..."
        return $false
     }
 
