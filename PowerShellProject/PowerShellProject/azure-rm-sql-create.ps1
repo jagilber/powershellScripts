@@ -23,8 +23,9 @@
 .NOTES  
    File Name  : azure-rm-sql-create.ps1
    Author     : jagilber
-   Version    : 170516 added -generateUniqueName
+   Version    : 170520 adding to wiki
    History    : 
+                170516 added -generateUniqueName
                 170514 added description
 .EXAMPLE  
     .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
@@ -39,6 +40,9 @@
 .PARAMETER serverName
     if specified, will check and if not exists, create new sql server. if named sql server exists, existing sql server will be used. 
     if not specified, or not exists, will prompt for name or to generate random name.
+
+.PARAMETER databaseName
+    name of database to create
 
 .PARAMETER adminUserName
     if specified, will be used for sql administrator logon.
@@ -55,29 +59,40 @@
 
 .PARAMETER generateUniqueName
     if specified, will generate random sql server name which have to be globally unique
+
+.PARAMETER nsgStartIpAllow
+    if specified, ip address will be the starting range of ip addresses to allow
+
+.PARAMETER nsgEndIpAllow
+    if specified, ip address will be the ending range of ip addresses to allow
+
+.PARAMETER maskPassword
+    if specified, will not display provided password in connection string output
 #>  
 
 param(
-[Parameter(Mandatory=$true)]
-[string]$resourceGroupName,
-[Parameter(Mandatory=$true)]
-[string]$location,
-[Parameter(Mandatory=$false)]
-[string]$serverName,
-[Parameter(Mandatory=$false)]
-[string]$adminUserName = "sql-administrator",
-[Parameter(Mandatory=$true)]
-[string]$adminPassword,
-[Parameter(Mandatory=$false)]
-[pscredential]$credentials,
-[Parameter(Mandatory=$false)]
-[string]$nsgStartIpAllow = "0.0.0.0",
-[Parameter(Mandatory=$false)]
-[string]$nsgEndIpAllow = "255.255.255.255",
-[Parameter(Mandatory=$true)]
-[string]$databaseName,
-[Parameter(Mandatory=$false)]
-[switch]$generateUniqueName
+    [Parameter(Mandatory=$true)]
+    [string]$resourceGroupName,
+    [Parameter(Mandatory=$true)]
+    [string]$location,
+    [Parameter(Mandatory=$false)]
+    [string]$serverName,
+    [Parameter(Mandatory=$false)]
+    [string]$adminUserName = "sql-administrator",
+    [Parameter(Mandatory=$true)]
+    [string]$adminPassword,
+    [Parameter(Mandatory=$false)]
+    [pscredential]$credentials,
+    [Parameter(Mandatory=$false)]
+    [string]$nsgStartIpAllow = "0.0.0.0",
+    [Parameter(Mandatory=$false)]
+    [string]$nsgEndIpAllow = "255.255.255.255",
+    [Parameter(Mandatory=$true)]
+    [string]$databaseName,
+    [Parameter(Mandatory=$false)]
+    [switch]$generateUniqueName,
+    [Parameter(Mandatory=$false)]
+    [switch]$maskPassword
 )
 
 $erroractionpreference = "Continue"
@@ -155,42 +170,39 @@ function main()
         $servername = read-host "enter servername to use for new database or leave empty to generate random name"
     }
 
-    if(!$servername -and $generateUniqueName)
+    check-credentials
+
+    $created = create-database
+    if(!$created -and $generateUniqueName)
     {
-        $servername = "sql-server-$(Get-Random)"
+        # retry 1 time in case of server name issue or db exists on server specified and -generateUniqueName was passed
+        log-info "clearing server name and retrying 1 time"
+        $servername = ""
+        $created = create-database
     }
 
-    if($sqlServersAvailable.Count -gt 0 -and $sqlServersAvailable.ServerName -imatch $servername)
-    {
-        $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
-            -ResourceGroupName $resourceGroupName `
-            -ServerName $servername `
-            -ErrorAction SilentlyContinue
-    }
-    else
-    {
-        $createSqlServer = $true
-    }
+    log-info "finished"
 
-    log-info "checking sql db $($databaseName) on server $($servername)"
-    $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
-        -ResourceGroupName $resourceGroupName `
-        -ServerName $servername `
-        -ErrorAction SilentlyContinue
+    if($created)
+    {
+        if($maskPassword)
+        {
+            $adminPassword = "{enter_sql_password_here}"
+        }
 
-    if(!$sqlDbAvailable)
-    {
-        $CreateSqlDatabase = $true
-    }
-    else
-    {
-        log-info "database $($databasename) already exists on server $($servername). exiting"
-        return
+        log-info "connection string ADO:`r`nServer=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID=$($adminUserName);Password=$($adminPassword);MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        $odbcString = "connection string ODBC Native client:`r`nDRIVER=SQL Server Native Client 11.0;Server=tcp:$($servername).database.windows.net,1433;Database=$($databaseName);Uid=$($adminUserName)@$($servername);Pwd=$($adminPassword);Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+        log-info $odbcString
+
+        return $odbcString
     }
 
-    log-info "using server name $($servername)"
-    log-info "creating sql server : $($createSqlServer) creating sql db : $($CreateSqlDatabase)"
+    return $false
+}
 
+# ----------------------------------------------------------------------------------------------------------------
+function check-credentials()
+{
     log-info "checking adminUserName account name $($adminUsername)"
     if($adminUsername.ToLower() -eq "admin" -or $adminUsername.ToLower() -eq "administrator")
     {
@@ -246,43 +258,109 @@ function main()
         exit 1
     }
 
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function create-database()
+{
+    if(!$servername -and $generateUniqueName)
+    {
+        $servername = "sql-server-$(Get-Random)"
+    }
+
+    if($sqlServersAvailable.Count -gt 0 -and $sqlServersAvailable.ServerName -imatch $servername)
+    {
+        $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
+            -ResourceGroupName $resourceGroupName `
+            -ServerName $servername `
+            -ErrorAction SilentlyContinue
+    }
+    else
+    {
+        $createSqlServer = $true
+    }
+
+    log-info "checking sql db $($databaseName) on server $($servername)"
+    $sqlDbAvailable = Get-AzureRmSqlDatabase -DatabaseName $databaseName `
+        -ResourceGroupName $resourceGroupName `
+        -ServerName $servername `
+        -ErrorAction SilentlyContinue
+
+    if(!$sqlDbAvailable)
+    {
+        $CreateSqlDatabase = $true
+    }
+    else
+    {
+        log-info "database $($databasename) already exists on server $($servername). exiting"
+        return $false
+    }
+
+    log-info "using server name $($servername)"
+    log-info "creating sql server : $($createSqlServer) creating sql db : $($CreateSqlDatabase)"
+
+
     $error.Clear()
     try
     {
         if($createSqlServer)
         {
             log-info "create a logical server"
-            New-AzureRmSqlServer -ResourceGroupName $resourceGroupName `
+            $ret = New-AzureRmSqlServer -ResourceGroupName $resourceGroupName `
                 -ServerName $servername `
                 -Location $location `
                 -SqlAdministratorCredentials $global:credential
 
+            if($error)
+            {
+                log-info "error creating sql server. returning: $($error)"
+                $error.Clear()
+                return $false
+            }
+
+            log-info "create a logical server result: $($ret | format-list * | Out-String)"
             log-info "configure a server firewall rule"
-            New-AzureRmSqlServerFirewallRule -ResourceGroupName $resourcegroupname `
+            $ret = New-AzureRmSqlServerFirewallRule -ResourceGroupName $resourcegroupname `
                 -ServerName $servername `
                 -FirewallRuleName "AllowSome" -StartIpAddress $nsgStartIpAllow -EndIpAddress $nsgEndIpAllow
+
+            if($error)
+            {
+                log-info "error creating sql server. returning: $($error)"
+                $error.Clear()
+                return $false
+            }
+
+            log-info "configure a logical server firewall result: $($ret | format-list * | Out-String)"
         }
 
         if($CreateSqlDatabase)
         {
             log-info "create a blank database"
 
-            New-AzureRmSqlDatabase  -ResourceGroupName $resourceGroupName `
+            $ret = New-AzureRmSqlDatabase  -ResourceGroupName $resourceGroupName `
                 -ServerName $servername `
                 -DatabaseName $databasename `
                 -RequestedServiceObjectiveName "S0"
+
+            if($error)
+            {
+                log-info "error creating sql database. returning: $($error)"
+                $error.Clear()
+                return $false
+            }
+
+            log-info "create database result: $($ret | format-list * | Out-String)"
+
         }
 
-        log-info "connection string ADO:`r`nServer=tcp:$($servername).database.windows.net,1433;Initial Catalog=$($databaseName);Persist Security Info=False;User ID=$($adminUserName);Password=$($adminPassword);MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-        log-info "connection string ODBC:`r`nDriver={ODBC Driver 13 for SQL Server};Server=tcp:$($servername).database.windows.net,1433;Database=$($databaseName);Uid=$($adminUserName)@$($servername);Pwd=$($adminPassword);Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
-        log-info "connection string ODBC Native client:`r`nDRIVER=SQL Server Native Client 11.0;Server=tcp:$($servername).database.windows.net,1433;Database=$($databaseName);Uid=$($adminUserName)@$($servername);Pwd=$($adminPassword);Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+        return $true
     }
     catch
     {
         log-info "error:$($error)"
+        return $false
     }
-    
-    log-info "finished"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -309,6 +387,7 @@ function log-info($data)
         }
     }
 }
+
 # ----------------------------------------------------------------------------------------------------------------
 
 main
