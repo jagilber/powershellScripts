@@ -3,7 +3,7 @@
     powershell script to query azure rm logs used with quickstart template deployment
 
 .DESCRIPTION  
-    github: https://raw.githubusercontent.com/Microsoft/AZRDAV/master/Scripts/ARM/azure-rm-log-reader.ps1
+    github: https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-log-reader.ps1
     gallery: https://gallery.technet.microsoft.com/Azure-Resource-Manager-c1ce252c 
 
     script authenticates to azure rm 
@@ -18,8 +18,9 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170102.1 changed output formatting. switched to named pipe 
+   Version    : 170510 updated git links
    History    : 
+                170102.1 changed output formatting. switched to named pipe 
                 161205 v1
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
@@ -94,7 +95,7 @@ $global:scriptName = $null
 $global:subscription = $subscriptionId
 $global:timer = $null
 $global:window = $null
-$updateUrl = "https://raw.githubusercontent.com/Microsoft/AZRDAV/master/Scripts/ARM/azure-rm-log-reader.ps1"
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-log-reader.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -180,7 +181,7 @@ function main()
     
     if($update)
     {
-        if((git-update -updateUrl $updateUrl -destinationFile $global:scriptname))
+        if((get-update -updateUrl $updateUrl -destinationFile $global:scriptname))
         {
             write-host "file updated. restart script."
             return
@@ -649,7 +650,7 @@ function format-eventView($item,$listBoxItem)
 
         if($detail)
         {
-            write-host ($item | fl * | out-string) -BackgroundColor Red
+            write-host ($item | format-list * | out-string) -BackgroundColor Red
         }
     }
     else
@@ -659,7 +660,7 @@ function format-eventView($item,$listBoxItem)
 
         if($detail)
         {
-            write-host ($item | fl * | out-string) -BackgroundColor Green
+            write-host ($item | format-list * | out-string) -BackgroundColor Green
         }
     }
 
@@ -697,30 +698,36 @@ function get-localTime([string]$time)
 function get-subscriptions()
 {
     write-host "enumerating subscriptions"
+    $subList = @{}
     $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
-
+    $newSubFormat = (get-module AzureRM.Resources).Version.ToString() -ge "4.0.0"
+            
     if($subs.Count -gt 1)
     {
         [int]$count = 1
         foreach($sub in $subs)
         {
-            $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
+           if($newSubFormat)
+           { 
+                $message = "$($count). $($sub.name) $($sub.id)"
+                $id = $sub.id
+           }
+           else
+           {
+                $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
+                $id = $sub.SubscriptionId
+           }
+
             Write-Host $message
-            $subList.Add($count,$sub.SubscriptionId)
+            [void]$subList.Add($count,$id)
             $count++
         }
         
-        [int]$id = Read-Host ("Enter number for subscription to enumerate or 0 to query all:")
-        Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
-
-        if($id -ne 0)
-        {
-            $subs = Get-AzureRmSubscription -SubscriptionId $subList[$id].ToString() -WarningAction SilentlyContinue
-        }
+        [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
+        $null = Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
     }
-
-    write-verbose "enum-resourcegroup returning:$($subs | fl | out-string)"
-    return $subs
+    
+    return
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -812,7 +819,7 @@ function get-workingDirectory()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function git-update($updateUrl, $destinationFile)
+function get-update($updateUrl, $destinationFile)
 {
     write-host "get-update:checking for updated script: $($updateUrl)"
 
@@ -827,7 +834,7 @@ function git-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
@@ -1343,7 +1350,7 @@ function start-backgroundJob()
                     if($detail)
                     {
                         write-host "$([DateTime]::Now) job:finished processing event: $($pipeCommand) results count: $($jobResults.Count)"
-                        write-host "results: $($jobResults | fl * | out-string)"
+                        write-host "results: $($jobResults | format-list * | out-string)"
                     }
 
                     # output result object

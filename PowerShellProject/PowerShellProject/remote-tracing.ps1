@@ -21,13 +21,11 @@
 .NOTES  
    File Name  : remote-tracing.ps1  
    Author     : jagilber
-   Version    : 170507 fixed runas and other configurations
+   Version    : 170510 added get-update
    History    : 
-                170506 renamed and added netsh
-                170220 added -configurationFile and modified -machines to use file and -continue to continue on errors and -showDetial. cleaned output
-                160902 added -nodynamicpath for when being called from another script to centralize all files in common folder
-                160519 added switch verifier
-
+                170509 fixed issue with etw session name being blank with configurationfolder switch
+                170508.1 fixed issue with config file path and config file delete
+                170507 fixed runas and other configurations
 .EXAMPLE  
     .\remote-tracing.ps1 -action start -configurationFolder .\remoteDesktopServicesConfig 
     deploy ETW configuration file "single-session.xml" generated from configurationFolder ".\remoteDesktopServicesConfig" to local machine
@@ -112,6 +110,9 @@
 
 .PARAMETER continue
     if specified, will continue on error
+
+.PARAMETER getUpdate
+    If specified, will compare the current script against the location in github and will update if different.
     
 .PARAMETER machines
     the machine(s) to perform action on. If not specified, the local machine is used. Multiple machines should be separated by comma ',' with no spaces in between. 
@@ -150,6 +151,8 @@ Param(
     [string] $configurationFolder = "",
     [parameter(HelpMessage="Enter false to stop after error.")]
     [bool] $continue = $true,
+    [parameter(HelpMessage="Enter to check for script update.")]
+    [switch] $getUpdate,
     [parameter(HelpMessage="Enter single, comma separated, or file name with list of machines to manage")]
     [string[]] $machines,
     [parameter(HelpMessage="Select this switch to capture network tracing.")]
@@ -198,6 +201,7 @@ $networkEtlFile = "network.etl"
 $networkStartCommand = "netsh.exe trace start capture=yes report=disabled persistent=no filemode=circular overwrite=yes maxsize=1024 tracefile="
 $networkStopCommand = "netsh.exe trace stop"
 $processWaitMs = 10000
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/remote-tracing.ps1"
 $workingDir = ""
 
 add-type -TypeDefinition @'
@@ -231,6 +235,15 @@ function main()
     if(($ret = runas-admin) -eq $false)
     {
         exit 3
+    }
+
+    # see if new (different) version of file
+    if($getUpdate)
+    {
+        if(get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName)
+        {
+            exit
+        }
     }
 
     $workingDir = get-workingDirectory
@@ -267,10 +280,11 @@ function main()
     }
  
     # set full paths
+    $defaultConfigurationFile = $defaultConfigurationFile.Replace(".\","$(get-location)\")
     $configurationFile = $configurationFile.Replace(".\","$(get-location)\")
     $configurationFolder = $configurationFolder.Replace(".\","$(get-location)\")
-    $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($configurationFile)
     $singleEtwSessionNameFile = $configurationFile
+    $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($singleEtwSessionNameFile)
 
     # should pass configuration file or folder 
     if(![IO.File]::Exists($configurationFile) -and ![IO.Directory]::Exists($configurationFolder) -and !$network)
@@ -286,13 +300,6 @@ function main()
         $configurationFolder = verify-configFiles
     
         # delete previous singlesessionfile if it exists
-        if($useSingleEtwSession)
-        {
-            if([IO.File]::Exists($singleEtwSessionNameFile))
-            {
-                [IO.File]::Delete($singleEtwSessionNameFile);
-            }
-        }
 
         # enumerate config files
         $global:configurationFiles = [IO.Directory]::GetFiles($configurationFolder,"*.xml",[IO.SearchOption]::AllDirectories)
@@ -300,6 +307,13 @@ function main()
         if($useSingleEtwSession)
         {
             $singleEtwSessionNameFile  = $defaultConfigurationFile 
+            $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($singleEtwSessionNameFile)
+
+            if([IO.File]::Exists($singleEtwSessionNameFile))
+            {
+                [IO.File]::Delete($singleEtwSessionNameFile);
+            }
+
             # populate configurationFiles from configuration directory
             populate-configFiles -action $currentAction -configFiles $global:configurationFiles
         }
@@ -351,7 +365,7 @@ function main()
     # clean up    
     if(get-job)
     {
-        clean-jobs
+        clean-jobs -silent $true
     }
 
     # display file tree
@@ -426,19 +440,24 @@ function check-ProcessOutput([string] $output, [ActionType] $action, [bool] $sho
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function clean-jobs()
+function clean-jobs($silent = $false)
 {
     if(get-job)
     {
-        [string] $ret = read-host -Prompt "There are existing jobs, do you want to clear?[y:n]" 
-        if($ret -ieq "y")
+        if(!$silent)
         {
-            get-job 
-
-            while(get-job)
+            [string] $ret = read-host -Prompt "There are existing jobs, do you want to clear?[y:n]" 
+            if($ret -ieq "n")
             {
-                get-job | remove-job -Force
+                return
             }
+        }
+
+        get-job 
+
+        while(get-job)
+        {
+            get-job | remove-job -Force
         }
     }
 }
@@ -625,6 +644,47 @@ function get-workingDirectory()
     
     Set-Location $retVal | out-null
     return $retVal
+}
+
+#----------------------------------------------------------------------------
+function get-update($updateUrl, $destinationFile)
+{
+    log-info "get-update:checking for updated script: $($updateUrl)"
+
+    try 
+    {
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
+        $gitClean = [regex]::Replace($git, '\W+', "")
+
+        if(![IO.File]::Exists($destinationFile))
+        {
+            $fileClean = ""    
+        }
+        else
+        {
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
+        }
+
+        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        {
+            log-info "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
+        }
+        else
+        {
+            log-info "script is up to date"
+        }
+        
+        return $false
+        
+    }
+    catch [System.Exception] 
+    {
+        log-info "get-update:exception: $($error)"
+        $error.Clear()
+        return $false    
+    }
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -973,13 +1033,7 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
  
                         # will start now only for this boot
                         run-logman -arguments "import -n $($loggerName) -ets -s $($machine) -xml $($file)"
-                        #run-logman -arguments "start $($loggerName) -ets -s $($machine)" -shouldHaveSession $true
-                   
-                        # query to see session status. session should be there and running
-                        #if ($showDetail) 
-                        #{
-                            run-logman -arguments "query -ets -s $($machine)" -shouldHaveSession $true -sessionName $loggerName
-                        #}
+                        run-logman -arguments "query -ets -s $($machine)" -shouldHaveSession $true -sessionName $loggerName
                     }
  
                     ([ActionType]::stop) 
@@ -997,13 +1051,9 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
                         {
                             run-logman -arguments "delete $($fullloggerName) -ets -s $($machine)"
                         }
- 
-                        # query to verify session does not exist. session should be removed.
-                        #if ($showDetail) 
-                        #{
-                            run-logman -arguments "query -ets -s $($machine)" -shouldNotHaveSession $true -sessionName $loggerName
-                        #}
- 
+
+                        run-logman -arguments "query -ets -s $($machine)" -shouldNotHaveSession $true -sessionName $loggerName
+
                         # add etl files to list for copy back to local machine
                         if([IO.File]::Exists($etlFile))
                         {
@@ -1041,7 +1091,7 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
                 'name' = "netsh";
                 'wait' = $true;
                 'command' = "";
-                'workingDir' = $workingDir;
+                'workingDir' = $traceFolder.Replace("$",":");
             }
 
             switch($currentAction)
@@ -1159,9 +1209,8 @@ function run-wmiCommandJob($command, $machine)
     $functions = {
         function log-info($data)
         {
-            $data = "$([System.DateTime]::Now):$($data)`n"
-
-            Write-Host $data
+            $data = "$([System.DateTime]::Now):$($data)`n"
+            Write-Host $data
         }
     }
 
@@ -1177,12 +1226,12 @@ function run-wmiCommandJob($command, $machine)
 
         try
         {
-            log-info "running wmi command: $($command.command)"
+            log-info "running wmi command: $($command.command) from dir: $($command.workingDir)"
             $startup=[wmiclass]"Win32_ProcessStartup"
             $startup.Properties['ShowWindow'].value=$False
             # $ret = Invoke-WmiMethod -ComputerName $machine -Class Win32_Process -Name Create -Impersonation Impersonate -ArgumentList @($command.command, $command.workingDir, $startup)
-            $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
-            $ret = $wmi.Create($command.command, $command.workingDir, $startup)
+            $wmiP = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
+            $ret = $wmiP.Create($command.command, $command.workingDir, $startup)
     
             if($ret.ReturnValue -ne 0 -or $ret.ProcessId -eq 0)
             {

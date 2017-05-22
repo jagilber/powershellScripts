@@ -834,7 +834,7 @@ function get-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))

@@ -18,12 +18,13 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170315 changed documentation for eventlognamepattern. one example had eventlognames
+   Version    : 170518 added try catch to getlognames(). added -credentials (get-credential)
    History    : 
+                170315 changed documentation for eventlognamepattern. one example had eventlognames
                 170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
                 170206 fixed typos in $global:eventlogIdSQuery and $global:eventlogLevelSQuery
                 170124 setting job exception to detail. modifying check on -eventDetails. fixing 'unblock' issue
-                
+
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -173,6 +174,8 @@ Param(
     [switch] $clearEventLogs,
     [parameter(Position=0,Mandatory=$false,HelpMessage="Select to clear events after gather")]
     [switch] $clearEventLogsOnGather,
+    [parameter(HelpMessage="Enger ps credentials (get-credential)")]
+    [pscredential] $credentials,
     [parameter(HelpMessage="Enter days")]
     [int] $days = 0,
     [parameter(HelpMessage="Enable to debug script")]
@@ -780,42 +783,69 @@ function enable-logs($eventLogNames, $machine)
 function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
 {
     $filteredEventLogs = New-Object Collections.ArrayList
-
-    if(!$global:eventLogFiles)
+    try
     {
-        # query eventlog session
-        $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
-        $eventLogNames = $session.GetLogNames()
-    }
-    else
-    {
-        if([IO.File]::Exists($eventLogPath))
+        if(!$global:eventLogFiles)
         {
-            $eventLogNames = @($eventLogPath)
+            if(!$credentials)
+            {
+                # query eventlog session
+                $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
+                $eventLogNames = $session.GetLogNames()
+            }
+            else
+            {
+                $domain = [string]::Empty
+                if($credentials.UserName.Contains("\"))
+                {
+                    $domain = $credentials.UserName.Split("\")[0]
+                }
+                elseif($credentials.UserName.Contains("@"))
+                {
+                    $domain = $credentials.UserName.Split("@")[1]
+                }
+
+                # query eventlog session
+                $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine,$domain, $credentials.UserName, $credentials.Password, [Diagnostics.Eventing.Reader.SessionAuthentication]::Negotiate)
+                $eventLogNames = $session.GetLogNames()
+            }
         }
         else
         {
-            # query eventlog path
-            $eventLogNames = [IO.Directory]::GetFiles($eventLogPath, "*.evt*",[IO.SearchOption]::TopDirectoryOnly)
+            if([IO.File]::Exists($eventLogPath))
+            {
+                $eventLogNames = @($eventLogPath)
+            }
+            else
+            {
+                # query eventlog path
+                $eventLogNames = [IO.Directory]::GetFiles($eventLogPath, "*.evt*",[IO.SearchOption]::TopDirectoryOnly)
+            }
         }
-    }
 
-    [Text.StringBuilder] $sb = new-object Text.StringBuilder
-    [void]$sb.Appendline("")
+        [Text.StringBuilder] $sb = new-object Text.StringBuilder
+        [void]$sb.Appendline("")
 
-    foreach($eventLogName in $eventLogNames)
-    {
-        if (![regex]::IsMatch($eventLogName, $eventLogPattern ,[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
+        foreach($eventLogName in $eventLogNames)
         {
-            continue
+            if (![regex]::IsMatch($eventLogName, $eventLogPattern ,[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
+            {
+                continue
+            }
+
+            [void]$filteredEventLogs.Add($eventLogName)
         }
 
-        [void]$filteredEventLogs.Add($eventLogName)
+        [void]$sb.AppendLine("filtered logs count: $($filteredEventLogs.Count)")
+        log-info $sb.ToString()
+        return $filteredEventLogs
     }
-
-    [void]$sb.AppendLine("filtered logs count: $($filteredEventLogs.Count)")
-    log-info $sb.ToString()
-    return $filteredEventLogs
+    catch
+    {
+        log-info "exception reading event log names from $($machine): $($error)"
+        $error.Clear()
+        return $null
+    }
 }
 
 #----------------------------------------------------------------------------
@@ -1079,7 +1109,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         if($global:logStream -eq $null)
         {
             $global:logStream = new-object System.IO.StreamWriter ($logFile,$true)
-            $global:logTimer.Interval = 5000 #5 seconds  
+            $global:logTimer.Interval = 5000 #5 secondsÂ  
 
             Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
             { 
@@ -1092,7 +1122,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         }
 
         # reset timer
-        $global:logTimer.Interval = 5000 #5 seconds  
+        $global:logTimer.Interval = 5000 #5 secondsÂ  
         $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch {}
@@ -1150,6 +1180,13 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
 
         # filter log names
         $filteredLogs = filter-eventLogs -eventLogPattern $global:eventLogNameSearchPattern -machine $machine -eventLogPath $eventLogPath
+
+        if(!$filteredLogs)
+        {
+            log-info "error retrieving event log names from machine $($machine)"
+            $retval = $false
+            continue
+        }
 
         if(!$global:eventLogFiles)
         {
@@ -1209,7 +1246,7 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         }
     }
 
-    if($listen)
+    if($listen -and $retval)
     {
         log-info "listening for events from machines:"
 

@@ -32,6 +32,59 @@ function get-workingDirectory()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function get-subscriptions()
+{
+    write-host "enumerating subscriptions"
+    $subList = @{}
+    $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
+    $newSubFormat = (get-module AzureRM.Resources).Version.ToString() -ge "4.0.0"
+            
+    if($subs.Count -gt 1)
+    {
+        [int]$count = 1
+        foreach($sub in $subs)
+        {
+           if($newSubFormat)
+           { 
+                $message = "$($count). $($sub.name) $($sub.id)"
+                $id = $sub.id
+           }
+           else
+           {
+                $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
+                $id = $sub.SubscriptionId
+           }
+
+            Write-Host $message
+            [void]$subList.Add($count,$id)
+            $count++
+        }
+        
+        [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
+        $null = Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
+        
+        if($id -ne 0 -and $id -le $subs.count)
+        {
+            return $subList[$id]
+        }
+    }
+    elseif($subs.Count -eq 1)
+    {
+        if($newSubFormat)
+        {
+            [void]$subList.Add("1",$subs.Id)
+        }
+        else
+        {
+            [void]$subList.Add("1",$subs.SubscriptionId)
+        }
+    }
+
+    write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
+    return $subList.Values
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function get-sysInternalsUtility ([string] $utilityName)
 {
     try
@@ -72,7 +125,7 @@ $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/maste
 
 
 #----------------------------------------------------------------------------
-function git-update($updateUrl, $destinationFile)
+function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
 
@@ -87,7 +140,7 @@ function git-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if(([string]::Compare($gitClean, $fileClean) -ne 0))
