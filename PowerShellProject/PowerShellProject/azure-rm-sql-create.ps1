@@ -45,6 +45,10 @@
     .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -listAvailable
     list existing databases on sql-server-01 in resource group existingResourceGroup
 
+.EXAMPLE  
+    .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -serviceTier S0 -databaseName TestDB
+    create a new sql database TestDB on sql-server-01 using service tier S0
+
 .PARAMETER resourceGroupName
     required paramater for the resource group name for new database and sql server
 
