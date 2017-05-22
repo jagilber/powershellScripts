@@ -18,13 +18,14 @@
     
     https://aka.ms/azure-rm-sql-create.ps1
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-get-started-powershell
+    https://docs.microsoft.com/en-us/azure/sql-database/sql-database-performance-guidance
 
     minimum parameters : resource group, location, databaseName, adminPassword
  
 .NOTES  
    File Name  : azure-rm-sql-create.ps1
    Author     : jagilber
-   Version    : 170521 adding to wiki
+   Version    : 170522 adding to wiki
    History    : 
                 170516 added -generateUniqueName
                 170514 added description
@@ -87,6 +88,11 @@
 
 .PARAMETER listAvailable
     if specified, will list available sql servers and databases in resource gropup
+
+.PARAMETER serviceTier
+    if specified, will use the provided service tier.
+    by default, will use cheapest tier 'Basic'
+    https://docs.microsoft.com/en-us/azure/sql-database/sql-database-performance-guidance
 #>  
 
 param(
@@ -113,7 +119,9 @@ param(
     [Parameter(Mandatory=$false)]
     [switch]$maskPassword,
     [Parameter(Mandatory=$false)]
-    [switch]$listAvailable
+    [switch]$listAvailable,
+    [Parameter(Mandatory=$false)]
+    [string]$serviceTier="Basic" #cheapest
 )
 
 $erroractionpreference = "Continue"
@@ -295,6 +303,8 @@ function check-credentials()
 "@
             exit 1
         }
+
+        return $true
     }
     catch
     {
@@ -328,9 +338,6 @@ function create-database()
         return $false
     }
 
-    # for odbc string in case server wasnt created
-    $adminUserName = (enum-sqlServers -resourceGroup $resourceGroupName -sqlServer $script:servername).SqlAdministratorLogin
-
     if($sqlServersAvailable.Count -lt 1 -or $sqlServersAvailable.ServerName -inotmatch $script:servername)
     {
         $script:createSqlServer = $true
@@ -344,6 +351,9 @@ function create-database()
 
     if(!$script:createSqlServer)
     {
+        # for odbc string in case server wasnt created
+        $adminUserName = (enum-sqlServers -resourceGroup $resourceGroupName -sqlServer $script:servername).SqlAdministratorLogin
+
         # if database name specified / generated and it exists, exit
         $sqlDatabasesAvailable = @(enum-sqlDatabases -sqlServer $script:servername -resourceGroup $resourceGroupName)
 
@@ -419,7 +429,7 @@ function create-database()
             $ret = New-AzureRmSqlDatabase  -ResourceGroupName $resourceGroupName `
                 -ServerName $script:servername `
                 -DatabaseName $script:databaseName `
-                -RequestedServiceObjectiveName "S0"
+                -RequestedServiceObjectiveName $serviceTier
 
             if($error)
             {
@@ -529,7 +539,7 @@ function list-availableSqlServers()
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
 {
-    $data = $($data | format-list * | out-string)
+    $data = $($data | format-list * | out-string)
 
     if($data -imatch "error|warning|exception|fail|terminate")
     {
@@ -537,7 +547,7 @@ function log-info($data)
     }
     else
     {
-        write-host $data
+        write-host $data
     }
 
     out-file -Append -InputObject $data -FilePath $logFile
