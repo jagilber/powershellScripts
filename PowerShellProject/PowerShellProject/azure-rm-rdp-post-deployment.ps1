@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170519 fixed issue with idsEntry
+   Version    : 170524 another change for azurerm.resources coming back not as collection for single sub?
    History    : 
+                170519 fixed issue with idsEntry
                 170514 breaking change in get-azurermsubscription subscriptionname -> name, subscriptionid -> id
                 170405 cleaned up and added -rdWebUrl
                 161230 changed runas-admin to call powershell with -executionpolicy bypass
@@ -129,7 +130,7 @@ function main()
     $subscriptions = get-subscriptions
     $redisplay = $true
 
-    while($redisplay)
+    while($redisplay -and $subscriptions.Count -gt 0)
     {
         foreach($sub in $subscriptions)
         {
@@ -518,8 +519,8 @@ function get-subscriptions()
 {
     write-host "enumerating subscriptions"
     $subList = @{}
-    $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
-    $newSubFormat = (get-module AzureRM.Resources).Version.ToString() -ge "4.0.0"
+    $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue)
+    $newSubFormat = (get-module AzureRM.Resources -ListAvailable).Version.ToString() -ge "4.0.0"
             
     if($subs.Count -gt 1)
     {
