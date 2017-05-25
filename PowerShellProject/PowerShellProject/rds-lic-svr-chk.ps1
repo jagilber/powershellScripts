@@ -12,11 +12,12 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170519 fixed named pipe job not being removed
+   Version    : 170525 fixed logging
    History    : 
+                170519 fixed named pipe job not being removed
                 170426.2 added calpack info to summary
                 170426 fixed issue with x509 and for currently configured showing false when it was supposed to be true
-                170425 added rds role check and made summary more descriptive. fixed issue with x509 check
+
 
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
@@ -96,13 +97,10 @@ function main()
         $logFile = "$(Get-Location)\$($logFile)"
     }                                       
 
-#    Start-Transcript -Path $logFile -Force
-
     $MyInvocation.ScriptName
     # run as administrator
     if(!(runas-admin))
     {
-        Stop-Transcript 
         return
     }
     
@@ -116,13 +114,11 @@ function main()
         $psexec = get-sysInternalsUtility -utilityName "psexec.exe"
         if(![string]::IsNullOrEmpty($psexec))
         {
-            Stop-Transcript 
             run-process -processName $($psexec) -arguments "-accepteula -i -u `"nt authority\network service`" cmd.exe /c powershell.exe -noexit -executionpolicy Bypass -file $($MyInvocation.ScriptName) -checkUser `"$($checkUser)`" -logFile `"$($logFile)`" -licServer `"$($licServer)`" -rdshServer `"$($rdshServer)`"" -wait $false
             return
         }
         else
         {
-            Stop-Transcript 
             log-info "unable to download utility. exiting"
             return
         }
@@ -136,15 +132,15 @@ function main()
     log-info "-----------------------------------------"
     log-info "OS $($rdshServer)"
     log-info "-----------------------------------------"
-    $osVersion = read-reg -machine $licServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value CurrentVersion
-    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName
+    $osVersion = read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value CurrentVersion
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion' -value ProductName | Out-String)
 
     log-info "-----------------------------------------"
     log-info "INSTALLED FEATURES $($rdshServer)"
     log-info "-----------------------------------------"
     
     $features = Get-WindowsFeature -ComputerName $rdshServer | Where-Object Installed -eq $true
-    $features
+    log-info ($features | Out-String)
 
     if($features.Name.Contains("RDS-RD-Server"))
     {
@@ -160,7 +156,7 @@ function main()
     log-info "EVENTS $($rdshServer)"
     log-info "-----------------------------------------"
 
-    Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning")
+    log-info (Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning"))
 
     log-info "-----------------------------------------"
     log-info "REGISTRY $($rdshServer)"
@@ -168,26 +164,26 @@ function main()
 
     if($rdshServer -ilike $env:COMPUTERNAME -and $osVersion -gt 6.1) # does not like 2k8
     {
-        get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | Format-List *
-        get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | Format-List *
-        get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM\GracePeriod" -Audit | Format-List *
+        log-info (get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | Format-List * | Out-String)
+        log-info (get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | Format-List *| Out-String)
+        log-info (get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM\GracePeriod" -Audit | Format-List *| Out-String)
     }
     
-    read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server' -subKeySearch $false
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server' -subKeySearch $false)
     $hasX509 = (read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' -value "X509 Certificate").Length -gt 0
-    read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' 
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Control\Terminal Server\RCM' | Out-String)
     
-    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing'
-    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false
-    read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers'
-    read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\TermServLicensing' | Out-String)
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Terminal Server\TSAppAllowList' -subKeySearch $false | Out-String)
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SYSTEM\CurrentControlSet\Services\TermService\Parameters\LicenseServers\SpecifiedLicenseServers' | Out-String)
+    log-info (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Out-String)
     
     log-info "-----------------------------------------"
     log-info "Win32_TerminalServiceSetting $($rdshServer)"
     log-info "-----------------------------------------"
  
     $rWmi = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TerminalServiceSetting -ComputerName $rdshServer
-    $rWmi
+    log-info ($rWmi | Out-String)
 
     #lsdiag uses this to determine if app server or admin server
     if($rWmi.TerminalServerMode -eq 1)
@@ -232,7 +228,7 @@ function main()
     log-info "-----------------------------------------"
     
     $rWmiL = Get-WmiObject -Namespace root/cimv2/TerminalServices -Class Win32_TSDeploymentLicensing -ComputerName $rdshServer
-    $rWmiL
+    log-info ($rWmiL | Out-String)
     
     log-info "-----------------------------------------"
     log-info "checking wmi for lic server"
@@ -320,7 +316,7 @@ function main()
     }
 
     # show license info if this server is a license server
-    if($isLicServer -and !$licServersList.Contains($rdshServer))
+    if($isLicServer -and ($licServersList.Keys -inotmatch $rdshServer))
     {
         $licServersList.Add($rdshServer,(check-licenseServer -licServer $rdshServer))
     }
@@ -382,7 +378,7 @@ function main()
     if($isRdshServer)
     {
         $configuredCorrectly = ($licCheck -or $lsDiscovered) -and $hasX509 -and ($licenseMode -eq 2 -or $licenseMode -eq 4) `
-            -and $licServersList.Values.TsToLsConnectivityStatus.Contains("LS_CONNECTABLE_VALID")
+            -and $licServersList.Values.TsToLsConnectivityStatus -imatch "LS_CONNECTABLE_VALID"
     }
     else
     {
@@ -398,8 +394,6 @@ function main()
     log-info "`t During this time, the RDSH server will allow connections regardless if licensed or not."
     log-info "`t The internal Grace counter will ALWAYS count down to 0."
     log-info "`t This is regardless of RDSH server connectivity status to license server."
-  
- #   Stop-Transcript 
 
     log-info "-----------------------------------------"
     log-info "log file located here: $([IO.Path]::GetFullPath($logFile))"
@@ -622,7 +616,7 @@ function check-licenseServer([string] $licServer)
 
     log-info "checking rpc endpoint mapper"
 
-    if(Test-NetConnection -Port 135 -ComputerName $licServer)
+    if((Test-NetConnection -Port 135 -ComputerName $licServer).TcpTestSucceeded)
     {
         $licServerResult.CanAccessRpcEpt = $true
     }
@@ -1004,7 +998,7 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
 {
-    $data = "$([DateTime]::Now):$($data)"
+    #$data = "$([DateTime]::Now):$($data)"
     write-host ($data | out-string)
     out-file -Append -InputObject ($data | out-string) -FilePath $logFile
 }
@@ -1028,3 +1022,4 @@ function runas-admin()
 
 # ----------------------------------------------------------------------------------------------------------------
 main
+    
