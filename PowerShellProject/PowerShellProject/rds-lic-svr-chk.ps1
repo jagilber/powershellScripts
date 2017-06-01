@@ -53,7 +53,7 @@
     this is useful as 'network service' is how the rdsh server and license server communicate (as themselves). 
     this may show issues where running under logged on credentials may not.
 
-.PARAMETER showCalInfo
+.PARAMETER enumCals
     If specified, User / Device cal information will be enumerated as well as license report information
 
 #>  
@@ -65,7 +65,7 @@ Param(
     [string] $logFile = "rds-lic-svr-chk.txt",
     [string] $rdshServer = $env:COMPUTERNAME,
     [switch] $runAsNetworkService,
-    [switch] $showCalInfo
+    [switch] $enumCals
 )
 
 clear-Host
@@ -92,27 +92,27 @@ function main()
 { 
     get-workingDirectory
 
-    if(!$logFile.Contains("\"))
+    if (!$logFile.Contains("\"))
     {
         $logFile = "$(Get-Location)\$($logFile)"
     }                                       
 
     $MyInvocation.ScriptName
     # run as administrator
-    if(!(runas-admin))
+    if (!(runas-admin))
     {
         return
     }
     
-    if($getUpdate)
+    if ($getUpdate)
     {
         get-update -updateUrl $updateUrl
     }
 
-    if($runAsNetworkService)
+    if ($runAsNetworkService)
     {
         $psexec = get-sysInternalsUtility -utilityName "psexec.exe"
-        if(![string]::IsNullOrEmpty($psexec))
+        if (![string]::IsNullOrEmpty($psexec))
         {
             run-process -processName $($psexec) -arguments "-accepteula -i -u `"nt authority\network service`" cmd.exe /c powershell.exe -noexit -executionpolicy Bypass -file $($MyInvocation.ScriptName) -checkUser `"$($checkUser)`" -logFile `"$($logFile)`" -licServer `"$($licServer)`" -rdshServer `"$($rdshServer)`"" -wait $false
             return
@@ -124,7 +124,7 @@ function main()
         }
     }
 
-    if(![string]::IsNullOrEmpty($licServer))
+    if (![string]::IsNullOrEmpty($licServer))
     {
         $licServers = @($licServer)
     }
@@ -142,12 +142,12 @@ function main()
     $features = Get-WindowsFeature -ComputerName $rdshServer | Where-Object Installed -eq $true
     log-info ($features | Out-String)
 
-    if($features.Name.Contains("RDS-RD-Server"))
+    if ($features.Name.Contains("RDS-RD-Server"))
     {
         $isRdshServer = $true
     }
 
-    if($features.Name.Contains("RDS-Licensing"))
+    if ($features.Name.Contains("RDS-Licensing"))
     {
         $isLicServer = $true
     }
@@ -156,13 +156,13 @@ function main()
     log-info "EVENTS $($rdshServer)"
     log-info "-----------------------------------------"
 
-    log-info (Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning"))
+    log-info (Get-EventLog -LogName System -Source TermService -Newest 10 -ComputerName $rdshServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error", "Warning"))
 
     log-info "-----------------------------------------"
     log-info "REGISTRY $($rdshServer)"
     log-info "-----------------------------------------"
 
-    if($rdshServer -ilike $env:COMPUTERNAME -and $osVersion -gt 6.1) # does not like 2k8
+    if ($rdshServer -ilike $env:COMPUTERNAME -and $osVersion -gt 6.1) # does not like 2k8
     {
         log-info (get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Audit | Format-List * | Out-String)
         log-info (get-acl -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\RCM" -Audit | Format-List *| Out-String)
@@ -186,7 +186,7 @@ function main()
     log-info ($rWmi | Out-String)
 
     #lsdiag uses this to determine if app server or admin server
-    if($rWmi.TerminalServerMode -eq 1)
+    if ($rWmi.TerminalServerMode -eq 1)
     {
         $isRdshServer = $true
         log-info "TerminalServerMode:1 == Remote Desktop Session Host"
@@ -207,10 +207,10 @@ function main()
 
     $lsList = $rWmi.FindLicenseServers().LicenseServersList
     
-    foreach($ls in $lsList)
+    foreach ($ls in $lsList)
     {
         #lsdiag uses this
-        if(![string]::IsNullOrEmpty($ls.LicenseServer))
+        if (![string]::IsNullOrEmpty($ls.LicenseServer))
         {
             $lsDiscovered = $true
         }
@@ -236,36 +236,36 @@ function main()
     $licMode = $rWmi.LicensingType
     log-info "wmi lic servers: $($tempServers) license mode: $($licMode)"
     
-    if($tempServers.Length -gt 0)
+    if ($tempServers.Length -gt 0)
     {
         $licenseConfigSource = 'wmi'
     }
 
     $licenseMode = $licMode    
     
-    if($licServers.Length -lt 1)
+    if ($licServers.Length -lt 1)
     {
         $licServers = $tempServers;
     }
  
     log-info "-----------------------------------------"
     log-info "checking gpo for lic server"
-    $tempServers = @(([string](read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",",[StringSplitOptions]::RemoveEmptyEntries))
+    $tempServers = @(([string](read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicenseServers')).Split(",", [StringSplitOptions]::RemoveEmptyEntries))
     $licMode = (read-reg -machine $rdshServer -hive $HKLM -key 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -value 'LicensingMode')
     log-info "gpo lic servers: $($tempServers) license mode: $($licMode)"
 
-    if($rWmi.PolicySourceLicensingType)
+    if ($rWmi.PolicySourceLicensingType)
     {
         $licenseConfigSource = 'policy'
         $licenseMode = $licMode    
     }
     
-    if([string]::IsNullOrEmpty($licServer) -and ($rWmi.PolicySourceConfiguredLicenseServers -or $rWmi.PolicySourceDirectConnectLicenseServers))
+    if ([string]::IsNullOrEmpty($licServer) -and ($rWmi.PolicySourceConfiguredLicenseServers -or $rWmi.PolicySourceDirectConnectLicenseServers))
     {
         $licServers = $tempServers;        
     }
     
-    if($rdshServer -ilike $env:COMPUTERNAME)
+    if ($rdshServer -ilike $env:COMPUTERNAME)
     {
         log-info "-----------------------------------------"
         log-info "checking local powershell for license server"
@@ -273,52 +273,52 @@ function main()
         $licMode = (Get-RDLicenseConfiguration).Mode
         log-info "powershell license servers: $($tempServers) license mode: $($licMode)"
 
-        if($tempServers.Length -gt 0)
+        if ($tempServers.Length -gt 0)
         {
             $licenseConfigSource = 'powershell/gui'
         }
     }
 
-    if($licServers.Length -lt 1)
+    if ($licServers.Length -lt 1)
     {
         $licServers = $tempServers;
     }
     
-    if($licenseMode -eq 0)
+    if ($licenseMode -eq 0)
     {
         $licenseMode = $licMode
     }
 
-    if(![string]::IsNullOrEmpty($checkUser))
+    if (![string]::IsNullOrEmpty($checkUser))
     {
         log-info "-----------------------------------------"
         check-user -user $checkUser
         log-info "-----------------------------------------"
     }
  
-    if($licServers.Length -lt 1)
+    if ($licServers.Length -lt 1)
     {
         log-info "license server has not been configured for remote desktop services for this server!"
     }
     else
     {
         $licCheck = $true
-        foreach($server in $licServers)
+        foreach ($server in $licServers)
         {
             # issue where server name has space in front but not sure why so adding .Trim() for now
-            if($server -ne $server.Trim())
+            if ($server -ne $server.Trim())
             {
                 log-info "warning:whitespace characters on server name"    
             }
 
-            $licServersList.Add($server.Trim(),(check-licenseServer -licServer $server.Trim()))
+            $licServersList.Add($server.Trim(), (check-licenseServer -licServer $server.Trim()))
         }
     }
 
     # show license info if this server is a license server
-    if($isLicServer -and ($licServersList.Keys -inotmatch $rdshServer))
+    if ($isLicServer -and ($licServersList.Keys -inotmatch $rdshServer))
     {
-        $licServersList.Add($rdshServer,(check-licenseServer -licServer $rdshServer))
+        $licServersList.Add($rdshServer, (check-licenseServer -licServer $rdshServer))
     }
 
     try
@@ -337,45 +337,50 @@ function main()
     log-info "server $($rdshServer) is license server? $($isLicServer)"
     log-info "license server info:"
 
-    foreach($serverInfo in $licServersList.GetEnumerator())
+    foreach ($serverInfo in $licServersList.GetEnumerator())
     {
         log-info "license server name: $($serverInfo.Key)"
         $serverInfo.Value.GetEnumerator() | sort-object Name | Format-Table
     }
 
-    switch($licenseMode)
+    switch ($licenseMode)
     {
-        0 { 
+        0
+        { 
             $modeString = "0 (should not be set to this!)" 
-          }
-        1 { 
+        }
+        1
+        { 
             $modeString = "Personal Desktop (admin mode 2 session limit)."
 
-            if($isrdshServer)
+            if ($isrdshServer)
             {
-               $modeString += " (should not be set to this!)"
+                $modeString += " (should not be set to this!)"
             }
-          }
-        2 { 
+        }
+        2
+        { 
             $modeString = "Per Device"
-          }
-        4 { 
+        }
+        4
+        { 
             $modeString = "Per User"
-          }
-        5 { 
+        }
+        5
+        { 
             $modeString = "Not configured"
 
-            if($isRdshServer)
+            if ($isRdshServer)
             {
-               $modeString += " (should not be set to this!)"
+                $modeString += " (should not be set to this!)"
             }
-          }
+        }
 
         default { $modeString = "error: $($licenseMode)" }
     }
     $configuredCorrectly = $false
 
-    if($isRdshServer)
+    if ($isRdshServer)
     {
         $configuredCorrectly = ($licCheck -or $lsDiscovered) -and $hasX509 -and ($licenseMode -eq 2 -or $licenseMode -eq 4) `
             -and $licServersList.Values.TsToLsConnectivityStatus -imatch "LS_CONNECTABLE_VALID"
@@ -449,9 +454,9 @@ function check-licenseServer([string] $licServer)
     log-info "EVENTS $($licServer)"
     log-info "-----------------------------------------"
 
-    log-info (Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error","Warning") | fl * | out-string)
+    log-info (Get-EventLog -LogName "System" -Source "TermServLicensing" -Newest 10 -ComputerName $licServer -After ([DateTime]::Now).AddDays(-7) -EntryType @("Error", "Warning") | fl * | out-string)
 
-    if(($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
+    if (($rWmiLS = Get-WmiObject -Namespace root/cimv2 -Class Win32_TSLicenseServer -ComputerName $licServer))
     {
         log-info "-----------------------------------------"
         log-info "Win32_TSLicenseServer $($licServer)"
@@ -475,7 +480,7 @@ function check-licenseServer([string] $licServer)
         log-info "is rds in tsc group on ls: $($wmiClass.IsTSinTSCGroup($rdsshServer).IsMember)"
     
         $dbPath = "\\$licServer\admin$\system32\lserver"
-        if(test-path $dbPath)
+        if (test-path $dbPath)
         {
             log-info "-----------------------------------------"
             log-info "License Database $($licServer)"
@@ -502,7 +507,7 @@ function check-licenseServer([string] $licServer)
         $licServerResult.CalsPerDeviceUsed = (($rWmiLS | ? TypeAndModel -Cmatch "RDS Per Device").IssuedLicenses | measure-object -Sum).Sum
         $licServerResult.CalsPerDeviceTotal = $licServerResult.CalsPerDeviceAvailable + $licServerResult.CalsPerDeviceUsed
 
-        if($showCalInfo)
+        if ($enumCals)
         {
             log-info "-----------------------------------------"
             log-info "Win32_TSIssuedLicense $($licServer)"
@@ -588,7 +593,7 @@ function check-licenseServer([string] $licServer)
     } -ArgumentList ($licServer)
 
     $count = 0
-    while($job -and $job.State -ne "Completed" -and $count -lt 5)
+    while ($job -and $job.State -ne "Completed" -and $count -lt 5)
     {
         $jobInfo = get-job -Name $job.Name
         receive-job -Job $jobInfo | Out-Null
@@ -596,7 +601,7 @@ function check-licenseServer([string] $licServer)
         start-sleep -Seconds 1
     }
 
-    if($count -eq 5)
+    if ($count -eq 5)
     {
         # pipe failed.
         $licServerResult.CanAccessNamedPipe = $false
@@ -606,7 +611,7 @@ function check-licenseServer([string] $licServer)
         $licServerResult.CanAccessNamedPipe = $true
     }
 
-    if($jobInfo = get-job -Name $job.Name)
+    if ($jobInfo = get-job -Name $job.Name)
     {
         Stop-Job -Job $jobInfo
         Remove-Job -Job $jobInfo -Force
@@ -616,7 +621,7 @@ function check-licenseServer([string] $licServer)
 
     log-info "checking rpc endpoint mapper"
 
-    if((Test-NetConnection -Port 135 -ComputerName $licServer).TcpTestSucceeded)
+    if ((Test-NetConnection -Port 135 -ComputerName $licServer).TcpTestSucceeded)
     {
         $licServerResult.CanAccessRpcEpt = $true
     }
@@ -628,7 +633,7 @@ function check-licenseServer([string] $licServer)
     log-info "Can access rpc port mapper? $($licServerResult.CanAccessRpcEpt)"
 
     $ret = $rWmi.GetTStoLSConnectivityStatus($licServer)
-    switch($ret.TsToLsConnectivityStatus)
+    switch ($ret.TsToLsConnectivityStatus)
     {
         0 { $retName = "LS_CONNECTABLE_UNKNOWN" }
         1 { $retName = "LS_CONNECTABLE_VALID_WS08R2=1" }
@@ -668,7 +673,7 @@ function check-user ([string] $user)
         $objSearcher.SearchScope = "Subtree"
 
         # lic server user attributes for per user
-        $colProplist = "msTSManagingLS","msTSExpireDate" #"name"
+        $colProplist = "msTSManagingLS", "msTSExpireDate" #"name"
 
         foreach ($i in $colPropList)
         {
@@ -677,7 +682,7 @@ function check-user ([string] $user)
 
         $colResults = $objSearcher.FindAll()
 
-        if($colResults.Count -lt 1)
+        if ($colResults.Count -lt 1)
         {
             log-info "unable to find user:$($user)"
             return $false
@@ -711,7 +716,7 @@ function get-update($updateUrl)
         $gitClean = [regex]::Replace($git, '\W+', "")
         $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
 
-        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        if (([string]::Compare($gitClean, $fileClean) -ne 0))
         {
             log-info "updating new script"
             [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
@@ -769,12 +774,12 @@ function get-sysInternalsUtility ([string] $utilityName)
     {
         $destFile = "$(get-location)\$utilityName"
         
-        if(![IO.File]::Exists($destFile))
+        if (![IO.File]::Exists($destFile))
         {
             $sysUrl = "http://live.sysinternals.com/$($utilityName)"
 
             log-info "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
-            if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
+            if ((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
             {
                 $webClient = new-object System.Net.WebClient
                 [void]$webClient.DownloadFile($sysUrl, $destFile)
@@ -801,7 +806,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
     
-    if([string]::IsNullOrEmpty($value))
+    if ([string]::IsNullOrEmpty($value))
     {
         [void]$retVal.AppendLine("-----------------------------------------")
         [void]$retVal.AppendLine("enumerating $($key)")
@@ -820,9 +825,9 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
-        for($i = 0; $i -lt $sNames.count; $i++)
+        for ($i = 0; $i -lt $sNames.count; $i++)
         {
-            if(![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
+            if (![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
             {
                 continue
             }
@@ -830,9 +835,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             switch ($sTypes[$i])
             {
                 # REG_SZ 
-                1{ 
+                1
+                { 
                     $keyValue = $reg.GetStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -843,26 +849,28 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_EXPAND_SZ 
-                2{
+                2
+                {
                     $keyValue = $reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }                    
                     else 
                     {
-                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
                     }
                 }            
                 
                 # REG_BINARY 
-                3{ 
+                3
+                { 
                     $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
-                    if($enumValue -or $displayBinaryBlob)
+                    if ($enumValue -or $displayBinaryBlob)
                     {
                         return $keyValue
                     }
-                    elseif($displayBinaryBlob)
+                    elseif ($displayBinaryBlob)
                     {
                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
                     }
@@ -874,9 +882,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_DWORD 
-                4{ 
+                4
+                { 
                     $keyValue = $reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -887,9 +896,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_MULTI_SZ 
-                7{
+                7
+                {
                     $keyValue = (($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ',')
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -900,9 +910,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
 
                 # REG_QWORD
-                11{ 
+                11
+                { 
                     $keyValue = $reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -917,12 +928,12 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
         
-        if([string]::IsNullOrEmpty($value) -and $subKeySearch)
+        if ([string]::IsNullOrEmpty($value) -and $subKeySearch)
         {
             
-            foreach($subKey in $reg.EnumKey($hive, $key).sNames)
+            foreach ($subKey in $reg.EnumKey($hive, $key).sNames)
             {
-                if([string]::IsNullOrEmpty($subKey))
+                if ([string]::IsNullOrEmpty($subKey))
                 {
                     continue
                 }
@@ -931,7 +942,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
 
-        if($enumValue)
+        if ($enumValue)
         {
             # no value
             return $null
@@ -969,23 +980,23 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 
     [void]$process.Start()
  
-    if($wait -and !$process.HasExited)
+    if ($wait -and !$process.HasExited)
     {
  
-        if($process.StandardOutput.Peek() -gt -1)
+        if ($process.StandardOutput.Peek() -gt -1)
         {
             $stdOut = $process.StandardOutput.ReadToEnd()
             $stdOut
         }
  
-        if($process.StandardError.Peek() -gt -1)
+        if ($process.StandardError.Peek() -gt -1)
         {
             $stdErr = $process.StandardError.ReadToEnd()
             $stdErr
             $Error.Clear()
         }
     }
-    elseif($wait)
+    elseif ($wait)
     {
         log-info "Error:Process ended before capturing output."
     }
@@ -1007,14 +1018,14 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
 {
-    if(([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).Identities.Name -eq "NT AUTHORITY\NETWORK SERVICE")
+    if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).Identities.Name -eq "NT AUTHORITY\NETWORK SERVICE")
     {
         return $true
     }
     elseif (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
         log-info "please restart script as administrator. exiting..."
-       return $false
+        return $false
     }
 
     return $true
