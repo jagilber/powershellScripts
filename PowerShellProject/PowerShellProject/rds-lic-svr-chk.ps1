@@ -12,12 +12,10 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170525 fixed logging
+   Version    : 170605 -notmatch on licserver list check
    History    : 
+                170525 fixed logging
                 170519 fixed named pipe job not being removed
-                170426.2 added calpack info to summary
-                170426 fixed issue with x509 and for currently configured showing false when it was supposed to be true
-
 
 .EXAMPLE  
     .\rds-lic-svr-chk.ps1
@@ -316,7 +314,7 @@ function main()
     }
 
     # show license info if this server is a license server
-    if ($isLicServer -and ($licServersList.Keys -inotmatch $rdshServer))
+    if ($isLicServer -and ($licServersList.Keys -notmatch $rdshServer))
     {
         $licServersList.Add($rdshServer, (check-licenseServer -licServer $rdshServer))
     }
