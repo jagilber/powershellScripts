@@ -12,7 +12,7 @@
 .NOTES  
    File Name  : rds-lic-svr-chk.ps1  
    Author     : jagilber
-   Version    : 170605 -notmatch on licserver list check
+   Version    : 170605 fix $rdsLicServerList.Count check
    History    : 
                 170525 fixed logging
                 170519 fixed named pipe job not being removed
@@ -314,7 +314,7 @@ function main()
     }
 
     # show license info if this server is a license server
-    if ($isLicServer -and ($licServersList.Keys -notmatch $rdshServer))
+    if ($isLicServer -and !$licServersList.Count -or ($licServerslist.Count -and $licServersList.Keys -inotmatch $rdshServer))
     {
         $licServersList.Add($rdshServer, (check-licenseServer -licServer $rdshServer))
     }
