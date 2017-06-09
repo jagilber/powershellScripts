@@ -120,7 +120,7 @@ while($true)
                 {
                     write-host "running command: cmd.exe /c start $($command) $($newVmState.Name)"
                     #Invoke-expression -Command "cmd.exe /c start $($command) $($newVmState.Name)"
-                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c start $($command) $($newVmState.Name)"
+                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c start $($command) $($newVmState.Name) $($newVmState.ComputerName)"
                 }
             }
         }
