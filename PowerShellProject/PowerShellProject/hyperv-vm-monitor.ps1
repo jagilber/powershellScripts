@@ -51,7 +51,15 @@ $newVmStates = new-object Collections.ArrayList
 
 if (!$hypervisors)
 {
-    $hypervisors = @($env:COMPUTERNAME)
+    if((Get-WindowsFeature -Name Hyper-v).InstallState -eq "Installed")
+    {
+        $hypervisors = @($env:COMPUTERNAME)
+    }
+    else
+    {
+        write-host "specify -hypervisors to monitor. exiting"
+        exit
+    }
 }
 
 foreach ($hvm in $hypervisors)
