@@ -144,34 +144,34 @@
  
 Param(
  
-    [parameter(Mandatory = $true, HelpMessage = "Enter the action to take: [start|stop|generateConfig]")]
+    [parameter(Mandatory=$true,HelpMessage="Enter the action to take: [start|stop|generateConfig]")]
     [string][ValidateSet('start', 'stop', 'generateConfig')] $action,
-    [parameter(HelpMessage = "Specify xml configuration file.")]
+    [parameter(HelpMessage="Specify xml configuration file.")]
     [string] $configurationFile = "",
-    [parameter(HelpMessage = "Specify xml configuration folder.")]
+    [parameter(HelpMessage="Specify xml configuration folder.")]
     [string] $configurationFolder = "",
-    [parameter(HelpMessage = "Enter false to stop after error.")]
+    [parameter(HelpMessage="Enter false to stop after error.")]
     [bool] $continue = $true,
-    [parameter(HelpMessage = "Enter to check for script update.")]
+    [parameter(HelpMessage="Enter to check for script update.")]
     [switch] $getUpdate,
-    [parameter(HelpMessage = "Enter single, comma separated, or file name with list of machines to manage")]
+    [parameter(HelpMessage="Enter single, comma separated, or file name with list of machines to manage")]
     [string[]] $machines,
-    [parameter(HelpMessage = "Select this switch to capture network tracing.")]
+    [parameter(HelpMessage="Select this switch to capture network tracing.")]
     [switch] $network,
     [switch] $noretry,
-    [parameter(HelpMessage = "Select this switch force all files to be flat when run on a single machine")]
+    [parameter(HelpMessage="Select this switch force all files to be flat when run on a single machine")]
     [switch] $nodynamicpath,
-    [parameter(HelpMessage = "Enter output folder where all collected traces will be copied")]
+    [parameter(HelpMessage="Enter output folder where all collected traces will be copied")]
     [string] $outputFolder = ".\gather", 
-    [parameter(HelpMessage = "Specify to enable tracing across reboots.")]
+    [parameter(HelpMessage="Specify to enable tracing across reboots.")]
     [switch] $permanent,
-    [parameter(HelpMessage = "Specify to enable tracing for Remote Desktop Services.")]
+    [parameter(HelpMessage="Specify to enable tracing for Remote Desktop Services.")]
     [switch] $rds,
-    [parameter(HelpMessage = "Select this switch to show additional logging")]
+    [parameter(HelpMessage="Select this switch to show additional logging")]
     [switch]$showDetail = $false,
-    [parameter(HelpMessage = "Enter trace folder where .etl files will be written to while tracing")]
+    [parameter(HelpMessage="Enter trace folder where .etl files will be written to while tracing")]
     [string] $traceFolder = [Environment]::GetEnvironmentVariables("Machine").TMP,
-    [parameter(HelpMessage = "Enter false to disable singleEtwSession. disabling will use more resources.")]
+    [parameter(HelpMessage="Enter false to disable singleEtwSession. disabling will use more resources.")]
     [bool] $useSingleEtwSession = $true
 )
  
@@ -219,38 +219,38 @@ add-type -TypeDefinition @'
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
- {
+{
     log-info "============================================="
     log-info "Starting"
     $error.Clear()  
     $retval = $null
 
     # check minimun os ver
-    if (!([environment]::OSVersion.Version.Build -ge $minBuild))
- {
+    if(!([environment]::OSVersion.Version.Build -ge $minBuild))
+    {
         log-info "script requires at least windows 8 / 2012. exiting script"
         exit 2
     }
 
     # run as administrator
-    if (($ret = runas-admin) -eq $false)
- {
+    if(($ret = runas-admin) -eq $false)
+    {
         exit 3
     }
 
     # see if new (different) version of file
-    if ($getUpdate)
- {
-        if (get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName)
- {
+    if($getUpdate)
+    {
+        if(get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName)
+        {
             exit
         }
     }
 
     $workingDir = get-workingDirectory
 
-    if ($workingDir.Contains(" "))
- {
+    if($workingDir.Contains(" "))
+    {
         log-info "error:working directory path contains a space. please move script and files to path without space and restart. $($workingDir)"
         exit 4
     }
@@ -262,8 +262,8 @@ function main()
     [ActionType] $currentAction = determine-action $action
 
     # if generateConfig then query logman for base line, pause, and query again for differences
-    if ($currentAction -eq [ActionType]::generateConfig)
- {
+    if($currentAction -eq [ActionType]::generateConfig)
+    {
         # set to multisession to split output into named files instead of single-session
         $useSingleEtwSession = $false
         log-info "generating config xml files"
@@ -271,48 +271,48 @@ function main()
         return
     }
     
-    $global:defaultFolder = $global:outputFolder = $global:outputFolder.Replace(".\", "$(get-location)\")
+    $global:defaultFolder = $global:outputFolder = $global:outputFolder.Replace(".\","$(get-location)\")
 
-    if (!$network -and [string]::IsNullOrEmpty($configurationFile) -and $useSingleEtwSession)
- {
+    if(!$network -and [string]::IsNullOrEmpty($configurationFile) -and $useSingleEtwSession)
+    {
         # if network not specified its ok to default file name
         # this is to prevent etw from running when intent is only -network
         $configurationFile = $defaultConfigurationFile
     }
  
     # set full paths
-    $defaultConfigurationFile = $defaultConfigurationFile.Replace(".\", "$(get-location)\")
-    $configurationFile = $configurationFile.Replace(".\", "$(get-location)\")
-    $configurationFolder = $configurationFolder.Replace(".\", "$(get-location)\")
+    $defaultConfigurationFile = $defaultConfigurationFile.Replace(".\","$(get-location)\")
+    $configurationFile = $configurationFile.Replace(".\","$(get-location)\")
+    $configurationFolder = $configurationFolder.Replace(".\","$(get-location)\")
     $singleEtwSessionNameFile = $configurationFile
     $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($singleEtwSessionNameFile)
 
     # should pass configuration file or folder if not network
-    if (($configurationFile -and ![IO.File]::Exists($configurationFile)) `
- -or ($configurationFolder -and ![IO.Directory]::Exists($configurationFolder)))
- {
+    if(($configurationFile -and ![IO.File]::Exists($configurationFile)) `
+        -or ($configurationFolder -and ![IO.Directory]::Exists($configurationFolder)))
+    {
         log-info "neither configuration file '$($configurationFile)' exists nor configuration folder '$($configurationFolder)' exists. exiting."
         log-info "use configurationfile or configurationfolder argument"
         exit 5
     }
 
-    if (![string]::IsNullOrEmpty($configurationFolder) -and [IO.Directory]::Exists($configurationFolder))
- {
+    if(![string]::IsNullOrEmpty($configurationFolder) -and [IO.Directory]::Exists($configurationFolder))
+    {
         # verify config files are available
         $configurationFolder = verify-configFiles
     
         # delete previous singlesessionfile if it exists
 
         # enumerate config files
-        $global:configurationFiles = [IO.Directory]::GetFiles($configurationFolder, "*.xml", [IO.SearchOption]::AllDirectories)
+        $global:configurationFiles = [IO.Directory]::GetFiles($configurationFolder,"*.xml",[IO.SearchOption]::AllDirectories)
 
-        if ($useSingleEtwSession)
- {
-            $singleEtwSessionNameFile = $defaultConfigurationFile 
+        if($useSingleEtwSession)
+        {
+            $singleEtwSessionNameFile  = $defaultConfigurationFile 
             $singleEtwSessionName = [IO.Path]::GetFileNameWithoutExtension($singleEtwSessionNameFile)
 
-            if ([IO.File]::Exists($singleEtwSessionNameFile))
- {
+            if([IO.File]::Exists($singleEtwSessionNameFile))
+            {
                 [IO.File]::Delete($singleEtwSessionNameFile);
             }
 
@@ -320,44 +320,44 @@ function main()
             populate-configFiles -action $currentAction -configFiles $global:configurationFiles
         }
     }
-    elseif ([string]::IsNullOrEmpty($configurationFile) -or ![IO.File]::Exists($configurationFile) -and !$network)
- {
+    elseif([string]::IsNullOrEmpty($configurationFile) -or ![IO.File]::Exists($configurationFile) -and !$network)
+    {
         log-info "error: invalid arguments. need valid configurationFolder or configurationFile if not tracing network. exiting."
         exit 6
     }
 
-    if ($useSingleEtwSession -and [IO.File]::Exists($singleEtwSessionNameFile))
- {
+    if($useSingleEtwSession -and [IO.File]::Exists($singleEtwSessionNameFile))
+    {
         $global:configurationFiles = $singleEtwSessionNameFile
     }
 
-    $traceFolder = $traceFolder.Replace(":", "$")
+    $traceFolder = $traceFolder.Replace(":","$")
 
     log-info "Setting default etl output folder to: $($traceFolder)"
  
     # add local machine if empty
-    if ($machines.Count -lt 1)
- {
+    if($machines.Count -lt 1)
+    {
         $machines += $env:COMPUTERNAME
     }
-    elseif ($machines.Count -eq 1 -and $machines[0].Contains(","))
- {
+    elseif($machines.Count -eq 1 -and $machines[0].Contains(","))
+    {
         # when passing comma separated list of machines from bat, it does not get separated correctly
         $machines = $machines[0].Split(",")
     }
-    elseif ($machines.Count -eq 1 -and [IO.File]::Exists($machines))
- {
+    elseif($machines.Count -eq 1 -and [IO.File]::Exists($machines))
+    {
         # file passed in
         $machines = [IO.File]::ReadAllLines($machines);
     } 
 
     # run commands
     try
- { 
+    { 
         run-commands -currentAction $currentAction -configFiles $global:configurationFiles
     }
     catch
- {
+    {
         log-info "exception:$($error)"
     }
 
@@ -365,14 +365,14 @@ function main()
     [string[]] $resultFiles = copy-files $global:copyFiles
 
     # clean up    
-    if (get-job)
- {
+    if(get-job)
+    {
         clean-jobs -silent $true
     }
 
     # display file tree
-    if ($currentAction -eq [ActionType]::stop -and [IO.Directory]::Exists($global:outputFolder))
- {
+    if($currentAction -eq [ActionType]::stop -and [IO.Directory]::Exists($global:outputFolder))
+    {
         tree /a /f $($global:outputFolder)
     }
 
@@ -381,84 +381,84 @@ function main()
  
 # ----------------------------------------------------------------------------------------------------------------
 function check-ProcessOutput([string] $output, [ActionType] $action, [bool] $shouldHaveSession = $false, [bool] $shouldNotHaveSession = $false, [string] $sessionName = "")
- {
-    if ($action -eq [ActionType]::start)
- {
-        if ($output -imatch "Data Collector Set already exists" -and !$shouldHaveSession)
- {
+{
+    if($action -eq [ActionType]::start)
+    {
+        if($output -imatch "Data Collector Set already exists" -and !$shouldHaveSession)
+        {
             # this is ok
             log-info "warning: $($output)"
             return $false
         }
     }
-    elseif ($action -eq [ActionType]::stop)
- {
-        if ($output -imatch "Data Collector Set was not found" -and !$shouldNotHaveSession)
- {
+    elseif($action -eq [ActionType]::stop)
+    {
+        if($output -imatch "Data Collector Set was not found" -and !$shouldNotHaveSession)
+        {
             # this is not ok if trace was running. show warning
             log-info "warning: $($output)"
             return $false
         }
     }
 
-    if (![string]::IsNullOrEmpty($sessionName) -and $shouldHaveSession)
- {
-        if ($output -inotmatch $sessionName)
- {
+    if(![string]::IsNullOrEmpty($sessionName) -and $shouldHaveSession)
+    {
+        if($output -inotmatch $sessionName)
+        {
             log-info "warning: $($sessionName) does not exist!"
             return $false
         }
     }
 
-    if (![string]::IsNullOrEmpty($sessionName) -and $shouldNotHaveSession)
- {
-        if ($output -imatch $sessionName)
- {
+    if(![string]::IsNullOrEmpty($sessionName) -and $shouldNotHaveSession)
+    {
+        if($output -imatch $sessionName)
+        {
             log-info "warning: $($sessionName) is running but should not be!"
             return $false
         }
     }
 
-    if (![string]::IsNullOrEmpty($sessionName))
- {
-        if ($output -imatch $sessionName)
- {
+    if(![string]::IsNullOrEmpty($sessionName))
+    {
+        if($output -imatch $sessionName)
+        {
             log-info "$($sessionName) etw trace is started"
         }
         else
- {
+        {
             log-info "$($sessionName) etw trace is not started"
         }
     }
 
-    if ($output -imatch "error|fail|exception")
- {
+    if($output -imatch "error|fail|exception")
+    {
         return $false
     }
     else
- {
+    {
         return $true
     }
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function clean-jobs($silent = $false)
- {
-    if (get-job)
- {
-        if (!$silent)
- {
+{
+    if(get-job)
+    {
+        if(!$silent)
+        {
             [string] $ret = read-host -Prompt "There are existing jobs, do you want to clear?[y:n]" 
-            if ($ret -ieq "n")
- {
+            if($ret -ieq "n")
+            {
                 return
             }
         }
 
         get-job 
 
-        while (get-job)
- {
+        while(get-job)
+        {
             get-job | remove-job -Force
         }
     }
@@ -466,37 +466,37 @@ function clean-jobs($silent = $false)
  
 # ----------------------------------------------------------------------------------------------------------------
 function copy-files($files)
- {
+{
     $resultFiles = @()
  
-    foreach ($kvp in $files.GetEnumerator())
- {
-        if ($kvp -eq $null)
- {
+    foreach($kvp in $files.GetEnumerator())
+    {
+        if($kvp -eq $null)
+        {
             continue
         }
  
         $destinationFile = $kvp.Value
         $sourceFile = $kvp.Key
  
-        if (!(Test-Path $sourceFile))
- {
+        if(!(Test-Path $sourceFile))
+        {
             log-info "Warning:Copying File:No source. skipping:$($sourceFile)"
             continue
         }
  
         $count = 0
  
-        while ($count -lt 30)
- {
+        while($count -lt 30)
+        {
             try
- {
-                if (is-fileLocked $sourceFile)
- {
+            {
+                if(is-fileLocked $sourceFile)
+                {
                     start-sleep -Seconds 1
 	                $count++          
-                    If ($count -lt 30)          
- {
+                    If($count -lt 30)          
+                    {
                         Continue
                     }
                 }
@@ -507,12 +507,12 @@ function copy-files($files)
                 log-info "Deleting File:$($sourceFile)"
                 [IO.File]::Delete($sourceFile)
  
-                if ($removeEmptyEtls)
- {
+                if($removeEmptyEtls)
+                {
                     $fileInfo = new-object System.IO.FileInfo($destinationFile)
  
-                    if ($fileInfo.Length -le 8192)
- {
+                    if($fileInfo.Length -le 8192)
+                    {
                         log-info "Deleting Empty Etl:$($destinationFile)"
                         [IO.File]::Delete($destinationFile)
                         break
@@ -524,7 +524,7 @@ function copy-files($files)
                 break
             }
             catch
- {
+            {
                 log-info "Exception:Copying File:$($sourceFile) to $($destinationFile): $($Error)"
                 $Error.Clear()
                 $count++
@@ -538,16 +538,16 @@ function copy-files($files)
 
 # ----------------------------------------------------------------------------------------------------------------
 function determine-action($action)
- {
+{
     [ActionType] $at = [ActionType]::unknown
  
-    switch ($action.Trim().ToLower())
- {
+    switch($action.Trim().ToLower())
+    {
         "start" { $at = [ActionType]::start }
-        "stop" { $at = [ActionType]::stop  }
+        "stop"  { $at = [ActionType]::stop  }
         "generateConfig" { $at = [ActionType]::generateConfig }
         default
- {
+        {
             log-info "Unknown action:$($action): should be start or stop. exiting"
             exit
         }
@@ -558,25 +558,25 @@ function determine-action($action)
 
 # ----------------------------------------------------------------------------------------------------------------
 function generate-config()
- {
+{
 
     # get base traces before adding new ones to export
      $output = run-logman -arguments "query -ets" -returnResults
      log-info $output
 
      $regexPattern = "\n(?<set>[a-zA-Z0-9-_ ]*)\s*(?<type>Trace)\s*(?<status>\w*)"
-     $regex = New-Object Text.RegularExpressions.Regex ($regexPattern, [Text.RegularExpressions.RegexOptions]::Singleline)
+     $regex = New-Object Text.RegularExpressions.Regex ($regexPattern,[Text.RegularExpressions.RegexOptions]::Singleline)
      $result = $regex.Matches($output)
      $originalList = @{}
 
-     for ($i = 0; $i -lt $result.Count; $i++)
- {
+     for($i = 0; $i -lt $result.Count;$i++)
+     {
         $loggerName = ($result[$i].Groups['set'].Value).Trim()
         $loggerStatus = ($result[$i].Groups['status'].Value).Trim()
 
-        if (![String]::IsNullOrEmpty($loggerName))
- {
-            $originalList.Add($loggerName, $loggerStatus)
+        if(![String]::IsNullOrEmpty($loggerName))
+        {
+            $originalList.Add($loggerName,$loggerStatus)
         }
      }
 
@@ -589,31 +589,31 @@ function generate-config()
      $result = $regex.Matches($output)
      $newList = @{}
 
-     for ($i = 0; $i -lt $result.Count; $i++)
- {
+     for($i = 0; $i -lt $result.Count;$i++)
+     {
         $loggerName = ($result[$i].Groups['set'].Value).Trim()
         $loggerStatus = ($result[$i].Groups['status'].Value).Trim()
         
-        if (![String]::IsNullOrEmpty($loggerName))
- {
-            if (!$originalList.ContainsKey($loggerName))
- {
-                $newList.Add($loggerName, $loggerStatus)
+        if(![String]::IsNullOrEmpty($loggerName))
+        {
+            if(!$originalList.ContainsKey($loggerName))
+            {
+                $newList.Add($loggerName,$loggerStatus)
             }
         }
      }
 
      #export out only new logman sessions
-     if ($newList.Count -gt 0)
- {
-         foreach ($session in $newList.GetEnumerator())
- {
+     if($newList.Count -gt 0)
+     {
+         foreach($session in $newList.GetEnumerator())
+         {
             $output = run-logman -arguments "export `"$($session.Key)`" -ets -xml `"$($workingDir)\$($session.Key).xml`"" -returnResults
             populate-configFiles -configFiles "$($workingDir)\$($session.Key).xml"
          }
      }
      else
- {
+     {
         log-info "no new logman sessions to process"   
      }
 
@@ -622,24 +622,24 @@ function generate-config()
  
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
- {
+{
     $retVal = [string]::Empty
  
     if (Test-Path variable:\hostinvocation)
- {
+    {
         $retVal = $hostinvocation.MyCommand.Path
     }
     else
- {
+    {
         $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
     }
   
     if (Test-Path $retVal)
- {
+    {
         $retVal = (Split-Path $retVal)
     }
     else
- {
+    {
         $retVal = (Get-Location).path
         log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     } 
@@ -650,31 +650,31 @@ function get-workingDirectory()
 
 #----------------------------------------------------------------------------
 function get-update($updateUrl, $destinationFile)
- {
+{
     log-info "get-update:checking for updated script: $($updateUrl)"
 
     try 
- {
+    {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
         $gitClean = [regex]::Replace($git, '\W+', "")
 
-        if (![IO.File]::Exists($destinationFile))
- {
+        if(![IO.File]::Exists($destinationFile))
+        {
             $fileClean = ""    
         }
         else
- {
+        {
             $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
-        if (([string]::Compare($gitClean, $fileClean) -ne 0))
- {
+        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        {
             log-info "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
             return $true
         }
         else
- {
+        {
             log-info "script is up to date"
         }
         
@@ -682,7 +682,7 @@ function get-update($updateUrl, $destinationFile)
         
     }
     catch [System.Exception] 
- {
+    {
         log-info "get-update:exception: $($error)"
         $error.Clear()
         return $false    
@@ -691,20 +691,20 @@ function get-update($updateUrl, $destinationFile)
 
 # ----------------------------------------------------------------------------------------------------------------
 function is-fileLocked([string] $file)
- {
+{
     $fileInfo = New-Object System.IO.FileInfo $file
  
     if ((Test-Path -Path $file) -eq $false)
- {
+    {
         log-info "File does not exist:$($file)"
         return $false
     }
   
     try
- {
+    {
 	    $fileStream = $fileInfo.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
 	    if ($fileStream)
- {
+	    {
             $fileStream.Close()
 	    }
  
@@ -712,7 +712,7 @@ function is-fileLocked([string] $file)
         return $false
     }
     catch
- {
+    {
         # file is locked by a process.
         log-info "File is locked:$($file)"
         return $true
@@ -721,43 +721,43 @@ function is-fileLocked([string] $file)
  
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
- {
+{
     $foregroundColor = "White"
-    if ([string]::IsNullOrEmpty($data))
- {
+    if([string]::IsNullOrEmpty($data))
+    {
         return
     }
 
-    if ($data -imatch "error")
- {
+    if($data -imatch "error")
+    {
         $foregroundColor = "Red"
     }
-    elseif ($data -imatch "fail")
- {
+    elseif($data -imatch "fail")
+    {
         $foregroundColor = "Red"
     }
-    elseif ($data -imatch "warning")
- {
+    elseif($data -imatch "warning")
+    {
         $foregroundColor = "Yellow"
     }
-    elseif ($data -imatch "exception")
- {
+    elseif($data -imatch "exception")
+    {
         $foregroundColor = "Yellow"
     }
-    elseif ($data -imatch "running process")
- {
+    elseif($data -imatch "running process")
+    {
         $foregroundColor = "Cyan"
     }
-    elseif ($data -imatch "success")
- {
+    elseif($data -imatch "success")
+    {
         $foregroundColor = "Green"
     }
-    elseif ($data -imatch "is started")
- {
+    elseif($data -imatch "is started")
+    {
         $foregroundColor = "Green"
     }
-    elseif ($data -imatch "is not started")
- {
+    elseif($data -imatch "is not started")
+    {
         $foregroundColor = "Gray"
     }
     
@@ -768,7 +768,7 @@ function log-info($data)
 
 # ----------------------------------------------------------------------------------------------------------------
 function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
- {
+{
     # level is typically 0xff
     # flags is typically 0xffffffff
  
@@ -793,12 +793,12 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
     
     $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\default:StdRegProv" 
     
-    foreach ($valueName in $valueNames)
- {
-        switch ($currentAction)
- {
+    foreach($valueName in $valueNames)
+    {
+        switch($currentAction)
+        {
             ([ActionType]::start)
- {
+            {
                 # to enable
                 $ret = $wmi.SetDWORDValue($hklm, $key, ("Debug$($valueName)"), "1")
                 # to enable to debugger
@@ -810,7 +810,7 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
             }
  
             ([ActionType]::stop)
- {
+            {
                 # to disable
                 $ret = $wmi.DeleteValue($hklm, $key, ("Debug$($valueName)"))
                 # to disable to debugger
@@ -822,7 +822,7 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
             }
  
             default
- {
+            {
                 log-info "Unknown action:$($currentAction): should be start or stop. exiting"
                 exit 1
             }
@@ -834,10 +834,10 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
 
 # ----------------------------------------------------------------------------------------------------------------
 function populate-configFiles([string[]] $configFiles)
- {
+{
     # modify settings in config files for environment
-    foreach ($file in $configFiles)
- {
+    foreach($file in $configFiles)
+    {
         [xml.xmldocument] $xmlDoc = xml-reader $file
  
  
@@ -856,28 +856,28 @@ function populate-configFiles([string[]] $configFiles)
         $xmlDoc.DocumentElement.TraceDataCollector.MaximumBuffers = $maxBuffersKB
         $xmlDoc.DocumentElement.TraceDataCollector.LatestOutputLocation = [string]::Empty
             
-        if ($useSingleEtwSession)
- {
+        if($useSingleEtwSession)
+        {
             # create new single session file
-            if (!([IO.File]::Exists($singleEtwSessionNameFile)))
- {
+            if(!([IO.File]::Exists($singleEtwSessionNameFile)))
+            {
                 $xmlDoc.DocumentElement.Name = $singleEtwSessionName
                 $xmlDoc.DocumentElement.TraceDataCollector.Name = $singleEtwSessionName
                 $xmlDoc.DocumentElement.TraceDataCollector.SessionName = $singleEtwSessionName
                 xml-writer -file $singleEtwSessionNameFile -xdoc $xmlDoc
             }  
             else
- {
+            {
                 [xml.xmldocument] $xmlDocSingle = xml-reader $singleEtwSessionNameFile
                 $dupe = $false
  
-                foreach ($node in $xmlDoc.DocumentElement.TraceDataCollector.GetElementsByTagName("TraceDataProvider"))
- {
+                foreach($node in $xmlDoc.DocumentElement.TraceDataCollector.GetElementsByTagName("TraceDataProvider"))
+                {
                     # check for dupes
-                    foreach ($t in $xmlDocSingle.DocumentElement.TraceDataCollector.GetElementsByTagName("Guid")) 
- {
-                        if ((($t.'#text').ToString()) -imatch ($Node.Guid.ToString()))
- {
+                    foreach($t in $xmlDocSingle.DocumentElement.TraceDataCollector.GetElementsByTagName("Guid")) 
+                    {
+                        if((($t.'#text').ToString()) -imatch ($Node.Guid.ToString()))
+                        {
                             #dupe
                             log-info "dupe guid:$($node.Guid)"
                             $dupe = $true
@@ -885,8 +885,8 @@ function populate-configFiles([string[]] $configFiles)
                         }
                     }
                         
-                    if (!$dupe)
- {
+                    if(!$dupe)
+                    {
                         $newNode = $xmlDocSingle.ImportNode($node, $true)
                         $ret = $xmlDocSingle.DocumentElement.TraceDataCollector.AppendChild($newNode)
                     }
@@ -896,7 +896,7 @@ function populate-configFiles([string[]] $configFiles)
             }
         }
         else
- {
+        {
             xml-writer -file $file -xdoc $xmlDoc
         }
     }
@@ -904,13 +904,13 @@ function populate-configFiles([string[]] $configFiles)
 
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
- {
+{
     write-verbose "checking for admin"
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
- {
-        if (!$noretry)
- { 
-            $commandLine = ($Script:MyInvocation.Line).Replace(".\", "$(get-location)\")
+    {
+        if(!$noretry)
+        { 
+            $commandLine = ($Script:MyInvocation.Line).Replace(".\","$(get-location)\")
             write-host "restarting script as administrator."
             Write-Host "run-process -processName powershell.exe -arguments -NoExit -ExecutionPolicy Bypass -File $($commandLine) -noretry"
             $ret = run-process -processName "powershell.exe" -arguments "-NoExit -ExecutionPolicy Bypass -File $($commandLine) -noretry" -runas $true
@@ -919,7 +919,7 @@ function runas-admin()
         return $false
    }
    else
- {
+   {
         write-verbose "running as admin"
    }
 
@@ -928,105 +928,105 @@ function runas-admin()
 
 # ----------------------------------------------------------------------------------------------------------------
 function run-commands([ActionType] $currentAction, [string[]] $configFiles)
- {
+{
     $machineFolder = [string]::Empty   
     $dirName = ([DateTime]::Now).ToString("yyyy-MM-dd-hh-mm-ss")
  
-    foreach ($machine in $machines)
- {
+    foreach($machine in $machines)
+    {
         
         $machine = $machine.Trim()
-        if ([String]::IsNullOrEmpty($machine))
- {
+        if([String]::IsNullOrEmpty($machine))
+        {
             continue
         }
  
         # add / remove rds debug registry settings
         if ($rds)
- {
+        {
             manage-rdsRegistry -currentAction $currentAction -machine $machine
         }
         
         # store files in computer folder or in root
-        if ($nodynamicpath)
- {
+        if($nodynamicpath)
+        {
             $machineFolder = $global:outputFolder
         }
-        elseif ($useSingleEtwSession)
- {
+        elseif($useSingleEtwSession)
+        {
             $machineFolder = $global:outputFolder = "$($global:defaultFolder)\$($dirName)"
         }
         else
- {
+        {
             $global:outputFolder = "$($global:defaultFolder)\$($dirName)"
             $machineFolder = "$($global:defaultFolder)\$($dirName)\$($machine)"            
         }
 
         $etlFileFolder = "\\$($machine)\$($traceFolder)"
 
-        if ($currentAction -eq ([ActionType]::stop))
- {
+        if($currentAction -eq ([ActionType]::stop))
+        {
             # verify etl local destination
-            if (!(Test-Path $machineFolder))
- {
+            if(!(Test-Path $machineFolder))
+            {
                 log-info "Creating Directory:$($machineFolder)"
                 [void][IO.Directory]::CreateDirectory($machineFolder)
             }
         }
  
-        if ($configFiles.Length -gt 0)
- {
+        if($configFiles.Length -gt 0)
+        {
             if ($showDetail) 
- {
-                if ($permanent)
- {
+            {
+                if($permanent)
+                {
                     run-logman -arguments "query autosession\* -s $($machine)" -shouldHaveSession ($currentAction -eq [ActionType]::stop) -shouldNotHaveSession ($currentAction -eq [ActionType]::start)
                 }
                 else
- {
+                {
                     run-logman -arguments "query -ets -s $($machine)" -shouldHaveSession ($currentAction -eq [ActionType]::stop) -shouldNotHaveSession ($currentAction -eq [ActionType]::start)
                 }
             }
 
-            foreach ($file in $configFiles)
- {
+            foreach($file in $configFiles)
+            {
                 $baseFileName = [IO.Path]::GetFileNameWithoutExtension($file)
                 $fullLoggerName = $loggerName = "lmw-$($baseFileName)"
  
-                if ($permanent)
- {
+                if($permanent)
+                {
                     $fullLoggerName = "autosession\$($loggerName)"
                 }
             
                 $etlFile = "$($etlFileFolder)\$($baseFileName).etl"
  
-                switch ($currentAction)
- {
+                switch($currentAction)
+                {
                     ([ActionType]::start) 
- {
+                    {
                         # make sure etl file does not already exist
                     
-                        if (Test-Path $etlFile)
- {
+                        if(Test-Path $etlFile)
+                        {
                             log-info "Deleting old etl file:$($etlFile)"
                             [IO.File]::Delete($etlFile)
                         }
  
                         # make sure etl dir exists
-                        if (!(Test-Path $etlFileFolder))
- {
+                        if(!(Test-Path $etlFileFolder))
+                        {
                             [IO.Directory]::CreateDirectory($etlFileFolder)
                         }
  
                         # query to see if session already exists. it shouldnt if we are starting
                         if ($showDetail) 
- {
+                        {
                             run-logman -arguments "query -ets -s $($machine)" -shouldNotHaveSession $true -sessionName $loggerName
                         }
  
                         # import configuration from xml file
-                        if ($permanent)
- {
+                        if($permanent)
+                        {
                             # will start next boot
                             run-logman -arguments "import -n $($fullLoggerName) -s $($machine) -xml $($file)"
                             # will start now
@@ -1039,38 +1039,38 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
                     }
  
                     ([ActionType]::stop) 
- {
+                    {
                         # query to see if session exists. session should exist if we are stoping
                         if ($showDetail) 
- {
+                        {
                             run-logman -arguments "query -ets -s $($machine)" -shouldHaveSession $true -sessionName $loggerName
                         }
  
                         run-logman -arguments "stop $($loggerName) -ets -s $($machine)"
                     
                         # delete session
-                        if ($permanent)
- {
+                        if($permanent)
+                        {
                             run-logman -arguments "delete $($fullloggerName) -ets -s $($machine)"
                         }
 
                         run-logman -arguments "query -ets -s $($machine)" -shouldNotHaveSession $true -sessionName $loggerName
 
                         # add etl files to list for copy back to local machine
-                        if ([IO.File]::Exists($etlFile))
- {
+                        if([IO.File]::Exists($etlFile))
+                        {
                             $destFile = "$($machineFolder)\$($machine)-$([IO.Path]::GetFileName($etlFile))"
                             log-info "Adding file to be copied source: $($etlFile) dest: $($destFile)"
                             $global:copyFiles.Add($etlFile, $destFile);
                         }
                         else
- {
+                        {
                             log-info "error: $($etlFile) does NOT exist! you may need to troubleshoot and restart tracing."
                         }
                     }
  
                     default
- {
+                    {
                         log-info "Unknown action:$($currentAction): should be start or stop. exiting"
                         exit
                     }
@@ -1087,26 +1087,26 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
             #}
         } # end if configfiles.length
 
-        if ($network)
- {
+        if($network)
+        {
             $command = @{ 
                 'name' = "netsh";
                 'wait' = $true;
                 'command' = "";
-                'workingDir' = $traceFolder.Replace("$", ":");
+                'workingDir' = $traceFolder.Replace("$",":");
             }
 
-            switch ($currentAction)
- {
+            switch($currentAction)
+            {
                 ([ActionType]::start) 
- {
-                    $destFile = ("$($traceFolder)\$($machine)-$([IO.Path]::GetFileName($networkEtlFile))").Replace("$", ":")
+                {
+                    $destFile = ("$($traceFolder)\$($machine)-$([IO.Path]::GetFileName($networkEtlFile))").Replace("$",":")
                     $command.command = "$($networkStartCommand)$($destFile)"
                     log-info "starting network trace $($machine)"
                 }
 
                 ([ActionType]::stop) 
- {
+                {
                     $command.command = $networkStopCommand
                     $etlFile = "$($etlFileFolder)\$($machine)-$([IO.Path]::GetFileName($networkEtlFile))"
                     $destFile = "$($machineFolder)\$([IO.Path]::GetFileName($etlFile))"
@@ -1117,7 +1117,7 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
                 }
 
                 default
- {
+                {
                     log-info "Unknown action:$($currentAction): should be start or stop. exiting"
                     exit
                 }
@@ -1133,29 +1133,29 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
  
 # ----------------------------------------------------------------------------------------------------------------
 function run-logman([string] $arguments, [bool] $shouldHaveSession = $false, [bool] $shouldNotHaveSession = $false, [switch] $returnResults, [string] $sessionName = "")
- {
+{
     $retval = run-process -processName $logman -arguments $arguments -wait $true
     
-    if (!(check-processOutput -output $retval -action $currentAction -shouldHaveSession $shouldHaveSession -shouldNotHaveSession $shouldNotHaveSession -sessionName $sessionName) -and !$continue)
- {
+    if(!(check-processOutput -output $retval -action $currentAction -shouldHaveSession $shouldHaveSession -shouldNotHaveSession $shouldNotHaveSession -sessionName $sessionName) -and !$continue)
+    {
         log-info "error in logman command. exiting. use -continue switch to ignore errors"
         log-info "error: $($retval)"
         exit 1
     }
 
-    if ($returnResults)
- {
+    if($returnResults)
+    {
         return $retval
     }
     else
- {
+    {
         return
     }
 }
  
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false, [bool] $runas = $false)
- {
+{
     log-info "Running process $processName $arguments"
     $exitVal = 0
     $process = New-Object System.Diagnostics.Process
@@ -1167,37 +1167,37 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.CreateNoWindow = $wait
     $process.StartInfo.WorkingDirectory = get-location
     
-    if ($runas)
- {
+    if($runas)
+    {
         $process.StartInfo.Verb = "runas"
     }
 
     [void]$process.Start()
-    if ($wait -and !$process.HasExited)
- {
+    if($wait -and !$process.HasExited)
+    {
         [void]$process.WaitForExit($processWaitMs)
         $exitVal = $process.ExitCode
         $stdOut = $process.StandardOutput.ReadToEnd()
         $stdErr = $process.StandardError.ReadToEnd()
         
-        if ($showDetail)
- {
+        if($showDetail)
+        {
             log-info "Process output:$stdOut"
         }
  
-        if (![String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
- {
+        if(![String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+        {
             log-info "Error:$stdErr `n $Error"
             $Error.Clear()
             
-            if (!$continue)
- {
+            if(!$continue)
+            {
                 exit 1
             }
         }
     }
-    elseif ($wait)
- {
+    elseif($wait)
+    {
         log-info "Process ended before capturing output."
     }
 
@@ -1206,39 +1206,39 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 
 # ----------------------------------------------------------------------------------------------------------------
 function run-wmiCommandJob($command, $machine)
- {
+{
 
     $functions = {
         function log-info($data)
- {
+        {
             $data = "$([System.DateTime]::Now):$($data)`n"
             Write-Host $data
         }
     }
 
     #throttle
-    while ((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
- {
+    while((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
+    {
         Start-Sleep -Milliseconds 100
     }
 
     log-info "starting wmi job: $($machine)-$($command.Name)"
     $job = Start-Job -Name "$($machine)-$($command.Name)" -InitializationScript $functions -ScriptBlock {
-        param($command, $machine)
+        param($command,$machine)
 
         try
- {
+        {
             log-info "running wmi command: $($command.command) from dir: $($command.workingDir)"
-            $startup = [wmiclass]"Win32_ProcessStartup"
-            $startup.Properties['ShowWindow'].value = $False
+            $startup=[wmiclass]"Win32_ProcessStartup"
+            $startup.Properties['ShowWindow'].value=$False
             # $ret = Invoke-WmiMethod -ComputerName $machine -Class Win32_Process -Name Create -Impersonation Impersonate -ArgumentList @($command.command, $command.workingDir, $startup)
             $wmiP = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
             $ret = $wmiP.Create($command.command, $command.workingDir, $startup)
     
-            if ($ret.ReturnValue -ne 0 -or $ret.ProcessId -eq 0)
- {
-                switch ($result.ReturnValue)
- {
+            if($ret.ReturnValue -ne 0 -or $ret.ProcessId -eq 0)
+            {
+                switch($result.ReturnValue)
+                {
                     0 { log-info "$($machine) return:success" }
                     2 { log-info "$($machine) return:access denied" }
                     3 { log-info "$($machine) return:insufficient privilege" }
@@ -1252,17 +1252,17 @@ function run-wmiCommandJob($command, $machine)
                 return
             }
 
-            if ($command.wait)
- {
-                while ($true)
- {
+            if($command.wait)
+            {
+                while($true)
+                {
                     #log-info "waiting on process: $($ret.ProcessId)"
-                    if ((Get-WmiObject -ComputerName $machine -Class Win32_Process -Filter "ProcessID = '$($ret.ProcessId)'"))
- {
+                    if((Get-WmiObject -ComputerName $machine -Class Win32_Process -Filter "ProcessID = '$($ret.ProcessId)'"))
+                    {
                         Start-Sleep -Seconds 1
                     }
                     else
- {
+                    {
                         #log-info "no process"
                         break
                     }
@@ -1270,45 +1270,45 @@ function run-wmiCommandJob($command, $machine)
             }
         }
         catch
- {
+        {
             log-info "Exception:run-wmiCommand: $($Error)"
             $Error.Clear()
         }
-    } -ArgumentList ($command, $machine)
+    } -ArgumentList ($command,$machine)
     
     $global:jobs = $global:jobs + $job
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function verify-configFiles()
- {
+{
     $retval
     log-info "Verifying config files"
  
     # if path starts with a '.' replace with working dir
-    if ($configurationFolder.StartsWith(".\"))
- {
+    if($configurationFolder.StartsWith(".\"))
+    {
         $configurationFolder = "$(get-location)$($configurationFolder.Substring(1))"
         $configurationFolder = $configurationFolder.Trim()
     }
  
-    if ([String]::IsNullOrEmpty($configurationFolder) -or !(Test-Path $configurationFolder))
- {
+    if([String]::IsNullOrEmpty($configurationFolder) -or !(Test-Path $configurationFolder))
+    {
         log-info "logman configuration files not found:$($configurationFolder)"
         log-info "please specify logman configuration file (.xml) files location or add. exiting"
         exit 7
     }
     
-    if (!(Test-Path $configurationFolder) -and (Test-Path $defaultTemplateConfigFolder))
- {
+    if(!(Test-Path $configurationFolder) -and (Test-Path $defaultTemplateConfigFolder))
+    {
         $retval = [IO.Directory]::CreateDirectory($configurationFolder)
  
-        if ((Test-Path $configurationFolder) -and (Test-Path $defaultTemplateConfigFolder))
- {
+        if((Test-Path $configurationFolder) -and (Test-Path $defaultTemplateConfigFolder))
+        {
             $retval = Copy-Item $defaultTemplateConfigFolder\* $configurationFolder
         }
         else
- {
+        {
             log-info "Config Files do not exist:exiting:" + $configurationFolder
             exit 8
         }
@@ -1320,40 +1320,40 @@ function verify-configFiles()
 
 # ----------------------------------------------------------------------------------------------------------------
 function wait-forJobs()
- {
+{
     log-info "jobs count:$($global:jobs.Length)"
     # Wait for all jobs to complete
     $waiting = $true
 
-    if ($global:jobs -ne @())
- {
-        while ($waiting)
- {
+    if($global:jobs -ne @())
+    {
+        while($waiting)
+        {
             $waiting = $false
-            foreach ($job in Get-Job)
- {
-                if ($showDetail)
- {
+            foreach($job in Get-Job)
+            {
+                if($showDetail)
+                {
                     log-info "waiting on $($job.Name):$($job.State)"
                 }
 
                 switch ($job.State)
- {
+                {
                     'Stopping' { $waiting = $true }
                     'NotStarted' { $waiting = $true }
                     'Blocked' { $waiting = $true }
                     'Running' { $waiting = $true }
                 }
 
-                if ($stop -and $job.State -ieq 'Completed')
- {
+                if($stop -and $job.State -ieq 'Completed')
+                {
                     # gather files
-                    foreach ($machine in $machines)
- {
-                        foreach ($command in $global:stopCommands)
- {
-                            if ($job.Name -ieq "$($machine)-$($command.Name)")
- {
+                    foreach($machine in $machines)
+                    {
+                        foreach($command in $global:stopCommands)
+                        {
+                            if($job.Name -ieq "$($machine)-$($command.Name)")
+                            {
                                 log-info "job completed, copying files from: $($machine) for command: $($command.Name)"
                                 gather-files -command $command -machine $machine
                             }
@@ -1362,29 +1362,29 @@ function wait-forJobs()
                 }
                 
                 # restart failed jobs
-                if ($job.State -ieq 'Failed')
- {
+                if($job.State -ieq 'Failed')
+                {
                     log-info "** JOB FAILED **"
                     Receive-Job -Job $job
                     Remove-Job -Job $job
                 }
 
                 # Getting the information back from the jobs
-                if ($job.State -ieq 'Completed')
- {
+                if($job.State -ieq 'Completed')
+                {
                     Receive-Job -Job $job
                     Remove-Job -Job $job
                 }
             }
             
-            if ($job.State -ieq 'Completed')
- {
-                foreach ($job in $global:jobs)
- {
-                    if ($job.State -ine 'Completed')
- {
-                        if ($showDetail)
- {
+            if($job.State -ieq 'Completed')
+            {
+                foreach($job in $global:jobs)
+                {
+                    if($job.State -ine 'Completed')
+                    {
+                        if($showDetail)
+                        {
                             log-info ("$($job.Name):$($job.State):$($job.Error)")
                         }
 
@@ -1393,7 +1393,7 @@ function wait-forJobs()
                 }
             }
             else
- {
+            {
                 Write-Host "." -NoNewline
             }
 
@@ -1404,9 +1404,9 @@ function wait-forJobs()
  
 # ----------------------------------------------------------------------------------------------------------------
 function xml-reader([string] $file)
- {
-    if ($showDetail) 
- {
+{
+    if($showDetail) 
+    {
         log-info "Reading xml config file:$($file)"
     }
  
@@ -1417,7 +1417,7 @@ function xml-reader([string] $file)
  
 # ----------------------------------------------------------------------------------------------------------------
 function xml-writer([string] $file, [Xml.XmlDocument] $xdoc)
- {
+{
     # write xml
     # if xml is not formatted, this will fix it for example when generating config file with logman export
     [IO.StringWriter] $sw = new-object IO.StringWriter
@@ -1427,8 +1427,8 @@ function xml-writer([string] $file, [Xml.XmlDocument] $xdoc)
     $xdoc.PreserveWhitespace = $true
     $xdoc.LoadXml($sw.ToString())
 
-    if ($showDetail)
- {
+    if($showDetail)
+    {
         log-info "Writing xml config file:$($file)"
     }
     
