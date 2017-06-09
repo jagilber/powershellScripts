@@ -13,6 +13,8 @@
     
     remote requirements:
         powershell access
+
+    https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/hyperv-vm-monitor.ps1
     
 .NOTES  
    File Name  : hyperv-vm-monitor.ps1
