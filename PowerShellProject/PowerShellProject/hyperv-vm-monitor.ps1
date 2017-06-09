@@ -40,71 +40,77 @@
 #>  
 
 param(
-[string]$command,
-[string[]]$hypervisors
+    [string]$command,
+    [string[]]$hypervisors,
+    [switch]$continue
 )
 
-$ErrorActionPreference  = "SilentlyContinue"
+$ErrorActionPreference = "SilentlyContinue"
 $currentVmStates = new-object Collections.ArrayList
 $newVmStates = new-object Collections.ArrayList
 
-if(!$hypervisors)
+if (!$hypervisors)
 {
     $hypervisors = @($env:COMPUTERNAME)
 }
 
-foreach($hvm in $hypervisors)
+foreach ($hvm in $hypervisors)
 {
     write-host "checking machine $($hvm)"
-    [void]$currentVmStates.AddRange((get-vm -ComputerName $hvm | select-object Name,State,Uptime,Status,ComputerName))
+    [void]$currentVmStates.AddRange((get-vm -ComputerName $hvm | select-object Name, State, Uptime, Status, ComputerName))
     #[void]$currentVmStates.AddRange((get-vm -ComputerName $hvm | select-object Name,State,Uptime,Status,ComputerName,HardDrives))
 }
 
-$currentVmStates | ft
+$currentVmStates | Format-Table
 $count = 0
 
-while($true)
+while ($true)
 {
-    if(!$currentVmStates)
+    if (!$currentVmStates)
     {
-        Write-Warning "unable to query current vm states. exiting"
-        exit
+        if (!$continue)
+        {
+            Write-Warning "unable to query current vm states. exiting"
+            exit
+        }
+        
+        Write-Warning "unable to query current vm states."
     }
 
-    foreach($hvm in $hypervisors)
+    foreach ($hvm in $hypervisors)
     {
         write-verbose "checking machine $($hvm)"
-        [void]$newVmStates.AddRange((get-vm -ComputerName $hvm | select-object Name,State,Uptime,Status,ComputerName))
+        [void]$newVmStates.AddRange((get-vm -ComputerName $hvm | select-object Name, State, Uptime, Status, ComputerName))
         #[void]$newVmStates.AddRange((get-vm -ComputerName $hvm | select-object Name,State,Uptime,Status,ComputerName,HardDrives))
     }
 
-    foreach($currentVmState in $currentVmStates)
+    foreach ($currentVmState in $currentVmStates)
     {
-        if(!$newVmStates.Name.Contains($currentVmState.Name))
+        if (!$newVmStates.Name.Contains($currentVmState.Name))
         {
             write-host
             write-host "$((get-date).ToString("o")) removed vm $($currentVmState.Name)" -ForegroundColor Red
-            $currentVmState | ft *
+            $currentVmState | Format-Table *
         }
     }
 
-    foreach($newVmState in $newVmStates)
+    foreach ($newVmState in $newVmStates)
     {
-        if(!$currentVmStates.Name.Contains($newVmState.Name))
+        if (!$currentVmStates.Name.Contains($newVmState.Name))
         {
             write-host
             write-host "$((get-date).ToString("o")) new vm $($newVmState.Name)" -ForegroundColor Green
-            $newVmState | ft *
+            $newVmState | Format-Table *
         }
         else
         {
             $currentVm = $currentVmStates | where-object Name -eq $newVmState.Name
 
-            if(($currentVm.state -ne $newVmState.state) `
-                -or ($currentVm.Uptime -gt $newVmState.Uptime) `
-                -or ($currentVm.ComputerName -ne $newVmState.ComputerName) `
-                -or ($currentVm.Status -ne $newVmState.Status)) #`
-                #-or ($currentVm.HardDrives.Count -ne $newVmState.HardDrives.Count)) 
+            if (($currentVm.state -ne $newVmState.state) `
+                    -or ($currentVm.Uptime -gt $newVmState.Uptime) `
+                    -or ($currentVm.ComputerName -ne $newVmState.ComputerName) `
+                    -or ($currentVm.Status -ne $newVmState.Status)) #`
+            #-or ($currentVm.HardDrives.Count -ne $newVmState.HardDrives.Count)) 
             {
                 write-host
                 write-host "$((get-date).ToString("o")) modified vm $($newVmState.Name)" -ForegroundColor Yellow
@@ -116,7 +122,7 @@ while($true)
                 $newVmState | ft *
                 #$newVmState.HardDrives.Path | ft *
 
-                if($command -and ($newVmState.State -eq "Running") -and ($newVmState.Status -eq "Operating normally"))
+                if ($command -and ($newVmState.State -eq "Running") -and ($newVmState.Status -eq "Operating normally"))
                 {
                     write-host "running command: cmd.exe /c start $($command) $($newVmState.Name)"
                     #Invoke-expression -Command "cmd.exe /c start $($command) $($newVmState.Name)"
@@ -130,7 +136,7 @@ while($true)
     $currentVmStates.AddRange($newVmStates)
     $newVmStates.Clear()
 
-    if($count -eq 80)
+    if ($count -eq 80)
     {
         $count = 0
         write-host "."
