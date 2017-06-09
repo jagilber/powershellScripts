@@ -37,7 +37,7 @@
 
 #>  
 
-params(
+param(
 [string]$command,
 [string[]]$hypervisors
 )
@@ -114,7 +114,12 @@ while($true)
                 $newVmState | ft *
                 #$newVmState.HardDrives.Path | ft *
 
-                Invoke-expression -Command "start $($command) $($newVmState.Name)"
+                if($command -and ($newVmState.State -eq "Running") -and ($newVmState.Status -eq "Operating normally"))
+                {
+                    write-host "running command: cmd.exe /c start $($command) $($newVmState.Name)"
+                    #Invoke-expression -Command "cmd.exe /c start $($command) $($newVmState.Name)"
+                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c start $($command) $($newVmState.Name)"
+                }
             }
         }
     }
