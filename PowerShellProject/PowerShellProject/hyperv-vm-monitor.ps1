@@ -3,7 +3,8 @@
     powershell script to monitor hyper-v vm state changes
 
 .DESCRIPTION  
-    this script will monitor hyper-v vm state changes
+    this script will monitor hyper-v vm state changes.
+    press ctrl-c to exit.
     
     requirements: 
         at least windows 8 / 2012
@@ -21,12 +22,12 @@
                 
 .EXAMPLE  
     .\hyperv-vm-monitor.ps1 -hypervisors machine1,machine2
-    monitor two hypervisor machines machine1 and machine 2
+    monitor two hypervisor machines machine1 and machine2
 
 .EXAMPLE  
-    .\hyperv-vm-monitor.ps1 -hypervisors machine1,machine2 -command .\somescript.ps1
-    monitor two hypervisor machines machine1 and machine 2. 
-    launch command .\somescript.ps1 on modified vm event
+    .\hyperv-vm-monitor.ps1 -hypervisors machine1,machine2 -command "powershell.exe .\somescript.ps1"
+    monitor two hypervisor machines machine1 and machine2. 
+    launches command powershell .\somescript.ps1 <vmname> in new window on modified vm event
 
 .PARAMETER hypervisors
     comma separated list of hypervisor machine names
@@ -113,7 +114,7 @@ while($true)
                 $newVmState | ft *
                 #$newVmState.HardDrives.Path | ft *
 
-                Invoke-expression -Command $command
+                Invoke-expression -Command "start $($command) $($newVmState.Name)"
             }
         }
     }
