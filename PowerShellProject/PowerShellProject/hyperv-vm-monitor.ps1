@@ -45,7 +45,7 @@ param(
     [switch]$continue
 )
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Continue"
 $currentVmStates = new-object Collections.ArrayList
 $newVmStates = new-object Collections.ArrayList
 
