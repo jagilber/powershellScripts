@@ -3,11 +3,12 @@
 # cert auth. put in ps script
 # Add-AzureRmAccount -ServicePrincipal -CertificateThumbprint $cert.Thumbprint -ApplicationId $app.ApplicationId -TenantId $tenantId
 # requires free AAD base subscription
+# https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal#provide-credentials-through-automated-powershell-script
 
 # 170609
 
 param(
-    [switch]$usecert = $false,
+    [bool]$usecert = $true,
     [string]$password,
     [Parameter(Mandatory=$true)]
     [string]$aadDisplayName,
@@ -85,11 +86,13 @@ function main()
         New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
         Start-Sleep 15
         New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $app.ApplicationId
-        New-AzureRmRoleAssignment -RoleDefinitionName "Virtual Machine Contributor" -ServicePrincipalName $app.ApplicationId
+        New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $app.ApplicationId
 
         if ($usecert)
         {
+            write-host "for use in script: Add-AzureRmAccount -ServicePrincipal -CertificateThumbprint $($cert.Thumbprint) -ApplicationId $($app.ApplicationId) -TenantId $($tenantId)"
             write-host "certificate thumbprint: $($cert.Thumbprint)"
+            
         }
     } # else
 
