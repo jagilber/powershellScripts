@@ -314,7 +314,7 @@ function authenticate-azureRm()
 	}
 
 	#  install AzureRM module
-	if (!(get-module AzureRM*))
+	if (!(get-module AzureRM -ListAvailable))
 	{
 		log "installing AzureRm powershell module..."
 		install-module AzureRM -force

@@ -1,5 +1,88 @@
 # general functions
 
+
+# ----------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------
+function authenticate-azureRm()
+{
+    # make sure at least wmf 5.0 installed
+
+    if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
+    {
+        write-host "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
+        start-process "https://www.bing.com/search?q=download+windows+management+framework+5.0"
+        # start-process "https://www.microsoft.com/en-us/download/details.aspx?id=50395"
+        exit
+    }
+
+    #  verify NuGet package
+	$nuget = get-packageprovider nuget -Force
+
+	if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
+	{
+		write-host "installing nuget package..."
+		install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
+	}
+
+    $allModules = (get-module azure* -ListAvailable).Name
+	#  install AzureRM module
+	if ($allModules -inotcontains "AzureRM")
+	{
+        # at least need profile, resources, compute, network
+        if ($allModules -inotcontains "AzureRM.profile")
+        {
+            write-host "installing AzureRm.profile powershell module..."
+            install-module AzureRM.profile -force
+        }
+        if ($allModules -inotcontains "AzureRM.resources")
+        {
+            write-host "installing AzureRm.resources powershell module..."
+            install-module AzureRM.resources -force
+        }
+        if ($allModules -inotcontains "AzureRM.compute")
+        {
+            write-host "installing AzureRm.compute powershell module..."
+            install-module AzureRM.compute -force
+        }
+        if ($allModules -inotcontains "AzureRM.network")
+        {
+            write-host "installing AzureRm.network powershell module..."
+            install-module AzureRM.network -force
+
+        }
+            
+        Import-Module azurerm.profile        
+        Import-Module azurerm.resources        
+        Import-Module azurerm.compute            
+        Import-Module azurerm.network
+		#write-host "installing AzureRm powershell module..."
+		#install-module AzureRM -force
+        
+	}
+    else
+    {
+        Import-Module azurerm
+    }
+
+    # authenticate
+    try
+    {
+        Get-AzureRmResourceGroup | Out-Null
+    }
+    catch
+    {
+        try
+        {
+            Add-AzureRmAccount
+        }
+        catch
+        {
+            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+            exit 1
+        }
+    }
+}
+
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {

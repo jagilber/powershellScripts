@@ -68,7 +68,7 @@ param(
     [switch]$update
 )
 
-set-strictmode –version Latest
+set-strictmode -version Latest
 $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference = "SilentlyContinue"
 $global:resourceList = @{}
@@ -127,7 +127,7 @@ function main()
     
     # connect to azure
     authenticate-azureRm
-    $subscriptions = get-subscriptions
+    $subscriptions = @(get-subscriptions)
     $redisplay = $true
 
     while ($redisplay -and $subscriptions.Count -gt 0)
@@ -297,20 +297,51 @@ function authenticate-azureRm()
     #  verify NuGet package
 	$nuget = get-packageprovider nuget -Force
 
-	if (-not $nuget -or ($nuget.Version -lt 2.8.5.22))
+	if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
 	{
-		log "installing nuget package..."
-		install-packageprovider -name NuGet -minimumversion 2.8.5.201 -force
+		write-host "installing nuget package..."
+		install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
 	}
 
+    $allModules = (get-module azure* -ListAvailable).Name
 	#  install AzureRM module
-	if (!(get-module AzureRM*))
+	if ($allModules -inotcontains "AzureRM")
 	{
-		log "installing AzureRm powershell module..."
-		install-module AzureRM -force
-	}
+        # at least need profile, resources, compute, network
+        if ($allModules -inotcontains "AzureRM.profile")
+        {
+            write-host "installing AzureRm.profile powershell module..."
+            install-module AzureRM.profile -force
+        }
+        if ($allModules -inotcontains "AzureRM.resources")
+        {
+            write-host "installing AzureRm.resources powershell module..."
+            install-module AzureRM.resources -force
+        }
+        if ($allModules -inotcontains "AzureRM.compute")
+        {
+            write-host "installing AzureRm.compute powershell module..."
+            install-module AzureRM.compute -force
+        }
+        if ($allModules -inotcontains "AzureRM.network")
+        {
+            write-host "installing AzureRm.network powershell module..."
+            install-module AzureRM.network -force
 
-    Import-Module azurerm
+        }
+            
+        Import-Module azurerm.profile        
+        Import-Module azurerm.resources        
+        Import-Module azurerm.compute            
+        Import-Module azurerm.network
+		#write-host "installing AzureRm powershell module..."
+		#install-module AzureRM -force
+        
+	}
+    else
+    {
+        Import-Module azurerm
+    }
 
     # authenticate
     try
@@ -319,7 +350,15 @@ function authenticate-azureRm()
     }
     catch
     {
-        Add-AzureRmAccount
+        try
+        {
+            Add-AzureRmAccount
+        }
+        catch
+        {
+            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+            exit 1
+        }
     }
 }
 
@@ -406,7 +445,7 @@ function enum-resourcegroup([string] $subid)
             # look for public ips
             foreach ($pubIp in (query-publicIp -resourceName $resourceGroup.ResourceGroupName -ipName $publicIpAddressName))
             {
-                if ($pubIp.IpAddress.Length -le 1)
+                if (!$pubIp -or $pubIp.IpAddress.Length -le 1)
                 {
                     continue
                 }
