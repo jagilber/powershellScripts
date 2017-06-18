@@ -71,7 +71,7 @@ param(
 set-strictmode –version Latest
 $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference = "SilentlyContinue"
-$global:resourceList = @{}
+
 $global:selfSigned = $false
 $global:san = $false
 $global:wildcard = $false
@@ -134,7 +134,7 @@ function main()
     {
         foreach ($sub in $subscriptions)
         {
-            $global:resourceList.Clear()
+            $resourceList = @{}
 
             if ([string]::IsNullOrEmpty($sub))
             {
@@ -144,16 +144,22 @@ function main()
             Set-AzureRmContext -SubscriptionId $sub
             write-host "enumerating subscription $($sub)"
 
-            if (!(enum-resourcegroup $sub))
+            if (!($resourceList = enum-resourcegroup $sub))
             {
                 continue
             }
 
-            if ($global:resourceList.Count -gt 1)
+            $count = 0
+            foreach($resource in $resourceList)
+            {
+                write-host "$($count++). $($resource.message)"
+            }
+
+            if ($resourceList.Count -gt 1)
             {
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to")
             }
-            elseif ($global:resourceList.Count -eq 1)
+            elseif ($resourceList.Count -eq 1)
             {
                 $id = 1
             }
@@ -186,7 +192,7 @@ function main()
 
             foreach ($id in $ids)
             {
-                if (!([Convert]::ToInt32($id)) -or $id -gt $global:resourceList.Count -or $id -lt 1)
+                if (!([Convert]::ToInt32($id)) -or $id -gt $resourceList.Count -or $id -lt 1)
                 {
                     write-host "invalid entry $($id)..."
                     continue
@@ -194,12 +200,14 @@ function main()
 
                 [int]$id = [Convert]::ToInt32($id)
 
-                $resourceGroup = Get-AzureRmResourceGroup -Name $global:resourceList[$id].Values.ResourceGroupName -WarningAction SilentlyContinue
+                #$resourceGroup = Get-AzureRmResourceGroup -Name $resourceList[$id].Values.ResourceGroupName -WarningAction SilentlyContinue
+                $resourceGroup = $resourceList[$id].resourceGroup
                 write-host $resourceGroup.ResourceGroupName
                 write-verbose "enum-resourcegroup returning:$($resourceGroup | fl | out-string)"
 
-                $resourceGroup = $global:resourceList[$id].Values
-                $ip = $global:resourceList[$id].Keys
+                #$resourceGroup = $resourceList[$id].Values
+                #$ip = $resourceList[$id].Keys
+                $ip = $resourceList[$id].publicIp
         
                 # enumerate resource group
                 write-host "provision state: $($resourceGroup.ProvisioningState)"
@@ -227,6 +235,8 @@ function main()
             }
         }
     }
+
+    log-info "finished"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -351,6 +361,7 @@ function enum-resourcegroup([string] $subid)
     $resourceGroup = $null
     $id = 0
     $message = ""
+    $resourceList =  New-Object Collection.ArrayList
 
     try
     {
@@ -369,6 +380,15 @@ function enum-resourcegroup([string] $subid)
 
         foreach ($resourceGroup in $resourceGroups)
         {
+            $resource = @{}
+            $resource.publicIp = $null
+            $resource.subId = $subid
+            $resource.message = [string]::Empty
+            $resource.resourceGroup = $resourceGroup
+            $resource.rdWebUrl = [string]::Empty
+            $resource.certInfo = $null
+            $resource.messageColor = "White"
+
             write-verbose "enumerating resourcegroup: $($resourcegroup.ResourceGroupName)"
 
             # check all vm's
@@ -388,18 +408,21 @@ function enum-resourcegroup([string] $subid)
                         
                     write-verbose "`t $($pubIp.Id)"
 
-                    if ($global:resourceList.Count -gt 0 -and $global:resourceList.Values.Keys.IpAddress.Contains($publicIp.IpAddress))
+                    if ($resourceList.Count -gt 0 -and $resourceList.Values.Keys.IpAddress.Contains($publicIp.IpAddress))
                     {
                         write-verbose "duplicate entry $($publicIp.IpAddress)"
                         continue
                     }
-                        
-                    [void]$global:resourceList.Add($count, @{$publicIp = $resourceGroup})
+                     
+                    
+                       
+                    #[void]$resourceList.Add($count, @{$publicIp = $resourceGroup})
                     $message = "`r`n`tResource Group: $($resourceGroup.ResourceGroupName)`r`n`tIP name: $($publicIp.Name)`r`n`tIP address: $($publicIp.IpAddress)"
-                    $message = "$($count). VM: mstsc.exe /v $($publicIp.IpAddress) /admin$($message)"
-                    write-host $message                        
-
-                    $count++
+                    #$message = "$($count). VM: mstsc.exe /v $($publicIp.IpAddress) /admin$($message)"
+                    $message = " VM: mstsc.exe /v $($publicIp.IpAddress) /admin$($message)"
+                    $resource.message = $message                        
+                    $resource.publicIp = $publicIp
+                    [void]$resourceList.Add($resource)
                 }
             }
 
@@ -412,13 +435,13 @@ function enum-resourcegroup([string] $subid)
                 }
 
                 write-verbose "`t public ip: $($pubIp.Id)"
-                if ($global:resourceList.Count -gt 0 -and $global:resourceList.Values.Keys.IpAddress.Contains($pubIp.IpAddress))
+                if ($resourceList.Count -gt 0 -and $resourceList.Values.Keys.IpAddress.Contains($pubIp.IpAddress))
                 {
                     write-verbose "public ip duplicate entry"
                     continue
                 }
                 
-                [void]$global:resourceList.Add($count, @{$pubIp = $resourceGroup})
+                #[void]$resourceList.Add($count, @{$pubIp = $resourceGroup})
                 $rdwebUrl = "https://$($pubIp.IpAddress)/RDWeb"
                 $message = "`r`n`tResource Group: $($resourceGroup.ResourceGroupName)`r`n`tIP name: $($pubIp.Name)`r`n`tIP address: $($pubIp.IpAddress)"
                 
@@ -426,20 +449,29 @@ function enum-resourcegroup([string] $subid)
 
                 if (![string]::IsNullOrEmpty($certInfo) -and $certInfo -ne $false)
                 {
-                    $message = "$($count). RDWEB: $($rdwebUrl)$($message)`r`n`tCert Subject: $($certInfo.Subject)"
-                    write-host $message -ForegroundColor Green
+                    $resource.message = " RDWEB: $($rdwebUrl)$($message)`r`n`tCert Subject: $($certInfo.Subject)"
+                    $resource.messageColor = Green
                 }
                 else
                 {
-                    $message = "$($count). PUBIP: mstsc.exe /v $($pubIp.IpAddress) /admin$($message)"
-                    write-host $message
+                    $resource.message = " PUBIP: mstsc.exe /v $($pubIp.IpAddress) /admin$($message)"
                 }
                 
-                $count++
+                $resource.certInfo = $certInfo
+                $resource.rdWebUrl = $rdwebUrl                
+                $resource.publicIp = $publicIp
+                [void]$resourceList.Add($resource)
             }
         }
 
-        return $true
+        if($resourceList.Count)
+        {
+            return $resourceList
+        }
+        else
+        {
+            return $false
+        }
     }
     catch
     {
@@ -860,6 +892,7 @@ function start-mstsc($ip)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-main
-write-host "finished"
-
+if ($host.Name -ine "ServerRemoteHost")
+{
+    main
+}

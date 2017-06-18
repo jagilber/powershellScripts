@@ -243,3 +243,11 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+
+# CUSTOM
+
+*.txt
+*.cer
+*.pfx
+**/gather
+**/Configuration
