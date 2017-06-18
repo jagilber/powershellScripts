@@ -1,7 +1,7 @@
 
 param(
     [switch]$start,
-    [int]$throttle = 2
+    [int]$throttle = 20
 )
 
 $global:jobs = New-Object Collections.ArrayList
@@ -13,33 +13,22 @@ function main()
     {
         get-job | remove-job -Force
 
+        $jobInfos = New-Object Collections.ArrayList
+
         # add values here to pass to jobs
-        $this = @{}
-        $this.jobName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.Scriptname)
-        $this.invocation = $MyInvocation
-        $this.action = "test"
+        $jobInfo = @{}
+        $jobInfo.jobName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.Scriptname)
+        $jobInfo.invocation = $MyInvocation
+        $JobInfo.backgroundJobFunction = (get-item function:do-backgroundJob)
+        $jobInfo.action = "test"
+        $jobInfo.result = $null
 
-        while ($true)
-        {
-            if (((get-job).State -eq "Running").Count -le $throttle)
-            {
-                $global:jobs.Add((start-backgroundJob -this $this))
-            }
+        $jobInfos.Add($jobInfo)
 
-            foreach ($job in get-job)
-            {
-                if ($job.State -ine "Running")
-                {
-                    get-job -Id $job.Id  
-                    Receive-Job -Job $job
-                    Remove-Job -Id $job.Id -Force  
-                }
-            }
+        start-backgroundJobs -jobInfos $jobInfos -throttle $throttle
 
-            get-job | Receive-Job
-            Start-Sleep -Seconds 1
-        } 
-          
+        monitor-backgroundJobs 
+                  
         log-info "finished"
     }
     finally
@@ -55,34 +44,80 @@ function log-info ([string]$data)
 }
 
 #-------------------------------------------------------------------
-function do-backgroundJob($this)
+function do-backgroundJob($jobInfo)
 {
+    $count = 0
     while ($true)
     {
-        log-info "doing background job $($this.action)"
-        log-info ($this.action)
+        log-info "doing background job $($jobInfo.action)"
+        log-info ($jobInfo.action)
         "================"
+        $jobInfo.result = $count
+        
+
+        $jobInfo
         Start-Sleep -Seconds 1
+        $count++
     }
 }
 
+#-------------------------------------------------------------------
+function monitor-backgroundJobs()
+{
+    while (get-job)
+    {
+        foreach ($job in get-job)
+        {
+            if ($job.State -ine "Running")
+            {
+                $job
+                Remove-Job -Id $job.Id -Force  
+            }
+            else
+            {
+                $jobInfo = Receive-Job -Job $job
+                $jobInfo
+            }            
+
+            Start-Sleep -Seconds 1
+        }
+    }
+}
 
 #-------------------------------------------------------------------
-function start-backgroundJob($this)
+function start-backgroundJob($jobInfo)
 {
     log-info "starting background job"
         
     $job = Start-Job -ScriptBlock `
- { 
-        param($this)
+    { 
+        param($jobInfo)
 
-        . $($this.invocation.scriptname)
-        log-info ($this.action)
-        do-backgroundJob -this $this
+        . $($jobInfo.invocation.scriptname)
+        log-info ($jobInfo.action)
+        #do-backgroundJob -jobInfo $jobInfo
+        & $jobInfo.backgroundJobFunction $jobInfo
 
-    } -Name $this.jobName -ArgumentList $this
+    } -Name $jobInfo.jobName -ArgumentList $jobInfo
     
     return $job
+}
+
+#-------------------------------------------------------------------
+function start-backgroundJobs($jobInfos, $throttle)
+{
+    log-info "starting background jobs"
+
+    foreach ($jobInfo in $jobInfos)
+    {
+        while (((get-job).State -eq "Running").Count -gt $throttle)
+        {
+            Write-Verbose "throttled"
+            Start-Sleep -Seconds 1
+        }
+
+        $global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
+    }
 }
 
 #-------------------------------------------------------------------

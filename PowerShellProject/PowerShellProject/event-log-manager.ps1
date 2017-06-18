@@ -18,8 +18,9 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170714 add $command
+   Version    : 170616 added set-strictmode
    History    : 
+                170614 add $command
                 170518 added try catch to getlognames().
                 170315 changed documentation for eventlognamepattern. one example had eventlognames
                 170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
@@ -242,7 +243,7 @@ Param(
     [string] $uploadDir
 )
 
-cls
+Set-StrictMode -Version Latest
 $appendOutputFiles = $false
 $debugLogsMax = 100
 $errorActionPreference = "Continue"
@@ -565,6 +566,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 {
     $newEvents = New-Object Collections.ArrayList 
     $listenJobItem = @{}
+    $preader = $null
 
     # build query string from ids and levels
     if (![string]::IsNullOrEmpty($global:eventLogLevelsQuery) -and ![string]::IsNullOrEmpty($global:eventLogIdsQuery))
@@ -599,7 +601,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 
         try
         {
-            $pathType
+            $pathType = $null
 
             # peek to see if any records, if so start job
             if (!$global:eventLogFiles)
@@ -635,7 +637,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 
             if ($listen)
             {
-                if ($listenJobItem.Keys.Count -eq 0)
+                if (!$listenJobItem -or $listenJobItem.Keys.Count -eq 0)
                 {
                     $listenJobItem = @{}
                     $listenJobItem.Machine = $machine
@@ -692,7 +694,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
         } # end if
     } # end for
 
-    if ($listenJobItem.Count -gt 0)
+    if ($listenJobItem -and $listenJobItem.Count -gt 0)
     {
         $job = start-listenJob -jobItem $listenJobItem
     }
@@ -961,7 +963,7 @@ function listen-forEvents()
                 log-info (get-job).Debug | fl * | out-string
             }
 
-            if (@($newEvents.Count) -gt 0)
+            if ($newEvents.Count -gt 0)
             {
                 [void]$unsortedEvents.AddRange(@($newEvents | sort-object))
             }
@@ -1132,10 +1134,10 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         if ($global:logStream -eq $null)
         {
             $global:logStream = new-object System.IO.StreamWriter ($logFile, $true)
-            $global:logTimer.Interval = 5000 #5 seconds  
+            $global:logTimer.Interval = 5000 #5 seconds
 
             Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
- { 
+            { 
                 Unregister-Event -SourceIdentifier logTimer
                 $global:logStream.Close() 
                 $global:logStream = $null
@@ -1145,7 +1147,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
         }
 
         # reset timer
-        $global:logTimer.Interval = 5000 #5 seconds  
+        $global:logTimer.Interval = 5000 #5 seconds
         $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch {}
@@ -1360,7 +1362,7 @@ function remove-jobs($silent)
 {
     try
     {
-        if ((get-job).Count -gt 0)
+        if (@(get-job).Count -gt 0)
         {
             if (!$silent -and !(Read-Host -Prompt "delete existing jobs?[y|n]:") -like "y")
             {
@@ -1408,7 +1410,7 @@ function set-uploadDir()
     get-workingDirectory
 
     # if parsing a path for evtx files to convert and no upload path is given then use path of evtx
-    if ([string]::IsNullOrEmpty($global:uploadDir) -and $global:eventLogFiles)
+    if (!$global:uploadDir -and $global:eventLogFiles)
     {
         if ([IO.Directory]::Exists($eventLogPath))
         {
@@ -1419,7 +1421,7 @@ function set-uploadDir()
             $global:uploadDir = [IO.Path]::GetDirectoryName($eventLogPath)
         }
     }
-    elseif ([string]::IsNullOrEmpty($global:uploadDir))
+    elseif (!$global:uploadDir)
     {
         $global:uploadDir = "$(get-location)\gather"
     }
@@ -1455,7 +1457,7 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
     log-info "starting export job:$($machine) eventlog:$($eventLogName)" -debugOnly
 
     #throttle
-    While ((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
+    While (@(Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         receive-backgroundJobs
         Start-Sleep -Milliseconds 100
@@ -1530,10 +1532,10 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
                 {
                     break
                 }
-                elseif (![string]::IsNullOrEmpty($event.TimeCreated))
+                elseif ($event.TimeCreated)
                 {
                     $description = $event.FormatDescription()
-                    if ([string]::IsNullOrEmpty($description))
+                    if (!$description)
                     {
                         $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                     }
@@ -1543,10 +1545,11 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
                     }
 
                     # event log 'details' tab
-                    if ($eventdetails -or $eventDetailsFormatted -or [string]::IsNullOrEmpty($description))
+                    if ($eventdetails -or $eventDetailsFormatted -or !$description)
                     {
                         $eventXml = $event.ToXml()
-                        if (![string]::IsNullOrEmpty($eventXml))
+
+                        if ($eventXml)
                         {
                             if ($eventDetailsFormatted)
                             {
@@ -1580,12 +1583,12 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
                         + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
                         + "$($description)"))
 
-                    if ([string]::IsNullOrEmpty($eventTracePattern) -or 
-                        (![string]::IsNullOrEmpty($eventTracePattern) -and 
+                    if (!$eventTracePattern -or 
+                        ($eventTracePattern -and 
                             [regex]::IsMatch($outputEntry, $eventTracePattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
                                 [Text.RegularExpressions.RegexOptions]::Singleline)))
                     {
-                        if (![string]::IsNullOrEmpty($eventTracePattern))
+                        if ($eventTracePattern)
                         {
                             write-host "------------------------------------------"
                             write-host $outputEntry
@@ -1609,7 +1612,7 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
             }
             catch
             {
-                if ($global:debugscript)
+                if ($debugscript)
                 {
                     write-host "job exception:$($error)"
                 }
@@ -1670,7 +1673,7 @@ function start-listenJob([hashtable]$jobItem)
     log-info "starting listen job:$($jobItem.Machine)" -debugOnly
     
     # max job check
-    if ((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
+    if (@(Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         log-info "error: too many listen jobs running. returning..."
         return
@@ -1751,10 +1754,10 @@ function start-listenJob([hashtable]$jobItem)
                             {
                                 break
                             }
-                            elseif (![string]::IsNullOrEmpty($event.TimeCreated))
+                            elseif ($event.TimeCreated)
                             {
                                 $description = $event.FormatDescription()
-                                if ([string]::IsNullOrEmpty($description))
+                                if (!$description)
                                 {
                                     $description = "$(([xml]$event.ToXml()).Event.UserData.InnerXml)"
                                 }
@@ -1764,10 +1767,10 @@ function start-listenJob([hashtable]$jobItem)
                                 }
 
                                 # event log 'details' tab
-                                if ($eventdetails -or $eventDetailsFormatted -or [string]::IsNullOrEmpty($description))
+                                if ($eventdetails -or $eventDetailsFormatted -or !$description)
                                 {
                                     $eventXml = $event.ToXml()
-                                    if (![string]::IsNullOrEmpty($eventXml))
+                                    if ($eventXml)
                                     {
                                         if ($eventDetailsFormatted)
                                         {
@@ -1801,8 +1804,8 @@ function start-listenJob([hashtable]$jobItem)
                                     + "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
                                     + "$($event.ThreadId),$($description)"))
 
-                                if ([string]::IsNullOrEmpty($eventTracePattern) -or 
-                                    (![string]::IsNullOrEmpty($eventTracePattern) -and 
+                                if (!$eventTracePattern -or 
+                                    ($eventTracePattern -and 
                                         [regex]::IsMatch($outputEntry, $eventTracePattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
                                             [Text.RegularExpressions.RegexOptions]::Singleline)))
                                 {
@@ -1901,7 +1904,7 @@ function start-listenJob([hashtable]$jobItem)
         $eventDetailsFormatted,
         $listenEventReadCount,
         $listenSleepMs,
-        $global:debugscript
+        $debugscript
     )
 
     return $job 
