@@ -14,7 +14,6 @@ function main()
         get-job | remove-job -Force
 
         $jobInfos = New-Object Collections.ArrayList
-
         # add values here to pass to jobs
         $jobInfo = @{}
         $jobInfo.jobName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.Scriptname)
@@ -29,6 +28,29 @@ function main()
 
         monitor-backgroundJobs 
                   
+        $jobInfo.action = "test"
+
+        while ($true)
+        {
+            if (((get-job).State -eq "Running").Count -le $throttle)
+            {
+                $global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
+            }
+
+            foreach ($job in get-job)
+            {
+                if ($job.State -ine "Running")
+                {
+                    get-job -Id $job.Id  
+                    Receive-Job -Job $job
+                    Remove-Job -Id $job.Id -Force  
+                }
+            }
+
+            get-job | Receive-Job
+            Start-Sleep -Seconds 1
+        } 
+          
         log-info "finished"
     }
     finally
@@ -43,7 +65,6 @@ function log-info ([string]$data)
     write-host ("$((get-date).ToString("o")):$([Diagnostics.Process]::GetCurrentProcess().Id) $data")
 }
 
-# ----------------------------------------------------------------------------------------------------------------
 function do-backgroundJob($jobInfo)
 {
     $count = 0
@@ -84,7 +105,12 @@ function monitor-backgroundJobs()
     }
 }
 
-# ----------------------------------------------------------------------------------------------------------------
+        Start-Sleep -Seconds 1
+    }
+}
+
+
+#-------------------------------------------------------------------
 function start-backgroundJob($jobInfo)
 {
     log-info "starting background job"
