@@ -18,8 +18,9 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170510 updated git links
+   Version    : 170617 add import-module azurerm. add replace \u0027
    History    : 
+                170510 updated git links
                 170102.1 changed output formatting. switched to named pipe 
                 161205 v1
 .EXAMPLE  
@@ -142,6 +143,7 @@ function main()
         return
     }
 
+    import-module azurerm
     # check for azurerm.resources
     if(!(get-command -Name Get-AzureRmResourceGroupDeployment))
     {
@@ -679,7 +681,7 @@ function format-record([string]$inputString)
     # , new line and replace with new line
     # , and replace with new line tab tab
 
-    return ((($inputString).Replace("\`"","").Replace("`"","").Replace("\r\n","`r`n`t`t").Replace("{","{`r`n`t`t").Replace("}","`r`n`t`t}") -replace ",`r`n","`r`n") -replace ",","`r`n`t`t")
+    return ((($inputString).Replace("\u0027","'").Replace("\`"","").Replace("`"","").Replace("\r\n","`r`n`t`t").Replace("{","{`r`n`t`t").Replace("}","`r`n`t`t}") -replace ",`r`n","`r`n") -replace ",","`r`n`t`t")
 }
 
 # ----------------------------------------------------------------------------------------------------------------
