@@ -262,7 +262,7 @@ function get-update($updateUrl, $destinationFile)
 function log-info($data)
 {
     $dataWritten = $false
-    $data = "$([System.DateTime]::Now):$($data)`n"
+    $data = "$([System.DateTime]::Now):$($data)`n"
     if([regex]::IsMatch($data.ToLower(),"error|exception|fail|warning"))
     {
         write-host $data -foregroundcolor Yellow
@@ -281,7 +281,7 @@ function log-info($data)
     }
     else
     {
-        Write-Host $data
+        Write-Host $data
     }
 
     $counter = 0
@@ -289,7 +289,7 @@ function log-info($data)
     {
         try
         {
-            $ret = out-file -Append -InputObject $data -FilePath $logFile
+            $ret = out-file -Append -InputObject $data -FilePath $logFile
             $dataWritten = $true
         }
         catch
@@ -504,16 +504,16 @@ function runas-admin()
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
     $Error.Clear()
-    log-info "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = !$wait
-    $process.StartInfo.RedirectStandardOutput = $wait
-    $process.StartInfo.RedirectStandardError = $wait
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $wait
-    $process.StartInfo.WorkingDirectory = get-location
+    log-info "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = !$wait
+    $process.StartInfo.RedirectStandardOutput = $wait
+    $process.StartInfo.RedirectStandardError = $wait
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $wait
+    $process.StartInfo.WorkingDirectory = get-location
     $process.StartInfo.ErrorDialog = $true
     $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
     $process.StartInfo.LoadUserProfile = $false
@@ -523,12 +523,12 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
  
     [void]$process.Start()
  
-    if($wait -and !$process.HasExited)
-    {
+    if($wait -and !$process.HasExited)
+    {
  
-        if($process.StandardOutput.Peek() -gt -1)
+        if($process.StandardOutput.Peek() -gt -1)
         {
-            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut = $process.StandardOutput.ReadToEnd()
             log-info $stdOut
         }
  
@@ -537,22 +537,22 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
         {
             $stdErr = $process.StandardError.ReadToEnd()
             log-info $stdErr
-            $Error.Clear()
-        }
+            $Error.Clear()
+        }
             
-    }
-    elseif($wait)
-    {
-        log-info "Error:Process ended before capturing output."
-    }
-    
+    }
+    elseif($wait)
+    {
+        log-info "Error:Process ended before capturing output."
+    }
+    
  
-    
+    
     $exitVal = $process.ExitCode
  
     log-info "Running process exit $($processName) : $($exitVal)"
-    $Error.Clear()
+    $Error.Clear()
  
-    return $stdOut
+    return $stdOut
 }
 

@@ -200,8 +200,8 @@ function log-info($data)
 {
     
     $dataWritten = $false
-    $data = "$([System.DateTime]::Now):$($data)`n"
-    write-host $data
+    $data = "$([System.DateTime]::Now):$($data)`n"
+    write-host $data
     $counter = 0
 
     while (!$dataWritten -and $counter -lt 1000)

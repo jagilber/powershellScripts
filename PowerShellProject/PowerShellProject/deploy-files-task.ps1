@@ -117,40 +117,40 @@ function main()
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
-    log-info "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $true
-    $process.StartInfo.RedirectStandardError = $true
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $true
+    log-info "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $true
     #only needed if useshellexecute is true
-    $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
+    $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
  
     [void]$process.Start()
-    if($wait -and !$process.HasExited)
-    {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
+    if($wait -and !$process.HasExited)
+    {
+        $process.WaitForExit($processWaitMs)
+        $exitVal = $process.ExitCode
+        $stdOut = $process.StandardOutput.ReadToEnd()
+        $stdErr = $process.StandardError.ReadToEnd()
+        log-info "Process output:$stdOut"
  
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
-    }
-    elseif($wait)
-    {
-        log-info "Process ended before capturing output."
-    }
-    
+        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+        {
+            log-info "Error:$stdErr `n $Error"
+            $Error.Clear()
+        }
+    }
+    elseif($wait)
+    {
+        log-info "Process ended before capturing output."
+    }
+    
     #return $exitVal
-    return $stdOut
+    return $stdOut
 }
  
  
@@ -165,8 +165,8 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [bool] $wait = $false)
 {
-        # win 2k8r2 and below have to use com object
-        # 2012 can use cmdlets
+        # win 2k8r2 and below have to use com object
+        # 2012 can use cmdlets
 
         
         $TaskName = $taskInfo.taskname
@@ -176,9 +176,9 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
         $TaskArg = $taskInfo.taskarg
 
         $error.Clear()
-        $service = new-object -ComObject("Schedule.Service")
-        # connect to the local machine. 
-        # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
+        $service = new-object -ComObject("Schedule.Service")
+        # connect to the local machine. 
+        # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
 	    # for remote machine connect do $service.Connect(serverName,user,domain,password)
         if([string]::IsNullOrEmpty($machine))
         {
@@ -186,73 +186,73 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
         }
         else
         {
-            $service.Connect($machine)
+            $service.Connect($machine)
         }
  
-        $rootFolder = $service.GetFolder("\")
+        $rootFolder = $service.GetFolder("\")
  
-        if($enable)
-        {
-            $TaskDefinition = $service.NewTask(0) 
-            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
+        if($enable)
+        {
+            $TaskDefinition = $service.NewTask(0) 
+            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
             # 2k8r2 is 65539 (0x10003) 1.3
             # procmon needs at least 2k8r2 compat
             #$TaskDefinition.Settings.Compatibility = 3
-            $TaskDefinition.Settings.Enabled = $true
-            $TaskDefinition.Settings.AllowDemandStart = $true
+            $TaskDefinition.Settings.Enabled = $true
+            $TaskDefinition.Settings.AllowDemandStart = $true
  
-            $triggers = $TaskDefinition.Triggers
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
-            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
-            $trigger.Enabled = $true
+            $triggers = $TaskDefinition.Triggers
+            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
+            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
+            $trigger.Enabled = $true
  
-            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
-            $Action = $TaskDefinition.Actions.Create(0)
-            $action.Path = "$TaskCommand"
-            $action.Arguments = "$TaskArg"
-            $action.WorkingDirectory = $TaskDir
-            
+            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
+            $Action = $TaskDefinition.Actions.Create(0)
+            $action.Path = "$TaskCommand"
+            $action.Arguments = "$TaskArg"
+            $action.WorkingDirectory = $TaskDir
+            
             #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
-            $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
+            $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
  
-            #start task
-            $task = $rootFolder.GetTask($TaskName)
+            #start task
+            $task = $rootFolder.GetTask($TaskName)
  
-            $task.Run($null)
+            $task.Run($null)
  
-        }
-        else
-        {
-            # stop task if its running
-            foreach($task in $service.GetRunningTasks(1))
-            {
-                if($task.Name -ieq $TaskName)
-                {
+        }
+        else
+        {
+            # stop task if its running
+            foreach($task in $service.GetRunningTasks(1))
+            {
+                if($task.Name -ieq $TaskName)
+                {
                     log-info "found task"
-                    $task.Stop()
-                }
-            }
+                    $task.Stop()
+                }
+            }
  
-            # delete task
-            $rootFolder.DeleteTask($TaskName,$null)
-        }
+            # delete task
+            $rootFolder.DeleteTask($TaskName,$null)
+        }
  
-        if($wait)
+        if($wait)
         {
             log-info "waiting for task to complete"
             while($true)
             {
                 $foundTask = $false
-                # stop task if its running
-                foreach($task in $service.GetRunningTasks(1))
-                {
-                    if($task.Name -ieq $TaskName)
-                    {
+                # stop task if its running
+                foreach($task in $service.GetRunningTasks(1))
+                {
+                    if($task.Name -ieq $TaskName)
+                    {
                         log-info "found task"
-                        $foundTask = $true
-                    }
-                }
+                        $foundTask = $true
+                    }
+                }
 
                 if(!$foundTask)
                 {
@@ -279,32 +279,32 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {
-    [string] $retVal = ""
+    [string] $retVal = ""
  
-    if (Test-Path variable:\hostinvocation)
-    {
-        $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
+    if (Test-Path variable:\hostinvocation)
+    {
+        $retVal = $hostinvocation.MyCommand.Path
+    }
+    else
+    {
+        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    }
   
     if (Test-Path $retVal)
-    {
-        $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-        $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
+    {
+        $retVal = (Split-Path $retVal)
+    }
+    else
+    {
+        $retVal = (Get-Location).path
+        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
+        
     } 
  
-    
+    
     Set-Location $retVal
  
-    return $retVal
+    return $retVal
  
 }
  

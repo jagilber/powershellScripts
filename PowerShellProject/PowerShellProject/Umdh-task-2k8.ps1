@@ -73,40 +73,40 @@ function main()
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
-    log-info "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $true
-    $process.StartInfo.RedirectStandardError = $true
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $true
+    log-info "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $true
     #only needed if useshellexecute is true
-    $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
+    $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
  
     [void]$process.Start()
-    if($wait -and !$process.HasExited)
-    {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
+    if($wait -and !$process.HasExited)
+    {
+        $process.WaitForExit($processWaitMs)
+        $exitVal = $process.ExitCode
+        $stdOut = $process.StandardOutput.ReadToEnd()
+        $stdErr = $process.StandardError.ReadToEnd()
+        log-info "Process output:$stdOut"
  
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
-    }
-    elseif($wait)
-    {
-        log-info "Process ended before capturing output."
-    }
-    
+        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+        {
+            log-info "Error:$stdErr `n $Error"
+            $Error.Clear()
+        }
+    }
+    elseif($wait)
+    {
+        log-info "Process ended before capturing output."
+    }
+    
     #return $exitVal
-    return $stdOut
+    return $stdOut
 }
 
 
@@ -122,32 +122,32 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {
-    [string] $retVal = ""
+    [string] $retVal = ""
  
-    if (Test-Path variable:\hostinvocation)
-    {
-        $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
+    if (Test-Path variable:\hostinvocation)
+    {
+        $retVal = $hostinvocation.MyCommand.Path
+    }
+    else
+    {
+        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    }
   
     if (Test-Path $retVal)
-    {
-        $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-        $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
+    {
+        $retVal = (Split-Path $retVal)
+    }
+    else
+    {
+        $retVal = (Get-Location).path
+        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
+        
     } 
  
-    
+    
     Set-Location $retVal
  
-    return $retVal
+    return $retVal
 
 }
 

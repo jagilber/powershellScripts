@@ -155,16 +155,16 @@ function log-info($data)
 {
     
     $dataWritten = $false
-    $data = "$([System.DateTime]::Now):$($data)`n"
+    $data = "$([System.DateTime]::Now):$($data)`n"
 
-    write-host $data
+    write-host $data
 
     $counter = 0
     while(!$dataWritten -and $counter -lt 1000)
     {
         try
         {
-            out-file -Append -InputObject $data -FilePath $logFile
+            out-file -Append -InputObject $data -FilePath $logFile
             $dataWritten = $true
         }
         catch

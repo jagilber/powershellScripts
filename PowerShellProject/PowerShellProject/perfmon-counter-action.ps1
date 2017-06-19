@@ -115,7 +115,7 @@ function run-process([string] $processName, [string] $arguments, [string] $worki
     $process.StartInfo.FileName = $processName
     $process.StartInfo.Arguments = $arguments
     $process.StartInfo.CreateNoWindow = $true
-    $process.StartInfo.WorkingDirectory = $workingDir
+    $process.StartInfo.WorkingDirectory = $workingDir
  
     [void]$process.Start()
     if($wait -and !$process.HasExited)

@@ -14,13 +14,13 @@
   
 .EXAMPLE  
     .\rds-upd-mgr.ps1 -user jagilber
-    .\rds-upd-mgr.ps1 -sid S-1-5-21-124525095-708259637-1543119021-1234567
+    .\rds-upd-mgr.ps1 -sid S-1-5-21-124525095-708259637-1543119021-1234567
     
 .PARAMETER user
-    users ad account with issue
+    users ad account with issue
  
 .PARAMETER sid
-    users sid or sid from vhd with issue
+    users sid or sid from vhd with issue
 
 .PARAMETER machine
     machine to query or connection broker to query
@@ -29,12 +29,12 @@
  
 Param(
  
-    [parameter(HelpMessage="Enter user name:")]
-    [string] $user,
-    [parameter(HelpMessage="Enter collection:")]
-    [string] $collection,
+    [parameter(HelpMessage="Enter user name:")]
+    [string] $user,
+    [parameter(HelpMessage="Enter collection:")]
+    [string] $collection,
     [parameter(HelpMessage="Enter connection Broker:")]
-    [string] $server = $env:COMPUTERNAME,
+    [string] $server = $env:COMPUTERNAME,
     [parameter(HelpMessage="Enter `$true to prompt / use alternate credentials. Default is `$false")]
     [bool] $useCreds = $false,
     [parameter(HelpMessage="Enter `$true to store alternate credentials. Default is `$false")]
@@ -349,25 +349,25 @@ function log-info($data)
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
     $Error.Clear()
-    log-info "Running process $processName $arguments"
-    $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $wait
-    $process.StartInfo.RedirectStandardError = $wait
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $wait
-    $process.StartInfo.WorkingDirectory = get-location
+    log-info "Running process $processName $arguments"
+    $exitVal = 0
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.RedirectStandardOutput = $wait
+    $process.StartInfo.RedirectStandardError = $wait
+    $process.StartInfo.FileName = $processName
+    $process.StartInfo.Arguments = $arguments
+    $process.StartInfo.CreateNoWindow = $wait
+    $process.StartInfo.WorkingDirectory = get-location
  
     [void]$process.Start()
  
-    if($wait -and !$process.HasExited)
-    {
+    if($wait -and !$process.HasExited)
+    {
  
-        if($process.StandardOutput.Peek() -gt -1)
+        if($process.StandardOutput.Peek() -gt -1)
         {
-            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut = $process.StandardOutput.ReadToEnd()
             log-info $stdOut
         }
  
@@ -376,23 +376,23 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
         {
             $stdErr = $process.StandardError.ReadToEnd()
             log-info $stdErr
-            $Error.Clear()
-        }
+            $Error.Clear()
+        }
             
-    }
-    elseif($wait)
-    {
-        log-info "Error:Process ended before capturing output."
-    }
-    
+    }
+    elseif($wait)
+    {
+        log-info "Error:Process ended before capturing output."
+    }
+    
  
-    
+    
     $exitVal = $process.ExitCode
  
     log-info "Running process exit $($processName) : $($exitVal)"
-    $Error.Clear()
+    $Error.Clear()
  
-    return $stdOut
+    return $stdOut
 }
 
 # ---------------------------------------------------------------------------
