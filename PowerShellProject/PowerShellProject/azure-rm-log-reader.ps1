@@ -37,7 +37,7 @@
 
 .PARAMETER cacheMinutes
     optional int parameter to keep cache of resource groups and deployments before requerying. default is 5 minutes.
- 
+
 .PARAMETER deploymentName
     optional string parameter to view specific deployment
 
@@ -97,6 +97,7 @@ $global:subscription = $subscriptionId
 $global:timer = $null
 $global:window = $null
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/azure-rm-log-reader.ps1"
+$global:profileContext = "$($env:TEMP)\ProfileContext.ctx"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -134,35 +135,11 @@ function main()
     </Window>
 "@
 
-    # make sure at least wmf 5.0 installed
-    if($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
-    {
-        write-host "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
-        start-process "https://www.bing.com/search?q=download+windows+management+framework+5.0"
-        # start-process "https://www.microsoft.com/en-us/download/details.aspx?id=50395"
-        return
-    }
-
-    import-module azurerm
-    # check for azurerm.resources
-    if(!(get-command -Name Get-AzureRmResourceGroupDeployment))
-    {
-        Install-Module -Name azurerm
-        Import-Module -Name azurerm
-    }
+    authenticate-azureRm
 
     # set sub if passed as argument. requires auth
     if(![string]::IsNullOrEmpty($subscriptionId) -or $enumSubscriptions)
     {
-        # authenticate
-        try
-        {
-            Get-AzureRmResourceGroup | Out-Null
-        }
-        catch
-        {
-            Add-AzureRmAccount
-        }
 
         if($enumSubscriptions)
         {
@@ -174,6 +151,9 @@ function main()
             Set-AzureRmContext -SubscriptionId $subscriptionId
         }
     }
+
+    # save context for jobs
+    Save-AzureRmContext -Path $global:profileContext -Force 
 
     $global:Window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
     $global:timer = new-object Windows.Threading.DispatcherTimer
@@ -289,9 +269,14 @@ function main()
         $global:timer.Stop()
         $global:pipeWriter.Dispose()
         $global:serverPipe.Dispose()
-        
+
         get-job -Name $global:jobName | receive-job -ErrorAction SilentlyContinue
         get-job -Name $global:jobName -ErrorAction SilentlyContinue | remove-job -Force -ErrorAction SilentlyContinue
+
+        if([IO.File]::Exists($global:profileContext))
+        {
+            [IO.File]::Delete($global:profileContext)
+        }
     }
 }
 
@@ -486,6 +471,97 @@ function add-eventItem($lbitem, $color)
         if($detail)
         {
             write-host "$(($item | out-string)) exists"
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function authenticate-azureRm()
+{
+    # make sure at least wmf 5.0 installed
+
+    if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
+    {
+        write-host "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
+        start-process "https://www.bing.com/search?q=download+windows+management+framework+5.0"
+        # start-process "https://www.microsoft.com/en-us/download/details.aspx?id=50395"
+        exit
+    }
+
+    #  verify NuGet package
+	$nuget = get-packageprovider nuget -Force
+
+	if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
+	{
+		write-host "installing nuget package..."
+		install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
+	}
+
+    $allModules = (get-module azure* -ListAvailable).Name
+	#  install AzureRM module
+	if ($allModules -inotcontains "AzureRM")
+	{
+        # at least need profile, resources, insights, logicapp
+        if ($allModules -inotcontains "AzureRM.profile")
+        {
+            write-host "installing AzureRm.profile powershell module..."
+            install-module AzureRM.profile -force
+        }
+        if ($allModules -inotcontains "AzureRM.resources")
+        {
+            write-host "installing AzureRm.resources powershell module..."
+            install-module AzureRM.resources -force
+        }
+        if ($allModules -inotcontains "AzureRM.insights")
+        {
+            write-host "installing AzureRm.insights powershell module..."
+            install-module AzureRM.insights -force
+        }
+        if ($allModules -inotcontains "AzureRM.logicapp")
+        {
+            write-host "installing AzureRm.logicapp powershell module..."
+            install-module AzureRM.logicapp -force
+
+        }
+            
+        Import-Module azurerm.profile        
+        Import-Module azurerm.resources        
+        Import-Module azurerm.insights
+        Import-Module azurerm.logicapp
+		#write-host "installing AzureRm powershell module..."
+		#install-module AzureRM -force
+        
+	}
+    else
+    {
+        Import-Module azurerm
+    }
+
+    # authenticate
+    try
+    {
+        $rg = @(Get-AzureRmResourceGroup)
+                
+        if($rg)
+        {
+            write-host "job:auth passed $($rg.Count)"
+        }
+        else
+        {
+            write-host "job:auth error $($error)" -ForegroundColor Yellow
+            throw [Exception]
+        }
+    }
+    catch
+    {
+        try
+        {
+            Add-AzureRmAccount
+        }
+        catch
+        {
+            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+            exit 1
         }
     }
 }
@@ -1264,6 +1340,7 @@ function send-backgroundJob([string]$command)
 function start-backgroundJob()
 {
     Write-host "start-backgroundJob:enter"
+    $job = $null
 
     try
     {
@@ -1287,18 +1364,36 @@ function start-backgroundJob()
 
         $job = start-job -Name $global:jobName -ScriptBlock `
         {
-            param ($scriptName, $pipeName, $detail)
+            param ($scriptName, $pipeName, $detail, $profileContext)
 
             $currentTimeStamp = 0
             $pipeCommand = $null
             $clientPipe = $null
             $pipeReader = $null
+            $rgCount = 0
 
             # authenticate
             try
             {
+                Import-Module azurerm
+                Import-Module azurerm.profile
+                Import-Module azurerm.insights
+                Import-Module azurerm.logicapp
+                Import-Module azurerm.resources
+                Import-AzureRmContext -Path $profileContext 
+                
                 write-host "job:checking auth"
-                Get-AzureRmResourceGroup | Out-Null
+                $rg = @(Get-AzureRmResourceGroup)
+                
+                if($rg)
+                {
+                    write-host "job:auth passed $($rg.Count)"
+                }
+                else
+                {
+                    write-host "job:auth error $($error)" -ForegroundColor Yellow
+                    throw [Exception]
+                }
             }
             catch
             {
@@ -1369,7 +1464,7 @@ function start-backgroundJob()
                     return
                 }
             }
-        } -ArgumentList $global:jobName,$global:pipeName,$detail
+        } -ArgumentList $global:jobName,$global:pipeName,$detail,$global:profileContext
 
         write-host "$([DateTime]::Now) waiting for client connection"
         $global:serverPipe.WaitForConnection()

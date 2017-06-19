@@ -88,6 +88,7 @@ function main()
     $rg = $null
     $subject = $null
     $certInfo = $null
+    $subject = $null
 
     write-host "starting script $($MyInvocation.ScriptName) to enumerate public ip addresses and RDWeb sites in Azure RM"
 
@@ -307,7 +308,7 @@ function authenticate-azureRm()
 	#  install AzureRM module
 	if ($allModules -inotcontains "AzureRM")
 	{
-        # at least need profile, resources, compute, network
+        # at least need profile, resources, insights, logicapp for this script
         if ($allModules -inotcontains "AzureRM.profile")
         {
             write-host "installing AzureRm.profile powershell module..."
@@ -332,7 +333,7 @@ function authenticate-azureRm()
             
         Import-Module azurerm.profile        
         Import-Module azurerm.resources        
-        Import-Module azurerm.compute            
+        Import-Module azurerm.compute
         Import-Module azurerm.network
 		#write-host "installing AzureRm powershell module..."
 		#install-module AzureRM -force
@@ -346,7 +347,18 @@ function authenticate-azureRm()
     # authenticate
     try
     {
-        Get-AzureRmResourceGroup | Out-Null
+        $rg = @()
+        $rg = @(Get-AzureRmResourceGroup)
+                
+        if($rg)
+        {
+            write-host "job:auth passed $($rg.Count)"
+        }
+        else
+        {
+            write-host "job:auth error $($error)" -ForegroundColor Yellow
+            throw [Exception]
+        }
     }
     catch
     {
@@ -495,6 +507,9 @@ function get-cert([string] $url, [string] $certFile)
     $error.Clear()
     $webRequest = [Net.WebRequest]::Create($url)
     $webRequest.Timeout = 1000 #ms
+    $crt = $null
+    $bytes = $null
+    $cert = $null
 
     try
     { 
@@ -512,6 +527,12 @@ function get-cert([string] $url, [string] $certFile)
         $webRequest = [Net.WebRequest]::Create($url)
         $crt = $webRequest.ServicePoint.Certificate
         Write-Verbose "checking cert: $($crt | fl * | Out-String)"
+
+        if(!$crt)
+        {
+            write-verbose "unable to retrieve cert: $($crt)"
+            return $null
+        }
 
         $bytes = $crt.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
 
@@ -666,6 +687,12 @@ function get-update($updateUrl, $destinationFile)
 # ----------------------------------------------------------------------------------------------------------------
 function import-cert($cert, $certFile, $subject)
 {
+    $certList = $null
+    $certSubject = $null
+    $certStore = $null
+    $certInfo = $null
+    $hostname = $null
+
     write-verbose "import-cert $($certFile) $($subject)"
     if ([string]::IsNullOrEmpty($subject))
     {
@@ -679,7 +706,7 @@ function import-cert($cert, $certFile, $subject)
         return $false
     }
 
-    $certList = Get-ChildItem -Recurse -Path cert:\ -DnsName "$($subject)"
+    $certList = @(Get-ChildItem -Recurse -Path cert:\ -DnsName "$($subject)")
     $certSubject = $cert.Subject.Replace("CN=", "").Split(",")[0]
 
     # see if trusted or non-trusted
@@ -745,7 +772,7 @@ function import-cert($cert, $certFile, $subject)
         }
     }
     
-    $certList = Get-ChildItem -Recurse -Path cert:\ -DnsName "$($subject)"
+    $certList = @(Get-ChildItem -Recurse -Path cert:\ -DnsName "$($subject)")
     
     if ($certList.Count -lt 1)
     {

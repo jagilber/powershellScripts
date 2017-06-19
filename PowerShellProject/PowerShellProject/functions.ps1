@@ -2,7 +2,6 @@
 
 
 # ----------------------------------------------------------------------------------------------------------------
-# ----------------------------------------------------------------------------------------------------------------
 function authenticate-azureRm()
 {
     # make sure at least wmf 5.0 installed
@@ -28,7 +27,7 @@ function authenticate-azureRm()
 	#  install AzureRM module
 	if ($allModules -inotcontains "AzureRM")
 	{
-        # at least need profile, resources, compute, network
+        # at least need profile, resources, insights, logicapp for this script
         if ($allModules -inotcontains "AzureRM.profile")
         {
             write-host "installing AzureRm.profile powershell module..."
@@ -53,7 +52,7 @@ function authenticate-azureRm()
             
         Import-Module azurerm.profile        
         Import-Module azurerm.resources        
-        Import-Module azurerm.compute            
+        Import-Module azurerm.compute
         Import-Module azurerm.network
 		#write-host "installing AzureRm powershell module..."
 		#install-module AzureRM -force
@@ -67,7 +66,18 @@ function authenticate-azureRm()
     # authenticate
     try
     {
-        Get-AzureRmResourceGroup | Out-Null
+        $rg = @()
+        $rg = @(Get-AzureRmResourceGroup)
+                
+        if($rg)
+        {
+            write-host "job:auth passed $($rg.Count)"
+        }
+        else
+        {
+            write-host "job:auth error $($error)" -ForegroundColor Yellow
+            throw [Exception]
+        }
     }
     catch
     {
