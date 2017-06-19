@@ -20,11 +20,11 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170602 fix for wildcard certs
+   Version    : 170617 authenticate-azurerm
    History    : 
+                170602 fix for wildcard certs
                 170524 another change for azurerm.resources coming back not as collection for single sub?
-                170405 cleaned up and added -rdWebUrl
-                161230 changed runas-admin to call powershell with -executionpolicy bypass
+
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
     query azure rm for all resource groups with for all public ips.
