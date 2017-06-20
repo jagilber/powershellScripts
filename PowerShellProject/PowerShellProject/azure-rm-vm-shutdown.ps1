@@ -11,7 +11,7 @@ param(
 $logFile = "azure-vm-shutdown.log.txt"
 #$subscriptionId = ""
 #Select-AzureRmSubscription -SubscriptionId $subscriptionId 
-$profileContext = "$($env:TEMP)\ProfileContext.ctx"
+$profileContext = "c:\temp\test.ctx" #"$($env:TEMP)\ProfileContext.ctx"
 
 # to stop only specific resource groups. Remove entries to run on all groups
 #$resourceGroupNames = @()
@@ -20,17 +20,32 @@ $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
+    $ctx = $null
+    $allVms = @()
+    $filteredVms = New-Object Collections.ArrayList
+
     log-info "starting script"
     # see if we need to auth
     authenticate-azureRm
 
-    if ([string]::IsNullOrEmpty($resourceGroupNames))
+    $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
+
+    if($resourceGroupNames)
     {
-        $resourceGroups = (Get-AzureRmResourceGroup).ResourceGroupName
+        foreach($resourceGroupName in $resourceGroupNames)
+        {
+            foreach($vm in $allVms)
+            {
+                if($resourceGroupName -imatch $vm.ResourceGroupName)
+                {
+                    [void]$filteredVms.Add($vm)
+                }
+            }
+        }
     }
     else
     {
-        $resourceGroups = $resourceGroupNames
+        $filteredVms = $allVms
     }
 
     $jobs = @()
@@ -38,51 +53,53 @@ function main()
     # save context for jobs
     Save-AzureRmContext -Path $profileContext -Force 
 
-    ForEach ($resourceGroupName in $resourceGroups)
+    log-info "checking $($filteredVms.Count) vms"
+
+    foreach ($vm in $filteredVms)
     {
-        foreach ($vm in (get-azureRmvm -ResourceGroupName $resourceGroupName | select-object Name))
-        {
-            log-info "starting job $($resourceGroupName)\$($vm.name)"
+        write-verbose "starting job $($vm.resourceGroupName)\$($vm.name)"
        
-            $job = Start-Job -Name "vm" -ScriptBlock {
-                param($resourceGroupName, $exclusionList, $profileContext, $listRunning, $vm)
+        $job = Start-Job -Name "vm" -ScriptBlock {
+            param($resourceGroupName, $exclusionList, $profileContext, $listRunning, $vm)
 
-                $ret = Import-AzureRmContext -Path $profileContext
+            $ctx = Import-AzureRmContext -Path $profileContext
+            # bug to be fixed 8/2017
+            # From <https://github.com/Azure/azure-powershell/issues/3954> 
+            $ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
 
-                if (!$listRunning)
+            if (!$listRunning)
+            {
+                write-host "$(get-date) checking vm $($resourceGroupName)\$($vm.name)"
+            }
+
+            foreach ($status in (get-azurermvm -resourceGroupName $resourceGroupName -Name $vm.Name -status).Statuses)
+            {
+                #write-host $status.Code
+                if ($status.Code -eq "PowerState/running")
                 {
-                    write-host "$(get-date) checking vm $($resourceGroupName)\$($vm.name)"
-                }
-
-                foreach ($status in (get-azurermvm -resourceGroupName $resourceGroupName -Name $vm.Name -status).Statuses)
-                {
-                    #write-host $status.Code
-                    if ($status.Code -eq "PowerState/running")
+                    if ($listRunning)
                     {
-                        if ($listRunning)
-                        {
-                            write-host "$($resourceGroupName):$($vm.name):running"
-                            break
-                        }
+                        write-host "$($resourceGroupName):$($vm.name):running"
+                        break
+                    }
 
-                        if ($exclusionList.Contains($vm.name))
-                        {
-                            write-host "`t$(get-date) skipping vm $($resourceGroupName)\$($vm.name)"
+                    if ($exclusionList.Contains($vm.name))
+                    {
+                        write-host "`t$(get-date) skipping vm $($resourceGroupName)\$($vm.name)"
                     
-                        }
-                        else
-                        {
-                            write-host "`t$(get-date) stopping vm $($resourceGroupName)\$($vm.name)"
-                            Stop-AzureRmvm -Name $vm.Name -ResourceGroupName $resourceGroupName -Force
-                            write-host "`t$(get-date) vm stopped $($resourceGroupName)\$($vm.name)"
-                        }
+                    }
+                    else
+                    {
+                        write-host "`t$(get-date) stopping vm $($resourceGroupName)\$($vm.name)"
+                        Stop-AzureRmvm -Name $vm.Name -ResourceGroupName $resourceGroupName -Force
+                        write-host "`t$(get-date) vm stopped $($resourceGroupName)\$($vm.name)"
                     }
                 }
-            } -ArgumentList ($resourceGroupName, $exclusionList, $profileContext, $listRunning, $vm)
+            }
+        } -ArgumentList ($vm.resourceGroupName, $exclusionList, $profileContext, $listRunning, $vm)
 
-            $jobs = $jobs + $job
-        }
-    }
+        $jobs = $jobs + $job
+    } # end foreach
 
     # Wait for all jobs to complete
     if ($jobs -ne @())
@@ -101,6 +118,11 @@ function main()
                 }
             }
         }
+    }
+
+    if(test-path $profileContext)
+    {
+        Remove-Item -Path $profileContext -Force
     }
 
     log-info "finished"

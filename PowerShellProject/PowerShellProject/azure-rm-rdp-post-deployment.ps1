@@ -82,7 +82,6 @@ $updateUrl = "https://aka.ms/azure-rm-rdp-post-deployment.ps1"
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
-    cls
     $error.Clear()
     $subList = @{}
     $rg = $null
@@ -308,6 +307,12 @@ function authenticate-azureRm()
 	#  install AzureRM module
 	if ($allModules -inotcontains "AzureRM")
 	{
+        # each has different azurerm module requirements
+        # installing azurerm slowest but complete method
+        # if wanting to do minimum install, run the following script against script being deployed
+        # https://raw.githubusercontent.com/jagilber/powershellScripts/master/PowerShellProject/PowerShellProject/script-azurerm-module-enumerator.ps1
+        # this will parse scripts in given directory and output which azure modules are needed to populate the below
+
         # at least need profile, resources, insights, logicapp for this script
         if ($allModules -inotcontains "AzureRM.profile")
         {
@@ -347,8 +352,7 @@ function authenticate-azureRm()
     # authenticate
     try
     {
-        $rg = @()
-        $rg = @(Get-AzureRmResourceGroup)
+        $rg = @(Get-AzureRmTenant)
                 
         if($rg)
         {

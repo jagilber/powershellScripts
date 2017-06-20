@@ -18,7 +18,7 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170617 add import-module azurerm. add replace \u0027
+   Version    : 170618 add import-module azurerm. add replace \u0027
    History    : 
                 170510 updated git links
                 170102.1 changed output formatting. switched to named pipe 
@@ -1375,12 +1375,11 @@ function start-backgroundJob()
             # authenticate
             try
             {
-                Import-Module azurerm
-                Import-Module azurerm.profile
-                Import-Module azurerm.insights
-                Import-Module azurerm.logicapp
-                Import-Module azurerm.resources
-                Import-AzureRmContext -Path $profileContext 
+               
+                $ctx = Import-AzureRmContext -Path $profileContext 
+                # bug to be fixed 8/2017
+                # From <https://github.com/Azure/azure-powershell/issues/3954> 
+                $ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
                 
                 write-host "job:checking auth"
                 $rg = @(Get-AzureRmResourceGroup)
