@@ -125,6 +125,8 @@ function main()
                     Remove-Job -Job $job
                 }
             }
+            
+            start-sleep -seconds 1
         }
     }
 

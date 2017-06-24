@@ -11,7 +11,7 @@ param(
 $logFile = "azure-vm-shutdown.log.txt"
 #$subscriptionId = ""
 #Select-AzureRmSubscription -SubscriptionId $subscriptionId 
-$profileContext = "c:\temp\test.ctx" #"$($env:TEMP)\ProfileContext.ctx"
+$profileContext = "$($env:TEMP)\ProfileContext.ctx"
 
 # to stop only specific resource groups. Remove entries to run on all groups
 #$resourceGroupNames = @()
@@ -117,6 +117,8 @@ function main()
                     Remove-Job -Job $job
                 }
             }
+
+            start-sleep -seconds 1
         }
     }
 

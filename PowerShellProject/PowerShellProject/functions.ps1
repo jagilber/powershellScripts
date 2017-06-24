@@ -76,11 +76,11 @@ function authenticate-azureRm()
                 
         if($rg)
         {
-            write-host "job:auth passed $($rg.Count)"
+            write-host "auth passed $($rg.Count)"
         }
         else
         {
-            write-host "job:auth error $($error)" -ForegroundColor Yellow
+            write-host "auth error $($error)" -ForegroundColor Yellow
             throw [Exception]
         }
     }
