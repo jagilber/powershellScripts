@@ -33,6 +33,9 @@
     .\azure-rm-rdp-post-deployment.ps1 -rdWebUrl https://contoso.eastus.cloudapp.azure.com/RDWeb
     used to bypass Azure enumeration and to copy cert from url to local cert store
 
+.PARAMETER enumerateSubscriptions
+    to query all subscriptions and not just current one
+
 .PARAMETER noPrompt
     to not prompt when adding cert to cert store or when modifying hosts file
  
@@ -52,19 +55,13 @@
  
 
 param(
-    [Parameter(Mandatory = $false)]
     [string][ValidateSet('LocalMachine', 'CurrentUser')] $certLocation = "LocalMachine",
-    [Parameter(Mandatory = $false)]
+    [switch]$enumerateSubscriptions,
     [switch]$noprompt,
-    [Parameter(Mandatory = $false)]
     [switch]$noretry,
-    [Parameter(Mandatory = $false)]
     [string]$publicIpAddressName = ".",
-    [Parameter(Mandatory = $false)]
     [string]$rdWebUrl = "",
-    [Parameter(Mandatory = $false)]
     [string]$resourceGroupName,
-    [Parameter(Mandatory = $false)]
     [switch]$update
 )
 
@@ -139,12 +136,16 @@ function main()
         {
             $resourceList = New-Object Collections.ArrayList
 
-            if ([string]::IsNullOrEmpty($sub))
+            if (!$sub)
             {
                 continue
             }
 
-            Set-AzureRmContext -SubscriptionId $sub
+            if($enumerateSubscriptions)
+            {
+                Set-AzureRmContext -SubscriptionId $sub
+            }
+
             write-host "enumerating subscription $($sub)"
 
             if (!($resourceList = enum-resourcegroup $sub))
@@ -164,7 +165,7 @@ function main()
 
             if ($resourceList.Count -gt 1)
             {
-                write-host "query time: $(((get-date) - $startTime).TotalSeconds)"
+                write-verbose "query time: $(((get-date) - $startTime).TotalSeconds)"
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to")
             }
             elseif ($resourceList.Count -eq 1)
@@ -223,7 +224,7 @@ function main()
 
                 $ip = $resource.publicIp
         
-                if (![string]::IsNullOrEmpty($ip.IpAddress))
+                if ($ip.IpAddress)
                 {
                     write-host "public ip address: $($ip.IpAddress)"
                     $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
@@ -453,7 +454,7 @@ function enum-certSubject($cert)
 {
     # get certificate from RDWeb site
 
-    if ($cert -eq $false -or [string]::IsNullOrEmpty($cert))
+    if (!$cert)
     {
         write-host "no cert!"
         return $false
@@ -461,7 +462,7 @@ function enum-certSubject($cert)
 
     $subject = $cert.Subject.Replace("CN=", "")   
         
-    if (![string]::IsNullOrEmpty($subject))
+    if ($subject)
     {
         return $subject
     }
@@ -492,7 +493,7 @@ function enum-resourcegroup([string] $subid)
     try
     {
         # find resource group
-        if ([string]::IsNullOrEmpty($resourceGroupName))
+        if (!$resourceGroupName)
         {
             write-host "Azure RM resources with public IP addresses. Green indicates RDWeb site:"
             #$Null = Set-AzureRmContext -SubscriptionId $subid
@@ -710,7 +711,7 @@ function get-gatewayUrl($resourceGroup)
     # find public ip from loadbalancer
     $ip = query-publicIp -resourceName $resourceGroup.ResourceGroupName -ipName $publicIpAddressName
 
-    if (![string]::IsNullOrEmpty($ip.IpAddress))
+    if ($ip.IpAddress)
     {
         write-host "public loadbalancer ip address: $($ip.IpAddress)"
         $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
@@ -723,54 +724,49 @@ function get-gatewayUrl($resourceGroup)
 # ----------------------------------------------------------------------------------------------------------------
 function get-subscriptions()
 {
-    write-host "enumerating subscriptions"
-    $subList = @{}
-    $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue)
-    $newSubFormat = (get-module AzureRM.Resources -ListAvailable).Version.ToString() -ge "4.0.0"
-            
-    if ($subs.Count -gt 1)
+    write-verbose "enumerating subscriptions"
+    $subList = new-object Collections.ArrayList
+    if($enumerateSubscriptions)
     {
-        [int]$count = 1
-        foreach ($sub in $subs)
-        {
-            if ($newSubFormat)
-            { 
-                $displayMessage = "$($count). $($sub.name) $($sub.id)"
-                $id = $sub.id
-            }
-            else
-            {
-                $displayMessage = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
-                $id = $sub.SubscriptionId
-            }
-
-            Write-Host $displayMessage
-            [void]$subList.Add($count, $id)
-            $count++
-        }
-        
-        [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
-        $null = Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
-        
-        if ($id -ne 0 -and $id -le $subs.count)
-        {
-            return $subList[$id]
-        }
+        $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue)
     }
-    elseif ($subs.Count -eq 1)
+    else
     {
-        if ($newSubFormat)
+        $subs = @(Get-AzureRmContext)
+    }
+
+    # check format    
+    foreach ($sub in $subs)
+    {
+        $id = $null
+        $name = ""
+        if($sub | get-member -name id)
         {
-            [void]$subList.Add("1", $subs.Id)
+            $id = $sub.id
+            $name = $sub.name
+        }
+        elseif($sub | get-member -name subscriptionid)
+        {
+            $id = $sub.subscriptionid
+            $name = $sub.subscriptionname
+        }
+        elseif($sub | get-member -name subscription)
+        {
+            $id = $sub.subscription.id
+            $name = $sub.subscription.name
         }
         else
         {
-            [void]$subList.Add("1", $subs.SubscriptionId)
+            Write-verbose "unable to find subscription id"
+            continue
         }
-    }
 
+        write-host "enumerating subscription $($name)"
+        [void]$subList.Add($id)
+    }
+            
     write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
-    return $subList.Values
+    return $subList
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -818,7 +814,7 @@ function get-update($updateUrl, $destinationFile)
 function import-cert($cert, $certFile, $subject)
 {
     write-verbose "import-cert $($certFile) $($subject)"
-    if ([string]::IsNullOrEmpty($subject))
+    if (!$subject)
     {
         Write-Warning "import-cert:error: subject empty. returning"
         return $false
@@ -954,7 +950,7 @@ function query-publicIp([string] $resourceName, [string] $ipName)
 
     foreach ($ip in $ips)
     {
-        if ([string]::IsNullOrEmpty($ip.IpAddress) -or $ip.IpAddress -eq "Not Assigned")
+        if (!$ip.IpAddress -or $ip.IpAddress -eq "Not Assigned")
         {
             continue
         }
@@ -993,7 +989,7 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
         $stdErr = $process.StandardError.ReadToEnd()
         write-host "Process output:$stdOut"
  
-        if (![String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+        if ($stdErr -and $stdErr -notlike "0")
         {
             #write-host "Error:$stdErr `n $Error"
             $Error.Clear()
