@@ -177,7 +177,6 @@ function main()
             else
             {
                 write-host "no ip addresses found. exiting..."
-
                 exit 1
             }
 
@@ -340,6 +339,7 @@ function authenticate-azureRm()
 	}
 
     $allModules = (get-module azure* -ListAvailable).Name
+
 	#  install AzureRM module
 	if ($allModules -inotcontains "AzureRM")
 	{
@@ -593,7 +593,7 @@ function enum-resourcegroup([string] $subid)
 
                     if ($resource.certInfo)
                     {
-                        $resource.displayMessage = " RDWEB: $($resource.rdWebUrl)$($displayMessage)`r`n`tCert Subject: $($resource.certInfo.Subject)"
+                        $resource.displayMessage = " RDWEB: $($resource.rdWebUrl)$($displayMessage)`r`n`tCert Subject: $(enum-certSubject -cert $resource.certInfo)"
                         $resource.displayMessageColor = "Green"
                         # write results to pipe
                         $resource
