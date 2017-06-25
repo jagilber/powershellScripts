@@ -146,14 +146,16 @@ function main()
                 Set-AzureRmContext -SubscriptionId $sub
             }
 
-            write-host "enumerating subscription $($sub)"
+            write-host "subscription id $($sub)"
 
             if (!($resourceList = enum-resourcegroup $sub))
             {
+                write-host "no ip addresses found. returning..."
                 continue
             }
 
             $count = 1
+
             foreach($resource in $resourceList)
             {
                 if($resource.DisplayMessage)
@@ -174,7 +176,7 @@ function main()
             }
             else
             {
-                write-host "no ip addresses found. returning..."
+                write-host "no ip addresses found. exiting..."
 
                 exit 1
             }
