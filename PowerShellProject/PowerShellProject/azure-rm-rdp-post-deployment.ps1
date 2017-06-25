@@ -88,6 +88,7 @@ function main()
     $subject = $null
     $certInfo = $null
     $subject = $null
+    $startTime = get-date
 
     write-host "starting script $($MyInvocation.ScriptName) to enumerate public ip addresses and RDWeb sites in Azure RM"
 
@@ -151,6 +152,7 @@ function main()
 
             if ($global:resourceList.Count -gt 1)
             {
+                write-host "query time: $(((get-date) - $startTime).TotalSeconds)"
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to")
             }
             elseif ($global:resourceList.Count -eq 1)

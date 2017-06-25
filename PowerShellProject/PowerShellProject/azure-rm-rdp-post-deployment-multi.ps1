@@ -20,7 +20,7 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170624 added background jobs
+   Version    : 170625.2 added background jobs
    History    : 
                 170602 fix for wildcard certs
                 170524 another change for azurerm.resources coming back not as collection for single sub?
@@ -216,7 +216,7 @@ function main()
 
                 
                 $resource = $null
-                $resource = $resourceList[$id]
+                $resource = $resourceList[$id -1]
                 
                 write-host $resourceGroup.ResourceGroupName
                 write-verbose "enum-resourcegroup returning:$($resource | fl | out-string)"
@@ -259,7 +259,7 @@ function main()
         Remove-Item -Path $profileContext -Force
     }
 
-    log-info "finished"
+    write-host "finished"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -494,7 +494,7 @@ function enum-resourcegroup([string] $subid)
         # find resource group
         if ([string]::IsNullOrEmpty($resourceGroupName))
         {
-            write-host "Azure RM resource groups with public IP addresses. Green indicates RDWeb site:"
+            write-host "Azure RM resources with public IP addresses. Green indicates RDWeb site:"
             #$Null = Set-AzureRmContext -SubscriptionId $subid
             $resourceGroups = Get-AzureRmResourceGroup -WarningAction SilentlyContinue
             $count = 1
@@ -505,7 +505,7 @@ function enum-resourcegroup([string] $subid)
         }
 
         #$pubIps = @(Find-AzureRmResource -ResourceType Microsoft.Network/publicIPAddresses)
-        $pubIps = @(Get-AzureRmPublicIpAddress)| ? IpAddress -ine "Not Assigned"
+        $pubIps = @(Get-AzureRmPublicIpAddress | ? IpAddress -ine "Not Assigned")
         write-host "checking $($pubIps.count) ip addresses"
 
         foreach($resourceGroup in $resourceGroups.ResourceGroupName)
