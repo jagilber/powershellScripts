@@ -28,29 +28,6 @@ function main()
 
         monitor-backgroundJobs 
                   
-        $jobInfo.action = "test"
-
-        while ($true)
-        {
-            if (((get-job).State -eq "Running").Count -le $throttle)
-            {
-                $global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
-            }
-
-            foreach ($job in get-job)
-            {
-                if ($job.State -ine "Running")
-                {
-                    get-job -Id $job.Id  
-                    Receive-Job -Job $job
-                    Remove-Job -Id $job.Id -Force  
-                }
-            }
-
-            get-job | Receive-Job
-            Start-Sleep -Seconds 1
-        } 
-          
         log-info "finished"
     }
     finally
@@ -60,11 +37,30 @@ function main()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function log-info ([string]$data)
+function log-info($data)
 {
-    write-host ("$((get-date).ToString("o")):$([Diagnostics.Process]::GetCurrentProcess().Id) $data")
+    
+    $dataWritten = $false
+    $data = "$([System.DateTime]::Now):$($data)`n"
+    write-host $data
+    $counter = 0
+    
+    while (!$dataWritten -and $counter -lt 1000)
+    {
+        try
+        {
+            out-file -Append -InputObject $data -FilePath $logFile
+            $dataWritten = $true
+        }
+        catch
+        {
+            Start-Sleep -Milliseconds 10
+            $counter++
+        }
+    }
 }
 
+# ----------------------------------------------------------------------------------------------------------------
 function do-backgroundJob($jobInfo)
 {
     $count = 0
@@ -83,32 +79,46 @@ function do-backgroundJob($jobInfo)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function monitor-backgroundJobs()
+function check-backgroundJobs()
 {
-    while (get-job)
+    foreach ($job in get-job)
     {
-        foreach ($job in get-job)
+        if ($job.State -ine "Running")
         {
-            if ($job.State -ine "Running")
-            {
-                $job
-                Remove-Job -Id $job.Id -Force  
-            }
-            else
-            {
-                $jobInfo = Receive-Job -Job $job
-                $jobInfo
-            }            
-
-            Start-Sleep -Seconds 1
+            #log-info ($job | fl * | out-string)
+            Remove-Job -Id $job.Id -Force  
         }
+        else
+        {
+            $jobInfo = Receive-Job -Job $job
+            #log-info ($jobInfo | fl * | out-string)
+        }            
+
+        Start-Sleep -Seconds 1
     }
+
+    return @(get-job).Count
 }
 
+# ----------------------------------------------------------------------------------------------------------------
+function monitor-backgroundJobs()
+{
+    while ((check-backgroundJobs))
+    {
         Start-Sleep -Seconds 1
     }
 }
 
+# ----------------------------------------------------------------------------------------------------------------
+function remove-backgroundJobs()
+{
+    foreach($job in get-job)
+    {
+        write-verbose "removing job"
+        write-verbose (Receive-Job -Job $Job | fl * | out-string)
+        Write-Verbose (Remove-Job -Job $job -Force)
+    }
+}
 
 #-------------------------------------------------------------------
 function start-backgroundJob($jobInfo)
@@ -118,8 +128,14 @@ function start-backgroundJob($jobInfo)
     $job = Start-Job -ScriptBlock `
     { 
         param($jobInfo)
+        $ctx = $null
 
         . $($jobInfo.invocation.scriptname)
+        $ctx = Import-AzureRmContext -Path $jobInfo.profileContext
+        # bug to be fixed 8/2017
+        # From <https://github.com/Azure/azure-powershell/issues/3954> 
+        [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
+
         log-info ($jobInfo.action)
         #do-backgroundJob -jobInfo $jobInfo
         & $jobInfo.backgroundJobFunction $jobInfo
@@ -136,13 +152,13 @@ function start-backgroundJobs($jobInfos, $throttle)
 
     foreach ($jobInfo in $jobInfos)
     {
-        while (((get-job).State -eq "Running").Count -gt $throttle)
+        while ((check-backgroundJobs) -gt $throttle)
         {
             Write-Verbose "throttled"
             Start-Sleep -Seconds 1
         }
 
-        $global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
+        [void]$global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
     }
 }
 
