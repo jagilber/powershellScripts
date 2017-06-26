@@ -38,8 +38,7 @@
 #>  
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string][ValidateSet('start', 'stop', 'restart', 'listRunning')]$action = 'listRunning',
+    [string]$action = 'listRunning',
     [string[]]$resourceGroupNames = @(),
     [string[]]$exclusionList = @(),
     [int]$throttle = 20
@@ -48,9 +47,6 @@ param(
 $logFile = "azure-rm-vm-manager.log.txt"
 $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
-# to stop only specific resource groups. Remove entries to run on all groups
-#$resourceGroupNames = @()
-#$exclusionList = @() #@("rds-dc-1","ara-rds-1","ara-rds-2")
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -112,7 +108,7 @@ function main()
             $jobInfo.result = $null
             $jobInfo.vm = $vm
             $jobInfo.jobName = "$($action):$($vm.Name)"
-            $jobInfos.Add($jobInfo)
+            [void]$jobInfos.Add($jobInfo)
    
         } # end foreach
 
@@ -357,7 +353,7 @@ function remove-backgroundJobs()
     {
         write-verbose "removing job"
         write-verbose (Receive-Job -Job $Job | fl * | out-string)
-        Write-Verbose (Remove-Job -Job $job -Force)
+        Write-verbose (Remove-Job -Job $job -Force)
     }
 }
 
