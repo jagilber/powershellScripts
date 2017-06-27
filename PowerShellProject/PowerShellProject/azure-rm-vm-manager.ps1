@@ -10,7 +10,7 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170626 original
+   Version    : 170627 added -vms
    History    : 
 
 .EXAMPLE  
@@ -37,11 +37,13 @@
 
 #>  
 
+[CmdletBinding()]
 param(
-    [string]$action = 'listRunning',
+    [string]$action,
     [string[]]$resourceGroupNames = @(),
     [string[]]$exclusionList = @(),
-    [int]$throttle = 20
+    [int]$throttle = 20,
+    [string[]]$vms = @()
 )
 
 $logFile = "azure-rm-vm-manager.log.txt"
@@ -58,7 +60,7 @@ function main()
     log-info "starting script"
     remove-backgroundJobs
 
-    # cant check on command line cause of calling on background job
+    # cant check on command line because of calling on background job
     #[string][ValidateSet('start', 'stop', 'restart', 'listRunning')] 
     if(!$action -or ($action -ine 'start' -and $action -ine 'stop' -and $action -ine 'listRunning'-and $action -ine 'restart'))
     {
@@ -73,6 +75,7 @@ function main()
 
         $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
 
+        # check passed in resource group names
         if($resourceGroupNames)
         {
             foreach($resourceGroupName in $resourceGroupNames)
@@ -86,9 +89,24 @@ function main()
                 }
             }
         }
-        else
+
+        # check passed in vm names
+        if($vms)
         {
-            $filteredVms = $allVms
+            foreach($vm in $vms)
+            {
+                if(!$filteredVms.Name -imatch $vm -and $allVms.Name -imatch $vm)
+                {
+                   [void]$filteredVms.AddRange(@($allVms.Name -imatch $vm))
+                }
+            }
+        }
+
+        # if neither passed in use all
+        if(!$vms -and !$resourceGroupNames)
+        {
+           Write-Warning "warning: querying / managing all vm's in subscription! use -resourcegroupnames or -vms to filter. if this is wrong, press ctrl-c to exit..."
+           $filteredVms = $allVms
         }
 
         log-info "checking $($filteredVms.Count) vms"
@@ -112,8 +130,19 @@ function main()
    
         } # end foreach
 
-        start-backgroundJobs -jobInfos $jobInfos -throttle $throttle
-        monitor-backgroundJobs 
+        if($action -ieq "listrunning")
+        {
+            # quick to not use jobs for listing power state
+            foreach($job in $jobInfos)
+            {
+                do-backgroundJob -jobInfo $job
+            }
+        }
+        else
+        {
+            start-backgroundJobs -jobInfos $jobInfos -throttle $throttle
+            monitor-backgroundJobs 
+        }
     }
     catch
     {
@@ -216,100 +245,6 @@ function authenticate-azureRm()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function log-info($data)
-{
-    
-    $dataWritten = $false
-    $data = "$([System.DateTime]::Now):$($data)`n"
-    write-host $data
-    $counter = 0
-    
-    while (!$dataWritten -and $counter -lt 1000)
-    {
-        try
-        {
-            out-file -Append -InputObject $data -FilePath $logFile
-            $dataWritten = $true
-        }
-        catch
-        {
-            Start-Sleep -Milliseconds 10
-            $counter++
-        }
-    }
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function do-backgroundJob($jobInfo)
-{
-    log-info "doing background job $($jobInfo.action)"
-    log-info "================"
-
-    if ($jobinfo.action -ine 'listRunning')
-    {
-        log-info "$(get-date) checking vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-    }
-
-    if($jobInfo.action -ieq "stop" -or $jobInfo.action -ieq "restart" -or $jobInfo.action -ieq "listRunning")
-    {
-        foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
-        {
-            #log-info $status.Code
-            if ($status.Code -eq "PowerState/running")
-            {
-                if ($jobInfo.action -ieq 'listRunning')
-                {
-                    log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
-                    break
-                }
-
-                if ($jobInfo.exclusionList.Contains($jobInfo.vm.name))
-                {
-                    log-info "`t$(get-date) skipping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    
-                }
-                else
-                {
-                    log-info "`t$(get-date) stopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
-                    log-info "`t$(get-date) vm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                }
-            }
-        }
-    }
-
-    if($jobInfo.action -ieq "start" -or $jobInfo.action -ieq "restart")
-    {
-        foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
-        {
-            if ($status.Code -eq "PowerState/running")
-            {
-                break
-            }
-            elseif ($status.Code -ieq "PowerState/deallocated")
-            {
-                if ($jobInfo.exclusionList.Contains($vm.name))
-                {
-                    write-host "`t$(get-date) skipping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    
-                }
-                else
-                {
-                    write-host "`t$(get-date) starting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
-                    write-host "`t$(get-date) vm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                }
-
-                break
-            }
-        }
-
-    }
-    
-    #$jobInfo.result = $count
-}
-
-# ----------------------------------------------------------------------------------------------------------------
 function check-backgroundJobs()
 {
     foreach ($job in get-job)
@@ -328,13 +263,113 @@ function check-backgroundJobs()
 
         if($jobInfo)
         {
-            log-info $jobInfo                
+            log-info "verbose:jobresult:$($jobInfo)"
         }
 
         Start-Sleep -Seconds 1
     }
 
     return @(get-job).Count
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function do-backgroundJob($jobInfo)
+{
+    log-info "verbose:doing background job $($jobInfo.action)"
+
+    if ($jobinfo.action -ine 'listRunning')
+    {
+        log-info "verbose:checking vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+    }
+
+    if($jobInfo.action -ieq "stop" -or $jobInfo.action -ieq "restart" -or $jobInfo.action -ieq "listRunning")
+    {
+        foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
+        {
+            #log-info $status.Code
+            if ($status.Code -eq "PowerState/running")
+            {
+                if ($jobInfo.action -ieq 'listRunning')
+                {
+                    log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
+                    break
+                }
+
+                if ($jobInfo.exclusionList.Contains($jobInfo.vm.name))
+                {
+                    log-info "verbose:`tskipping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    
+                }
+                else
+                {
+                    log-info "verbose:`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    log-info "verbose:`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                }
+            }
+        }
+    }
+
+    if($jobInfo.action -ieq "start" -or $jobInfo.action -ieq "restart")
+    {
+        foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
+        {
+            if ($status.Code -eq "PowerState/running")
+            {
+                break
+            }
+            elseif ($status.Code -ieq "PowerState/deallocated")
+            {
+                if ($jobInfo.exclusionList.Contains($vm.name))
+                {
+                    log-info "verbose:`tskipping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                }
+                else
+                {
+                    log-info "verbose:`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                    log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                }
+
+                break
+            }
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function log-info($data)
+{
+    
+    $dataWritten = $false
+    $counter = 0
+    
+    while (!$dataWritten -and $counter -lt 1000)
+    {
+        try
+        {
+            out-file -Append -InputObject "$([System.DateTime]::Now):$($data)`n" -FilePath $logFile
+            $dataWritten = $true
+        }
+        catch
+        {
+            Start-Sleep -Milliseconds 10
+            $counter++
+        }
+    }
+
+    if($data.ToLower().StartsWith("verbose:"))
+    {
+        if($VerbosePreference -ine "SilentlyContinue")
+        {
+            write-host $data
+        }
+    }
+    else
+    {
+        write-host $data
+    }
+
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -360,7 +395,7 @@ function remove-backgroundJobs()
 #-------------------------------------------------------------------
 function start-backgroundJob($jobInfo)
 {
-    log-info "starting background job"
+    log-info "verbose:starting background job $($jobInfo.jobName)"
         
     $job = Start-Job -ScriptBlock `
     { 
