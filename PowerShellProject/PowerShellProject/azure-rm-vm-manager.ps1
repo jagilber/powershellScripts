@@ -357,12 +357,12 @@ function do-backgroundJob($jobInfo)
             switch($jobInfo.action)
             {
                 "stop" {
-                    log-info "verbose:`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    log-info "`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
                     log-info "verbose:`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
                 "restart" {
-                    log-info "verbose:`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Restart-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
@@ -374,7 +374,7 @@ function do-backgroundJob($jobInfo)
             switch($jobInfo.action)
             {
                 "start" {
-                    log-info "verbose:`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    log-info "`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
