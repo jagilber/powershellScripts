@@ -10,7 +10,7 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170627 added -vms
+   Version    : 170629 added -vms
    History    : 
 
 .EXAMPLE  
@@ -42,7 +42,7 @@
 
 [CmdletBinding()]
 param(
-    #[ValidateSet('start','stop','restart','listRunning','listStopped')]
+    [ValidateSet('start','stop','restart','listRunning','listStopped')]
     [string]$action = 'listRunning',
     [string[]]$resourceGroupNames = @(),
     [string[]]$excludeVms = @(),
@@ -64,15 +64,33 @@ function main()
     $startTime = get-date
     $jobInfos = New-Object Collections.ArrayList
 
-    log-info "$((get-date).ToString("o")) starting script"
-    remove-backgroundJobs
-
     try
     {
+        log-info "$((get-date).ToString("o")) starting script"
+        remove-backgroundJobs
+
         # see if we need to auth
         authenticate-azureRm
 
         $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
+
+        if(!$allVms)
+        {
+            log-info "warning:no vm's found. exiting"
+            exit 1
+        }
+
+        # if neither passed in use all
+        if(!$vms -and !$resourceGroupNames)
+        {
+            log-info "warning: querying / managing all vm's in subscription! use -resourcegroupnames or -vms to filter. if this is wrong, press ctrl-c to exit..."
+            #$filteredVms = $allVms
+        }
+
+        if(!$resourceGroupNames)
+        {
+            $resourceGroupNames = (Get-AzureRmResourceGroup).ResourceGroupName
+        }
 
         # check passed in resource group names
         foreach($resourceGroupName in $resourceGroupNames)
@@ -86,12 +104,25 @@ function main()
             }
         }
 
-        # check passed in vm names
-        foreach($vm in $vms)
+        if($vms -and $filteredVms)
         {
-            if(!($filteredVms.Name -imatch $vm) -and ($allVms.Name -imatch $vm))
+            # remove vm's not matching $vms list
+            foreach($filteredVm in (new-object Collections.ArrayList(,$filteredVms)))
             {
-                [void]$filteredVms.AddRange(@($allVms |? Name -imatch $vm))
+                if(!($vms -imatch $filteredVm.Name) -or !($vms.ResourceGroupName -imatch $filteredVm.ResourceGroupName))
+                {
+                    $filteredVms.Remove($filteredVm)
+                    #[void]$filteredVms.RemoveRange(@($allVms |? Name -imatch $vm))
+                }
+            }
+
+            # add vm's matching $vms list
+            foreach($vm in $vms)
+            {
+                if(!($filteredVms.Name -imatch $vm) -and ($allVms.Name -imatch $vm))
+                {
+                    [void]$filteredVms.AddRange(@($allVms |? { $_.Name -imatch $vm -and $_.ResourceGroupName -imatch $resourceGroupNames }))
+                }
             }
         }
 
@@ -105,22 +136,12 @@ function main()
         }
 
 
-        # if neither passed in use all
-        if(!$vms -and !$resourceGroupNames)
+        foreach($filteredVm in $filteredVms)
         {
-           Write-Warning "warning: querying / managing all vm's in subscription! use -resourcegroupnames or -vms to filter. if this is wrong, press ctrl-c to exit..."
-           $filteredVms = $allVms
-        }
-        else
-        {
-            foreach($filteredVm in $filteredVms)
-            {
-                log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
-            }
+            log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
 
         log-info "checking $($filteredVms.Count) vms. use -verbose switch to see more detail..."
-        
     
         foreach ($vm in $filteredVms)
         {
@@ -132,13 +153,13 @@ function main()
             $jobInfo.invocation = $MyInvocation
             $JobInfo.backgroundJobFunction = (get-item function:do-backgroundJob)
             $jobInfo.jobName = $action
-            $jobInfo.poweredon = $null
             $jobInfo.vm = $vm
             $jobInfo.jobName = "$($action):$($vm.resourceGroupName)\$($vm.name)"
             $jobInfo.verbosePreference = $VerbosePreference
             $jobInfo.debugPreference = $DebugPreference
             # quicker to not use jobs for checking power state
             $jobInfo.poweredon = check-vmPoweredOn -jobInfo $jobInfo
+
             [void]$jobInfos.Add($jobInfo)
         } 
 
@@ -229,17 +250,10 @@ function authenticate-azureRm()
             log-info "installing AzureRm.compute powershell module..."
             install-module AzureRM.compute -force
         }
-        if ($allModules -inotcontains "AzureRM.network")
-        {
-            log-info "installing AzureRm.network powershell module..."
-            install-module AzureRM.network -force
-
-        }
             
         Import-Module azurerm.profile        
         Import-Module azurerm.resources        
         Import-Module azurerm.compute            
-        Import-Module azurerm.network
 		#log-info "installing AzureRm powershell module..."
 		#install-module AzureRM -force
         
@@ -280,7 +294,7 @@ function check-backgroundJobs()
         if ($job.State -ine "Running")
         {
             $jobInfo = "$($job.Name) $($job.JobStateInfo)"
-            log-info "verbose $(Remove-Job -Id $job.Id -Force)"
+            log-info "verbose: $(Remove-Job -Id $job.Id -Force)"
         }
         else
         {
@@ -325,14 +339,15 @@ function check-vmPoweredOn($jobInfo)
 function do-backgroundJob($jobInfo)
 {
     $powerState = $null
-    $VerbosePreference = $jobInfo.verbosePreference
+    $VerbosePreference = $jobInfo.verbosePreference.Value
     log-info "verbose:doing background job $($jobInfo.action)"
    
     # for job debugging
     # when attached with -debug switch, set $debugPreference to SilentlyContinue to debug
     while($jobInfo.debugPreference -ieq "Inquire")
     {
-		log-info "verbose:waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
+		log-info "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
+		log-info "set jobInfo.debugPreference = SilentlyContinue to break debug loop"
         start-sleep -Seconds 1
     }
     
@@ -380,9 +395,21 @@ function log-info($data)
     $counter = 0
     $foregroundColor = "white"
 
-    if($data.ToString().ToLower().StartsWith("error"))
+    if($data -imatch "error")
     {
         $foregroundColor = "red"
+    }
+    elseif($data -imatch "warning")
+    {
+        $foregroundColor = "yellow"
+    }
+    elseif($data -imatch "running")
+    {
+        $foregroundColor = "green"
+    }
+    elseif($data -imatch "deallocated|stopped")
+    {
+        $foregroundColor = "gray"
     }
 
     while (!$dataWritten -and $counter -lt 1000)
@@ -403,7 +430,7 @@ function log-info($data)
     {
         if($VerbosePreference -ine "SilentlyContinue")
         {
-            write-host $data -ForegroundColor $foregroundcolor
+            write-host $data -ForegroundColor $foregroundColor
         }
     }
     else
@@ -428,8 +455,8 @@ function remove-backgroundJobs()
     foreach($job in get-job)
     {
         log-info "verbose:removing job"
-        log-info "verbose $(Receive-Job -Job $Job | fl * | out-string)"
-        log-info "verbose $(Remove-Job -Job $job -Force)"
+        log-info "verbose: $(Receive-Job -Job $Job | fl * | out-string)"
+        log-info "verbose: $(Remove-Job -Job $job -Force)"
     }
 }
 
@@ -449,8 +476,6 @@ function start-backgroundJob($jobInfo)
         # From <https://github.com/Azure/azure-powershell/issues/3954> 
         [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
 
-        log-info ($jobInfo.action)
-        #do-backgroundJob -jobInfo $jobInfo
         & $jobInfo.backgroundJobFunction $jobInfo
 
     } -Name $jobInfo.jobName -ArgumentList $jobInfo
@@ -461,7 +486,6 @@ function start-backgroundJob($jobInfo)
         Start-Sleep -Seconds 5
         debug-job -Job $job
         pause
-        ### end test
     }
 
     return $job
