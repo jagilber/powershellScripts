@@ -303,7 +303,7 @@ function check-backgroundJobs()
 
         if($jobInfo)
         {
-            log-info "verbose:jobresult:$($jobInfo)"
+            log-info "job status:$($jobInfo)"
         }
 
         Start-Sleep -Seconds 1
