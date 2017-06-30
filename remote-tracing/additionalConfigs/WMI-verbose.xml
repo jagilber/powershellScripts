@@ -1,0 +1,147 @@
+<DataCollectorSet>
+  <Status>1</Status>
+  <Duration>0</Duration>
+  <Description />
+  <DescriptionUnresolved />
+  <DisplayName />
+  <DisplayNameUnresolved />
+  <SchedulesEnabled>-1</SchedulesEnabled>
+  <LatestOutputLocation>
+  </LatestOutputLocation>
+  <Name>WMI</Name>
+  <OutputLocation>
+  </OutputLocation>
+  <RootPath>%systemroot%\temp</RootPath>
+  <Segment>0</Segment>
+  <SegmentMaxDuration>0</SegmentMaxDuration>
+  <SegmentMaxSize>500</SegmentMaxSize>
+  <SerialNumber>1</SerialNumber>
+  <Server />
+  <Subdirectory />
+  <SubdirectoryFormat>0</SubdirectoryFormat>
+  <SubdirectoryFormatPattern />
+  <Task />
+  <TaskArguments />
+  <TaskUserTextArguments />
+  <UserAccount />
+  <Security>O:BAG:BAD:(A;;0x800;;;WD)(A;;0x120fff;;;SY)(A;;0x120fff;;;LS)(A;;0x120fff;;;NS)(A;;0x120fff;;;BA)(A;;0xee5;;;LU)(A;;LC;;;MU)(A;;0x800;;;AC)</Security>
+  <TraceDataCollector>
+    <DataCollectorType>1</DataCollectorType>
+    <Name>WMI</Name>
+    <FileName>
+    </FileName>
+    <FileNameFormat>0</FileNameFormat>
+    <FileNameFormatPattern />
+    <LogAppend>0</LogAppend>
+    <LogCircular>-1</LogCircular>
+    <LogOverwrite>0</LogOverwrite>
+    <LatestOutputLocation>
+    </LatestOutputLocation>
+    <Guid>{30F8AA0F-68DC-11E4-80CE-00155D055112}</Guid>
+    <BufferSize>8</BufferSize>
+    <BuffersLost>0</BuffersLost>
+    <BuffersWritten>2</BuffersWritten>
+    <ClockType>1</ClockType>
+    <EventsLost>0</EventsLost>
+    <ExtendedModes>4194304</ExtendedModes>
+    <FlushTimer>0</FlushTimer>
+    <FreeBuffers>3</FreeBuffers>
+    <MaximumBuffers>26</MaximumBuffers>
+    <MinimumBuffers>4</MinimumBuffers>
+    <NumberOfBuffers>4</NumberOfBuffers>
+    <PreallocateFile>0</PreallocateFile>
+    <ProcessMode>0</ProcessMode>
+    <RealTimeBuffersLost>0</RealTimeBuffersLost>
+    <SessionName>WMI</SessionName>
+    <SessionThreadId>3964</SessionThreadId>
+    <StreamMode>1</StreamMode>
+    <TraceDataProvider>
+      <DisplayName>{8E6B6962-AB54-4335-8229-3255B919DD0E}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>15</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>15</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x1</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0</Value>
+      </Properties>
+      <Guid>{8E6B6962-AB54-4335-8229-3255B919DD0E}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{1FF6B227-2CA7-40F9-9A66-980EADAA602E}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>15</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>15</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x7</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0</Value>
+      </Properties>
+      <Guid>{1FF6B227-2CA7-40F9-9A66-980EADAA602E}</Guid>
+    </TraceDataProvider>
+  </TraceDataCollector>
+</DataCollectorSet>
