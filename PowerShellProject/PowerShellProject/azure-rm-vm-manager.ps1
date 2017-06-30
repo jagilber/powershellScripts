@@ -121,7 +121,9 @@ function main()
             {
                 if(!($filteredVms.Name -imatch $vm) -and ($allVms.Name -imatch $vm))
                 {
-                    [void]$filteredVms.AddRange(@($allVms |? { $_.Name -imatch $vm -and $_.ResourceGroupName -imatch $resourceGroupNames }))
+                    [void]$filteredVms.AddRange(@($allVms | where-object {
+                        $_.Name -imatch $vm -and ($_.ResourceGroupName -imatch ($resourceGroupNames -join "|"))
+                    }))
                 }
             }
         }
@@ -131,7 +133,7 @@ function main()
         {
             if(($filteredVms.Name -imatch $excludeVm) -and ($allVms.Name -imatch $excludeVm))
             {
-                [void]$filteredVms.RemoveRange(@($allVms |? Name -imatch $excludeVm))
+                [void]$filteredVms.RemoveRange(@($allVms | Where-Object Name -imatch $excludeVm))
             }
         }
 
@@ -363,7 +365,10 @@ function do-backgroundJob($jobInfo)
                 }
                 "restart" {
                     log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Restart-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                    #Restart-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    log-info "`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
                 default: {}
@@ -395,7 +400,7 @@ function log-info($data)
     $counter = 0
     $foregroundColor = "white"
 
-    if($data -imatch "error")
+    if($data -imatch "error:")
     {
         $foregroundColor = "red"
     }
