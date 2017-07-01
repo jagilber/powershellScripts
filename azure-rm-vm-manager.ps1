@@ -10,7 +10,7 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170629 added -vms
+   Version    : 170630 added real states in verbose
    History    : 
 
 .EXAMPLE  
@@ -42,7 +42,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('start','stop','restart','listRunning','listStopped')]
+    [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
     [string]$action = 'listRunning',
     [string[]]$resourceGroupNames = @(),
     [string[]]$excludeVms = @(),
@@ -81,9 +81,9 @@ function main()
         }
 
         # if neither passed in use all
-        if(!$vms -and !$resourceGroupNames)
+        if(!$vms -and !$resourceGroupNames -and !($action -imatch 'list'))
         {
-            log-info "warning: querying / managing all vm's in subscription! use -resourcegroupnames or -vms to filter. if this is wrong, press ctrl-c to exit..."
+            log-info "warning: managing all vm's in subscription! use -resourcegroupnames or -vms to filter. if this is wrong, press ctrl-c to exit..."
             #$filteredVms = $allVms
         }
 
@@ -159,8 +159,11 @@ function main()
             $jobInfo.jobName = "$($action):$($vm.resourceGroupName)\$($vm.name)"
             $jobInfo.verbosePreference = $VerbosePreference
             $jobInfo.debugPreference = $DebugPreference
+            $jobInfo.vmRunning = ""
+            $jobInfo.powerState = ""
+            $jobInfo.provisioningState = ""
             # quicker to not use jobs for checking power state
-            $jobInfo.poweredon = check-vmPoweredOn -jobInfo $jobInfo
+            $jobInfo = check-vmRunning -jobInfo $jobInfo
 
             [void]$jobInfos.Add($jobInfo)
         } 
@@ -168,6 +171,13 @@ function main()
         # perform action
         switch($action)
         {
+            "list" { 
+                log-info "resourcegroupname`t:`tvm name`t:`tprovisioning`t:`tpower"
+                foreach ($jobInfo in $jobInfos)
+                {
+                    log-info "$($jobInfo.vm.resourceGroupName)`t:`t$($jobInfo.vm.name)`t:`t$($jobInfo.provisioningState)`t:`t$($jobInfo.powerState)"
+                }
+            }
             "listRunning" { 
                 foreach ($jobInfo in $jobInfos |? poweredon -imatch $true)
                 {
@@ -175,10 +185,10 @@ function main()
                 }
             }
             
-            "listStopped" { 
+            "listDeallocated" { 
                 foreach ($jobInfo in $jobInfos |? poweredon -imatch $false)
                 {
-                    log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):stopped"
+                    log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):deallocated"
                 }
             }
 
@@ -315,26 +325,38 @@ function check-backgroundJobs()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function check-vmPoweredOn($jobInfo)
+function check-vmRunning($jobInfo)
 {
     log-info "verbose:checking vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
 
+    $jobInfo.vmRunning = $null
+    $jobInfo.powerState = "unknown"
+    $jobInfo.provisioningState = "unknown"
+
     foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
     {
+        if($status.Code -imatch "PowerState")
+        {
+            $jobInfo.powerState = $status.Code.ToString().Replace("PowerState/","")
+        }
+        
+        if($status.Code -imatch "ProvisioningState")
+        {
+            $jobInfo.provisioningState = $status.Code.ToString().Replace("ProvisioningState/","")
+        }
+
         if ($status.Code -eq "PowerState/running")
         {
-            log-info "verbose:`tvm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name):running"
-            return $true
+            $jobInfo.vmRunning = $true
         }
         elseif ($status.Code -ieq "PowerState/deallocated")
         {
-            log-info "verbose:`tvm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name):deallocated"
-            return $false
+            $jobInfo.vmRunning = $false
         }
     }    
 
-    log-info "verbose:`twarning:vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name):unknown"
-    return $null
+    log-info "verbose:`tvm $($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):$($jobInfo.provisioningState):$($jobInfo.powerState)"
+    return $jobInfo
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -353,7 +375,9 @@ function do-backgroundJob($jobInfo)
         start-sleep -Seconds 1
     }
     
-    switch((check-vmPoweredOn -jobInfo $jobInfo))
+    $jobInfo = check-vmRunning -jobInfo $jobInfo
+
+    switch($jobInfo.vmRunning)
     {
         $true {
             switch($jobInfo.action)
@@ -361,7 +385,7 @@ function do-backgroundJob($jobInfo)
                 "stop" {
                     log-info "`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
-                    log-info "verbose:`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
                 "restart" {
                     log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
@@ -415,6 +439,10 @@ function log-info($data)
     elseif($data -imatch "deallocated|stopped")
     {
         $foregroundColor = "gray"
+    }
+    elseif($data -imatch "unknown")
+    {
+        $foregroundColor = "blue"
     }
 
     while (!$dataWritten -and $counter -lt 1000)
