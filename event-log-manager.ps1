@@ -18,12 +18,10 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170616 added set-strictmode
+   Version    : 170705 add -merge
    History    : 
+                170616 add set-strictmode
                 170614 add $command
-                170518 added try catch to getlognames().
-                170315 changed documentation for eventlognamepattern. one example had eventlognames
-                170219 added disabledebuglogs on -listen at end of trace. added file option for $machines
                 
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
@@ -83,53 +81,53 @@
     If event is logged, run command "powershell.exe .\somescript.ps1 <event message>" will be started in a new process
 
 .PARAMETER clearEventLogs
-    If specified, will clear all event logs matching 'eventLogNamePattern'
+    clear all event logs matching 'eventLogNamePattern'
 
 .PARAMETER clearEventLogsOnGather
-    If specified, will clear all event logs matching 'eventLogNamePattern' after eventlogs have been gathered.
+    clear all event logs matching 'eventLogNamePattern' after eventlogs have been gathered.
 
 .PARAMETER command
-    If specified, will run a command on -eventLogIds match or -eventTracePattern match.
+    run a command on -eventLogIds match or -eventTracePattern match.
     NOTE: requires -listen and -eventLogIds or -eventTracePattern arguments.
     NOTE: by default will only run command one time but can be modified with -commandCount argument.
     event string will be added to command given as a quoted argument when command is started.
     see EXAMPLE
 
 .PARAMETER commandCount
-    If specified, will modify default value of 1 for number of times to execute command on match.
+    modify default value of 1 for number of times to execute command on match.
 
 .PARAMETER days
-    If specified, is the number of days to query from the event logs. The number specified is a positive number
+    number of days to query from the event logs. The number specified is a positive number
 
 .PARAMETER disableDebugLogs
-    If specified, will disable the 'analytic and debug' event logs matching 'eventLogNamePattern'
+    disable the 'analytic and debug' event logs matching 'eventLogNamePattern'
 
 .PARAMETER displayMergedResults
-    If specified, will display merged results in default viewer for .csv files.
+    display merged results in default viewer for .csv files.
 
 .PARAMETER enableDebugLogs
-    If specified, will enable the 'analytic and debug' event logs matching 'eventLogNamePattern'
+    enable the 'analytic and debug' event logs matching 'eventLogNamePattern'
     NOTE: at end of troubleshooting, remember to 'disableEventLogs' as there is disk and cpu overhead for debug logs
     WARNING: enabling too many debug eventlogs can make system non responsive and may make machine unbootable!
     Only enable specific debug logs needed and only while troubleshooting.
 
 .PARAMETER eventDetails
-    If specified, will output event log items including xml data found on 'details' tab.
+    output event log items including xml data found on 'details' tab.
 
 .PARAMETER eventDetailsFormatted
-    If specified, will output event log items including xml data found on 'details' tab with xml formatted.
+    output event log items including xml data found on 'details' tab with xml formatted.
 
 .PARAMETER eventLogIds
-    If specified, a comma separated list of event logs id's to query.
+    comma separated list of event logs id's to query.
     Default is all id's.
 
 .PARAMETER eventLogLevels
-    If specified, a comma separated list of event log levels to query.
+    comma separated list of event log levels to query.
     Default is all event levels.
     Options are Critical,Error,Warning,Information,Verbose
 
 .PARAMETER eventLogNamePattern
-    If specified, is a string or regex pattern to specify event log names to modify / query.
+    string or regex pattern to specify event log names to modify / query.
     If not specified, the default value is for 'Application' and 'System' event logs
     If 'rds $true' and this argument is not specified, the following regex will be used "RemoteApp|RemoteDesktop|Terminal"
 
@@ -139,49 +137,52 @@
     This parameter is not compatible with '-machines'
 
 .PARAMETER eventStartTime
-    If specified, is a time and / or date string that can be used as a starting time to query event logs
+    time and / or date string that can be used as a starting time to query event logs
     If not specified, the default is for today only
 
 .PARAMETER eventStopTime
-    If specified, is a time and / or date string that can be used as a stopping time to query event logs
+    time and / or date string that can be used as a stopping time to query event logs
     If not specified, the default is for current time
 
 .PARAMETER eventTracePattern
-    If specified, is a string or regex pattern to specify event log traces to query.
+    string or regex pattern to specify event log traces to query.
     If not specified, all traces matching other criteria are displayed
 
 .PARAMETER getUpdate
-    If specified, will compare the current script against the location in github and will update if different.
+    compare the current script against the location in github and will update if different.
 
 .PARAMETER hours
-    If specified, is the number of hours to query from the event logs. The number specified is a positive number
+    number of hours to query from the event logs. The number specified is a positive number
 
 .PARAMETER listen
-    If specified, will listen and display new events from event logs matching specifed pattern with eventlognamepattern
+    listen and display new events from event logs matching specifed pattern with eventlognamepattern
 
 .PARAMETER listeventlogs
-    If specified, will list all eventlogs matching specified pattern with eventlognamepattern
+    list all eventlogs matching specified pattern with eventlognamepattern
 
 .PARAMETER machines
-    If specified, will run script against remote machine(s). List is comma separated. argument also accepts file name and path of text file 
+    run script against remote machine(s). List is comma separated. argument also accepts file name and path of text file 
     with machine names.
     If not specified, script will run against local machine
 
+.PARAMETER merge
+    merge all .csv output files into one file sorted by time
+
 .PARAMETER minutes
-    If specified, is the number of minutes to query from the event logs. The number specified is a positive number
+    number of minutes to query from the event logs. The number specified is a positive number
 
 .PARAMETER months
-    If specified, is the number of months to query from the event logs. The number specified is a positive number
+    number of months to query from the event logs. The number specified is a positive number
 
 .PARAMETER noDynamicPath
-    If specifed, will store files in a non-timestamped folder which is useful if calling from another script.
+    store output files in a non-timestamped folder which is useful if calling from another script.
 
 .PARAMETER rds
-    If specified, will set the default 'eventLogNamePattern' to "RemoteApp|RemoteDesktop|Terminal" if value not populated
+    set the default 'eventLogNamePattern' to "RemoteApp|RemoteDesktop|Terminal" if value not populated
 
 .PARAMETER uploadDir
-    The directory where all files will be created.
-    The default is .\gather
+    directory where all files will be created.
+    default is .\gather
 #>
 
 Param(
