@@ -12,14 +12,12 @@
     Each export will be in its own file named with the event log name.
     Script has ability to 'listen' to new events by continuously polling configured event logs.
 
-    https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
-    https://aka.ms/event-log-manager.ps1
-
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170705 add -merge
+   Version    : 170706 fix bugs in main finally
    History    : 
+                170705 add -merge
                 170616 add set-strictmode
                 170614 add $command
                 
@@ -183,6 +181,11 @@
 .PARAMETER uploadDir
     directory where all files will be created.
     default is .\gather
+
+.LINK
+    https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
+    https://aka.ms/event-log-manager.ps1
+    https://github.com/jagilber/powershellScripts
 #>
 
 Param(
@@ -450,8 +453,13 @@ function main()
 
         if (!$listEventLogs -and @([IO.Directory]::GetFiles($global:uploadDir, "*.*")).Count -gt 0)
         {
-            start $global:uploadDir
+            if($merge -or $displayMergedResults)
+            {
+                start $global:uploadDir
+            }
+
             log-info "files are located here: $($global:uploadDir)"
+           # tree /a /f $($global:uploadDir)
         }
    
         log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds)"
@@ -712,7 +720,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
 # ----------------------------------------------------------------------------------------------------------------
 function enable-logs($eventLogNames, $machine)
 {
-    log-info "enabling logs on $($machine)."
+    log-info "enabling / disabling logs on $($machine)."
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
     $debugLogsEnabled = New-Object Collections.ArrayList
 
@@ -756,6 +764,12 @@ function enable-logs($eventLogNames, $machine)
             [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
             $eventLog.IsEnabled = $false
             $eventLog.SaveChanges()
+            $global:debugLogsCount--
+
+            if($debugLogsEnabled.Contains($eventLog.LogName))
+            {
+                $debugLogsEnabled.Remove($eventLog.LogName)
+            }
         }
 
         if ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug")
@@ -1436,6 +1450,10 @@ function merge-files()
 {
     # run logmerge on all files
     $uDir = $global:uploadDir
+    if (!$global:eventLogFiles -and !$nodynamicpath)
+    {
+        $uDir = "$($uDir)\$($startTime)"
+    }
 
     foreach ($machine in $machines)
     {
@@ -1455,11 +1473,6 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
     $retval = $true
     $ret = $null
     $baseDir = $global:uploadDir
-
-    if (!$global:eventLogFiles -and !$nodynamicpath)
-    {
-        $baseDir = "$($baseDir)\$($startTime)"
-    }
 
     foreach ($machine in $machines)
     {
@@ -1487,7 +1500,10 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         }
 
         # create machine list
-        $global:machineRecords.Add($machine, @{})
+        if(!$global:machineRecords.ContainsKey($machine))
+        {
+            $global:machineRecords.Add($machine, @{})
+        }
 
         # create eventlog list for machine
         foreach ($eventLogName in $filteredLogs)
