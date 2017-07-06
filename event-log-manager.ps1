@@ -15,7 +15,7 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170706 fix bugs in main finally
+   Version    : 170706.1 fix bugs in main finally
    History    : 
                 170705 add -merge
                 170616 add set-strictmode
@@ -279,14 +279,16 @@ function main()
 {
     $error.Clear()
 
+    # set upload directory
+    set-uploadDir
+
+    $logFile = "$(get-location)\$($logFile)"
+
     log-info "starting $([DateTime]::Now.ToString()) $([Diagnostics.Process]::GetCurrentProcess().StartInfo.Arguments)"
 
     # log arguments
     log-info $PSCmdlet.MyInvocation.Line;
     log-arguments
-
-    # set upload directory
-    set-uploadDir
 
     # clean up old jobs
     remove-jobs $silent
@@ -459,7 +461,7 @@ function main()
             }
 
             log-info "files are located here: $($global:uploadDir)"
-           # tree /a /f $($global:uploadDir)
+            #tree /a /f $($global:uploadDir)
         }
    
         log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds)"
