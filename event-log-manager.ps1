@@ -726,11 +726,7 @@ function enable-logs($eventLogNames, $machine)
     log-info "enabling / disabling logs on $($machine)."
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
     $debugLogsEnabled = New-Object Collections.ArrayList
-
-    if ($VerbosePreference -ine "SilentlyContinue")
-    {
-        [void]$sb.Appendline("event logs:")
-    }
+    [void]$sb.Appendline("event logs:")
 
     foreach ($eventLogName in $eventLogNames)
     {
@@ -760,7 +756,7 @@ function enable-logs($eventLogNames, $machine)
 
         if ($enableDebugLogs -and $eventLog.IsEnabled -eq $false)
         {
-            if ($VerbosePreference -ine "SilentlyContinue")
+            if ($VerbosePreference -ine "SilentlyContinue" -or $listEventLogs)
             {
                 [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
             }
@@ -771,7 +767,7 @@ function enable-logs($eventLogNames, $machine)
 
         if ($disableDebugLogs -and $eventLog.IsEnabled -eq $true -and ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug"))
         {
-            if ($VerbosePreference -ine "SilentlyContinue")
+            if ($VerbosePreference -ine "SilentlyContinue" -or $listEventLogs)
             {
                 [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
             }
@@ -790,11 +786,7 @@ function enable-logs($eventLogNames, $machine)
         {
             if ($eventLog.IsEnabled -eq $true)
             {
-                if ($VerbosePreference -ine "SilentlyContinue")
-                {
-                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
-                }
-
+                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
                 $debugLogsEnabled.Add($eventLog.LogName)
 
                 if ($debugLogsMax -le $debugLogsEnabled.Count)
@@ -809,18 +801,12 @@ function enable-logs($eventLogNames, $machine)
             }
             else
             {
-                if ($VerbosePreference -ine "SilentlyContinue")
-                {
-                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
-                }
+                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
             }
         }
         else
         {
-            if ($VerbosePreference -ine "SilentlyContinue")
-            {
-                [void]$sb.AppendLine("$($eventLog.LogName)")
-            }
+            [void]$sb.AppendLine("$($eventLog.LogName)")
         }
     }
 
@@ -1118,6 +1104,7 @@ function log-arguments()
     log-info "hours:$($hours)"
     log-info "listen:$($listen)"
     log-info "listEventLogs:$($listEventLogs)"
+    log-info "logFile:$($logFile)"
     log-info "machines:$($machines -join ",")"
     log-info "minutes:$($minutes)"
     log-info "merge:$($merge)"
