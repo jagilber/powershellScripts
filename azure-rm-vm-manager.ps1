@@ -179,24 +179,24 @@ function main()
                 }
             }
             "listRunning" { 
-                foreach ($jobInfo in $jobInfos |? poweredon -imatch $true)
+                foreach ($jobInfo in $jobInfos |? vmRunning -imatch $true)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
                 }
             }
             
             "listDeallocated" { 
-                foreach ($jobInfo in $jobInfos |? poweredon -imatch $false)
+                foreach ($jobInfo in $jobInfos |? vmRunning -imatch $false)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):deallocated"
                 }
             }
 
-            "restart" { start-backgroundJobs -jobInfos ($jobInfos |? poweredon -imatch $true) -throttle $throttle }
+            "restart" { start-backgroundJobs -jobInfos ($jobInfos |? vmRunning -imatch $true) -throttle $throttle }
 
-            "start" { start-backgroundJobs -jobInfos ($jobInfos |? poweredon -imatch $false) -throttle $throttle }
+            "start" { start-backgroundJobs -jobInfos ($jobInfos |? vmRunning -imatch $false) -throttle $throttle }
 
-            "stop" { start-backgroundJobs -jobInfos ($jobInfos |? poweredon -imatch $true) -throttle $throttle }
+            "stop" { start-backgroundJobs -jobInfos ($jobInfos |? vmRunning -imatch $true) -throttle $throttle }
 
             default: {}
         }
