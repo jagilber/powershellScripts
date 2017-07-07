@@ -15,12 +15,10 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
+   Version    : 170707.2 finally fix for merge getfiles multiple machines
    History    : 
+                170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
                 170706.2 fix bugs in main finally, readalltext get-update
-                170705 add -merge
-                170616 add set-strictmode
-                170614 add $command
                 
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
@@ -455,7 +453,7 @@ function main()
             show-debugWarning -count $global:debugLogsCount
         }
 
-        if (!$listEventLogs -and @([IO.Directory]::GetFiles($global:uploadDir, "*.*")).Count -gt 0)
+        if (!$listEventLogs -and @([IO.Directory]::GetFiles($global:uploadDir, "*.*", [IO.SearchOption]::AllDirectories)).Count -gt 0)
         {
             if ($merge -or $displayMergedResults)
             {
@@ -1485,11 +1483,14 @@ function merge-files()
     foreach ($machine in $machines)
     {
         log-info "running merge for $($machine) in path $($uDir)"
-        log-merge -sourceFolder $($uDir) -filePattern "*.csv" -outputFile "$($uDir)\events-$($machine)-all.csv" -subDir $true
-
-        if ($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
+        if([IO.Directory]::Exists("$($uDir)\$($machine)"))
         {
-            & "$($uDir)\events-$($machine)-all.csv"
+            log-merge -sourceFolder "$($uDir)\$($machine)" -filePattern "*.csv" -outputFile "$($uDir)\events-$($machine)-all.csv" -subDir $true
+
+            if ($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
+            {
+                & "$($uDir)\events-$($machine)-all.csv"
+            }
         }
     }
 }
@@ -1581,6 +1582,9 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         }
     } # end foreach machine
 
+    # set back to default
+    $global:uploadDir = $baseDir
+
     if ($listen -and $retval)
     {
         log-info "listening for events from machines:"
@@ -1593,7 +1597,6 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         listen-forEvents
     }
 
-    $global:uploadDir = $baseDir
     return $retval
 }
 
