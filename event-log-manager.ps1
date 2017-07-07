@@ -729,7 +729,10 @@ function enable-logs($eventLogNames, $machine)
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
     $debugLogsEnabled = New-Object Collections.ArrayList
 
-    [void]$sb.Appendline("event logs:")
+    if($VerbosePreference -ine "SilentlyContinue")
+    {
+        [void]$sb.Appendline("event logs:")
+    }
 
     foreach ($eventLogName in $eventLogNames)
     {
