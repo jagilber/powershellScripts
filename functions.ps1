@@ -178,7 +178,7 @@ function get-subscriptions()
         }
     }
 
-    write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
+    write-verbose "get-subscriptions returning:$($subs | format-list | out-string)"
     return $subList.Values
 }
 
@@ -228,27 +228,27 @@ function get-update($updateUrl, $destinationFile)
     log-info "get-update:checking for updated script: $($updateUrl)"
     $file = $null
     $git = $null
-    
+
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
 
         # git  may not have carriage return
-        if([regex]::Matches($git,"`r").Count -eq 0)
+        if ([regex]::Matches($git, "`r").Count -eq 0)
         {
             $git = [regex]::Replace($git, "`n", "`r`n")
         }
 
-        if(![IO.File]::Exists($destinationFile))
+        if (![IO.File]::Exists($destinationFile))
         {
             $file = ""    
         }
         else
         {
-            $file = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
+            $file = [IO.File]::ReadAllText($destinationFile)
         }
 
-        if(([string]::Compare($git, $file) -ne 0))
+        if (([string]::Compare($git, $file) -ne 0))
         {
             log-info "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
@@ -260,7 +260,6 @@ function get-update($updateUrl, $destinationFile)
         }
         
         return $false
-        
     }
     catch [System.Exception] 
     {
