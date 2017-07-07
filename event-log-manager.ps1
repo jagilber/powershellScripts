@@ -15,8 +15,9 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170706.2 fix bugs in main finally, readalltext get-update
+   Version    : 170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
    History    : 
+                170706.2 fix bugs in main finally, readalltext get-update
                 170705 add -merge
                 170616 add set-strictmode
                 170614 add $command
@@ -1471,10 +1472,6 @@ function merge-files()
 {
     # run logmerge on all files
     $uDir = $global:uploadDir
-    if (!$global:eventLogFiles -and !$nodynamicpath)
-    {
-        $uDir = "$($uDir)\$($startTime)"
-    }
 
     foreach ($machine in $machines)
     {
@@ -1726,6 +1723,11 @@ function set-uploadDir()
     elseif (!$global:uploadDir)
     {
         $global:uploadDir = "$(get-location)\gather"
+    }
+
+    if (!$global:eventLogFiles -and !$nodynamicpath)
+    {
+        $global:uploadDir = "$($global:uploadDir)\$($startTime)"
     }
 
     # make sure directory exists
