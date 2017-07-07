@@ -321,6 +321,7 @@ function main()
     if ($getUpdate)
     {
         get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName
+        exit 0
     }
 
     # add local machine if empty
