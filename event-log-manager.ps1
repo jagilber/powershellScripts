@@ -458,6 +458,7 @@ function main()
         {
             if($merge -or $displayMergedResults)
             {
+                merge-files
                 start $global:uploadDir
             }
 
@@ -757,14 +758,22 @@ function enable-logs($eventLogNames, $machine)
 
         if ($enableDebugLogs -and $eventLog.IsEnabled -eq $false)
         {
-            [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            if($VerbosePreference -ine "SilentlyContinue")
+            {
+                [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            }
+         
             $eventLog.IsEnabled = $true
             $eventLog.SaveChanges()
         }
 
         if ($disableDebugLogs -and $eventLog.IsEnabled -eq $true -and ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug"))
         {
-            [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            if($VerbosePreference -ine "SilentlyContinue")
+            {
+                [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            }
+
             $eventLog.IsEnabled = $false
             $eventLog.SaveChanges()
             $global:debugLogsCount--
@@ -779,7 +788,11 @@ function enable-logs($eventLogNames, $machine)
         {
             if ($eventLog.IsEnabled -eq $true)
             {
-                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
+                if($VerbosePreference -ine "SilentlyContinue")
+                {
+                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
+                }
+
                 $debugLogsEnabled.Add($eventLog.LogName)
 
                 if ($debugLogsMax -le $debugLogsEnabled.Count)
@@ -794,12 +807,18 @@ function enable-logs($eventLogNames, $machine)
             }
             else
             {
-                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
+                if($VerbosePreference -ine "SilentlyContinue")
+                {
+                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
+                }
             }
         }
         else
         {
-            [void]$sb.AppendLine("$($eventLog.LogName)")
+            if($VerbosePreference -ine "SilentlyContinue")
+            {
+                [void]$sb.AppendLine("$($eventLog.LogName)")
+            }
         }
     }
 
@@ -975,7 +994,6 @@ function listen-forEvents()
                     log-info "Warning: no more command instances will be started on new matches. To modify use -commandCountExecuted argument"
                 }
             }
-
 
             if ($debugScript)
             {
@@ -1601,11 +1619,6 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
                 receive-backgroundJobs -showStatus $showStatus
                 Start-Sleep -Milliseconds 1000
             }
-        }
-
-        if($displayMergedResults -or $merge)
-        {
-            merge-files
         }
     }
 }
