@@ -15,7 +15,7 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170706.1 fix bugs in main finally
+   Version    : 170706.2 fix bugs in main finally, readalltext get-update
    History    : 
                 170705 add -merge
                 170616 add set-strictmode
@@ -884,7 +884,7 @@ function get-update($updateUrl, $destinationFile)
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
         if (([string]::Compare($gitClean, $fileClean) -ne 0))
