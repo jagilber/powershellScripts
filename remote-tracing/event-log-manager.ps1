@@ -15,8 +15,9 @@
 .NOTES
    File Name  : event-log-manager.ps1
    Author     : jagilber
-   Version    : 170706.2 fix bugs in main finally, readalltext get-update
+   Version    : 170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
    History    : 
+                170706.2 fix bugs in main finally, readalltext get-update
                 170705 add -merge
                 170616 add set-strictmode
                 170614 add $command
@@ -456,8 +457,9 @@ function main()
 
         if (!$listEventLogs -and @([IO.Directory]::GetFiles($global:uploadDir, "*.*")).Count -gt 0)
         {
-            if($merge -or $displayMergedResults)
+            if ($merge -or $displayMergedResults)
             {
+                merge-files
                 start $global:uploadDir
             }
 
@@ -658,10 +660,10 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                 }
             
                 $listenJobItem.EventLogItems.Add($eventLogName, @{
-                        EventQuery = $eventQuery
+                        EventQuery  = $eventQuery
                         QueryString = $queryString
-                        OutputCsv = $outputCsv
-                        RecordId = 0
+                        OutputCsv   = $outputCsv
+                        RecordId    = 0
                     }
                 )
             }
@@ -727,7 +729,10 @@ function enable-logs($eventLogNames, $machine)
     [Text.StringBuilder] $sb = new-object Text.StringBuilder
     $debugLogsEnabled = New-Object Collections.ArrayList
 
-    [void]$sb.Appendline("event logs:")
+    if ($VerbosePreference -ine "SilentlyContinue")
+    {
+        [void]$sb.Appendline("event logs:")
+    }
 
     foreach ($eventLogName in $eventLogNames)
     {
@@ -757,19 +762,27 @@ function enable-logs($eventLogNames, $machine)
 
         if ($enableDebugLogs -and $eventLog.IsEnabled -eq $false)
         {
-            [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            if ($VerbosePreference -ine "SilentlyContinue")
+            {
+                [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            }
+         
             $eventLog.IsEnabled = $true
             $eventLog.SaveChanges()
         }
 
         if ($disableDebugLogs -and $eventLog.IsEnabled -eq $true -and ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug"))
         {
-            [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            if ($VerbosePreference -ine "SilentlyContinue")
+            {
+                [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+            }
+
             $eventLog.IsEnabled = $false
             $eventLog.SaveChanges()
             $global:debugLogsCount--
 
-            if($debugLogsEnabled.Contains($eventLog.LogName))
+            if ($debugLogsEnabled.Contains($eventLog.LogName))
             {
                 $debugLogsEnabled.Remove($eventLog.LogName)
             }
@@ -779,7 +792,11 @@ function enable-logs($eventLogNames, $machine)
         {
             if ($eventLog.IsEnabled -eq $true)
             {
-                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
+                if ($VerbosePreference -ine "SilentlyContinue")
+                {
+                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
+                }
+
                 $debugLogsEnabled.Add($eventLog.LogName)
 
                 if ($debugLogsMax -le $debugLogsEnabled.Count)
@@ -794,12 +811,18 @@ function enable-logs($eventLogNames, $machine)
             }
             else
             {
-                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
+                if ($VerbosePreference -ine "SilentlyContinue")
+                {
+                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
+                }
             }
         }
         else
         {
-            [void]$sb.AppendLine("$($eventLog.LogName)")
+            if ($VerbosePreference -ine "SilentlyContinue")
+            {
+                [void]$sb.AppendLine("$($eventLog.LogName)")
+            }
         }
     }
 
@@ -872,29 +895,22 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
 function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
-    $file = $null
-    $git = $null
 
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
-
-        # git  may not have carriage return
-        if([regex]::Matches($git,"`r").Count -eq 0)
-        {
-            $git = [regex]::Replace($git, "`n", "`r`n")
-        }
+        $gitClean = [regex]::Replace($git, '\W+', "")
 
         if (![IO.File]::Exists($destinationFile))
         {
-            $file = ""    
+            $fileClean = ""    
         }
         else
         {
-            $file = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
+            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
         }
 
-        if (([string]::Compare($git, $file) -ne 0))
+        if (([string]::Compare($gitClean, $fileClean) -ne 0))
         {
             log-info "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
@@ -965,10 +981,10 @@ function listen-forEvents()
 
             # run command if eventtracepattern or eventlogids were provided and command provided
             # will launch separate process
-            if($newEvents.Count -gt 0 `
-                -and $commandCount -gt $global:commandCountExecuted `
-                -and ![string]::IsNullOrEmpty($command) `
-                -and (![string]::IsNullOrEmpty($eventTracePattern) -or $eventLogIds.Count -gt 0))
+            if ($newEvents.Count -gt 0 `
+                    -and $commandCount -gt $global:commandCountExecuted `
+                    -and ![string]::IsNullOrEmpty($command) `
+                    -and (![string]::IsNullOrEmpty($eventTracePattern) -or $eventLogIds.Count -gt 0))
                 
             {
                 log-info "information: starting command cmd.exe /c start $($command) `"$($newEvents[0] | Out-String)`""
@@ -977,12 +993,11 @@ function listen-forEvents()
                 $global:commandCountExecuted++
                 log-info "information: finished starting command. number of commands started $($global:commandCountExecuted)"
                 
-                if($global:commandCountExecuted -eq $commandCountExecuted)
+                if ($global:commandCountExecuted -eq $commandCountExecuted)
                 {
                     log-info "Warning: no more command instances will be started on new matches. To modify use -commandCountExecuted argument"
                 }
             }
-
 
             if ($debugScript)
             {
@@ -1118,7 +1133,7 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
             return
         }
 
-        if(!$data)
+        if (!$data)
         {
             return
         }
@@ -1190,10 +1205,10 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function log-merge($sourceFolder,$filePattern,$outputFile,$startDate,$endDate,$subDir = $false)
+function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDate, $subDir = $false)
 {
 
-$Code = @'
+    $Code = @'
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -1442,14 +1457,14 @@ $Code = @'
 
     [DateTime] $time = new-object DateTime
 
-    if(![DateTime]::TryParse($startDate,[ref] $time))
+    if (![DateTime]::TryParse($startDate, [ref] $time))
     {
-       $startDate = [DateTime]::MinValue
+        $startDate = [DateTime]::MinValue
     }
 
-    if(![DateTime]::TryParse($endDate,[ref] $time))
+    if (![DateTime]::TryParse($endDate, [ref] $time))
     {
-       $endDate = [DateTime]::Now
+        $endDate = [DateTime]::Now
     }
 
     [LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate)
@@ -1460,10 +1475,6 @@ function merge-files()
 {
     # run logmerge on all files
     $uDir = $global:uploadDir
-    if (!$global:eventLogFiles -and !$nodynamicpath)
-    {
-        $uDir = "$($uDir)\$($startTime)"
-    }
 
     foreach ($machine in $machines)
     {
@@ -1510,7 +1521,7 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         }
 
         # create machine list
-        if(!$global:machineRecords.ContainsKey($machine))
+        if (!$global:machineRecords.ContainsKey($machine))
         {
             $global:machineRecords.Add($machine, @{})
         }
@@ -1558,9 +1569,9 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
             }
 
             $ret = dump-events -eventLogNames (New-Object Collections.ArrayList($global:machineRecords[$machine].Keys)) `
-                    -machine $machine `
-                    -eventStartTime $eventStartTime `
-                    -eventStopTime $eventStopTime
+                -machine $machine `
+                -eventStartTime $eventStartTime `
+                -eventStopTime $eventStopTime
         }
     } # end foreach machine
 
@@ -1585,8 +1596,8 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
 {
     # process all event logs on all machines
     if (process-eventLogs -machines $machines `
-        -eventStartTime $eventStartTime `
-        -eventStopTime $eventStopTime)
+            -eventStartTime $eventStartTime `
+            -eventStopTime $eventStopTime)
     {
         log-info "jobs count:$($global:jobs.Count)"
         $count = 0
@@ -1608,11 +1619,6 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
                 receive-backgroundJobs -showStatus $showStatus
                 Start-Sleep -Milliseconds 1000
             }
-        }
-
-        if($displayMergedResults -or $merge)
-        {
-            merge-files
         }
     }
 }
@@ -1720,6 +1726,11 @@ function set-uploadDir()
     elseif (!$global:uploadDir)
     {
         $global:uploadDir = "$(get-location)\gather"
+    }
+
+    if (!$global:eventLogFiles -and !$nodynamicpath)
+    {
+        $global:uploadDir = "$($global:uploadDir)\$($startTime)"
     }
 
     # make sure directory exists
@@ -1876,8 +1887,8 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
                     }
 
                     $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
-                        + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
-                        + "$($description)"))
+                                + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
+                                + "$($description)"))
 
                     if (!$eventTracePattern -or 
                         ($eventTracePattern -and 
@@ -2097,8 +2108,8 @@ function start-listenJob([hashtable]$jobItem)
                                 }
 
                                 $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt"))," `
-                                    + "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
-                                    + "$($event.ThreadId),$($description)"))
+                                            + "$($machine),$($event.Id),$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId)," `
+                                            + "$($event.ThreadId),$($description)"))
 
                                 if (!$eventTracePattern -or 
                                     ($eventTracePattern -and 
