@@ -855,28 +855,24 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
     }
 }
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------
 function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
+    $file = ""
     $git = $null
-    $file = $null
 
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
 
-        # git  may not have carriage return
+        # git may not have carriage return
         if ([regex]::Matches($git, "`r").Count -eq 0)
         {
             $git = [regex]::Replace($git, "`n", "`r`n")
         }
 
-        if (![IO.File]::Exists($destinationFile))
-        {
-            $file = ""    
-        }
-        else
+        if ([IO.File]::Exists($destinationFile))
         {
             $file = [IO.File]::ReadAllText($destinationFile)
         }

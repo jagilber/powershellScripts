@@ -10,7 +10,7 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170707 added get-update
+   Version    : 170708 added get-update
    History    : 
                 170630 added real states in verbose
 .EXAMPLE  
@@ -71,7 +71,7 @@ function main()
 
     try
     {
-        log-info "$((get-date).ToString("o")) starting script"
+        log-info "$(get-date) starting script"
 
         # see if new (different) version of file
         if ($getUpdate)
@@ -184,32 +184,45 @@ function main()
         # perform action
         switch($action)
         {
-            "list" { 
+            "list" 
+            { 
                 log-info "resourcegroupname`t:`tvm name`t:`tprovisioning`t:`tpower"
                 foreach ($jobInfo in $jobInfos)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName)`t:`t$($jobInfo.vm.name)`t:`t$($jobInfo.provisioningState)`t:`t$($jobInfo.powerState)"
                 }
             }
-            "listRunning" { 
+
+            "listRunning" 
+            { 
                 foreach ($jobInfo in $jobInfos |? vmRunning -imatch $true)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
                 }
             }
             
-            "listDeallocated" { 
+            "listDeallocated" 
+            { 
                 foreach ($jobInfo in $jobInfos |? vmRunning -imatch $false)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):deallocated"
                 }
             }
 
-            "restart" { start-backgroundJobs -jobInfos ($jobInfos |? vmRunning -imatch $true) -throttle $throttle }
+            "restart" 
+            { 
+                start-backgroundJobs -jobInfos ($jobInfos |where-object vmRunning -imatch $true) -throttle $throttle 
+            }
 
-            "start" { start-backgroundJobs -jobInfos ($jobInfos |? vmRunning -imatch $false) -throttle $throttle }
+            "start" 
+            { 
+                start-backgroundJobs -jobInfos ($jobInfos |where-object vmRunning -imatch $false) -throttle $throttle 
+            }
 
-            "stop" { start-backgroundJobs -jobInfos ($jobInfos |? vmRunning -imatch $true) -throttle $throttle }
+            "stop" 
+            { 
+                start-backgroundJobs -jobInfos ($jobInfos |where-object vmRunning -imatch $true) -throttle $throttle 
+            }
 
             default: {}
         }
@@ -229,7 +242,7 @@ function main()
             Remove-Item -Path $profileContext -Force
         }
 
-        log-info "$((get-date).ToString("o")) finished script. total minutes: $(((get-date) - $startTime).totalminutes)"
+        log-info "$(get-date) finished script. total minutes: $(((get-date) - $startTime).totalminutes)"
     }
 }
 
@@ -237,7 +250,6 @@ function main()
 function authenticate-azureRm()
 {
     # make sure at least wmf 5.0 installed
-
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
     {
         log-info "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
@@ -279,9 +291,6 @@ function authenticate-azureRm()
         Import-Module azurerm.profile        
         Import-Module azurerm.resources        
         Import-Module azurerm.compute            
-		#log-info "installing AzureRm powershell module..."
-		#install-module AzureRM -force
-        
 	}
     else
     {
@@ -310,28 +319,26 @@ function authenticate-azureRm()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function check-backgroundJobs()
+function check-backgroundJobs($writeStatus = $false)
 {
     foreach ($job in get-job)
     {
-        $jobInfo = $Null
+        $jobInfo = "name:$($job.Name) status:$($job.JobStateInfo)"
 
         if ($job.State -ine "Running")
         {
-            $jobInfo = "$($job.Name) $($job.JobStateInfo)"
-            log-info "verbose: $(Remove-Job -Id $job.Id -Force)"
+            Remove-Job -Id $job.Id -Force
+            $writeStatus = $true
         }
         else
         {
-            $jobInfo = (Receive-Job -Job $job | fl * | out-string)
+            Receive-Job -Job $job
         }            
 
-        if($jobInfo)
+        if($writeStatus)
         {
-            log-info "job status:$($jobInfo)"
+            log-info "$(get-date) job status: $($jobInfo)"
         }
-
-        Start-Sleep -Seconds 1
     }
 
     return @(get-job).Count
@@ -362,7 +369,7 @@ function check-vmRunning($jobInfo)
         {
             $jobInfo.vmRunning = $true
         }
-        elseif ($status.Code -ieq "PowerState/deallocated")
+        elseif ($status.Code -ieq "PowerState/deallocated" -or $status.Code -ieq "PowerState/stopped")
         {
             $jobInfo.vmRunning = $false
         }
@@ -392,15 +399,19 @@ function do-backgroundJob($jobInfo)
 
     switch($jobInfo.vmRunning)
     {
-        $true {
+        $true 
+        {
             switch($jobInfo.action)
             {
-                "stop" {
+                "stop" 
+                {
                     log-info "`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
                     log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
-                "restart" {
+
+                "restart" 
+                {
                     log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     #Restart-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
@@ -408,50 +419,51 @@ function do-backgroundJob($jobInfo)
                     Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
+
                 default: {}
             }
         }
 
-        $false {
+        $false 
+        {
             switch($jobInfo.action)
             {
-                "start" {
+                "start" 
+                {
                     log-info "`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
+
                 default: {}
             }
         }
 
-        default: {
+        default: 
+        {
             log-info "error:vm power state unknown $($jobInfo.vm.name)"
         }
     }
 }
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------
 function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
+    $file = ""
     $git = $null
-    $file = $null
 
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
 
-        # git  may not have carriage return
+        # git may not have carriage return
         if ([regex]::Matches($git, "`r").Count -eq 0)
         {
             $git = [regex]::Replace($git, "`n", "`r`n")
         }
 
-        if (![IO.File]::Exists($destinationFile))
-        {
-            $file = ""    
-        }
-        else
+        if ([IO.File]::Exists($destinationFile))
         {
             $file = [IO.File]::ReadAllText($destinationFile)
         }
@@ -536,8 +548,10 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 function monitor-backgroundJobs()
 {
-    while ((check-backgroundJobs))
+    $updateCounter = 1
+    while ((check-backgroundJobs -writeStatus ($updateCounter % 300 -eq 0)))
     {
+        $updateCounter++
         Start-Sleep -Seconds 1
     }
 }

@@ -136,6 +136,17 @@ function authenticate-azureRm()
             exit 1
         }
     }
+
+    #Save-AzureRmContext -Path $profileContext -Force
+    #main finally
+    #finally
+    #{
+    #if(test-path $profileContext)
+    #{
+    #    Remove-Item -Path $profileContext -Force
+    #}
+    #}
+
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -162,7 +173,6 @@ function get-workingDirectory()
         log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
         
     } 
- 
     
     Set-Location $retVal | out-null
  
@@ -262,28 +272,24 @@ function get-sysInternalsUtility ([string] $utilityName)
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/rds-lic-svr-chk.ps1"
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------
 function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
-    $file = $null
+    $file = ""
     $git = $null
 
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
 
-        # git  may not have carriage return
+        # git may not have carriage return
         if ([regex]::Matches($git, "`r").Count -eq 0)
         {
             $git = [regex]::Replace($git, "`n", "`r`n")
         }
 
-        if (![IO.File]::Exists($destinationFile))
-        {
-            $file = ""    
-        }
-        else
+        if ([IO.File]::Exists($destinationFile))
         {
             $file = [IO.File]::ReadAllText($destinationFile)
         }
