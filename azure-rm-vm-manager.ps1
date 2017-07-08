@@ -10,9 +10,9 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170630 added real states in verbose
+   Version    : 170707 added get-update
    History    : 
-
+                170630 added real states in verbose
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
     will stop all vm's in subscription!
@@ -28,6 +28,12 @@
 .PARAMETER action
     required. action to perform. start, stop, restart, listRunning
 
+.PARAMETER excludeVms
+    string array list of vm's to exclude from command
+
+.PARAMETER getUpdate
+    compare the current script against the location in github and will update if different.
+
 .PARAMETER resourceGroupName
     string array of resource group names of the resource groups containg the vm's to manage
     if NOT specified, all resource groups will be managed
@@ -35,17 +41,15 @@
 .PARAMETER vms
     string array list of vm's to include for command
 
-.PARAMETER excludeVms
-    string array list of vm's to exclude from command
-
 #>  
 
 [CmdletBinding()]
 param(
     [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
     [string]$action = 'listRunning',
-    [string[]]$resourceGroupNames = @(),
     [string[]]$excludeVms = @(),
+    [switch] $getUpdate,
+    [string[]]$resourceGroupNames = @(),
     [int]$throttle = 20,
     [string[]]$vms = @()
 )
@@ -54,6 +58,7 @@ $logFile = "azure-rm-vm-manager.log.txt"
 $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-vm-manager.ps1"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -67,6 +72,14 @@ function main()
     try
     {
         log-info "$((get-date).ToString("o")) starting script"
+
+        # see if new (different) version of file
+        if ($getUpdate)
+        {
+            get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName
+            exit 0
+        }
+
         remove-backgroundJobs
 
         # see if we need to auth
@@ -414,6 +427,53 @@ function do-backgroundJob($jobInfo)
         default: {
             log-info "error:vm power state unknown $($jobInfo.vm.name)"
         }
+    }
+}
+
+#----------------------------------------------------------------------------
+function get-update($updateUrl, $destinationFile)
+{
+    log-info "get-update:checking for updated script: $($updateUrl)"
+    $git = $null
+    $file = $null
+
+    try 
+    {
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
+
+        # git  may not have carriage return
+        if ([regex]::Matches($git, "`r").Count -eq 0)
+        {
+            $git = [regex]::Replace($git, "`n", "`r`n")
+        }
+
+        if (![IO.File]::Exists($destinationFile))
+        {
+            $file = ""    
+        }
+        else
+        {
+            $file = [IO.File]::ReadAllText($destinationFile)
+        }
+
+        if (([string]::Compare($git, $file) -ne 0))
+        {
+            log-info "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
+        }
+        else
+        {
+            log-info "script is up to date"
+        }
+        
+        return $false
+    }
+    catch [System.Exception] 
+    {
+        log-info "get-update:exception: $($error)"
+        $error.Clear()
+        return $false    
     }
 }
 
