@@ -12,14 +12,22 @@
     Each export will be in its own file named with the event log name.
     Script has ability to 'listen' to new events by continuously polling configured event logs.
 
+    Requirements:
+        - administrator powershell prompt
+        - administrative access to machine
+        - remote network ports:
+            - smb 445
+            - rpc endpoint mapper 135
+            - rpc ephemeral ports
+
 .NOTES
-   File Name  : event-log-manager.ps1
-   Author     : jagilber
-   Version    : 170707.2 finally fix for merge getfiles multiple machines
-   History    : 
+    File Name  : event-log-manager.ps1
+    Author     : jagilber
+    Version    : 170707.2 finally fix for merge getfiles multiple machines
+    History    : 
                 170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
                 170706.2 fix bugs in main finally, readalltext get-update
-                
+    
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
     Example command to query rds event logs for last 10 minutes.
@@ -187,64 +195,36 @@
     https://github.com/jagilber/powershellScripts
 #>
 
+[CmdletBinding()]
 Param(
-    [parameter(Position = 0, Mandatory = $false, HelpMessage = "Select to clear events")]
     [switch] $clearEventLogs,
-    [parameter(Position = 0, Mandatory = $false, HelpMessage = "Select to clear events after gather")]
     [switch] $clearEventLogsOnGather,
-    [parameter(HelpMessage = "Enter process command to run on event match. requires -listen and -eventLogIds or -eventTracePattern switches")]
     [string] $command,
-    [parameter(HelpMessage = "Enter number of times to execute command on a match. default is 1.")]
     [int] $commandCount = 1,
-    [parameter(HelpMessage = "Enter days")]
     [int] $days = 0,
-    [parameter(HelpMessage = "Enable to debug script")]
     [switch] $debugScript = $false,
-    [parameter(HelpMessage = "Select to disable debug event logs")]
     [switch] $disableDebugLogs,
-    [parameter(HelpMessage = "Display merged event results in viewer. Requires log-merge.ps1")]
     [switch] $displayMergedResults,
-    [parameter(HelpMessage = "Select to enable debug event logs")]
     [switch] $enableDebugLogs,
-    [parameter(HelpMessage = "Select this switch to export event entry details tab")]
     [switch] $eventDetails,
-    [parameter(HelpMessage = "Select this switch to export event entry details tab with xml formatted")]
     [switch] $eventDetailsFormatted,
-    [parameter(HelpMessage = "Enter comma separated list of event log levels Critical,Error,Warning,Information,Verbose")]
     [string[]] $eventLogLevels = @("critical", "error", "warning", "information", "verbose"),
-    [parameter(HelpMessage = "Enter comma separated list of event log Id")]
     [int[]] $eventLogIds = @(),
-    [parameter(HelpMessage = "Enter regex or string pattern for event log name match")]
     [string] $eventLogNamePattern = "",
-    [parameter(HelpMessage = "Enter path and file name of event log file to open")]
     [string] $eventLogPath = "",
-    [parameter(HelpMessage = "Enter start time / date (the default is events for today)")]
     [string] $eventStartTime,
-    [parameter(HelpMessage = "Enter stop time / date (the default is current time)")]
     [string] $eventStopTime,
-    [parameter(HelpMessage = "Enter regex or string pattern for event log trace to match")]
     [string] $eventTracePattern = "",
-    [parameter(HelpMessage = "Select to check for new version of file")]
     [switch] $getUpdate,
-    [parameter(HelpMessage = "Enter hours")]
     [int] $hours = 0,
-    [parameter(HelpMessage = "Listen to event logs either all or by -eventLogNamePattern")]
     [switch] $listen,
-    [parameter(HelpMessage = "List event logs either all or by -eventLogNamePattern")]
     [switch] $listEventLogs,
-    [parameter(HelpMessage = "Enter comma separated list of machine names")]
     [string[]] $machines = @(),
-    [parameter(HelpMessage = "Select to merge event log csv files into one file.")]
     [switch] $merge,
-    [parameter(HelpMessage = "Enter minutes")]
     [int] $minutes = 0,
-    [parameter(HelpMessage = "Enter months")]
     [int] $months = 0,
-    [parameter(HelpMessage = "Select to force all files to be flat when run on a single machine")]
     [switch] $nodynamicpath,
-    [parameter(HelpMessage = "Enter minutes")]
     [switch] $rds,
-    [parameter(HelpMessage = "Enter path for upload directory")]
     [string] $uploadDir
 )
 
@@ -313,7 +293,7 @@ function main()
         }
     }
 
-    # check
+    # check to see if running in admin prompt
     runas-admin
 
     # see if new (different) version of file
@@ -1604,7 +1584,7 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
             while (get-job)
             {
                 $showStatus = $false
-                $count ++
+                $count++
 
                 if ($count -eq 30)
                 {
@@ -2073,6 +2053,7 @@ function start-listenJob([hashtable]$jobItem)
                                 if ($eventdetails -or $eventDetailsFormatted -or !$description)
                                 {
                                     $eventXml = $event.ToXml()
+
                                     if ($eventXml)
                                     {
                                         if ($eventDetailsFormatted)
