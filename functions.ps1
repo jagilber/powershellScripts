@@ -1,5 +1,45 @@
 # general functions
 
+<#
+.SYNOPSIS
+    powershell script to manage event logs on multiple machines
+
+.DESCRIPTION
+    To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
+
+    This script will optionally enable / disable debug and analytic event logs.
+    This can be against both local and remote machines.
+    It will also take a regex filter pattern for both event log names and traces.
+    For each match, all event logs will be exported to csv format.
+    Each export will be in its own file named with the event log name.
+    Script has ability to 'listen' to new events by continuously polling configured event logs.
+
+    Requirements:
+        - administrator powershell prompt
+        - administrative access to machine
+        - remote network ports:
+            - smb 445
+            - rpc endpoint mapper 135
+            - rpc ephemeral ports
+
+.NOTES
+    File Name  : functions.ps1
+    Author     : jagilber
+    Version    : 170707.2 finally fix for merge getfiles multiple machines
+    History    : 
+    
+.EXAMPLE
+    .\event-log-manager.ps1 -rds -minutes 10
+    Example command to query rds event logs for last 10 minutes.
+
+.PARAMETER commandCount
+    modify default value of 1 for number of times to execute command on match.
+
+.LINK
+    https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
+#>
+
+
 
 # ----------------------------------------------------------------------------------------------------------------
 function authenticate-azureRm()
