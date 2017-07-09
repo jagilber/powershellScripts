@@ -10,9 +10,9 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170708 added get-update
+   Version    : 170709 release
    History    : 
-                170630 added real states in verbose
+
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
     will stop all vm's in subscription!
@@ -54,6 +54,7 @@ param(
     [string[]]$vms = @()
 )
 
+$ErrorActionPreference = "Continue"
 $logFile = "azure-rm-vm-manager.log.txt"
 $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
@@ -146,6 +147,7 @@ function main()
         {
             if(($filteredVms.Name -imatch $excludeVm) -and ($allVms.Name -imatch $excludeVm))
             {
+                log-info "verbose: removing vm $($excludeVm)"
                 [void]$filteredVms.RemoveRange(@($allVms | Where-Object Name -imatch $excludeVm))
             }
         }
@@ -321,6 +323,8 @@ function authenticate-azureRm()
 # ----------------------------------------------------------------------------------------------------------------
 function check-backgroundJobs($writeStatus = $false)
 {
+    $ret = $Null
+
     foreach ($job in get-job)
     {
         $jobInfo = "name:$($job.Name) status:$($job.JobStateInfo)"
@@ -328,17 +332,27 @@ function check-backgroundJobs($writeStatus = $false)
         if ($job.State -ine "Running")
         {
             Remove-Job -Id $job.Id -Force
-            $writeStatus = $true
+            log-info "`tjob status: $($jobInfo)"
+            continue
         }
         else
         {
-            Receive-Job -Job $job
+            $ret = Receive-Job -Job $job
+            if($ret)
+            {
+                log-info "`twarning:receive job $($job.Name) data: $($ret)"
+            }
         }            
 
         if($writeStatus)
         {
-            log-info "$(get-date) job status: $($jobInfo)"
+            log-info "`tjob status: $($jobInfo)"
         }
+        else
+        {
+            log-info "`tverbose: job status: $($jobInfo)"
+        }
+
     }
 
     return @(get-job).Count
@@ -531,7 +545,7 @@ function log-info($data)
         }
     }
 
-    if($data.ToLower().StartsWith("verbose:"))
+    if($data -imatch "verbose:")
     {
         if($VerbosePreference -ine "SilentlyContinue")
         {
@@ -542,13 +556,13 @@ function log-info($data)
     {
         write-host $data -ForegroundColor $foregroundcolor
     }
-
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function monitor-backgroundJobs()
 {
     $updateCounter = 1
+
     while ((check-backgroundJobs -writeStatus ($updateCounter % 300 -eq 0)))
     {
         $updateCounter++
