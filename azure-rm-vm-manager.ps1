@@ -10,8 +10,9 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170709 release
+   Version    : 170712 add progress
    History    : 
+                170709 release
 
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
@@ -60,6 +61,7 @@ $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-vm-manager.ps1"
+$actionText = "unknown"
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -72,7 +74,37 @@ function main()
 
     try
     {
-        log-info "$(get-date) starting script"
+        switch($action)
+        {
+            "list" 
+            {
+                $actionText = "listing all" 
+            }
+            "listDeallocated" 
+            {
+                $actionText = "listing deallocated / stopped" 
+            }
+            "listRunning" 
+            {
+                $actionText = "listing running" 
+            }
+            "restart" 
+            {
+                $actionText = "restarting" 
+            }
+            "start" 
+            {
+                $actionText = "starting" 
+            }
+            "stop" 
+            {
+                $actionText = "stopping" 
+            }
+
+            default: {}
+        }
+
+        log-info "$(get-date) enumerating vms for action '$($actionText) vms'. use -verbose switch to see more detail..."
 
         # see if new (different) version of file
         if ($getUpdate)
@@ -158,7 +190,7 @@ function main()
             log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
 
-        log-info "checking $($filteredVms.Count) vms. use -verbose switch to see more detail..."
+        log-info "$($actionText) $($filteredVms.Count) vms. use -verbose switch to see more detail..."
     
         foreach ($vm in $filteredVms)
         {
@@ -323,16 +355,18 @@ function authenticate-azureRm()
 # ----------------------------------------------------------------------------------------------------------------
 function check-backgroundJobs($writeStatus = $false)
 {
-    $ret = $Null
+    $ret = $null
+    update-progress
 
     foreach ($job in get-job)
     {
-        $jobInfo = "name:$($job.Name) status:$($job.JobStateInfo)"
+        $jobInfo = "$(get-date) job name:$($job.Name)  job status:$($job.JobStateInfo)"
 
         if ($job.State -ine "Running")
         {
             Remove-Job -Id $job.Id -Force
             log-info "`tjob status: $($jobInfo)"
+            update-progress
             continue
         }
         else
@@ -402,7 +436,7 @@ function do-backgroundJob($jobInfo)
    
     # for job debugging
     # when attached with -debug switch, set $debugPreference to SilentlyContinue to debug
-    while($jobInfo.debugPreference -ieq "Inquire")
+    while($jobInfo.debugPreference -imatch "Inquire")
     {
 		log-info "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
 		log-info "set jobInfo.debugPreference = SilentlyContinue to break debug loop"
@@ -626,6 +660,22 @@ function start-backgroundJobs($jobInfos, $throttle)
         }
 
         [void]$global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function update-progress()
+{
+    $globalJobsCount = @($global:jobs).Count
+
+    if($globalJobsCount -gt 0)
+    {
+        $finishedJobsCount = $globalJobsCount - @(get-job).Count
+        $status = "$($finishedJobsCount) / $($globalJobsCount) vms completed. " `
+            + "time elapsed:  $(((get-date) - $startTime).TotalMinutes.ToString("0.0")) minutes"
+        $percentComplete = ($finishedJobsCount / $globaljobsCount * 100)
+
+        Write-Progress -Activity "$($actionText) vms. Ctrl-C to stop script." -Status $status -PercentComplete $percentComplete  
     }
 }
 
