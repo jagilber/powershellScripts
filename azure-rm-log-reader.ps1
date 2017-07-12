@@ -18,11 +18,9 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170618 add import-module azurerm. add replace \u0027
+   Version    : 170712 v2
    History    : 
-                170510 updated git links
-                170102.1 changed output formatting. switched to named pipe 
-                161205 v1
+
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
     query azure rm for all resource manager and deployment logs
@@ -60,6 +58,7 @@
     optional switch to check github for latest version of script
 #>  
 
+[CmdletBinding()]
 param (
     [int]$cacheMinutes=5,
     [string]$deploymentName,
@@ -135,6 +134,7 @@ function main()
     </Window>
 "@
 
+    get-workingDirectory
     authenticate-azureRm
 
     # set sub if passed as argument. requires auth
@@ -149,16 +149,14 @@ function main()
         {
             # set subscription
             Set-AzureRmContext -SubscriptionId $subscriptionId
+            # save context for jobs
+            Save-AzureRmContext -Path $global:profileContext -Force 
         }
     }
-
-    # save context for jobs
-    Save-AzureRmContext -Path $global:profileContext -Force 
 
     $global:Window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
     $global:timer = new-object Windows.Threading.DispatcherTimer
 
-    get-workingDirectory
     $global:scriptname = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.ScriptName)
     
     if($update)
@@ -476,10 +474,20 @@ function add-eventItem($lbitem, $color)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function authenticate-azureRm()
+function authenticate-azureRm($context = $Null)
 {
-    # make sure at least wmf 5.0 installed
 
+    if($context)
+    {
+        $ctx = $null
+        $ctx = Import-AzureRmContext -Path $context
+        # bug to be fixed 8/2017
+        # From <https://github.com/Azure/azure-powershell/issues/3954> 
+        [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
+        return $true
+    }
+
+    # make sure at least wmf 5.0 installed
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
     {
         write-host "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
@@ -564,6 +572,8 @@ function authenticate-azureRm()
             exit 1
         }
     }
+
+    Save-AzureRmContext -Path $profileContext -Force
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -796,7 +806,7 @@ function get-subscriptions()
                 $id = $sub.SubscriptionId
            }
 
-            Write-Host $message
+            write-host $message
             [void]$subList.Add($count,$id)
             $count++
         }
@@ -889,7 +899,7 @@ function get-workingDirectory()
     else
     {
         $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
+        write-host "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     } 
  
     Set-Location $retVal | out-null
@@ -922,13 +932,13 @@ function get-update($updateUrl, $destinationFile)
 
         if (([string]::Compare($git, $file) -ne 0))
         {
-            log-info "copying script $($destinationFile)"
+            write-host "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
             return $true
         }
         else
         {
-            log-info "script is up to date"
+            write-host "script is up to date"
         }
         
         return $false
@@ -1341,9 +1351,187 @@ function send-backgroundJob([string]$command)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function do-backgroundJob($jobInfo)
+{
+    $count = 0
+    while ($true)
+    {
+        write-host "doing background job $($jobInfo.action)"
+        # for job debugging
+        # when attached with -debug switch, set $debugPreference to SilentlyContinue to debug
+        while($jobInfo.debugPreference -imatch "Inquire")
+        {
+		    write-host "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
+		    write-host "set jobInfo.debugPreference = SilentlyContinue to break debug loop"
+            start-sleep -Seconds 1
+        }
+
+        authenticate-azureRm -context $jobInfo.profileContext
+
+        $scriptName = $jobInfo.jobName
+        $pipeName = $jobInfo.pipeName
+        $detail = $jobInfo.detail
+        $currentTimeStamp = 0
+        $pipeCommand = $null
+        $clientPipe = $null
+        $pipeReader = $null
+        $rgCount = 0
+
+
+        # setup pipe to receive commands
+        $clientPipe = New-Object IO.Pipes.NamedPipeClientStream('.', $pipeName, [IO.Pipes.PipeDirection]::In)
+        $clientPipe.Connect()
+        $pipeReader = New-Object IO.StreamReader($clientPipe)
+        
+        while($true)
+        {
+            try
+            {
+                # wait for command
+                if($detail)
+                {
+                    write-host "$([DateTime]::Now) job:reading command"
+                }
+
+                $pipeCommand = $pipeReader.ReadLine()
+                
+                if([string]::IsNullOrEmpty($pipeCommand))
+                {
+                    write-host "$([DateTime]::Now) job:empty command. sleeping..."
+                    start-sleep -Milliseconds 1000
+                    continue
+                }
+                
+                if($detail)
+                {
+                    write-host "$([DateTime]::Now) job:new command"
+                }
+
+                $error.clear()
+                $jobResults = @{}
+                $jobResults.Output = $null
+                $jobResults.LastUpdateTime = [DateTime]::Now
+                $jobResults.LastResult = $null
+
+                if($detail)
+                {
+                    write-host "$([DateTime]::Now) job:processing command: $($pipeCommand)"
+                }
+
+                $jobResults.Output = Invoke-Expression -Command $pipeCommand -ErrorVariable $jobResults.LastResult
+                $jobResults.LastUpdateTime = [DateTime]::Now
+
+                if($detail)
+                {
+                    write-host "$([DateTime]::Now) job:finished processing event: $($pipeCommand) results count: $($jobResults.Count)"
+                    write-host "results: $($jobResults | format-list * | out-string)"
+                }
+
+                # output result object
+                $jobResults
+            }
+            catch
+            {
+                $jobResults.LastResult = $error
+                $jobResults
+                $error.Clear()
+                $pipeReader.Dispose()
+                $clientPipe.Dispose()
+
+                #if(!authenticate-azurerm)
+                #{
+                    return
+                #}
+            }
+        }
+
+
+
+        "================"
+        $jobInfo.result = $count
+        
+
+        $jobInfo
+        Start-Sleep -Seconds 1
+        $count++
+    }
+}
+
+
+#-------------------------------------------------------------------
 function start-backgroundJob()
 {
-    Write-host "start-backgroundJob:enter"
+    write-host "starting background job"
+
+    # add values here to pass to jobs
+    $jobInfo = @{}
+    $jobInfo.action = "rpc job"
+    $jobInfo.jobName = $global:jobname
+    $jobInfo.invocation = $MyInvocation
+    $JobInfo.backgroundJobFunction = (get-item function:do-backgroundJob)
+    $jobInfo.pipeName = $global:pipeName
+    $jobInfo.profileContext = $profileContext
+    $jobInfo.detail = $detail
+    $jobInfo.verbosePreference = $VerbosePreference
+    $jobInfo.debugPreference = $DebugPreference
+    $jobInfo.result = $null
+
+    try
+    {
+        if(get-job $global:jobname -ErrorAction SilentlyContinue)
+        {
+            write-host "removing old job $($global:jobname)"
+            if($global:serverPipe -ne $null)
+            {
+                $global:pipeWriter.Dispose()
+                $global:serverPipe.Dispose()
+            }
+
+            remove-job -Name $global:jobname -Force
+        } 
+
+        # used to dispatch commands to background job
+        write-host "$([DateTime]::Now) setting up server pipe"
+        $global:serverPipe = new-object IO.Pipes.NamedPipeServerStream($global:pipeName, [IO.Pipes.PipeDirection]::Out, 1, [IO.Pipes.PipeTransmissionMode]::Message)
+
+        $job = Start-Job -ScriptBlock `
+        { 
+            param($jobInfo)
+            . $($jobInfo.invocation.scriptname)
+            & $jobInfo.backgroundJobFunction $jobInfo
+
+        } -Name $jobInfo.jobName -ArgumentList $jobInfo
+
+        if($DebugPreference -ine "SilentlyContinue")
+        {
+            ### debug job
+            Start-Sleep -Seconds 5
+            debug-job -Job $job
+            pause
+        }
+
+        write-host "$([DateTime]::Now) waiting for client connection"
+        $global:serverPipe.WaitForConnection()
+        write-host "$([DateTime]::Now) client connected"
+
+        $global:pipeWriter = New-Object IO.StreamWriter $global:serverPipe
+        $global:pipeWriter.AutoFlush = $true
+        $null = receive-backgroundJob
+
+        return $job
+    }
+    catch
+    {
+        write-host "start-backgroundjob: exception: $($error)"
+        exit 1
+        $error.Clear()
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function start-backgroundJobOld()
+{
+    write-host "start-backgroundJob:enter"
     $job = $null
 
     try
@@ -1487,5 +1675,8 @@ function start-backgroundJob()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-main
+if ($host.Name -ine "ServerRemoteHost")
+{
+    main
+}
 
