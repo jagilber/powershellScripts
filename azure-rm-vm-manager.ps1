@@ -191,7 +191,7 @@ function main()
             log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
 
-        log-info "$($actionText) $($filteredVms.Count) vms."
+        log-info "checking $($filteredVms.Count) vms for current state."
     
         foreach ($vm in $filteredVms)
         {
