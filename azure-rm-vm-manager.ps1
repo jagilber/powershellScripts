@@ -681,7 +681,7 @@ function update-progress()
     if($globalJobsCount -gt 0)
     {
         $finishedJobsCount = $globalJobsCount - @(get-job).Count
-        $status = "$($finishedJobsCount) / $($globalJobsCount) vms completed. " `
+        $status = "$($finishedJobsCount) / $($globalJobsCount) vm jobs completed. " `
             + "time elapsed:  $(((get-date) - $startTime).TotalMinutes.ToString("0.0")) minutes"
         $percentComplete = ($finishedJobsCount / $globaljobsCount * 100)
 
