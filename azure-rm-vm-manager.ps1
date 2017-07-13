@@ -277,8 +277,6 @@ function main()
             Remove-Item -Path $profileContext -Force
         }
 
-        Write-Progress -Completed -id 1
-        Write-Progress -Completed -parentid 1
         log-info "$(get-date) finished script. total minutes: $(((get-date) - $startTime).totalminutes)"
     }
 }
