@@ -62,6 +62,7 @@ $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-vm-manager.ps1"
 $actionText = "unknown"
+$global:jobInfos = New-Object Collections.ArrayList
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -70,7 +71,7 @@ function main()
     $allVms = @()
     $filteredVms = New-Object Collections.ArrayList
     $startTime = get-date
-    $jobInfos = New-Object Collections.ArrayList
+    
 
     try
     {
@@ -78,15 +79,15 @@ function main()
         {
             "list" 
             {
-                $actionText = "listing all" 
+                $actionText = "list all" 
             }
             "listDeallocated" 
             {
-                $actionText = "listing deallocated / stopped" 
+                $actionText = "list deallocated / stopped" 
             }
             "listRunning" 
             {
-                $actionText = "listing running" 
+                $actionText = "list running" 
             }
             "restart" 
             {
@@ -104,7 +105,7 @@ function main()
             default: {}
         }
 
-        log-info "$(get-date) enumerating vms for action '$($actionText) vms'. use -verbose switch to see more detail..."
+        log-info "$(get-date) enumerating vms for action '$($actionText) vms'. Ctrl-C to stop script. use '-verbose' switch for more detail..."
 
         # see if new (different) version of file
         if ($getUpdate)
@@ -190,7 +191,7 @@ function main()
             log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
 
-        log-info "$($actionText) $($filteredVms.Count) vms. use -verbose switch to see more detail..."
+        log-info "$($actionText) $($filteredVms.Count) vms."
     
         foreach ($vm in $filteredVms)
         {
@@ -212,7 +213,7 @@ function main()
             # quicker to not use jobs for checking power state
             $jobInfo = check-vmRunning -jobInfo $jobInfo
 
-            [void]$jobInfos.Add($jobInfo)
+            [void]$global:jobInfos.Add($jobInfo)
         } 
 
         # perform action
@@ -221,7 +222,7 @@ function main()
             "list" 
             { 
                 log-info "resourcegroupname`t:`tvm name`t:`tprovisioning`t:`tpower"
-                foreach ($jobInfo in $jobInfos)
+                foreach ($jobInfo in $global:jobInfos)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName)`t:`t$($jobInfo.vm.name)`t:`t$($jobInfo.provisioningState)`t:`t$($jobInfo.powerState)"
                 }
@@ -229,7 +230,7 @@ function main()
 
             "listRunning" 
             { 
-                foreach ($jobInfo in $jobInfos |? vmRunning -imatch $true)
+                foreach ($jobInfo in $global:jobInfos |? vmRunning -imatch $true)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
                 }
@@ -237,7 +238,7 @@ function main()
             
             "listDeallocated" 
             { 
-                foreach ($jobInfo in $jobInfos |? vmRunning -imatch $false)
+                foreach ($jobInfo in $global:jobInfos |? vmRunning -imatch $false)
                 {
                     log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):deallocated"
                 }
@@ -245,17 +246,17 @@ function main()
 
             "restart" 
             { 
-                start-backgroundJobs -jobInfos ($jobInfos |where-object vmRunning -imatch $true) -throttle $throttle 
+                start-backgroundJobs -jobInfos ($global:jobInfos |where-object vmRunning -imatch $true) -throttle $throttle 
             }
 
             "start" 
             { 
-                start-backgroundJobs -jobInfos ($jobInfos |where-object vmRunning -imatch $false) -throttle $throttle 
+                start-backgroundJobs -jobInfos ($global:jobInfos |where-object vmRunning -imatch $false) -throttle $throttle 
             }
 
             "stop" 
             { 
-                start-backgroundJobs -jobInfos ($jobInfos |where-object vmRunning -imatch $true) -throttle $throttle 
+                start-backgroundJobs -jobInfos ($global:jobInfos |where-object vmRunning -imatch $true) -throttle $throttle 
             }
 
             default: {}
@@ -276,6 +277,8 @@ function main()
             Remove-Item -Path $profileContext -Force
         }
 
+        Write-Progress -Completed -id 1
+        Write-Progress -Completed -parentid 1
         log-info "$(get-date) finished script. total minutes: $(((get-date) - $startTime).totalminutes)"
     }
 }
@@ -360,7 +363,7 @@ function check-backgroundJobs($writeStatus = $false)
 
     foreach ($job in get-job)
     {
-        $jobInfo = "$(get-date) job name:$($job.Name)  job status:$($job.JobStateInfo)"
+        $jobInfo = "$(get-date) job name:$($job.Name)  job state:$($job.JobStateInfo)"
 
         if ($job.State -ine "Running")
         {
@@ -650,6 +653,8 @@ function start-backgroundJob($jobInfo)
 function start-backgroundJobs($jobInfos, $throttle)
 {
     log-info "starting background jobs"
+    $count = 1
+    $activity = "starting $($jobInfos.Count) '$($actionText) vms' jobs. throttle: $($throttle). Ctrl-C to stop script."
 
     foreach ($jobInfo in $jobInfos)
     {
@@ -658,15 +663,20 @@ function start-backgroundJobs($jobInfos, $throttle)
             log-info "verbose:throttled"
             Start-Sleep -Seconds 1
         }
-
+        
+        $status = "$($count) / $($jobInfos.Count) jobs started. " `
+            + "time elapsed:  $(((get-date) - $startTime).TotalMinutes.ToString("0.0")) minutes"
+        $percentComplete = ($count / $jobInfos.Count * 100)
+        Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete -id 1
         [void]$global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
+        $count++
     }
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function update-progress()
 {
-    $globalJobsCount = @($global:jobs).Count
+    $globalJobsCount = @($global:jobInfos).Count
 
     if($globalJobsCount -gt 0)
     {
@@ -675,7 +685,7 @@ function update-progress()
             + "time elapsed:  $(((get-date) - $startTime).TotalMinutes.ToString("0.0")) minutes"
         $percentComplete = ($finishedJobsCount / $globaljobsCount * 100)
 
-        Write-Progress -Activity "$($actionText) vms. Ctrl-C to stop script." -Status $status -PercentComplete $percentComplete  
+        Write-Progress -Activity "$($actionText) $($globalJobsCount) vms." -Status $status -PercentComplete $percentComplete -ParentId 1
     }
 }
 
