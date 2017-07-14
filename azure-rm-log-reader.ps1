@@ -18,7 +18,7 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170712 v2
+   Version    : 170714 v2
    History    : 
 
 .EXAMPLE  
@@ -71,6 +71,7 @@ param (
 )
 
 $ErrorActionPreference = "Continue" #"SilentlyContinue"
+$WarningPreference = "SilentlyContinue"
 $error.Clear()
 Add-Type -AssemblyName PresentationFramework            
 Add-Type -AssemblyName PresentationCore  
@@ -86,7 +87,7 @@ $global:index = @{}
 $global:jobName = "bgJob"
 $global:listbox = $null
 $global:listboxEvent = $null
-[timespan]$global:refreshTime = "0:0:10.0"#"0:1:00.0"
+[timespan]$global:refreshTime = "0:0:30.0"#"0:1:00.0"
 $global:resourcegroupUpdate = [DateTime]::MinValue
 $global:scriptName = $null
 $global:subscription = $subscriptionId
@@ -213,47 +214,15 @@ function main()
             }
 
             write-host "$([DateTime]::Now) timer start routine"
+            $jobResults = receive-backgroundJob -once $true
+            process-results -jobResults $jobResults
 
-            $jobResults = receive-backgroundJob
-
-            if($jobResults.GroupOutput)
-            {
-                foreach($result in $jobResults.GroupOutput.GetEnumerator())
-                {
-                    if($result.Value)
-                    {
-                        foreach($item in $result.Value)
-                        {
-                            add-eventItem -lbitem $item -color "Yellow"
-                        }
-                    }
-                }
-            }
-
-            if($jobResults.DeploymentOutput)
-            {
-                foreach($result in $jobResults.DeploymentOutput.GetEnumerator())
-                {
-                    if($result.Value)
-                    {
-                        foreach($item in $result.Value)
-                        {
-                            add-depitem -lbitem $result.Value -color "DarkOrange"                
-                        }
-                    }
-                }
-            }
-
-            #check-backgroundJob
-            #run-commands
             $global:listbox.Items.SortDescriptions.Clear()
             $global:listbox.Items.SortDescriptions.Add((new-object ComponentModel.SortDescription("Content", [ComponentModel.ListSortDirection]::Descending)))     
-
             $deploymentsLabel.Content = $jobResults.Deployments.Count
             $groupsLabel.Content = $jobResults.ResourceGroups.Count
             $refreshLabel.Content = [DateTime]::Now.ToLongTimeString()
             $eventsLabel.Content = $global:listbox.Items.Count
-
 
             write-host "$([DateTime]::Now) finished timer"
         })
@@ -270,7 +239,7 @@ function main()
         $eventsLabel.Content = $global:listbox.Items.Count
 
         #Start timer
-        $global:timer.Interval = [TimeSpan]$global:refreshTime
+        $global:timer.Interval = new-object TimeSpan ($global:refreshTime.Ticks / 2)
         $global:timer.Start()
     })
 
@@ -286,15 +255,15 @@ function main()
     }
     catch
     {
-        write-host "window:exception:$($error)"
-        #$error.Clear()
+        write-host "window:exception:$($error | out-string)"
+        $error.Clear()
     }
     finally
     {
         $global:completed = 1
         $global:timer.Stop()
 
-        get-job -Name $global:jobName | receive-job -ErrorAction SilentlyContinue
+        get-job -Name $global:jobName -ErrorAction SilentlyContinue | receive-job -ErrorAction SilentlyContinue
         get-job -Name $global:jobName -ErrorAction SilentlyContinue | remove-job -Force -ErrorAction SilentlyContinue
 
         if([IO.File]::Exists($global:profileContext))
@@ -662,13 +631,15 @@ function do-backgroundJob($jobInfo)
         authenticate-azureRm -context $jobInfo.profileContext
 
         # set global start time from job
-        $global:eventStartTime = $jobInfo.eventStartTime
+        $currentTime = $global:eventStartTime = $jobInfo.eventStartTime
         $currentTimeStamp = 0
         $rgCount = 0
 
         while($true)
         {
             $jobResults = new-jobResults
+            $jobResults.LastUpdateTime = $currentTime
+            $currentTime = [DateTime]::Now
 
             try
             {
@@ -680,7 +651,6 @@ function do-backgroundJob($jobInfo)
 
                 $error.clear()
                 $jobResults = run-commands -jobObject $jobResults
-                $jobResults.LastUpdateTime = [DateTime]::Now
 
                 if($jobInfo.detail)
                 {
@@ -690,6 +660,9 @@ function do-backgroundJob($jobInfo)
 
                 # output result object
                 $jobResults
+                
+                Start-Sleep -Seconds $global:refreshTime.Seconds
+
             }
             catch
             {
@@ -702,13 +675,11 @@ function do-backgroundJob($jobInfo)
                  #   return
                 #}
             }
-
-            Start-Sleep -Seconds 10
         }
 
         $jobInfo.result = $count
         $jobInfo
-        Start-Sleep -Seconds ($global:refreshTime / 2)
+        Start-Sleep $global:refreshTime
         $count++
     }
 }
@@ -757,7 +728,7 @@ function enum-resourceGroups()
     if(![string]::IsNullOrEmpty($resourceGroupName))
     {
         
-        $global:groups.Add($resourcegroupname,0)
+        [void]$global:groups.Add($resourcegroupname,0)
         return ($global:groups)
     }
 
@@ -772,7 +743,7 @@ function enum-resourceGroups()
 
         foreach($group in $groups)
         {
-            $global:groups.Add($group,0)
+            [void]$global:groups.Add($group,0)
         }
     }
 
@@ -941,7 +912,7 @@ function get-time($item)
         
         if([string]::IsNullOrEmpty($utcTime) -or !([DateTime]::Parse($utcTime)))
         {
-            write-host "get-time: returning current time"
+            write-host "get-time: returning start time"
             return $retVal
         }
 
@@ -1148,6 +1119,46 @@ function open-event()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function process-results($jobResults)
+{
+    if(!$jobResults)
+    {
+        return
+    }
+
+    foreach($jobResult in @($jobResults))
+    {
+        if($jobResult.GroupOutput)
+        {
+            foreach($result in $jobResult.GroupOutput.GetEnumerator())
+            {
+                if($result.Value)
+                {
+                    foreach($item in $result.Value)
+                    {
+                        add-eventItem -lbitem $item -color "Yellow"
+                    }
+                }
+            }
+        }
+
+        if($jobResult.DeploymentOutput)
+        {
+            foreach($result in $jobResult.DeploymentOutput.GetEnumerator())
+            {
+                if($result.Value)
+                {
+                    foreach($item in $result.Value)
+                    {
+                        add-depitem -lbitem $result.Value -color "DarkOrange"                
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function receive-backgroundJob([bool]$once = $false)
 {
     try
@@ -1254,14 +1265,19 @@ function receive-backgroundJob([bool]$once = $false)
 # ----------------------------------------------------------------------------------------------------------------
 function reset-list()
 {
+    [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::AppStarting)
+
     $global:eventStartTime = ([DateTime]::Now).AddDays(-1)
     $global:deploymentUpdate = [DateTime]::MinValue
     $global:resourcegroupUpdate = [DateTime]::MinValue
     $global:deployments = @{}
     $global:groups = @{}
-
-    run-commands 
+    $jobResults = new-jobResults
+    $jobResults.LastUpdateTime = $global:eventStartTime
+    
+    process-results -jobResults (run-commands -jobObject $jobResults)
     $refreshLabel.Content = [DateTime]::Now.ToLongTimeString()
+    [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::Arrow)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1269,6 +1285,11 @@ function run-command($group, $items)
 {
     try
     {
+        if(!$items)
+        {
+            return $null
+        }
+
         if($detail)
         {
             write-host "$([DateTime]::Now) run-command  group: $($group.Key) items: $($items.Count)"
@@ -1335,25 +1356,17 @@ function run-command($group, $items)
                 }
             }    
             
-            #foreach($sItem in $allItems.GetEnumerator())
-            #{
-            #    add-depitem -lbitem $sItem.Value -color "DarkOrange"
-            #}  
             return $allItems.Values
         }
         else
         {
-            #foreach($item in $items)
-            #{
-            #    add-eventItem -lbitem $item -color "Yellow"
-            #}      
             return $items
         }
     }
     catch
     {
-        write-host "Exception:run-command $($error | Format-List *)"
-        #$error.Clear()
+        write-host "Exception:run-command $($error | out-string)"
+        $error.Clear()
     }
 }
 
@@ -1375,10 +1388,8 @@ function run-commands($jobObject = $null)
 
     try
     {
-       # [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::AppStarting)
-        
         $ret = enum-deployments
-        $localTime = get-time -item $global:eventStartTime
+        $localTime = $jobResults.LastUpdateTime #get-time -item $global:eventStartTime
 
         # use temp group so $global:groups can be modifed in run-command
         $tempGroups = @{}
@@ -1403,14 +1414,10 @@ function run-commands($jobObject = $null)
             write-host "run-commands:get-azsurermlog -detailedoutput -resourcegroup $($group.Key) -starttime $($localTime)"
             [void]$jobResults.GroupOutput.Add($group.key, 
                 (run-command -group $group -items @(get-azurermlog -DetailedOutput -ResourceGroup $group.Key -StartTime $localTime)))
-            #[void]$jobResults.GroupOutput.Add($group.key, 
-            #    (new-object Collections.ArrayList (,@(get-azurermlog -DetailedOutput -ResourceGroup $group.Key -StartTime $localTime))))
 
             # todo: filter not working. timestamp in 2 locations
             [void]$jobResults.DeploymentOutput.Add($group.key, 
                 (run-command -group $groupy -items @(Get-AzureRmResourceGroupDeployment -ResourceGroupName $group.Key | Where-Object TimeStamp -ge $localTime)))
-            #[void]$jobResults.DeploymentOutput.Add($group.key, 
-            #    (new-object Collections.ArrayList (,@(Get-AzureRmResourceGroupDeployment -ResourceGroupName $group.Key | Where-Object TimeStamp -ge $localTime))))
         }
 
         $jobResults.Deployments = $global:deployments
@@ -1421,10 +1428,6 @@ function run-commands($jobObject = $null)
     {
         write-host "run-commands:exception:$($error)"
         $error.clear()
-    }
-    finally
-    {
-        #[Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::Arrow)
     }
 }
 
