@@ -45,13 +45,11 @@
     string array of resource group names of the resource groups containg the vm's to manage
     if NOT specified, all resource groups will be managed
 
+.PARAMETER timerAction
+    action to perform at timerHours
+
 .PARAMETER timerHours
     if specified, decimal for hours to wait until performing timeraction. see example.
-    timeraction:
-    action: start   timeraction: stop
-    action: stop    timeraction: start
-    action: restart timeraction: restart
-    action: list*   timeraction: list*
 
 .PARAMETER vms
     string array list of vm's to include for command
@@ -61,7 +59,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
-    [string]$action = 'listRunning',
+    [string]$action = 'list',
     [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
     [switch]$getUpdate,
@@ -527,7 +525,7 @@ function log-info($data)
     $counter = 0
     $foregroundColor = "white"
 
-    if($data -imatch "error:")
+    if($data -imatch "error:|fail")
     {
         $foregroundColor = "red"
     }
@@ -545,7 +543,7 @@ function log-info($data)
     }
     elseif($data -imatch "unknown")
     {
-        $foregroundColor = "blue"
+        $foregroundColor = "darkyellow"
     }
 
     while (!$noLog -and !$dataWritten -and $counter -lt 1000)
@@ -594,10 +592,12 @@ function perform-action($currentAction)
     {
         "list" 
         { 
-            log-info "resourcegroupname`t:`tvm name`t:`tprovisioning`t:`tpower"
+            log-info "resourcegroupname   `t| vm name             `t| provisioning   `t| power"
+            log-info "---------------------------------------------------------------------------------"
+
             foreach ($jobInfo in $global:jobInfos)
             {
-                log-info "$($jobInfo.vm.resourceGroupName)`t:`t$($jobInfo.vm.name)`t:`t$($jobInfo.provisioningState)`t:`t$($jobInfo.powerState)"
+                log-info "$($jobInfo.vm.resourceGroupName.PadRight(20))`t| $($jobInfo.vm.name.PadRight(20))`t| $($jobInfo.provisioningState.PadRight(15))`t| $($jobInfo.powerState.PadRight(15))"
             }
         }
 
