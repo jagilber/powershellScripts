@@ -165,7 +165,11 @@ function main()
             if(($filteredVms.Name -imatch $excludeVm) -and ($allVms.Name -imatch $excludeVm))
             {
                 log-info "verbose: removing vm $($excludeVm)"
-                [void]$filteredVms.RemoveRange(@($allVms | Where-Object Name -imatch $excludeVm))
+                
+                foreach($vm in @($allVms | Where-Object Name -imatch $excludeVm))
+                {
+                    [void]$filteredVms.Remove($vm)
+                }
             }
         }
 
