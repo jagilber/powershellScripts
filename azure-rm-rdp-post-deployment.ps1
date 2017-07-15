@@ -20,11 +20,12 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170617 authenticate-azurerm
+   Version    : 170715 add to gallery
    History    : 
+                170625.2 added background jobs
                 170602 fix for wildcard certs
                 170524 another change for azurerm.resources coming back not as collection for single sub?
-
+                
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
     query azure rm for all resource groups with for all public ips.
@@ -32,6 +33,9 @@
 .EXAMPLE
     .\azure-rm-rdp-post-deployment.ps1 -rdWebUrl https://contoso.eastus.cloudapp.azure.com/RDWeb
     used to bypass Azure enumeration and to copy cert from url to local cert store
+
+.PARAMETER enumerateSubscriptions
+    to query all subscriptions and not just current one
 
 .PARAMETER noPrompt
     to not prompt when adding cert to cert store or when modifying hosts file
@@ -52,42 +56,38 @@
  
 
 param(
-    [Parameter(Mandatory = $false)]
     [string][ValidateSet('LocalMachine', 'CurrentUser')] $certLocation = "LocalMachine",
-    [Parameter(Mandatory = $false)]
+    [switch]$enumerateSubscriptions,
     [switch]$noprompt,
-    [Parameter(Mandatory = $false)]
     [switch]$noretry,
-    [Parameter(Mandatory = $false)]
     [string]$publicIpAddressName = ".",
-    [Parameter(Mandatory = $false)]
     [string]$rdWebUrl = "",
-    [Parameter(Mandatory = $false)]
     [string]$resourceGroupName,
-    [Parameter(Mandatory = $false)]
     [switch]$update
 )
 
 set-strictmode -version Latest
 $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference = "SilentlyContinue"
-$global:resourceList = @{}
+
 $global:selfSigned = $false
 $global:san = $false
 $global:wildcard = $false
 $hostsTag = "added by azure script"
 $hostsFile = "$($env:windir)\system32\drivers\etc\hosts"
 $updateUrl = "https://aka.ms/azure-rm-rdp-post-deployment.ps1"
+$profileContext = "$($env:TEMP)\ProfileContext.ctx"
+$throttle = 10
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
+    cls
     $error.Clear()
     $subList = @{}
     $rg = $null
     $subject = $null
     $certInfo = $null
-    $subject = $null
     $startTime = get-date
 
     write-host "starting script $($MyInvocation.ScriptName) to enumerate public ip addresses and RDWeb sites in Azure RM"
@@ -135,34 +135,49 @@ function main()
     {
         foreach ($sub in $subscriptions)
         {
-            $global:resourceList.Clear()
+            $resourceList = New-Object Collections.ArrayList
 
-            if ([string]::IsNullOrEmpty($sub))
+            if (!$sub)
             {
                 continue
             }
 
-            Set-AzureRmContext -SubscriptionId $sub
-            write-host "enumerating subscription $($sub)"
-
-            if (!(enum-resourcegroup $sub))
+            if($enumerateSubscriptions)
             {
+                Set-AzureRmContext -SubscriptionId $sub
+            }
+
+            write-host "subscription id $($sub)"
+
+            if (!($resourceList = enum-resourcegroup $sub))
+            {
+                write-host "no ip addresses found. returning..."
                 continue
             }
 
-            if ($global:resourceList.Count -gt 1)
+            $count = 1
+
+            foreach($resource in $resourceList)
             {
-                write-host "query time: $(((get-date) - $startTime).TotalSeconds)"
+                if($resource.DisplayMessage)
+                {
+                    write-host "$($count). $($resource.displayMessage)" -ForegroundColor $resource.displayMessageColor
+                    $count++
+                }
+            }
+
+            if ($resourceList.Count -gt 1)
+            {
+                write-verbose "query time: $(((get-date) - $startTime).TotalSeconds)"
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to")
             }
-            elseif ($global:resourceList.Count -eq 1)
+            elseif ($resourceList.Count -eq 1)
             {
                 $id = 1
             }
             else
             {
-                write-host "no ip addresses found. returning..."
-
+                write-host "no ip addresses found. exiting..."
                 exit 1
             }
 
@@ -188,33 +203,38 @@ function main()
 
             foreach ($id in $ids)
             {
-                if (!([Convert]::ToInt32($id)) -or $id -gt $global:resourceList.Count -or $id -lt 1)
+                if(!([Convert]::ToInt32($id)))
                 {
-                    write-host "invalid entry $($id)..."
+                   write-host "invalid entry $($id)..."
+                   continue
+                }
+                
+                [int]$id = [Convert]::ToInt32($id) 
+                
+                if ($id -gt $resourceList.Count -or $id -lt 1)
+                {
+                    write-host "entry out of range $($id)..."
                     continue
                 }
 
-                [int]$id = [Convert]::ToInt32($id)
-
-                $resourceGroup = Get-AzureRmResourceGroup -Name $global:resourceList[$id].Values.ResourceGroupName -WarningAction SilentlyContinue
+                
+                $resource = $null
+                $resource = $resourceList[$id -1]
+                
                 write-host $resourceGroup.ResourceGroupName
-                write-verbose "enum-resourcegroup returning:$($resourceGroup | fl | out-string)"
+                write-verbose "enum-resourcegroup returning:$($resource | fl | out-string)"
 
-                $resourceGroup = $global:resourceList[$id].Values
-                $ip = $global:resourceList[$id].Keys
+                $ip = $resource.publicIp
         
-                # enumerate resource group
-                write-host "provision state: $($resourceGroup.ProvisioningState)"
-
-                if (![string]::IsNullOrEmpty($ip.IpAddress))
+                if ($ip.IpAddress)
                 {
-                    write-host "public loadbalancer ip address: $($ip.IpAddress)"
+                    write-host "public ip address: $($ip.IpAddress)"
                     $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
                 }
                 
                 $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
                 $cert = get-cert -url $gatewayUrl -certFile $certFile
-                $subject = enum-certSubject -cert $cert
+                $subject = enum-certSubject -cert $resource.certInfo
 
                 if ($subject -eq $false)
                 {
@@ -227,8 +247,22 @@ function main()
                     open-RdWebSite -site "https://$($subject)/RDWeb"
                 }
             }
+        } # end foreach
+
+        if(!$resourceList)
+        {
+            write-warning "no machines are available to connect to. exiting"
+            break
         }
+
+    } # end while
+
+    if(test-path $profileContext)
+    {
+        Remove-Item -Path $profileContext -Force
     }
+
+    write-host "finished"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -279,7 +313,7 @@ function add-hostsEntry($ipAddress, $subject)
     }
     else
     {
-        write-host "dns resolution for $($subject) same as loadbalancer ip:$($ip.IpAddress)"
+        write-host "dns resolution for $($subject) same as ip:$($ip.IpAddress)"
     }
 }
 
@@ -306,6 +340,7 @@ function authenticate-azureRm()
 	}
 
     $allModules = (get-module azure* -ListAvailable).Name
+
 	#  install AzureRM module
 	if ($allModules -inotcontains "AzureRM")
 	{
@@ -378,6 +413,43 @@ function authenticate-azureRm()
             exit 1
         }
     }
+
+    Save-AzureRmContext -Path $profileContext -Force
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function check-jobs()
+{
+    $resultList = new-object Collections.ArrayList
+    $ret = $null
+    $jobInfos = $null
+
+    foreach($job in get-job)
+    {
+        if($job.State -ine "Running")
+        {
+            $jobInfos = (Receive-Job -Job $job)
+
+            foreach($jobInfo in $jobInfos)
+            {
+                if($jobInfo -and ($jobInfo.GetType().Name -eq "HashTable"))
+                {
+                    [void]$resultList.Add($jobInfo)
+                }
+                elseif($jobInfo)
+                {
+                    Write-Warning $jobInfo | out-string
+                }
+                else
+                {
+                    Write-verbose "job returned empty result"
+                }
+            }
+            $ret = Remove-Job -Job $job -Force
+        }
+    }
+
+    return $resultList
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -385,7 +457,7 @@ function enum-certSubject($cert)
 {
     # get certificate from RDWeb site
 
-    if ($cert -eq $false -or [string]::IsNullOrEmpty($cert))
+    if (!$cert)
     {
         write-host "no cert!"
         return $false
@@ -393,7 +465,7 @@ function enum-certSubject($cert)
 
     $subject = $cert.Subject.Replace("CN=", "")   
         
-    if (![string]::IsNullOrEmpty($subject))
+    if ($subject)
     {
         return $subject
     }
@@ -407,15 +479,30 @@ function enum-resourcegroup([string] $subid)
     write-verbose "enum-resourcegroup"
     $resourceGroup = $null
     $id = 0
-    $message = ""
+    $displayMessage = ""
+    $pubIps = @()
+    $vms = @()
+    $resourceList =  New-Object Collections.ArrayList
+    $resultList =  New-Object Collections.ArrayList
+    $ret =  New-Object Collections.ArrayList
+
+    # cleanup
+    if(get-job)
+    {
+        write-host "removing $(@(get-job).Count) old jobs..."
+        get-job | remove-job -Force
+    }
 
     try
     {
+        $pubIps = @(Get-AzureRmPublicIpAddress | ? IpAddress -ine "Not Assigned")
+        write-host "checking $($pubIps.count) ip addresses. please wait..."
+
         # find resource group
-        if ([string]::IsNullOrEmpty($resourceGroupName))
+        if (!$resourceGroupName)
         {
-            write-host "Azure RM resource groups with public IP addresses. Green indicates RDWeb site:"
-            $Null = Set-AzureRmContext -SubscriptionId $subid
+            write-host "Azure RM resources with public IP addresses. Green indicates RDWeb site:"
+            #$Null = Set-AzureRmContext -SubscriptionId $subid
             $resourceGroups = Get-AzureRmResourceGroup -WarningAction SilentlyContinue
             $count = 1
         }
@@ -424,79 +511,128 @@ function enum-resourcegroup([string] $subid)
             $resourceGroups = @(Get-AzureRmResourceGroup -Name $resourceGroupName -WarningAction SilentlyContinue)
         }
 
-        foreach ($resourceGroup in $resourceGroups)
+        foreach($resourceGroup in $resourceGroups.ResourceGroupName)
         {
-            write-verbose "enumerating resourcegroup: $($resourcegroup.ResourceGroupName)"
-
-            # check all vm's
-            foreach ($vm in (Get-AzureRmVM -ResourceGroupName $resourceGroup.ResourceGroupName -ErrorAction SilentlyContinue))
+            foreach($ip in $pubIps)
             {
-                write-verbose "checking vm: $($vm.Name)"
-                       
-                foreach ($interface in ($vm.NetworkProfile.NetworkInterfaces.Id))
+                if($resourceGroup -imatch $ip.ResourceGroupName)
                 {
-                    $interfaceName = [IO.Path]::GetFileName($interface)
-                    $publicIp = Get-AzureRmPublicIpAddress -Name $interfaceName -ResourceGroupName $resourceGroup.ResourceGroupName -ErrorAction SilentlyContinue
-                    
-                    if ([string]::IsNullOrEmpty($publicIp))
-                    {
-                        continue
-                    }
-                        
-                    write-verbose "`t $($pubIp.Id)"
+                    $resource = @{}
+                    $resource.publicIp = $ip
+                    $resource.subId = $subid
+                    $resource.displayMessage = "`r`n`tResource Group: $($resourceGroup)`r`n`tIP name: $($ip.Name)`r`n`tIP address: $($ip.IpAddress)"
+                    $resource.resourceGroup = $resourceGroup
+                    $resource.rdWebUrl = ""
+                    $resource.certInfo = $null
+                    $resource.displayMessageColor = "White"
+                    $resource.profileContext = $profileContext
+                    $resource.invocation = $MyInvocation
 
-                    if ($global:resourceList.Count -gt 0 -and $global:resourceList.Values.Keys.IpAddress.Contains($publicIp.IpAddress))
-                    {
-                        write-verbose "duplicate entry $($publicIp.IpAddress)"
-                        continue
-                    }
-                        
-                    [void]$global:resourceList.Add($count, @{$publicIp = $resourceGroup})
-                    $message = "`r`n`tResource Group: $($resourceGroup.ResourceGroupName)`r`n`tIP name: $($publicIp.Name)`r`n`tIP address: $($publicIp.IpAddress)"
-                    $message = "$($count). VM: mstsc.exe /v $($publicIp.IpAddress) /admin$($message)"
-                    write-host $message                        
-
-                    $count++
+                    [void]$resourceList.Add($resource)
                 }
-            }
-
-            # look for public ips
-            foreach ($pubIp in (query-publicIp -resourceName $resourceGroup.ResourceGroupName -ipName $publicIpAddressName))
-            {
-                if (!$pubIp -or $pubIp.IpAddress.Length -le 1)
-                {
-                    continue
-                }
-
-                write-verbose "`t public ip: $($pubIp.Id)"
-                if ($global:resourceList.Count -gt 0 -and $global:resourceList.Values.Keys.IpAddress.Contains($pubIp.IpAddress))
-                {
-                    write-verbose "public ip duplicate entry"
-                    continue
-                }
-                
-                [void]$global:resourceList.Add($count, @{$pubIp = $resourceGroup})
-                $rdwebUrl = "https://$($pubIp.IpAddress)/RDWeb"
-                $message = "`r`n`tResource Group: $($resourceGroup.ResourceGroupName)`r`n`tIP name: $($pubIp.Name)`r`n`tIP address: $($pubIp.IpAddress)"
-                
-                $certInfo = (get-cert -url $rdwebUrl)
-
-                if (![string]::IsNullOrEmpty($certInfo) -and $certInfo -ne $false)
-                {
-                    $message = "$($count). RDWEB: $($rdwebUrl)$($message)`r`n`tCert Subject: $($certInfo.Subject)"
-                    write-host $message -ForegroundColor Green
-                }
-                else
-                {
-                    $message = "$($count). PUBIP: mstsc.exe /v $($pubIp.IpAddress) /admin$($message)"
-                    write-host $message
-                }
-                
-                $count++
             }
         }
 
-        return $true
+
+        $jobs = New-Object Collections.ArrayList
+        
+        foreach($resource in $resourceList)
+        {
+            while((get-job) -and (@(get-job | where-object State -eq "Running").Count -gt $throttle))
+            {
+                Write-Verbose "throttled"
+                $ret = check-jobs
+
+                if($ret)
+                {
+                    if($ret.gettype().Name -eq "Object[]")
+                    {
+                        $resultList.AddRange($ret)
+                    }
+                    else
+                    {
+                        $resultList.Add($ret)
+                    }
+                }
+                Start-Sleep -Seconds 1
+            }
+
+            $job = start-job -ScriptBlock `
+            {
+                param($resource)
+                $ctx = $null
+                $displayMessage = $null
+                $t = $null
+
+                $ctx = Import-AzureRmContext -Path $resource.profileContext
+                # bug to be fixed 8/2017
+                # From <https://github.com/Azure/azure-powershell/issues/3954> 
+                [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
+                . $($resource.invocation.scriptname)
+
+                $displayMessage = $resource.displayMessage
+                $t = New-Object Net.Sockets.TcpClient
+
+                try
+                {
+                    $t.Connect($resource.publicIp.IpAddress,3389)
+                    $resource.displayMessage = " VM: mstsc.exe /v $($resource.publicIp.IpAddress) /admin$($displayMessage)"
+                    # write results to pipe
+                    $resource
+                }
+                catch {}
+
+                [void]$t.Dispose()
+                $t = New-Object Net.Sockets.TcpClient
+
+                try                
+                {
+                    $t.Connect($resource.publicIp.IpAddress,443)
+                    $resource.rdWebUrl = "https://$($resource.publicIp.IpAddress)/RDWeb"
+                    $resource.certInfo = (get-cert -url $resource.rdWebUrl)
+
+                    if ($resource.certInfo)
+                    {
+                        $resource.displayMessage = " RDWEB: $($resource.rdWebUrl)$($displayMessage)`r`n`tCert Subject: $(enum-certSubject -cert $resource.certInfo)"
+                        $resource.displayMessageColor = "Green"
+                        # write results to pipe
+                        $resource
+                    }
+                }
+                catch {}
+
+                [void]$t.Dispose()
+            } -ArgumentList $resource
+
+            [void]$jobs.Add($job)
+        }
+
+        while(get-job)
+        {
+            $ret = check-jobs
+
+            if($ret)
+            {
+                if($ret.gettype().Name -eq "Object[]")
+                {
+                    $resultList.AddRange($ret)
+                }
+                else
+                {
+                    $resultList.Add($ret)
+                }
+            }
+            Start-Sleep -Seconds 1
+        }
+
+        if($resultList.Count)
+        {
+            return $resultList
+        }
+        else
+        {
+            return $false
+        }
     }
     catch
     {
@@ -513,9 +649,6 @@ function get-cert([string] $url, [string] $certFile)
     $error.Clear()
     $webRequest = [Net.WebRequest]::Create($url)
     $webRequest.Timeout = 1000 #ms
-    $crt = $null
-    $bytes = $null
-    $cert = $null
 
     try
     { 
@@ -534,17 +667,11 @@ function get-cert([string] $url, [string] $certFile)
         $crt = $webRequest.ServicePoint.Certificate
         Write-Verbose "checking cert: $($crt | fl * | Out-String)"
 
-        if(!$crt)
-        {
-            write-verbose "unable to retrieve cert: $($crt)"
-            return $null
-        }
-
         $bytes = $crt.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
 
         if ($bytes.Length -gt 0)
         {
-            if ([string]::IsNullOrEmpty($certFile))
+            if (!$certFile)
             {
                 $certFile = "$($url -replace '\W','').cer"
             }
@@ -586,7 +713,7 @@ function get-gatewayUrl($resourceGroup)
     # find public ip from loadbalancer
     $ip = query-publicIp -resourceName $resourceGroup.ResourceGroupName -ipName $publicIpAddressName
 
-    if (![string]::IsNullOrEmpty($ip.IpAddress))
+    if ($ip.IpAddress)
     {
         write-host "public loadbalancer ip address: $($ip.IpAddress)"
         $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
@@ -599,54 +726,49 @@ function get-gatewayUrl($resourceGroup)
 # ----------------------------------------------------------------------------------------------------------------
 function get-subscriptions()
 {
-    write-host "enumerating subscriptions"
-    $subList = @{}
-    $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue)
-    $newSubFormat = (get-module AzureRM.Resources -ListAvailable).Version.ToString() -ge "4.0.0"
-            
-    if ($subs.Count -gt 1)
+    write-verbose "enumerating subscriptions"
+    $subList = new-object Collections.ArrayList
+    if($enumerateSubscriptions)
     {
-        [int]$count = 1
-        foreach ($sub in $subs)
-        {
-            if ($newSubFormat)
-            { 
-                $message = "$($count). $($sub.name) $($sub.id)"
-                $id = $sub.id
-            }
-            else
-            {
-                $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
-                $id = $sub.SubscriptionId
-            }
-
-            Write-Host $message
-            [void]$subList.Add($count, $id)
-            $count++
-        }
-        
-        [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
-        $null = Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
-        
-        if ($id -ne 0 -and $id -le $subs.count)
-        {
-            return $subList[$id]
-        }
+        $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue)
     }
-    elseif ($subs.Count -eq 1)
+    else
     {
-        if ($newSubFormat)
+        $subs = @(Get-AzureRmContext)
+    }
+
+    # check format    
+    foreach ($sub in $subs)
+    {
+        $id = $null
+        $name = ""
+        if($sub | get-member -name id)
         {
-            [void]$subList.Add("1", $subs.Id)
+            $id = $sub.id
+            $name = $sub.name
+        }
+        elseif($sub | get-member -name subscriptionid)
+        {
+            $id = $sub.subscriptionid
+            $name = $sub.subscriptionname
+        }
+        elseif($sub | get-member -name subscription)
+        {
+            $id = $sub.subscription.id
+            $name = $sub.subscription.name
         }
         else
         {
-            [void]$subList.Add("1", $subs.SubscriptionId)
+            Write-verbose "unable to find subscription id"
+            continue
         }
-    }
 
+        write-host "enumerating subscription $($name)"
+        [void]$subList.Add($id)
+    }
+            
     write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
-    return $subList.Values
+    return $subList
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -657,27 +779,31 @@ function get-update($updateUrl, $destinationFile)
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
-        $gitClean = [regex]::Replace($git, '\W+', "")
+
+        # git  may not have carriage return
+        if ([regex]::Matches($git, "`r").Count -eq 0)
+        {
+            $git = [regex]::Replace($git, "`n", "`r`n")
+        }
 
         if (![IO.File]::Exists($destinationFile))
         {
-            $fileClean = ""    
+            $file = ""    
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
+            $file = [IO.File]::ReadAllText($destinationFile)
         }
 
-        if (([string]::Compare($gitClean, $fileClean) -ne 0))
+        if (([string]::Compare($git, $file) -ne 0))
         {
-            write-host "copying script $($destinationFile)"
+            log-info "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
-            write-host "script updated. restart script" -ForegroundColor Yellow
             return $true
         }
         else
         {
-            write-host "script is up to date"
+            log-info "script is up to date"
         }
         
         return $false
@@ -693,14 +819,8 @@ function get-update($updateUrl, $destinationFile)
 # ----------------------------------------------------------------------------------------------------------------
 function import-cert($cert, $certFile, $subject)
 {
-    $certList = $null
-    $certSubject = $null
-    $certStore = $null
-    $certInfo = $null
-    $hostname = $null
-
     write-verbose "import-cert $($certFile) $($subject)"
-    if ([string]::IsNullOrEmpty($subject))
+    if (!$subject)
     {
         Write-Warning "import-cert:error: subject empty. returning"
         return $false
@@ -836,7 +956,7 @@ function query-publicIp([string] $resourceName, [string] $ipName)
 
     foreach ($ip in $ips)
     {
-        if ([string]::IsNullOrEmpty($ip.IpAddress) -or $ip.IpAddress -eq "Not Assigned")
+        if (!$ip.IpAddress -or $ip.IpAddress -eq "Not Assigned")
         {
             continue
         }
@@ -875,7 +995,7 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
         $stdErr = $process.StandardError.ReadToEnd()
         write-host "Process output:$stdOut"
  
-        if (![String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+        if ($stdErr -and $stdErr -notlike "0")
         {
             #write-host "Error:$stdErr `n $Error"
             $Error.Clear()
@@ -932,6 +1052,7 @@ function start-mstsc($ip)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-main
-write-host "finished"
-
+if ($host.Name -ine "ServerRemoteHost")
+{
+    main
+}
