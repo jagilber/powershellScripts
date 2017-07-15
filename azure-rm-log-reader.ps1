@@ -26,7 +26,7 @@
     query azure rm for all resource manager and deployment logs
 
 .EXAMPLE  
-    .\azure-rm-log-reader.ps1 -details
+    .\azure-rm-log-reader.ps1 -detail
     query azure rm for all resource manager logs and output additional detail to console
 
 .EXAMPLE  
@@ -79,7 +79,7 @@ Add-Type -AssemblyName PresentationCore
 $global:cacheMinutes = $cacheMinutes
 $global:completed = 0
 $global:deployments = @{}
-$global:deploymentUpdate = [DateTime]::MinValue
+$global:deploymentUpdate = $eventStartTime
 $global:eventStartTime = $eventStartTime
 $global:exportFile = "azure-rm-log-reader-export.txt"
 $global:groups = @{}
@@ -88,7 +88,7 @@ $global:jobName = "bgJob"
 $global:listbox = $null
 $global:listboxEvent = $null
 [timespan]$global:refreshTime = "0:0:30.0"#"0:1:00.0"
-$global:resourcegroupUpdate = [DateTime]::MinValue
+$global:resourcegroupUpdate = $eventStartTime
 $global:scriptName = $null
 $global:subscription = $subscriptionId
 $global:timer = $null
@@ -114,13 +114,13 @@ function main()
                 <RowDefinition Height="500" />
             </Grid.RowDefinitions>
             <Label x:Name="labelRefresh" Width="100" Margin="0,0,0,0" HorizontalAlignment="Left" Content="Last Refresh:" Grid.Row="0"/>
-            <Label x:Name="labelRefreshTime" Width="100" Margin="100,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
-            <Label x:Name="labelGroups" Width="100" Margin="200,0,0,0" HorizontalAlignment="Left" Content="Groups Count:" Grid.Row="0"/>
-            <Label x:Name="labelGroupsCount" Width="50" Margin="300,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
-            <Label x:Name="labelDeployments" Width="125" Margin="350,0,0,0" HorizontalAlignment="Left" Content="Deployments Count:" Grid.Row="0"/>
-            <Label x:Name="labelDeploymentsCount" Width="50" Margin="475,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
-            <Label x:Name="labelEvents" Width="100" Margin="525,0,0,0" HorizontalAlignment="Left" Content="Events Count:" Grid.Row="0"/>
-            <Label x:Name="labelEventsCount" Width="50" Margin="625,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
+            <Label x:Name="labelRefreshTime" Width="100" Margin="75,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
+            <Label x:Name="labelGroups" Width="130" Margin="150,0,0,0" HorizontalAlignment="Left" Content="Monitoring Groups:" Grid.Row="0"/>
+            <Label x:Name="labelGroupsCount" Width="50" Margin="260,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
+            <Label x:Name="labelDeployments" Width="145" Margin="300,0,0,0" HorizontalAlignment="Left" Content="Monitoring Deployments:" Grid.Row="0"/>
+            <Label x:Name="labelDeploymentsCount" Width="50" Margin="440,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
+            <Label x:Name="labelEvents" Width="100" Margin="480,0,0,0" HorizontalAlignment="Left" Content="Events Count:" Grid.Row="0"/>
+            <Label x:Name="labelEventsCount" Width="50" Margin="560,0,0,0" HorizontalAlignment="Left" Content="" Grid.Row="0"/>
             <Button x:Name="exportButton" Width="100" Margin="0,0,200,0" HorizontalAlignment="Right" Content="Export" Grid.Row="0"/>
             <Button x:Name="refreshButton" Width="100" Margin="0,0,0,0" HorizontalAlignment="Right" Content="Refresh" Grid.Row="0"/>
             <Button x:Name="clearButton" Width="100" Margin="0,0,100,0" HorizontalAlignment="Right" Content="Clear" Grid.Row="0"/>
@@ -186,7 +186,8 @@ function main()
     }
     else
     {
-        $eventStartTimeConvert
+        $eventStartTimeConvert = [DateTime]::MinValue
+
         if([DateTime]::TryParse($global:eventStartTime,[ref] $global:eventStartTimeConvert))
         {
             $global:eventStartTime = $eventStartTimeConvert
@@ -196,7 +197,11 @@ function main()
             $global:eventStartTime =  ([DateTime]::Now).AddDays(-1)
         }
     }
-    
+
+    $global:resourcegroupUpdate = $global:eventStartTime
+    $global:deploymentUpdate = $global:eventStartTime
+    $eventStartTime = $global:eventStartTime
+                
     $global:Window.Add_Closing({
         $global:completed = 1
         $global:timer.Stop()
@@ -205,7 +210,10 @@ function main()
     })
     
     $global:Window.Add_Loaded({
-
+        
+        write-host "form loaded:"
+        reset-list
+        
         $global:timer.Add_Tick({
 
             if($global:completed)
@@ -213,25 +221,10 @@ function main()
                 $global:timer.Stop()
             }
 
-            write-host "$([DateTime]::Now) timer start routine"
-            $jobResults = receive-backgroundJob -once $true
-            process-results -jobResults $jobResults
-
-            $global:listbox.Items.SortDescriptions.Clear()
-            $global:listbox.Items.SortDescriptions.Add((new-object ComponentModel.SortDescription("Content", [ComponentModel.ListSortDirection]::Descending)))     
-            $deploymentsLabel.Content = $jobResults.Deployments.Count
-            $groupsLabel.Content = $jobResults.ResourceGroups.Count
-            $refreshLabel.Content = [DateTime]::Now.ToLongTimeString()
-            $eventsLabel.Content = $global:listbox.Items.Count
-
-            write-host "$([DateTime]::Now) finished timer"
+            write-verbose "$([DateTime]::Now) timer start routine"
+            process-results -jobResults (receive-backgroundJob)
+            write-verbose "$([DateTime]::Now) finished timer"
         })
-
-        write-host "form loaded:"
-        
-        #[Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::AppStarting)
-        #run-commands    
-        #[Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::Arrow)
 
         $deploymentsLabel.Content = $global:deployments.Count
         $groupsLabel.Content = $global:groups.Count
@@ -435,7 +428,7 @@ function add-eventItem($lbitem, $color)
         + "   STATUS: $($statusCode)" `
         + "   MESSAGE: $($statusMessage)" `
         + "   $($resourcePath)"
-    
+            
     if($lbItem.EventDataId -eq $null -or !$global:index.ContainsKey((get-time -item $lbitem)))
     {
         if($detail)
@@ -471,7 +464,6 @@ function add-eventItem($lbitem, $color)
 # ----------------------------------------------------------------------------------------------------------------
 function authenticate-azureRm($context = $Null)
 {
-
     if($context)
     {
         $ctx = $null
@@ -575,7 +567,6 @@ function authenticate-azureRm($context = $Null)
 function check-backgroundJob()
 {
     Write-Verbose "check-backgroundjob:enter"
-
     $job = $null
 
     if(!($job = get-job -Name $global:jobName -ErrorAction SilentlyContinue))
@@ -615,10 +606,12 @@ function clear-list()
 # ----------------------------------------------------------------------------------------------------------------
 function do-backgroundJob($jobInfo)
 {
+    # runs on background thread
     $count = 0
+
     while ($true)
     {
-        write-host "doing background job $($jobInfo.action)"
+        write-host "doing background job $($jobInfo.action) event start time: $($jobInfo.eventStartTime)"
         # for job debugging
         # when attached with -debug switch, set $jobInfo.debugPreference to SilentlyContinue to debug
         while($jobInfo.debugPreference -imatch "Inquire")
@@ -631,15 +624,13 @@ function do-backgroundJob($jobInfo)
         authenticate-azureRm -context $jobInfo.profileContext
 
         # set global start time from job
-        $currentTime = $global:eventStartTime = $jobInfo.eventStartTime
-        $currentTimeStamp = 0
-        $rgCount = 0
+        $global:eventStartTime = $jobInfo.eventStartTime
+        $global:resourcegroupUpdate = $global:eventStartTime
+        $global:deploymentUpdate = $global:eventStartTime
 
         while($true)
         {
             $jobResults = new-jobResults
-            $jobResults.LastUpdateTime = $currentTime
-            $currentTime = [DateTime]::Now
 
             try
             {
@@ -654,7 +645,7 @@ function do-backgroundJob($jobInfo)
 
                 if($jobInfo.detail)
                 {
-                    write-host "$([DateTime]::Now) job:finished processing results count: $($jobResults.Output.Count)"
+                    write-host "$([DateTime]::Now) job:finished processing results count: $($jobResults.GroupOutput.Count):$($jobResults.DeploymentOutput.Count)"
                     write-host "results: $($jobResults | format-list * | out-string)"
                 }
 
@@ -662,11 +653,10 @@ function do-backgroundJob($jobInfo)
                 $jobResults
                 
                 Start-Sleep -Seconds $global:refreshTime.Seconds
-
             }
             catch
             {
-                $jobResults.LastResult = $error
+                $jobResults.LastResult = $error | out-string
                 $jobResults
                 $error.Clear()
 
@@ -698,20 +688,20 @@ function enum-deployments($resoureGroup = ".")
 
         foreach($group in (enum-resourceGroups).GetEnumerator())
         {
-            $deployments = (Get-AzureRmResourceGroupDeployment -ResourceGroupName $($group.Key)).DeploymentName
+            $deployments = (Get-AzureRmResourceGroupDeployment -ResourceGroupName $($group.Key))
 
             foreach($deployment in $deployments)
             {
                 if(!$global:deployments.ContainsKey($group.Key))
                 {
-                    $global:deployments.Add($group.Key,@{})    
+                    [void]$global:deployments.Add($group.Key,@{})    
                 }
 
                 if($deployment.TimeStamp -gt $global:eventStartTime)
                 {
                     if(!$global:deployments[$group.Key].ContainsKey($deployment.DeploymentName))
                     {
-                        $global:deployments[$group.Key].Add($deployment.DeploymentName, 0)
+                        [void]$global:deployments[$group.Key].Add($deployment.DeploymentName, 0)
                     }
                 }
             }
@@ -725,6 +715,7 @@ function enum-deployments($resoureGroup = ".")
 function enum-resourceGroups()
 {
     $global:groups = @{}
+
     if(![string]::IsNullOrEmpty($resourceGroupName))
     {
         
@@ -734,16 +725,17 @@ function enum-resourceGroups()
 
     if([DateTime]::Now.AddMinutes(-$global:cacheMinutes) -gt [DateTime]$global:resourcegroupUpdate)
     {
-        $groups = (Get-AzureRmResourceGroup | Get-AzureRmResourceGroupDeployment | Where-Object TimeStamp -gt $($global:eventStartTime) | Select-Object ResourceGroupName -Unique).ResourceGroupName
+        $global:resourceGroupUpdate = [DateTime]::Now
+        $groups = (Get-AzureRmResourceGroup | Get-AzureRmResourceGroupDeployment | Where-Object TimeStamp -gt $($global:eventStartTime) | Select-Object ResourceGroupName -Unique)
         
         if($groups.Count -eq 0)
         {
-            $groups = (Get-AzureRmResourceGroup  | Select-Object ResourceGroupName -Unique).ResourceGroupName
+            $groups = (Get-AzureRmResourceGroup  | Select-Object ResourceGroupName -Unique)
         }
 
         foreach($group in $groups)
         {
-            [void]$global:groups.Add($group,0)
+            [void]$global:groups.Add($group.ResourceGroupName,0)
         }
     }
 
@@ -788,7 +780,7 @@ function export-list()
 # ----------------------------------------------------------------------------------------------------------------
 function format-eventView($item,$listBoxItem)
 {
-    if(($item | format-list | out-string) -imatch "(level.+\:.+Error)|provisioningstate.+\:.+failed")
+    if(($item | format-list | out-string) -imatch "(level\:.+[1-2])|(provisioningstate\:.+failed)|(status\:.+failed)|(failed)")
     {
         $listBoxItem.Background = "AliceBlue"
         $listBoxItem.Foreground = "Red"
@@ -816,6 +808,7 @@ function format-eventView($item,$listBoxItem)
 function format-record([string]$inputString)
 {
     #get rid of in order:
+    # \u0027 unicode value for "'" single tick and replace with single tick '
     # \" literal
     # " literal
     # new line literals and replace with new line tab tab
@@ -940,6 +933,7 @@ function get-time($item)
 function get-workingDirectory()
 {
     $retVal = [string]::Empty
+
     if (Test-Path variable:\hostinvocation)
     {
         $retVal = $hostinvocation.MyCommand.Path
@@ -1012,6 +1006,7 @@ function get-update($updateUrl, $destinationFile)
 function is-deployment($items)
 {
     $items = @($items)
+
     try
     {
         if($items.Count -gt 0 -and $items[0].EventTimeStamp -ne $null)
@@ -1035,8 +1030,8 @@ function is-deployment($items)
 function new-jobResults()
 {
     $jobResults = @{}
-    $jobResults.GroupOutput = @{} #New-Object Collections.ArrayList}
-    $jobResults.DeploymentOutput = @{} #New-Object Collections.ArrayList}
+    $jobResults.GroupOutput = @{}
+    $jobResults.DeploymentOutput = @{}
     $jobResults.LastUpdateTime = $null
     $jobResults.LastResult = $null
     $jobResults.ResourceGroups = 0
@@ -1048,15 +1043,15 @@ function new-jobResults()
 # ----------------------------------------------------------------------------------------------------------------
 function open-event()
 {
-    if($detail)
-    {
-        write-host $global:listbox
-    }
-
-    [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::AppStarting)
-
     try
     {
+        [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::AppStarting)
+        
+        if($detail)
+        {
+            write-host $global:listbox
+        }
+
         $ret = $global:listboxEvent.Items.Clear()
         $item = $global:listbox.SelectedItem.Tag
         [Windows.Controls.ScrollViewer]$lbi = new-object Windows.Controls.ScrollViewer
@@ -1093,7 +1088,7 @@ function open-event()
                 $dlbi.MinWidth = $global:listboxEvent.ActualWidth - 5
                 
                 $dlbi.Content = format-record -inputString ($op | convertto-json -depth 100)
-                $ret = $global:listboxEvent.Items.Add((format-eventView -item $item -listBoxItem $dlbi))
+                $ret = $global:listboxEvent.Items.Add((format-eventView -item $dlbi.Content -listBoxItem $dlbi))
             }
         }
         else
@@ -1104,7 +1099,7 @@ function open-event()
             $jsonItem = $item | convertto-json -Depth 100
             $lbi.Content = format-record -inputString $jsonItem 
             
-            $ret = $global:listboxEvent.Items.Add((format-eventView -item $item -listBoxItem $lbi))
+            $ret = $global:listboxEvent.Items.Add((format-eventView -item $lbi.Content -listBoxItem $lbi))
         }
     }
     catch
@@ -1123,7 +1118,7 @@ function process-results($jobResults)
 {
     if(!$jobResults)
     {
-        return
+        return $false
     }
 
     foreach($jobResult in @($jobResults))
@@ -1150,16 +1145,24 @@ function process-results($jobResults)
                 {
                     foreach($item in $result.Value)
                     {
-                        add-depitem -lbitem $result.Value -color "DarkOrange"                
+                        add-depitem -lbitem $item -color "DarkOrange"                
                     }
                 }
             }
         }
     }
+
+    $global:listbox.Items.SortDescriptions.Clear()
+    $global:listbox.Items.SortDescriptions.Add((new-object ComponentModel.SortDescription("Content", [ComponentModel.ListSortDirection]::Descending)))     
+    $deploymentsLabel.Content = $jobResults.Deployments.Count
+    $groupsLabel.Content = $jobResults.ResourceGroups.Count
+    $refreshLabel.Content = [DateTime]::Now.ToLongTimeString()
+    $eventsLabel.Content = $global:listbox.Items.Count
+    return $true
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function receive-backgroundJob([bool]$once = $false)
+function receive-backgroundJob()
 {
     try
     {
@@ -1168,40 +1171,16 @@ function receive-backgroundJob([bool]$once = $false)
             write-host "$([DateTime]::Now) receiving job"
         }
 
-        $count = 0
         $job = $Null
         $jobResultsList = @{}
         $jobResults = new-jobResults
         $jobResults.LastUpdateTime = [DateTime]::MinValue
         $ret = @{}
-        $totalCount = ($global:refreshTime.TotalSeconds * 2)
-
-        if($once)
-        {
-            $totalCount = 1
-        }
-
-        while($count -le $totalCount)
-        {
-            $job = get-job -Name $global:jobName 
-            $jobResultsList = receive-job -Job $job
+        $job = get-job -Name $global:jobName 
+        $jobResultsList = receive-job -Job $job
             
-            if($jobResultsList -ne $Null)
-            {
-                break
-            }
-
-            start-sleep -Milliseconds 100
-            [void]$count++
-        }
-    
-        if($count -ge $totalCount)
+        if(!$jobResultsList)
         {
-            if(!$once)
-            {
-                write-host "error:receivebackgroundjob timed out" -ForegroundColor Red
-            }
-
             return $false
         }
 
@@ -1239,13 +1218,8 @@ function receive-backgroundJob([bool]$once = $false)
 
             if([DateTime]::TryParse($jobResults.LastUpdateTime,[ref] $lastUpdateTime))
             {
-                if([DateTime]::Now.Add(-($global:refreshTime)) -gt $lastUpdateTime)
-                {
-                    write-host "error in job, update time is stale: $($lastUpdateTime)"
-                }
-               
+                write-host "receive-job returning $(@($ret).Count) results. lastupdatetime: $($lastUpdateTime)" -ForegroundColor Green
                 $ret = $jobResults
-                write-host "receive-job returning $(@($ret).Count) results" -ForegroundColor Green
             }
             else
             {
@@ -1266,23 +1240,26 @@ function receive-backgroundJob([bool]$once = $false)
 function reset-list()
 {
     [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::AppStarting)
-
-    $global:eventStartTime = ([DateTime]::Now).AddDays(-1)
-    $global:deploymentUpdate = [DateTime]::MinValue
-    $global:resourcegroupUpdate = [DateTime]::MinValue
+    $global:eventStartTime = $eventStartTime
+    $global:window.Title = "GETTING EVENTS NEWER THAN $($global:eventStartTime), PLEASE WAIT..."
+    $global:deploymentUpdate = $global:eventStartTime
+    $global:resourcegroupUpdate = $global:eventStartTime
     $global:deployments = @{}
     $global:groups = @{}
     $jobResults = new-jobResults
     $jobResults.LastUpdateTime = $global:eventStartTime
     
     process-results -jobResults (run-commands -jobObject $jobResults)
+
     $refreshLabel.Content = [DateTime]::Now.ToLongTimeString()
     [Windows.Input.Mouse]::SetCursor([Windows.Input.Cursors]::Arrow)
+    $global:window.Title = "$($MyInvocation.ScriptName)"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function run-command($group, $items)
+function run-command($group, $items, [DateTime]$timeStamp = $null)
 {
+    # runs on background and foreground thread
     try
     {
         if(!$items)
@@ -1295,7 +1272,7 @@ function run-command($group, $items)
             write-host "$([DateTime]::Now) run-command  group: $($group.Key) items: $($items.Count)"
         }
         
-        if(@($items).Count -lt 1 -and $group.Value -eq 0)
+        if(@($items).Count -lt 1)
         {
             # remove from list
             $global:groups[$group.Key] = -1
@@ -1333,7 +1310,7 @@ function run-command($group, $items)
                 
                 $ops = Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($item.DeploymentName) -ResourceGroupName $($group.Key)
 
-                if(@($ops).count -lt 1 -and $global:deployments[$group.Key][$item.DeploymentName] -eq 0)
+                if(@($ops).count -lt 1)# -and $global:deployments[$group.Key][$item.DeploymentName] -eq 0)
                 {
                     $global:deployments[$group.Key][$item.DeploymentName] -eq -1
                     continue
@@ -1352,15 +1329,29 @@ function run-command($group, $items)
                         $timeadjust = $timeadjust.AddTicks(1)
                     }
 
-                    [void]$allItems.Add($timeadjust, $op)
+                    [void]$allItems.Add($timeadjust.ToString("o"), $op)
                 }
             }    
             
-            return $allItems.Values
+            if($timeStamp)
+            {
+                return ($allItems.GetEnumerator() | where-object Key -ge $timeStamp.ToString("o")).Value
+            }
+            else
+            {
+                return $allItems.Values
+            }
         }
         else
         {
-            return $items
+            if($timeStamp)
+            {
+                return ($items.GetEnumerator() | where-object EventTimeStamp -ge $timeStamp)
+            }
+            else
+            {
+                return $items
+            }
         }
     }
     catch
@@ -1373,6 +1364,7 @@ function run-command($group, $items)
 # ----------------------------------------------------------------------------------------------------------------
 function run-commands($jobObject = $null)
 {
+    # runs on background and foreground thread
     $ret = $null
 
     # background job
@@ -1383,18 +1375,17 @@ function run-commands($jobObject = $null)
     else
     {
         $jobResults = new-jobResults
-        $jobResults.LastUpdateTime = [DateTime]::Now
     }
 
     try
     {
+        # get old dates and use until new date is set after cache expires
+        $deploymentUpdate = $global:deploymentUpdate
+        $resourceGroupUpdate = $global:resourceGroupUpdate
         $ret = enum-deployments
-        $localTime = $jobResults.LastUpdateTime #get-time -item $global:eventStartTime
 
         # use temp group so $global:groups can be modifed in run-command
         $tempGroups = @{}
-
-        write-host "run-commands:group count: $($global:groups.Count) time: $($localTime)"
 
         foreach($tgroup in $global:groups.GetEnumerator())
         {
@@ -1411,17 +1402,18 @@ function run-commands($jobObject = $null)
                 continue
             }
 
-            write-host "run-commands:get-azsurermlog -detailedoutput -resourcegroup $($group.Key) -starttime $($localTime)"
-            [void]$jobResults.GroupOutput.Add($group.key, 
-                (run-command -group $group -items @(get-azurermlog -DetailedOutput -ResourceGroup $group.Key -StartTime $localTime)))
+            write-verbose "run-commands:get-azsurermlog -detailedoutput -resourcegroup $($group.Key) -starttime $($resourceGroupUpdate)"
+            $groupItems = @(get-azurermlog -DetailedOutput -ResourceGroup $group.Key -StartTime $resourceGroupUpdate)
+            [void]$jobResults.GroupOutput.Add($group.key, (run-command -group $group -items $groupItems -timeStamp $resourceGroupUpdate))
 
-            # todo: filter not working. timestamp in 2 locations
-            [void]$jobResults.DeploymentOutput.Add($group.key, 
-                (run-command -group $groupy -items @(Get-AzureRmResourceGroupDeployment -ResourceGroupName $group.Key | Where-Object TimeStamp -ge $localTime)))
+            write-verbose "run-commands:get-azsurermresourcegroupdeployment -detailedoutput -resourcegroup $($group.Key) -starttime $($deploymentUpdate)"
+            $tempDeployments += $depItems = @(Get-AzureRmResourceGroupDeployment -ResourceGroupName $group.Key | Where-Object TimeStamp -ge $deploymentUpdate)
+            [void]$jobResults.DeploymentOutput.Add($group.key, (run-command -group $group -items $depItems -timeStamp $deploymentUpdate))
         }
 
-        $jobResults.Deployments = $global:deployments
+        $jobResults.Deployments = $tempDeployments
         $jobResults.ResourceGroups = $tempGroups
+        $jobResults.LastUpdateTime = [DateTime]::Now
         return $jobResults    
     }
     catch
@@ -1440,7 +1432,7 @@ function start-backgroundJob()
 
     # add values here to pass to jobs
     $jobInfo = @{}
-    $jobInfo.action = "rpc job"
+    $jobInfo.action = "azure_rm_log_reader_job"
     $jobInfo.jobName = $global:jobname
     $jobInfo.invocation = $MyInvocation
     $JobInfo.backgroundJobFunction = (get-item function:do-backgroundJob)
@@ -1485,10 +1477,10 @@ function start-backgroundJob()
     }
 }
 
-
 # ----------------------------------------------------------------------------------------------------------------
 if ($host.Name -ine "ServerRemoteHost")
 {
+    # called on foreground thread only
     main
 }
 
