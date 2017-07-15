@@ -31,7 +31,8 @@
 #>
 
 Param(
-    [string]$rdgFile = ".\azure-ms.rdg"
+    [string]$rdgFile = ".\azure-ms.rdg",
+    [string[]]$resourceGroupNames# = @("rdsdepsa20")
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,10 +78,17 @@ function main()
 
         $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
 
-        foreach($resourceGroup in Get-AzureRmResourceGroup)
+        if(!$resourceGroupNames)
         {
-            write-host "resourcegroup:$($resourceGroup.ResourceGroupName)"
-            if(!($allVms.ResourceGroupName -imatch $resourceGroup.ResourceGroupName))
+            $resourceGroupNames = @(Get-AzureRmResourceGroup).ResourceGroupName
+        }
+
+
+        foreach($resourceGroupName in $resourceGroupNames)
+        {
+            
+            write-host "resourcegroup:$($resourceGroupName)"
+            if(!($allVms.ResourceGroupName -imatch $resourceGroupName))
             {
                 continue
             }
@@ -90,11 +98,100 @@ function main()
             [XML.XMLElement]$expandedElement = $propertiesElement.appendChild($doc.CreateElement("expanded"))
             $expandedElement.InnerText = "True"
             [XML.XMLElement]$nameElement = $propertiesElement.appendChild($doc.CreateElement("name"))
-            $nameElement.InnerText = $resourceGroup.ResourceGroupName
+            $nameElement.InnerText = $resourceGroupName
 
-            $publicIps = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroup.ResourceGroupName
-            $allInterfaces = @(Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroup.ResourceGroupName)
-            
+            $allIps = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName
+            $allInterfaces = @(Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName)
+            $allLbs = @(Get-AzureRmLoadBalancer -ResourceGroupName $resourceGroupName)
+           
+            # check loadbalancers
+            $lbInfos = New-Object Collections.ArrayList
+
+            foreach($publicIp in $allIps)
+            {
+                $lbInfo = @{}
+                $lbInfo.PublicIPAddress = $publicIp.IpAddress
+                $lbInfo.PrivateIPAddress = ""
+                $lbInfo.FQDN = $publicIp.DnsSettings.Fqdn
+                $lbInfo.LBName = $publicIp.Name
+                $lbInfo.RDPPort = $false
+                $lbInfo.SSLPort = $false
+                $lbInfo.VMs = New-Object Collections.ArrayList
+                $lbInfo.resourceGroupName = ""
+                
+                $lbInfos.Add($lbinfo)        
+            }
+
+
+            foreach($lb in $lbInfos)
+            {
+                $lbmatches = @([Linq.Enumerable]::Where($allLbs, 
+                    [Func[object,bool]]{ param($x) $x.FrontEndIpConfigurations.PublicIpAddress.Id -imatch $lb.LBName }))
+
+                if($lbmatches.count -eq 1)
+                {
+                    $lbmatch = $lbmatches[0]
+
+                    $lb.resourceGroupName = $lbmatch.ResourceGroupName
+
+                    $lb.SSLPort = @([Linq.Enumerable]::Where($lbMatches, 
+                        [Func[object,bool]]{ param($x) $x.LoadBalancingRules.FrontendPort -imatch "443"  -or $x.InboundNatRules.FrontendPort -imatch "433" })).Count -gt 0
+
+                    $lb.RDPPort = @([Linq.Enumerable]::Where($lbMatches, 
+                        [Func[object,bool]]{ param($x) $x.LoadBalancingRules.FrontendPort -imatch "3389" -or $x.InboundNatRules.FrontendPort -imatch "3389" })).Count -gt 0
+
+                    $interfaceMatches = @([Linq.Enumerable]::Where($allInterfaces, 
+                        [Func[object,bool]]{ param($x) $x.IpConfigurations.LoadbalancerBackendAddressPools.Id -imatch $lbmatch.BackendAddressPools.Name }))
+
+                    if($lb.SSLPort)
+                    {
+                        # check if gateway
+                        #https://40.71.47.111/rpc
+
+                        # if not, set to false
+                        # $lb.SSLPort = $false
+                    }
+
+
+                    if($lb.SSlPort -or $lb.RDPPort)
+                    {
+                        [XML.XMLElement]$serverElement = $groupElement.appendChild($doc.CreateElement("server"))
+                        [XML.XMLElement]$propertiesElement = $serverElement.appendChild($doc.CreateElement("properties"))
+                        [XML.XMLElement]$displayNameElement = $propertiesElement.appendChild($doc.CreateElement("displayName"))
+                        $displayNameElement.InnerText = "LB:$($lb.LBName) $($lb.PublicIpAddress) SSL:$($lb.SSLPort) RDP:$($lb.RDPPort)"
+                        [XML.XMLElement]$nameElement = $propertiesElement.appendChild($doc.CreateElement("name"))
+                        $nameElement.InnerText = $lb.PublicIPAddress
+
+                        if($lb.SSLPort)
+                        {
+                            # check if gateway
+                            #https://40.71.47.111/rpc
+                        }
+                    }
+
+
+#                    foreach($interfaceMatch in $interfaceMatches)
+#                    {
+#                        $vmInfo = @{}
+#
+#                        $vmInfo.vmName = [IO.Path]::GetFileName($interfaceMatch.VirtualMachine.Id)
+#                        $vmInfo.vmNic = [IO.Path]::GetFileName($interfaceMatch.Id)
+#                        $vmInfo.privateIpAddresses = @($interfaceMatch.IpConfigurations.PrivateIpAddress)
+#                        $vmInfo.publicIpAddresses = @($interfaceMatch.IpConfigurations.PublicIpAddress)
+#
+#                        $lb.VMs.Add($vmInfo)
+#                        #$filteredLbInfos.Add($lb)
+#
+#                        [XML.XMLElement]$serverElement = $groupElement.appendChild($doc.CreateElement("server"))
+#                        [XML.XMLElement]$propertiesElement = $serverElement.appendChild($doc.CreateElement("properties"))
+#                        [XML.XMLElement]$displayNameElement = $propertiesElement.appendChild($doc.CreateElement("displayName"))
+#                        $displayNameElement.InnerText = "LB:$($lb.LBName) $($lb.PublicIpAddress) SSL:$($lb.SSLPort) RDP:$($lb.RDPPort)"
+#                        [XML.XMLElement]$nameElement = $propertiesElement.appendChild($doc.CreateElement("name"))
+#                        $nameElement.InnerText = $lb.PublicIPAddress
+#
+#                    }
+                }
+            }
 
             foreach($interface in $allInterfaces)
             {
@@ -134,8 +231,9 @@ function main()
                         continue
                     }
 
+
                     $publicIpInterfaceName = [IO.Path]::GetFileName($interface.IpConfigurations.publicipaddress.Id)
-                    $publicIp = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroup.ResourceGroupName -Name $publicIpInterfaceName
+                    $publicIp = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $publicIpInterfaceName
 
                     [XML.XMLElement]$serverElement = $groupElement.appendChild($doc.CreateElement("server"))
                     [XML.XMLElement]$propertiesElement = $serverElement.appendChild($doc.CreateElement("properties"))
