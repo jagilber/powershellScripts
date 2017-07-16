@@ -31,7 +31,7 @@
     will start all vm's in resource group existingResourceGroup and 8 hours after start, will stop all vm's in same resource group
 
 .PARAMETER action
-    required. action to perform. start, stop, restart, listRunning
+    required. action to perform. start, stop, restart, list, listDeallocated, listRunning
 
 .PARAMETER excludeResourceGroupNames
     string array list of resource groups to exclude from command
@@ -195,7 +195,7 @@ function main()
             log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
 
-        log-info "checking $($filteredVms.Count) vms for current power state."
+        log-info "checking $($filteredVms.Count) vms for current power state. please wait ..." 
     
         foreach ($vm in $filteredVms)
         {
