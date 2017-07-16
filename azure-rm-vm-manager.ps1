@@ -26,6 +26,10 @@
     .\azure-rm-vm-manager.ps1 -resourceGroupName existingResourceGroup -action listRunning
     will list all running vm's in resource group existingResourceGroup
 
+.EXAMPLE  
+    .\azure-rm-vm-manager.ps1 -resourceGroupName existingResourceGroup -action start -timerAction stop -timerHours 8
+    will start all vm's in resource group existingResourceGroup and 8 hours after start, will stop all vm's in same resource group
+
 .PARAMETER action
     required. action to perform. start, stop, restart, listRunning
 
@@ -261,7 +265,7 @@ function main()
             Remove-Item -Path $profileContext -Force
         }
 
-        log-info "$(get-date) finished script. total minutes: $(((get-date) - $global:startTime).totalminutes)"
+        log-info "$(get-date) finished script. total minutes: $(((get-date) - $global:startTime).totalminutes.ToString("0.00"))"
     }
 }
 
