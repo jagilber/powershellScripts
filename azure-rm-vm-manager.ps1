@@ -254,7 +254,7 @@ function main()
     }
     catch
     {
-        log-info "main:exception:$($error)"
+        log-info "main:exception:$($error | out-string)"
     }
     finally
     {
@@ -333,7 +333,7 @@ function authenticate-azureRm()
         }
         catch
         {
-            log-info "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -361,6 +361,7 @@ function check-backgroundJobs($writeStatus = $false)
         else
         {
             $ret = Receive-Job -Job $job
+
             if($ret)
             {
                 log-info "`twarning:receive job $($job.Name) data: $($ret)"
@@ -424,11 +425,11 @@ function do-backgroundJob($jobInfo)
     log-info "verbose:doing background job $($jobInfo.action)"
    
     # for job debugging
-    # when attached with -debug switch, set $debugPreference to SilentlyContinue to debug
+    # when attached with -debug switch, set $jobInfo.debugPreference to SilentlyContinue to debug
     while($jobInfo.debugPreference -imatch "Inquire")
     {
 		log-info "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
-		log-info "set jobInfo.debugPreference = SilentlyContinue to break debug loop"
+		log-info "set $jobInfo.debugPreference = SilentlyContinue to break debug loop"
         start-sleep -Seconds 1
     }
     
@@ -520,7 +521,7 @@ function get-update($updateUrl, $destinationFile)
     }
     catch [System.Exception] 
     {
-        log-info "get-update:exception: $($error)"
+        log-info "get-update:exception: $($error | out-string)"
         $error.Clear()
         return $false    
     }
