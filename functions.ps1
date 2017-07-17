@@ -1,5 +1,45 @@
 # general functions
 
+<#
+.SYNOPSIS
+    powershell script to manage event logs on multiple machines
+
+.DESCRIPTION
+    To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
+
+    This script will optionally enable / disable debug and analytic event logs.
+    This can be against both local and remote machines.
+    It will also take a regex filter pattern for both event log names and traces.
+    For each match, all event logs will be exported to csv format.
+    Each export will be in its own file named with the event log name.
+    Script has ability to 'listen' to new events by continuously polling configured event logs.
+
+    Requirements:
+        - administrator powershell prompt
+        - administrative access to machine
+        - remote network ports:
+            - smb 445
+            - rpc endpoint mapper 135
+            - rpc ephemeral ports
+
+.NOTES
+    File Name  : functions.ps1
+    Author     : jagilber
+    Version    : 170707.2 finally fix for merge getfiles multiple machines
+    History    : 
+    
+.EXAMPLE
+    .\event-log-manager.ps1 -rds -minutes 10
+    Example command to query rds event logs for last 10 minutes.
+
+.PARAMETER commandCount
+    modify default value of 1 for number of times to execute command on match.
+
+.LINK
+    https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
+#>
+
+
 
 # ----------------------------------------------------------------------------------------------------------------
 function authenticate-azureRm()
@@ -96,6 +136,17 @@ function authenticate-azureRm()
             exit 1
         }
     }
+
+    #Save-AzureRmContext -Path $profileContext -Force
+    #main finally
+    #finally
+    #{
+    #if(test-path $profileContext)
+    #{
+    #    Remove-Item -Path $profileContext -Force
+    #}
+    #}
+
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -122,7 +173,6 @@ function get-workingDirectory()
         log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
         
     } 
- 
     
     Set-Location $retVal | out-null
  
@@ -178,7 +228,7 @@ function get-subscriptions()
         }
     }
 
-    write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
+    write-verbose "get-subscriptions returning:$($subs | format-list | out-string)"
     return $subList.Values
 }
 
@@ -222,26 +272,29 @@ function get-sysInternalsUtility ([string] $utilityName)
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/rds-lic-svr-chk.ps1"
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------
 function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
+    $file = ""
+    $git = $null
 
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
-        $gitClean = [regex]::Replace($git, '\W+', "")
 
-        if(![IO.File]::Exists($destinationFile))
+        # git may not have carriage return
+        if ([regex]::Matches($git, "`r").Count -eq 0)
         {
-            $fileClean = ""    
-        }
-        else
-        {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
+            $git = [regex]::Replace($git, "`n", "`r`n")
         }
 
-        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        if ([IO.File]::Exists($destinationFile))
+        {
+            $file = [IO.File]::ReadAllText($destinationFile)
+        }
+
+        if (([string]::Compare($git, $file) -ne 0))
         {
             log-info "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
@@ -253,7 +306,6 @@ function get-update($updateUrl, $destinationFile)
         }
         
         return $false
-        
     }
     catch [System.Exception] 
     {

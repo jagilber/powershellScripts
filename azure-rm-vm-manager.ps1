@@ -10,8 +10,10 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170630 added real states in verbose
+   Version    : 170717 fix $jobsCount for single machine
    History    : 
+                170713 add progress
+                170709 release
 
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
@@ -25,35 +27,65 @@
     .\azure-rm-vm-manager.ps1 -resourceGroupName existingResourceGroup -action listRunning
     will list all running vm's in resource group existingResourceGroup
 
+.EXAMPLE  
+    .\azure-rm-vm-manager.ps1 -resourceGroupName existingResourceGroup -action start -timerAction stop -timerHours 8
+    will start all vm's in resource group existingResourceGroup and 8 hours after start, will stop all vm's in same resource group
+
 .PARAMETER action
-    required. action to perform. start, stop, restart, listRunning
+    required. action to perform. start, stop, restart, list, listDeallocated, listRunning
+
+.PARAMETER excludeResourceGroupNames
+    string array list of resource groups to exclude from command
+
+.PARAMETER excludeVms
+    string array list of vm's to exclude from command
+
+.PARAMETER getUpdate
+    compare the current script against the location in github and will update if different.
+
+.PARAMETER noLog
+    disable writing log file
 
 .PARAMETER resourceGroupName
     string array of resource group names of the resource groups containg the vm's to manage
     if NOT specified, all resource groups will be managed
 
+.PARAMETER timerAction
+    action to perform at timerHours
+
+.PARAMETER timerHours
+    if specified, decimal for hours to wait until performing timeraction. see example.
+
 .PARAMETER vms
     string array list of vm's to include for command
-
-.PARAMETER excludeVms
-    string array list of vm's to exclude from command
 
 #>  
 
 [CmdletBinding()]
 param(
     [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
-    [string]$action = 'listRunning',
-    [string[]]$resourceGroupNames = @(),
+    [string]$action = 'list',
+    [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
+    [switch]$getUpdate,
+    [switch]$noLog,
+    [string[]]$resourceGroupNames = @(),
     [int]$throttle = 20,
+    [float]$timerHours = 0,
+    [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
+    [string]$timerAction,
     [string[]]$vms = @()
 )
 
+$ErrorActionPreference = "Continue"
 $logFile = "azure-rm-vm-manager.log.txt"
 $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
+$updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-vm-manager.ps1"
+$global:jobInfos = New-Object Collections.ArrayList
+$global:jobsCount = 0
+$global:startTime = get-date
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
@@ -61,12 +93,18 @@ function main()
     $error.Clear()
     $allVms = @()
     $filteredVms = New-Object Collections.ArrayList
-    $startTime = get-date
-    $jobInfos = New-Object Collections.ArrayList
 
     try
     {
-        log-info "$((get-date).ToString("o")) starting script"
+        log-info "$(get-date) enumerating vms for action '$($action) vms'. Ctrl-C to stop script."
+
+        # see if new (different) version of file
+        if ($getUpdate)
+        {
+            get-update -updateUrl $updateUrl -destinationFile $MyInvocation.ScriptName
+            exit 0
+        }
+
         remove-backgroundJobs
 
         # see if we need to auth
@@ -81,10 +119,9 @@ function main()
         }
 
         # if neither passed in use all
-        if(!$vms -and !$resourceGroupNames -and !($action -imatch 'list'))
+        if(!$vms -and !$resourceGroupNames -and !$excludeVms -and !$excludeResourceGroupNames -and !($action -imatch 'list'))
         {
-            log-info "warning: managing all vm's in subscription! use -resourcegroupnames or -vms to filter. if this is wrong, press ctrl-c to exit..."
-            #$filteredVms = $allVms
+            log-info "warning: managing all vm's in subscription! use -resourcegroupnames or -vms to filter.`r`nif this is wrong, press ctrl-c to exit..."
         }
 
         if(!$resourceGroupNames)
@@ -97,7 +134,7 @@ function main()
         {
             foreach($vm in $allVms)
             {
-                if($resourceGroupName -imatch $vm.ResourceGroupName)
+                if($resourceGroupName -ieq $vm.ResourceGroupName)
                 {
                     [void]$filteredVms.Add($vm)
                 }
@@ -109,21 +146,20 @@ function main()
             # remove vm's not matching $vms list
             foreach($filteredVm in (new-object Collections.ArrayList(,$filteredVms)))
             {
-                if(!($vms -imatch $filteredVm.Name) -or !($vms.ResourceGroupName -imatch $filteredVm.ResourceGroupName))
+                if(!($vms -ieq $filteredVm.Name) -or !($vms.ResourceGroupName -ieq $filteredVm.ResourceGroupName))
                 {
-                    $filteredVms.Remove($filteredVm)
-                    #[void]$filteredVms.RemoveRange(@($allVms |? Name -imatch $vm))
+                    log-info "verbose: removing vm $($filteredVm)"
+                    [void]$filteredVms.Remove($filteredVm)
                 }
             }
 
             # add vm's matching $vms list
             foreach($vm in $vms)
             {
-                if(!($filteredVms.Name -imatch $vm) -and ($allVms.Name -imatch $vm))
+                if(!($filteredVms.Name -ieq $vm) -and ($allVms.Name -ieq $vm))
                 {
-                    [void]$filteredVms.AddRange(@($allVms | where-object {
-                        $_.Name -imatch $vm -and ($_.ResourceGroupName -imatch ($resourceGroupNames -join "|"))
-                    }))
+                    log-info "verbose: adding vm $($vm)"
+                    [void]$filteredVms.Add($vm)
                 }
             }
         }
@@ -131,19 +167,36 @@ function main()
         # check for excludeVms names
         foreach($excludeVm in $excludeVms)
         {
-            if(($filteredVms.Name -imatch $excludeVm) -and ($allVms.Name -imatch $excludeVm))
+            if(($filteredVms.Name -ieq $excludeVm) -and ($allVms.Name -ieq $excludeVm))
             {
-                [void]$filteredVms.RemoveRange(@($allVms | Where-Object Name -imatch $excludeVm))
+                log-info "verbose: removing excluded vm $($excludeVm)"
+                
+                foreach($vm in @($allVms | Where-Object Name -ieq $excludeVm))
+                {
+                    [void]$filteredVms.Remove($vm)
+                }
             }
         }
 
+        # check for excludeResourceGroup names
+        foreach($excludeResourceGroup in $excludeResourceGroupNames)
+        {
+            foreach($vm in $allVms)
+            {
+                if($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
+                {
+                    log-info "verbose: removing vm $($vm)"
+                    [void]$filteredVms.Remove($vm)
+                }
+            }
+        }
 
         foreach($filteredVm in $filteredVms)
         {
             log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
 
-        log-info "checking $($filteredVms.Count) vms. use -verbose switch to see more detail..."
+        log-info "checking $($filteredVms.Count) vms for current power state. please wait ..." 
     
         foreach ($vm in $filteredVms)
         {
@@ -165,47 +218,44 @@ function main()
             # quicker to not use jobs for checking power state
             $jobInfo = check-vmRunning -jobInfo $jobInfo
 
-            [void]$jobInfos.Add($jobInfo)
+            [void]$global:jobInfos.Add($jobInfo)
         } 
 
         # perform action
-        switch($action)
-        {
-            "list" { 
-                log-info "resourcegroupname`t:`tvm name`t:`tprovisioning`t:`tpower"
-                foreach ($jobInfo in $jobInfos)
-                {
-                    log-info "$($jobInfo.vm.resourceGroupName)`t:`t$($jobInfo.vm.name)`t:`t$($jobInfo.provisioningState)`t:`t$($jobInfo.powerState)"
-                }
-            }
-            "listRunning" { 
-                foreach ($jobInfo in $jobInfos |? poweredon -imatch $true)
-                {
-                    log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
-                }
-            }
-            
-            "listDeallocated" { 
-                foreach ($jobInfo in $jobInfos |? poweredon -imatch $false)
-                {
-                    log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):deallocated"
-                }
-            }
+        perform-action -currentAction $action
 
-            "restart" { start-backgroundJobs -jobInfos ($jobInfos |? poweredon -imatch $true) -throttle $throttle }
-
-            "start" { start-backgroundJobs -jobInfos ($jobInfos |? poweredon -imatch $false) -throttle $throttle }
-
-            "stop" { start-backgroundJobs -jobInfos ($jobInfos |? poweredon -imatch $true) -throttle $throttle }
-
-            default: {}
-        }
-
+        # wait for action to complete
         monitor-backgroundJobs 
+
+        if($timerAction -and $timerHours -ne 0)
+        {
+            $totalMinutes = ($global:startTime.AddHours($timerHours) - $global:startTime).TotalMinutes
+
+            while($true)
+            {
+                $minutesLeft = ($global:startTime.AddHours($timerHours) - (get-date)).TotalMinutes
+                Write-Progress -Activity "timer for timerAction '$($timerAction) vms'. Ctrl-C to stop script / timerAction." `
+                        -Status "minutes left until timerAction starts: $($minutesLeft.ToString("0.0"))" `
+                        -PercentComplete ($minutesLeft / $totalMinutes * 100)
+
+                if($minutesLeft -le 0)
+                {
+                    # perform action
+                    perform-action -currentAction $timerAction
+
+                    # wait for action to complete
+                    monitor-backgroundJobs 
+
+                    break
+                }
+
+                Start-Sleep -seconds 5
+            }
+        }
     }
     catch
     {
-        log-info "main:exception:$($error)"
+        log-info "main:exception:$($error | out-string)"
     }
     finally
     {
@@ -216,7 +266,7 @@ function main()
             Remove-Item -Path $profileContext -Force
         }
 
-        log-info "$((get-date).ToString("o")) finished script. total minutes: $(((get-date) - $startTime).totalminutes)"
+        log-info "$(get-date) finished script. total minutes: $(((get-date) - $global:startTime).totalminutes.ToString("0.00"))"
     }
 }
 
@@ -224,7 +274,6 @@ function main()
 function authenticate-azureRm()
 {
     # make sure at least wmf 5.0 installed
-
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
     {
         log-info "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
@@ -266,9 +315,6 @@ function authenticate-azureRm()
         Import-Module azurerm.profile        
         Import-Module azurerm.resources        
         Import-Module azurerm.compute            
-		#log-info "installing AzureRm powershell module..."
-		#install-module AzureRM -force
-        
 	}
     else
     {
@@ -288,7 +334,7 @@ function authenticate-azureRm()
         }
         catch
         {
-            log-info "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -297,28 +343,41 @@ function authenticate-azureRm()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function check-backgroundJobs()
+function check-backgroundJobs($writeStatus = $false)
 {
+    $ret = $null
+    update-progress
+
     foreach ($job in get-job)
     {
-        $jobInfo = $Null
+        $jobInfo = "$(get-date) job name:$($job.Name)  job state:$($job.JobStateInfo)"
 
         if ($job.State -ine "Running")
         {
-            $jobInfo = "$($job.Name) $($job.JobStateInfo)"
-            log-info "verbose: $(Remove-Job -Id $job.Id -Force)"
+            Remove-Job -Id $job.Id -Force
+            log-info "`tjob status: $($jobInfo)"
+            update-progress
+            continue
         }
         else
         {
-            $jobInfo = (Receive-Job -Job $job | fl * | out-string)
+            $ret = Receive-Job -Job $job
+
+            if($ret)
+            {
+                log-info "`twarning:receive job $($job.Name) data: $($ret)"
+            }
         }            
 
-        if($jobInfo)
+        if($writeStatus)
         {
-            log-info "job status:$($jobInfo)"
+            log-info "`tjob status: $($jobInfo)"
+        }
+        else
+        {
+            log-info "`tverbose: job status: $($jobInfo)"
         }
 
-        Start-Sleep -Seconds 1
     }
 
     return @(get-job).Count
@@ -349,7 +408,7 @@ function check-vmRunning($jobInfo)
         {
             $jobInfo.vmRunning = $true
         }
-        elseif ($status.Code -ieq "PowerState/deallocated")
+        elseif ($status.Code -ieq "PowerState/deallocated" -or $status.Code -ieq "PowerState/stopped")
         {
             $jobInfo.vmRunning = $false
         }
@@ -367,11 +426,11 @@ function do-backgroundJob($jobInfo)
     log-info "verbose:doing background job $($jobInfo.action)"
    
     # for job debugging
-    # when attached with -debug switch, set $debugPreference to SilentlyContinue to debug
-    while($jobInfo.debugPreference -ieq "Inquire")
+    # when attached with -debug switch, set $jobInfo.debugPreference to SilentlyContinue to debug
+    while($jobInfo.debugPreference -imatch "Inquire")
     {
 		log-info "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
-		log-info "set jobInfo.debugPreference = SilentlyContinue to break debug loop"
+		log-info "set $jobInfo.debugPreference = SilentlyContinue to break debug loop"
         start-sleep -Seconds 1
     }
     
@@ -379,15 +438,19 @@ function do-backgroundJob($jobInfo)
 
     switch($jobInfo.vmRunning)
     {
-        $true {
+        $true 
+        {
             switch($jobInfo.action)
             {
-                "stop" {
+                "stop" 
+                {
                     log-info "`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
                     log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
-                "restart" {
+
+                "restart" 
+                {
                     log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     #Restart-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
@@ -395,25 +458,73 @@ function do-backgroundJob($jobInfo)
                     Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
+
                 default: {}
             }
         }
 
-        $false {
+        $false 
+        {
             switch($jobInfo.action)
             {
-                "start" {
+                "start" 
+                {
                     log-info "`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
+
                 default: {}
             }
         }
 
-        default: {
+        default: 
+        {
             log-info "error:vm power state unknown $($jobInfo.vm.name)"
         }
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function get-update($updateUrl, $destinationFile)
+{
+    log-info "get-update:checking for updated script: $($updateUrl)"
+    $file = ""
+    $git = $null
+
+    try 
+    {
+        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
+
+        # git may not have carriage return
+        if ([regex]::Matches($git, "`r").Count -eq 0)
+        {
+            $git = [regex]::Replace($git, "`n", "`r`n")
+        }
+
+        if ([IO.File]::Exists($destinationFile))
+        {
+            $file = [IO.File]::ReadAllText($destinationFile)
+        }
+
+        if (([string]::Compare($git, $file) -ne 0))
+        {
+            log-info "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
+        }
+        else
+        {
+            log-info "script is up to date"
+        }
+        
+        return $false
+    }
+    catch [System.Exception] 
+    {
+        log-info "get-update:exception: $($error | out-string)"
+        $error.Clear()
+        return $false    
     }
 }
 
@@ -424,7 +535,7 @@ function log-info($data)
     $counter = 0
     $foregroundColor = "white"
 
-    if($data -imatch "error:")
+    if($data -imatch "error:|fail")
     {
         $foregroundColor = "red"
     }
@@ -442,10 +553,10 @@ function log-info($data)
     }
     elseif($data -imatch "unknown")
     {
-        $foregroundColor = "blue"
+        $foregroundColor = "darkyellow"
     }
 
-    while (!$dataWritten -and $counter -lt 1000)
+    while (!$noLog -and !$dataWritten -and $counter -lt 1000)
     {
         try
         {
@@ -459,7 +570,7 @@ function log-info($data)
         }
     }
 
-    if($data.ToLower().StartsWith("verbose:"))
+    if($data -imatch "verbose:")
     {
         if($VerbosePreference -ine "SilentlyContinue")
         {
@@ -470,15 +581,68 @@ function log-info($data)
     {
         write-host $data -ForegroundColor $foregroundcolor
     }
-
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function monitor-backgroundJobs()
 {
-    while ((check-backgroundJobs))
+    $updateCounter = 1
+
+    while ((check-backgroundJobs -writeStatus ($updateCounter % 300 -eq 0)))
     {
+        $updateCounter++
         Start-Sleep -Seconds 1
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function perform-action($currentAction)
+{
+    switch($currentAction)
+    {
+        "list" 
+        { 
+            log-info "resourcegroupname   `t| vm name             `t| provisioning   `t| power"
+            log-info "---------------------------------------------------------------------------------"
+
+            foreach ($jobInfo in $global:jobInfos)
+            {
+                log-info "$($jobInfo.vm.resourceGroupName.PadRight(20))`t| $($jobInfo.vm.name.PadRight(20))`t| $($jobInfo.provisioningState.PadRight(15))`t| $($jobInfo.powerState.PadRight(15))"
+            }
+        }
+
+        "listRunning" 
+        { 
+            foreach ($jobInfo in $global:jobInfos | where-object vmRunning -imatch $true)
+            {
+                log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):running"
+            }
+        }
+            
+        "listDeallocated" 
+        { 
+            foreach ($jobInfo in $global:jobInfos | where-object vmRunning -imatch $false)
+            {
+                log-info "$($jobInfo.vm.resourceGroupName):$($jobInfo.vm.name):deallocated"
+            }
+        }
+
+        "restart" 
+        { 
+            start-backgroundJobs -jobInfos ($global:jobInfos | where-object vmRunning -imatch $true) -throttle $throttle 
+        }
+
+        "start" 
+        { 
+            start-backgroundJobs -jobInfos ($global:jobInfos | where-object vmRunning -imatch $false) -throttle $throttle 
+        }
+
+        "stop" 
+        { 
+            start-backgroundJobs -jobInfos ($global:jobInfos | where-object vmRunning -imatch $true) -throttle $throttle 
+        }
+
+        default: {}
     }
 }
 
@@ -527,7 +691,10 @@ function start-backgroundJob($jobInfo)
 # ----------------------------------------------------------------------------------------------------------------
 function start-backgroundJobs($jobInfos, $throttle)
 {
-    log-info "starting background jobs"
+    $count = 1
+    $global:jobsCount = @($jobInfos).Count
+    log-info "starting $($global:jobsCount) background jobs:"
+    $activity = "starting $($global:jobsCount) '$($action) vms' jobs. throttle: $($throttle). Ctrl-C to stop script."
 
     foreach ($jobInfo in $jobInfos)
     {
@@ -536,8 +703,29 @@ function start-backgroundJobs($jobInfos, $throttle)
             log-info "verbose:throttled"
             Start-Sleep -Seconds 1
         }
-
+        
         [void]$global:jobs.Add((start-backgroundJob -jobInfo $jobInfo))
+        $status = "$($count) / $($global:jobsCount) jobs started. " `
+            + "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+        $percentComplete = ($count / $global:jobsCount * 100)
+        Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete -id 1
+        $count++
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function update-progress()
+{
+    $globalJobsCount = $global:jobsCount
+
+    if($globalJobsCount -gt 0)
+    {
+        $finishedJobsCount = $globalJobsCount - @(get-job).Count
+        $status = "$($finishedJobsCount) / $($globalJobsCount) vm jobs completed. " `
+            + "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+        $percentComplete = ($finishedJobsCount / $globaljobsCount * 100)
+
+        Write-Progress -Activity "$($action) $($globalJobsCount) vms." -Status $status -PercentComplete $percentComplete -ParentId 1
     }
 }
 

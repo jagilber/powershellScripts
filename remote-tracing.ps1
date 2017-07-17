@@ -665,18 +665,23 @@ function get-update($updateUrl, $destinationFile)
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
-        $gitClean = [regex]::Replace($git, '\W+', "")
+
+        # git  may not have carriage return
+        if ([regex]::Matches($git, "`r").Count -eq 0)
+        {
+            $git = [regex]::Replace($git, "`n", "`r`n")
+        }
 
         if (![IO.File]::Exists($destinationFile))
         {
-            $fileClean = ""    
+            $file = ""    
         }
         else
         {
-            $fileClean = [regex]::Replace(([IO.File]::ReadAllText($destinationFile)), '\W+', "")
+            $file = [IO.File]::ReadAllText($destinationFile)
         }
 
-        if (([string]::Compare($gitClean, $fileClean) -ne 0))
+        if (([string]::Compare($git, $file) -ne 0))
         {
             log-info "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
@@ -688,7 +693,6 @@ function get-update($updateUrl, $destinationFile)
         }
         
         return $false
-        
     }
     catch [System.Exception] 
     {
