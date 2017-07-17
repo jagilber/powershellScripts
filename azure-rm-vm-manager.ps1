@@ -10,8 +10,9 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170713 add progress
+   Version    : 170717 fix $jobsCount for single machine
    History    : 
+                170713 add progress
                 170709 release
 
 .EXAMPLE  
@@ -133,7 +134,7 @@ function main()
         {
             foreach($vm in $allVms)
             {
-                if($resourceGroupName -imatch $vm.ResourceGroupName)
+                if($resourceGroupName -ieq $vm.ResourceGroupName)
                 {
                     [void]$filteredVms.Add($vm)
                 }
@@ -145,20 +146,20 @@ function main()
             # remove vm's not matching $vms list
             foreach($filteredVm in (new-object Collections.ArrayList(,$filteredVms)))
             {
-                if(!($vms -imatch $filteredVm.Name) -or !($vms.ResourceGroupName -imatch $filteredVm.ResourceGroupName))
+                if(!($vms -ieq $filteredVm.Name) -or !($vms.ResourceGroupName -ieq $filteredVm.ResourceGroupName))
                 {
-                    $filteredVms.Remove($filteredVm)
+                    log-info "verbose: removing vm $($filteredVm)"
+                    [void]$filteredVms.Remove($filteredVm)
                 }
             }
 
             # add vm's matching $vms list
             foreach($vm in $vms)
             {
-                if(!($filteredVms.Name -imatch $vm) -and ($allVms.Name -imatch $vm))
+                if(!($filteredVms.Name -ieq $vm) -and ($allVms.Name -ieq $vm))
                 {
-                    [void]$filteredVms.AddRange(@($allVms | where-object {
-                        $_.Name -imatch $vm -and ($_.ResourceGroupName -imatch ($resourceGroupNames -join "|"))
-                    }))
+                    log-info "verbose: adding vm $($vm)"
+                    [void]$filteredVms.Add($vm)
                 }
             }
         }
@@ -166,11 +167,11 @@ function main()
         # check for excludeVms names
         foreach($excludeVm in $excludeVms)
         {
-            if(($filteredVms.Name -imatch $excludeVm) -and ($allVms.Name -imatch $excludeVm))
+            if(($filteredVms.Name -ieq $excludeVm) -and ($allVms.Name -ieq $excludeVm))
             {
-                log-info "verbose: removing vm $($excludeVm)"
+                log-info "verbose: removing excluded vm $($excludeVm)"
                 
-                foreach($vm in @($allVms | Where-Object Name -imatch $excludeVm))
+                foreach($vm in @($allVms | Where-Object Name -ieq $excludeVm))
                 {
                     [void]$filteredVms.Remove($vm)
                 }
@@ -182,7 +183,7 @@ function main()
         {
             foreach($vm in $allVms)
             {
-                if($excludeResourceGroup -imatch $vm.ResourceGroupName -and $filteredVms.Contains($vm))
+                if($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
                 {
                     log-info "verbose: removing vm $($vm)"
                     [void]$filteredVms.Remove($vm)
@@ -691,7 +692,7 @@ function start-backgroundJob($jobInfo)
 function start-backgroundJobs($jobInfos, $throttle)
 {
     $count = 1
-    $global:jobsCount = $jobInfos.Count
+    $global:jobsCount = @($jobInfos).Count
     log-info "starting $($global:jobsCount) background jobs:"
     $activity = "starting $($global:jobsCount) '$($action) vms' jobs. throttle: $($throttle). Ctrl-C to stop script."
 
