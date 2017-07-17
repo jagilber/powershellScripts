@@ -20,12 +20,11 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170717 changed mstsc / rdweb logic after entry
+   Version    : 170717.2 add-hostsentry typos
    History    : 
+                170717 changed mstsc / rdweb logic after entry
                 170715 add to gallery
                 170625.2 added background jobs
-                170602 fix for wildcard certs
-                170524 another change for azurerm.resources coming back not as collection for single sub?
                 
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
@@ -163,6 +162,7 @@ function main()
                 if($resource.DisplayMessage)
                 {
                     write-host "$($count). $($resource.displayMessage)" -ForegroundColor $resource.displayMessageColor
+                    $resource.Id = $count
                     $count++
                 }
             }
@@ -218,9 +218,7 @@ function main()
                     continue
                 }
 
-                
-                $resource = $null
-                $resource = $resourceList[$id -1]
+                $resource = $resourceList | where Id -eq $id
                 
                 write-host $resourceGroup.ResourceGroupName
                 write-verbose "enum-resourcegroup returning:$($resource | fl | out-string)"
@@ -266,51 +264,58 @@ function main()
 function add-hostsEntry($ipAddress, $subject)
 {
     # see if it needs to be added to hosts file
-    $dnsresolve = (Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue).IPAddress
-
-    if (!(@($dnsresolve).Contains($ip.IpAddress)))
+    try
     {
-        write-host "$($ip.IpAddress) not same as $($dnsresolve), checking hosts file"
-        if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress.IpAddress)?[y|n]") -ieq 'n')
+        $dnsresolve = @(Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue)
+
+        if (!$dnsresolve -or !$dnsresolve.IpAddress.Contains($ipAddress.IpAddress))
         {
-            return $false
-        }
-
-        # check hosts file
-        [string]$hostFileInfo = [IO.File]::ReadAllText($hostsFile)
-
-        if ($hostFileInfo -imatch $subject)
-        {
-            # remove from hosts file
-            [IO.StreamReader]$rStream = [IO.File]::OpenText($hostsFile)
-            $newhostFileInfo = New-Object Text.StringBuilder
-
-            while (($line = $rStream.Readline()) -ne $null)
+            write-host "$($ipAddress.IpAddress) not same as $($dnsresolve.IpAddress), checking hosts file"
+            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress.IpAddress)?[y|n]") -ieq 'n')
             {
-                if (![regex]::IsMatch($line, "(\S+:\S+|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})\s+?$($subject)"))
-                {
-                    [void]$newhostFileInfo.AppendLine($line)
-                }
-                else
-                {
-                    write-host "removing $($line) from $($hostsFile)"
-                }
+                return $false
             }
 
-            $rStream.Close()
-            [IO.File]::WriteAllText($hostsFile, $newhostFileInfo.ToString())
-        }
+            # check hosts file
+            [string]$hostFileInfo = [IO.File]::ReadAllText($hostsFile)
 
-        # add to hosts file
-        $newEntry = "$($ip.IpAddress)`t$($subject)`t# $($hostsTag) $([IO.Path]::GetFileName($MyInvocation.ScriptName)) $([DateTime]::Now.ToShortDateString())`r`n"
-        write-host "adding new entry:$($newEntry)"
+            if ($hostFileInfo -imatch $subject)
+            {
+                # remove from hosts file
+                [IO.StreamReader]$rStream = [IO.File]::OpenText($hostsFile)
+                $newhostFileInfo = New-Object Text.StringBuilder
+
+                while (($line = $rStream.Readline()) -ne $null)
+                {
+                    if (![regex]::IsMatch($line, "(\S+:\S+|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})\s+?$($subject)"))
+                    {
+                        [void]$newhostFileInfo.AppendLine($line)
+                    }
+                    else
+                    {
+                        write-host "removing $($line) from $($hostsFile)"
+                    }
+                }
+
+                $rStream.Close()
+                [IO.File]::WriteAllText($hostsFile, $newhostFileInfo.ToString())
+            }
+
+            # add to hosts file
+            $newEntry = "$($ipAddress.IpAddress)`t$($subject)`t# $($hostsTag) $([IO.Path]::GetFileName($MyInvocation.ScriptName)) $([DateTime]::Now.ToShortDateString())`r`n"
+            write-host "adding new entry:$($newEntry)"
                 
-        [IO.File]::AppendAllText($hostsFile, $newEntry)
-        type $hostsFile
+            [IO.File]::AppendAllText($hostsFile, $newEntry)
+            type $hostsFile
+        }
+        else
+        {
+            write-host "dns resolution for $($subject) same as ip:$($ipAddress.IpAddress)"
+        }
     }
-    else
+    catch
     {
-        write-host "dns resolution for $($subject) same as ip:$($ip.IpAddress)"
+        write-host "add-hostname:exception: $($error | out-string)"
     }
 }
 
@@ -515,6 +520,7 @@ function enum-resourcegroup([string] $subid)
                 if($resourceGroup -imatch $ip.ResourceGroupName)
                 {
                     $resource = @{}
+                    $resource.Id = 0
                     $resource.publicIp = $ip
                     $resource.subId = $subid
                     $resource.displayMessage = "`r`n`tResource Group: $($resourceGroup)`r`n`tIP name: $($ip.Name)`r`n`tIP address: $($ip.IpAddress)"
@@ -532,7 +538,7 @@ function enum-resourcegroup([string] $subid)
 
 
         $jobs = New-Object Collections.ArrayList
-        
+         
         foreach($resource in $resourceList)
         {
             while((get-job) -and (@(get-job | where-object State -eq "Running").Count -gt $throttle))
