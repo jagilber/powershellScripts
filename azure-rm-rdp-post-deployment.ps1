@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170715 add to gallery
+   Version    : 170717 changed mstsc / rdweb logic after entry
    History    : 
+                170715 add to gallery
                 170625.2 added background jobs
                 170602 fix for wildcard certs
                 170524 another change for azurerm.resources coming back not as collection for single sub?
@@ -226,25 +227,21 @@ function main()
 
                 $ip = $resource.publicIp
         
-                if ($ip.IpAddress)
+                #if ($ip.IpAddress)
+                if ($resource.certInfo)
                 {
                     write-host "public ip address: $($ip.IpAddress)"
                     $gatewayUrl = "https://$($ip.IpAddress)/RDWeb"
-                }
-                
-                $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
-                $cert = get-cert -url $gatewayUrl -certFile $certFile
-                $subject = enum-certSubject -cert $resource.certInfo
-
-                if ($subject -eq $false)
-                {
-                    start-mstsc -ip $ip
-                }
-                else
-                {
+                    $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
+                    $cert = get-cert -url $gatewayUrl -certFile $certFile
+                    $subject = enum-certSubject -cert $resource.certInfo
                     $subject = import-cert -cert $cert -certFile $certFile -subject $subject    
                     add-hostsEntry -ipAddress $ip -subject $subject
                     open-RdWebSite -site "https://$($subject)/RDWeb"
+                }
+                else
+                {
+                    start-mstsc -ip $ip
                 }
             }
         } # end foreach
