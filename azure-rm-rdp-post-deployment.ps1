@@ -20,7 +20,7 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170717.2 add-hostsentry typos
+   Version    : 170722 fix exception in dnsresolve
    History    : 
                 170717 changed mstsc / rdweb logic after entry
                 170715 add to gallery
@@ -267,10 +267,16 @@ function add-hostsEntry($ipAddress, $subject)
     try
     {
         $dnsresolve = @(Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue)
+        $dnsIP0 = ""
 
         if (!$dnsresolve -or !$dnsresolve.IpAddress.Contains($ipAddress.IpAddress))
         {
-            write-host "$($ipAddress.IpAddress) not same as $($dnsresolve.IpAddress), checking hosts file"
+            if($dnsresolve -and $dnsresolve.IpAddress)
+            {
+                $dnsIP0 = @($dnsresolve.IpAddress)[0]
+            }
+        
+            write-host "$($ipAddress.IpAddress) not same as $($dnsIP0), checking hosts file"
             if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress.IpAddress)?[y|n]") -ieq 'n')
             {
                 return $false
