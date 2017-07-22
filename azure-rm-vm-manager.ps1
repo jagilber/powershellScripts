@@ -10,10 +10,11 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170717 fix $jobsCount for single machine
+   Version    : 170723 fix for $vms filter. fix for jobs count v2
    History    : 
+                170717 fix $jobsCount for single machine
                 170713 add progress
-                170709 release
+                
 
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
@@ -141,25 +142,28 @@ function main()
             }
         }
 
+        # check for excludeResourceGroup names
+        foreach($excludeResourceGroup in $excludeResourceGroupNames)
+        {
+            foreach($vm in $allVms)
+            {
+                if($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
+                {
+                    log-info "verbose: removing vm $($vm)"
+                    [void]$filteredVms.Remove($vm)
+                }
+            }
+        }
+
         if($vms -and $filteredVms)
         {
             # remove vm's not matching $vms list
-            foreach($filteredVm in (new-object Collections.ArrayList(,$filteredVms)))
+            foreach($filteredVm in (new-object Collections.ArrayList (,$filteredVms)))
             {
-                if(!($vms -ieq $filteredVm.Name) -or !($vms.ResourceGroupName -ieq $filteredVm.ResourceGroupName))
+                if(!($vms -ieq $filteredVm.Name))
                 {
                     log-info "verbose: removing vm $($filteredVm)"
                     [void]$filteredVms.Remove($filteredVm)
-                }
-            }
-
-            # add vm's matching $vms list
-            foreach($vm in $vms)
-            {
-                if(!($filteredVms.Name -ieq $vm) -and ($allVms.Name -ieq $vm))
-                {
-                    log-info "verbose: adding vm $($vm)"
-                    [void]$filteredVms.Add($vm)
                 }
             }
         }
@@ -178,17 +182,10 @@ function main()
             }
         }
 
-        # check for excludeResourceGroup names
-        foreach($excludeResourceGroup in $excludeResourceGroupNames)
+        if(!$filteredVms -or $filteredVms.Count -lt 1)
         {
-            foreach($vm in $allVms)
-            {
-                if($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
-                {
-                    log-info "verbose: removing vm $($vm)"
-                    [void]$filteredVms.Remove($vm)
-                }
-            }
+            log-info "0 vms matched command given."
+            return
         }
 
         foreach($filteredVm in $filteredVms)
@@ -553,7 +550,7 @@ function log-info($data)
     }
     elseif($data -imatch "unknown")
     {
-        $foregroundColor = "darkyellow"
+        $foregroundColor = "cyan"
     }
 
     while (!$noLog -and !$dataWritten -and $counter -lt 1000)
@@ -691,6 +688,12 @@ function start-backgroundJob($jobInfo)
 # ----------------------------------------------------------------------------------------------------------------
 function start-backgroundJobs($jobInfos, $throttle)
 {
+    if(!$jobInfos)
+    {
+        log-info "no vm's need action: '$($action)' performed"
+        return
+    }
+
     $count = 1
     $global:jobsCount = @($jobInfos).Count
     log-info "starting $($global:jobsCount) background jobs:"
@@ -725,7 +728,7 @@ function update-progress()
             + "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
         $percentComplete = ($finishedJobsCount / $globaljobsCount * 100)
 
-        Write-Progress -Activity "$($action) $($globalJobsCount) vms." -Status $status -PercentComplete $percentComplete -ParentId 1
+        Write-Progress -Activity "$($action) $($globalJobsCount) vms jobs completion status:" -Status $status -PercentComplete $percentComplete -ParentId 1
     }
 }
 
