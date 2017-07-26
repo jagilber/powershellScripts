@@ -16,11 +16,11 @@
     the first text file for compare
 .PARAMETER fileTwo
     the second text file for compare
- 
+
 #>  
- 
+
 Param(
- 
+
     [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the quoted regex pattern")]
     [string] $regexpattern,
     [parameter(Position=1,Mandatory=$true,HelpMessage="Enter path to first file")]
@@ -28,7 +28,7 @@ Param(
     [parameter(Position=2,Mandatory=$true,HelpMessage="Enter path to second file")]
     [string] $fileTwo
     )
- 
+
 # modify
 cls
 #$regexPattern = "KB[0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
@@ -39,12 +39,12 @@ $listTwo = @{}
 $listCombined = @{}
 $listOneOnly = @{}
 $listTwoOnly = @{}
- 
+
 # get all matches from first file
 $regex = new-object System.Text.RegularExpressions.Regex($regexPattern,[System.Text.RegularExpressions.RegexOptions]::Singleline)
 $matchesOne = $regex.Matches([System.IO.File]::ReadAllText($fileOne))
 
- 
+
 foreach($match in $matchesOne)
 {
     $value = $match.Groups[0].Value
@@ -56,11 +56,11 @@ foreach($match in $matchesOne)
     }
 }
 
- 
+
 # get all matches from second file
 $matchesTwo = $regex.Matches([System.IO.File]::ReadAllText($fileTwo))
 
- 
+
 foreach($match in $matchesTwo)
 {
     
@@ -73,7 +73,7 @@ foreach($match in $matchesTwo)
     }
 }
 
- 
+
 # find all matches in common 
 foreach($item in $listOne.GetEnumerator())
 {
@@ -89,7 +89,7 @@ foreach($item in $listOne.GetEnumerator())
         $listOneOnly.Add($item.key,$item.value)   
     }
 }
- 
+
 foreach($item in $listTwo.GetEnumerator())
 {
     if($listOne.Contains($item.Key))
@@ -104,7 +104,7 @@ foreach($item in $listTwo.GetEnumerator())
         $listTwoOnly.Add($item.key,$item.value)   
     }
 }
- 
+
 # list all in common
 write-host "*************************************************************"
 write-host "Items in both files:$($listCombined.Count)"
@@ -113,8 +113,8 @@ foreach($item in $listCombined.GetEnumerator())
 {
     $item.Key
 }
- 
- 
+
+
 # list differences from first file
 write-host "*************************************************************"
 write-host "Items only in first file:$($listOneOnly.Count) out of $($listOne.Count)"
@@ -123,7 +123,7 @@ foreach($item in $listOneOnly.GetEnumerator())
 {
     $item.Key
 }
- 
+
 # list differences from second file
 write-host "*************************************************************"
 write-host "Items only in second file:$($listTwoOnly.Count) out of $($listTwo.Count)"
@@ -136,12 +136,12 @@ foreach($item in $listTwoOnly.GetEnumerator())
 write-host "*************************************************************"
 write-host "Items in both files:$($listCombined.Count)"
 write-host "*************************************************************"
- 
+
 # list differences from first file
 write-host "*************************************************************"
 write-host "Items only in first file:$($listOneOnly.Count) out of $($listOne.Count)"
 write-host "*************************************************************"
- 
+
 # list differences from second file
 write-host "*************************************************************"
 write-host "Items only in second file:$($listTwoOnly.Count) out of $($listTwo.Count)"

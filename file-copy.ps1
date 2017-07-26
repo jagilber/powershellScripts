@@ -11,13 +11,13 @@
  
 .PARAMETER machineFile
     file containing list of machines (one per line) to copy files to. Example c:\temp\machines.txt
- 
+
 .PARAMETER sourcePath
     source path of files to copy. Example c:\temp\sourcefiles
- 
+
 .PARAMETER destPath
     dest path share of files to copy. Example admin$\temp
- 
+
 .EXAMPLE  
     .\file-copy.ps1 -machineFile machines.txt -sourcePath .\sourcefiles -destPath admin$\temp
     deploy all configuration files in default 'configs' or 'configs_templates' folder to local machine using defalut etl output folder of %systemroot%\temp
@@ -26,7 +26,7 @@
 #>  
  
 Param(
- 
+
     [parameter(Position=0,Mandatory=$true,HelpMessage="Enter file containing list of remote machines to copy files to. one machine per line. example: c:\temp\machines.txt")]
     [string] $machineFile,
     [parameter(Position=1,Mandatory=$true,HelpMessage="Enter source folder containing files. example: c:\temp\sourcefiles")]

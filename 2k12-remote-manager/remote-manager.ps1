@@ -6,7 +6,7 @@
     Set-ExecutionPolicy Bypass -Force
     powershell script to manage commands remotely across multiple machines
     default job definitions at bottom of script
-     
+    
 .NOTES  
    File Name  : remote-manager.ps1  
    Author     : jagilber
@@ -54,9 +54,9 @@ Param(
     [string[]] $machines = @($env:COMPUTERNAME),
     [parameter(HelpMessage="Enter number of minutes from now for event log gathering. Default is 60")]
     [string[]] $minutes = 60,
-    [parameter(HelpMessage="Use to not clean remote working directory on stop")]
+   [parameter(HelpMessage="Use to not clean remote working directory on stop")]
     [switch] $noclean,
-    [parameter(HelpMessage="Use to start")]
+   [parameter(HelpMessage="Use to start")]
     [switch] $start,
     [parameter(HelpMessage="Use to stop")]
     [switch] $stop,
@@ -64,7 +64,7 @@ Param(
     [int] $throttle = 10
 
     )
- 
+
 cls
 Add-Type -assembly "system.io.compression.filesystem"
 $ErrorActionPreference = "SilentlyContinue" #"Stop"
@@ -716,8 +716,8 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
         # ----------------------------------------------------------------------------------------------------------------
         function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [bool] $wait = $false)
         {
-                # win 2k8r2 and below have to use com object
-                # 2012 can use cmdlets
+            # win 2k8r2 and below have to use com object
+            # 2012 can use cmdlets
         
                 log-info "manage-scheduledTask $($taskInfo.taskname) $($machine)"
         
@@ -727,10 +727,10 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
                 $TaskDir = $taskInfo.taskdir
                 $TaskArg = $taskInfo.taskarg
 
-                $error.Clear()
-                $service = new-object -ComObject("Schedule.Service")
-                # connect to the local machine. 
-                # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
+               $error.Clear()
+            $service = new-object -ComObject("Schedule.Service")
+            # connect to the local machine.
+            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
 	            # for remote machine connect do $service.Connect(serverName,user,domain,password)
                 if([string]::IsNullOrEmpty($machine))
                 {
@@ -738,80 +738,80 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
                 }
                 else
                 {
-                    $service.Connect($machine)
+                $service.Connect($machine)
                 }
- 
-                $rootFolder = $service.GetFolder("\")
- 
-                if($enable)
-                {
-                    $TaskDefinition = $service.NewTask(0) 
-                    $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
+
+            $rootFolder = $service.GetFolder("\")
+
+            if($enable)
+            {
+            $TaskDefinition = $service.NewTask(0)
+            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
                     # 2k8r2 is 65539 (0x10003) 1.3
                     # procmon needs at least 2k8r2 compat
                     #$TaskDefinition.Settings.Compatibility = 3
-                    $TaskDefinition.Settings.Enabled = $true
-                    $TaskDefinition.Settings.AllowDemandStart = $true
- 
-                    $triggers = $TaskDefinition.Triggers
-                    #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-                    $trigger = $triggers.Create(8) # Creates a "boot time" trigger
-                    #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
-                    $trigger.Enabled = $true
- 
-                    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
-                    $Action = $TaskDefinition.Actions.Create(0)
-                    $action.Path = "$TaskCommand"
-                    $action.Arguments = "$TaskArg"
-                    $action.WorkingDirectory = $TaskDir
-            
-                    #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
-                    $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
- 
-                    #start task
-                    $task = $rootFolder.GetTask($TaskName)
- 
-                    $task.Run($null)
- 
-                }
-                else
-                {
-                    # stop task if its running
-                    foreach($task in $service.GetRunningTasks(1))
-                    {
-                        if($task.Name -ieq $TaskName)
-                        {
+            $TaskDefinition.Settings.Enabled = $true
+            $TaskDefinition.Settings.AllowDemandStart = $true
+
+            $triggers = $TaskDefinition.Triggers
+            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
+            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
+            $trigger.Enabled = $true
+
+            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
+            $Action = $TaskDefinition.Actions.Create(0)
+            $action.Path = "$TaskCommand"
+            $action.Arguments = "$TaskArg"
+            $action.WorkingDirectory = $TaskDir
+    
+           #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
+               $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
+
+            #start task
+            $task = $rootFolder.GetTask($TaskName)
+
+            $task.Run($null)
+
+            }
+            else
+            {
+            # stop task if its running
+            foreach($task in $service.GetRunningTasks(1))
+            {
+            if($task.Name -ieq $TaskName)
+            {
                             if($debugScript)
                             {
                                 log-info "found task $($TaskName)"
                             }
 
-                            $task.Stop()
-                        }
-                    }
- 
-                    # delete task
-                    $rootFolder.DeleteTask($TaskName,$null)
-                }
- 
-                if($wait)
+            $task.Stop()
+            }
+            }
+
+            # delete task
+            $rootFolder.DeleteTask($TaskName,$null)
+            }
+
+               if($wait)
                 {
                     log-info "waiting for task to complete"
                     while($true)
                     {
                         $foundTask = $false
-                        # stop task if its running
-                        foreach($task in $service.GetRunningTasks(1))
-                        {
-                            if($task.Name -ieq $TaskName)
-                            {
+                    # stop task if its running
+                foreach($task in $service.GetRunningTasks(1))
+                {
+                if($task.Name -ieq $TaskName)
+                {
                                 if($debugScript)
                                 {
                                     log-info "found task $($TaskName)"
                                 }
-                                $foundTask = $true
-                            }
-                        }
+                $foundTask = $true
+                }
+                }
 
                         if(!$foundTask)
                         {
@@ -832,9 +832,9 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
             {
                 return $true
             }
- 
+
         } # end manage-scheduledTask
- 
+
 
     } # end functions
 

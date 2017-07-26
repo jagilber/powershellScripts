@@ -55,18 +55,18 @@ function authenticate-azureRm()
     }
 
     #  verify NuGet package
-	$nuget = get-packageprovider nuget -Force
+    $nuget = get-packageprovider nuget -Force
 
-	if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
-	{
-		write-host "installing nuget package..."
-		install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
-	}
+    if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
+    {
+        write-host "installing nuget package..."
+        install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
+    }
 
     $allModules = (get-module azure* -ListAvailable).Name
-	#  install AzureRM module
-	if ($allModules -inotcontains "AzureRM")
-	{
+    #  install AzureRM module
+    if ($allModules -inotcontains "AzureRM")
+    {
         # each has different azurerm module requirements
         # installing azurerm slowest but complete method
         # if wanting to do minimum install, run the following script against script being deployed
@@ -100,10 +100,10 @@ function authenticate-azureRm()
         Import-Module azurerm.resources        
         Import-Module azurerm.compute
         Import-Module azurerm.network
-		#write-host "installing AzureRm powershell module..."
-		#install-module AzureRM -force
+        #write-host "installing AzureRm powershell module..."
+        #install-module AzureRM -force
         
-	}
+    }
     else
     {
         Import-Module azurerm
@@ -114,7 +114,7 @@ function authenticate-azureRm()
     {
         $rg = @(Get-AzureRmTenant)
                 
-        if($rg)
+        if ($rg)
         {
             write-host "auth passed $($rg.Count)"
         }
@@ -187,44 +187,44 @@ function get-subscriptions()
     $subs = Get-AzureRmSubscription -WarningAction SilentlyContinue
     $newSubFormat = (get-module AzureRM.Resources).Version.ToString() -ge "4.0.0"
             
-    if($subs.Count -gt 1)
+    if ($subs.Count -gt 1)
     {
         [int]$count = 1
-        foreach($sub in $subs)
+        foreach ($sub in $subs)
         {
-           if($newSubFormat)
-           { 
+            if ($newSubFormat)
+            { 
                 $message = "$($count). $($sub.name) $($sub.id)"
                 $id = $sub.id
-           }
-           else
-           {
+            }
+            else
+            {
                 $message = "$($count). $($sub.SubscriptionName) $($sub.SubscriptionId)"
                 $id = $sub.SubscriptionId
-           }
+            }
 
             Write-Host $message
-            [void]$subList.Add($count,$id)
+            [void]$subList.Add($count, $id)
             $count++
         }
         
         [int]$id = Read-Host ("Enter number for subscription to enumerate or {enter} to query all:")
         $null = Set-AzureRmContext -SubscriptionId $subList[$id].ToString()
         
-        if($id -ne 0 -and $id -le $subs.count)
+        if ($id -ne 0 -and $id -le $subs.count)
         {
             return $subList[$id]
         }
     }
-    elseif($subs.Count -eq 1)
+    elseif ($subs.Count -eq 1)
     {
-        if($newSubFormat)
+        if ($newSubFormat)
         {
-            [void]$subList.Add("1",$subs.Id)
+            [void]$subList.Add("1", $subs.Id)
         }
         else
         {
-            [void]$subList.Add("1",$subs.SubscriptionId)
+            [void]$subList.Add("1", $subs.SubscriptionId)
         }
     }
 
@@ -239,12 +239,12 @@ function get-sysInternalsUtility ([string] $utilityName)
     {
         $destFile = "$(get-location)\$utilityName"
         
-        if(![IO.File]::Exists($destFile))
+        if (![IO.File]::Exists($destFile))
         {
             $sysUrl = "http://live.sysinternals.com/$($utilityName)"
 
             write-host "Sysinternals process $($utilityName) is needed for this option!" -ForegroundColor Yellow
-            if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
+            if ((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))
             {
                 $webClient = new-object System.Net.WebClient
                 $webclient.UseDefaultCredentials = $true
@@ -320,21 +320,21 @@ function log-info($data)
 {
     $dataWritten = $false
     $data = "$([System.DateTime]::Now):$($data)`n"
-    if([regex]::IsMatch($data.ToLower(),"error|exception|fail|warning"))
+    if ([regex]::IsMatch($data.ToLower(), "error|exception|fail|warning"))
     {
         write-host $data -foregroundcolor Yellow
     }
-    elseif([regex]::IsMatch($data.ToLower(),"running"))
+    elseif ([regex]::IsMatch($data.ToLower(), "running"))
     {
-       write-host $data -foregroundcolor Green
+        write-host $data -foregroundcolor Green
     }
-    elseif([regex]::IsMatch($data.ToLower(),"job completed"))
+    elseif ([regex]::IsMatch($data.ToLower(), "job completed"))
     {
-       write-host $data -foregroundcolor Cyan
+        write-host $data -foregroundcolor Cyan
     }
-    elseif([regex]::IsMatch($data.ToLower(),"starting"))
+    elseif ([regex]::IsMatch($data.ToLower(), "starting"))
     {
-       write-host $data -foregroundcolor Magenta
+        write-host $data -foregroundcolor Magenta
     }
     else
     {
@@ -342,7 +342,7 @@ function log-info($data)
     }
 
     $counter = 0
-    while(!$dataWritten -and $counter -lt 1000)
+    while (!$dataWritten -and $counter -lt 1000)
     {
         try
         {
@@ -370,7 +370,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
     
-    if([string]::IsNullOrEmpty($value))
+    if ([string]::IsNullOrEmpty($value))
     {
         [void]$retVal.AppendLine("-----------------------------------------")
         [void]$retVal.AppendLine("enumerating $($key)")
@@ -389,9 +389,9 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
-        for($i = 0; $i -lt $sNames.count; $i++)
+        for ($i = 0; $i -lt $sNames.count; $i++)
         {
-            if(![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
+            if (![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
             {
                 continue
             }
@@ -399,9 +399,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             switch ($sTypes[$i])
             {
                 # REG_SZ 
-                1{ 
+                1
+                { 
                     $keyValue = $reg.GetStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -412,26 +413,28 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_EXPAND_SZ 
-                2{
+                2
+                {
                     $keyValue = $reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }                    
                     else 
                     {
-                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
                     }
                 }            
                 
                 # REG_BINARY 
-                3{ 
+                3
+                { 
                     $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
-                    if($enumValue -or $displayBinaryBlob)
+                    if ($enumValue -or $displayBinaryBlob)
                     {
                         return $keyValue
                     }
-                    elseif($displayBinaryBlob)
+                    elseif ($displayBinaryBlob)
                     {
                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
                     }
@@ -443,9 +446,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_DWORD 
-                4{ 
+                4
+                { 
                     $keyValue = $reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -456,9 +460,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_MULTI_SZ 
-                7{
+                7
+                {
                     $keyValue = (($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ',')
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -469,9 +474,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
 
                 # REG_QWORD
-                11{ 
+                11
+                { 
                     $keyValue = $reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -486,12 +492,12 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
         
-        if([string]::IsNullOrEmpty($value) -and $subKeySearch)
+        if ([string]::IsNullOrEmpty($value) -and $subKeySearch)
         {
             
-            foreach($subKey in $reg.EnumKey($hive, $key).sNames)
+            foreach ($subKey in $reg.EnumKey($hive, $key).sNames)
             {
-                if([string]::IsNullOrEmpty($subKey))
+                if ([string]::IsNullOrEmpty($subKey))
                 {
                     continue
                 }
@@ -500,7 +506,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
         
-        if($enumValue)
+        if ($enumValue)
         {
             # no value
             return $null
@@ -524,8 +530,8 @@ function runas-admin()
 {
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
-       log-info "please restart script as administrator. exiting..."
-       return $false
+        log-info "please restart script as administrator. exiting..."
+        return $false
     }
 
     return $true
@@ -539,7 +545,7 @@ function runas-admin()
     write-verbose "checking for admin"
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {
-        if(!$noretry)
+        if (!$noretry)
         { 
             write-host "restarting script as administrator."
             Write-Host "run-process -processName powershell.exe -arguments -ExecutionPolicy Bypass -File $($SCRIPT:MyInvocation.MyCommand.Path) -noretry"
@@ -547,12 +553,12 @@ function runas-admin()
         }
        
         return $false
-   }
-   else
-   {
+    }
+    else
+    {
         write-verbose "running as admin"
 
-   }
+    }
 
     return $true   
 }
@@ -577,39 +583,37 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
 
 
- 
-    [void]$process.Start()
- 
-    if($wait -and !$process.HasExited)
+
+[void]$process.Start()
+
+    if ($wait -and !$process.HasExited)
     {
- 
-        if($process.StandardOutput.Peek() -gt -1)
+       if ($process.StandardOutput.Peek() -gt -1)
         {
-            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut = $process.StandardOutput.ReadToEnd()
             log-info $stdOut
-        }
- 
- 
-        if($process.StandardError.Peek() -gt -1)
+       }
+
+       if ($process.StandardError.Peek() -gt -1)
         {
             $stdErr = $process.StandardError.ReadToEnd()
             log-info $stdErr
-            $Error.Clear()
-        }
+            $Error.Clear()
+        }
             
     }
-    elseif($wait)
+    elseif ($wait)
     {
-        log-info "Error:Process ended before capturing output."
+        log-info "Error:Process ended before capturing output."
     }
     
- 
+
     
     $exitVal = $process.ExitCode
- 
+
     log-info "Running process exit $($processName) : $($exitVal)"
     $Error.Clear()
- 
+
     return $stdOut
 }
 

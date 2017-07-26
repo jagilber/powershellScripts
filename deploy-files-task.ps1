@@ -1,5 +1,5 @@
 ﻿ 
- 
+
 <#  
 .SYNOPSIS  
     powershell script to manage umdh on local or remote machine
@@ -25,13 +25,13 @@
 
 .PARAMETER action
     The action to take. Currently this is either 'deploy' or 'undeploy'. 
- 
+
 .PARAMETER machine
     The remote machine to deploy to. if deploying to local machine do not use this argument.
 #>  
- 
+
 Param(
- 
+
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter the action to take: [deploy|undeploy]")]
     [string] $action,
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter machine names to deploy to:")]
@@ -44,7 +44,7 @@ Param(
     [string] $gatherFilePattern = "*.pml",
     [parameter(Position=5,Mandatory=$false,HelpMessage='Enter full path to folder where to store gathered files')]
     [string] $gatherPath = "$(get-location)\gather"
-    ) 
+    )
 
 $logFile = "deploy-files-task.log"
 $processWaitMs = 1000
@@ -68,12 +68,12 @@ $taskInfoUnDeploy.Add("taskarg","-WindowStyle Hidden -NonInteractive -Executionp
 $time = (get-date) #- (new-timespan -day 12)
 
 $requiresRestart = $false
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
     runas-admin
- 
+
     
     if(![string]::IsNullOrEmpty($machines))
     {
@@ -90,7 +90,7 @@ function main()
         $machines = $machines.Split(",")
     }
     
- 
+
     foreach($machine in $machines)
     {
 
@@ -108,12 +108,12 @@ function main()
         {
             undeploy-files -machine $machine
         }
-    }
+   }
 
- 
+
 }
- 
- 
+
+
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
@@ -128,32 +128,32 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.CreateNoWindow = $true
     #only needed if useshellexecute is true
     $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
- 
-    [void]$process.Start()
+
+[void]$process.Start()
     if($wait -and !$process.HasExited)
     {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
- 
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
+    $process.WaitForExit($processWaitMs)
+    $exitVal = $process.ExitCode
+    $stdOut = $process.StandardOutput.ReadToEnd()
+    $stdErr = $process.StandardError.ReadToEnd()
+    log-info "Process output:$stdOut"
+
+    if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+    {
+    log-info "Error:$stdErr `n $Error"
+    $Error.Clear()
+    }
     }
     elseif($wait)
     {
-        log-info "Process ended before capturing output."
+    log-info "Process ended before capturing output."
     }
     
-    #return $exitVal
+#return $exitVal
     return $stdOut
 }
- 
- 
+
+
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
 {
@@ -161,12 +161,12 @@ function log-info($data)
     Write-Host $data
     out-file -Append -InputObject $data -FilePath $logFile
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [bool] $wait = $false)
 {
-        # win 2k8r2 and below have to use com object
-        # 2012 can use cmdlets
+    # win 2k8r2 and below have to use com object
+    # 2012 can use cmdlets
 
         
         $TaskName = $taskInfo.taskname
@@ -175,10 +175,10 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
         $TaskDir = $taskInfo.taskdir
         $TaskArg = $taskInfo.taskarg
 
-        $error.Clear()
-        $service = new-object -ComObject("Schedule.Service")
-        # connect to the local machine. 
-        # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
+       $error.Clear()
+    $service = new-object -ComObject("Schedule.Service")
+    # connect to the local machine.
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
 	    # for remote machine connect do $service.Connect(serverName,user,domain,password)
         if([string]::IsNullOrEmpty($machine))
         {
@@ -186,73 +186,73 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
         }
         else
         {
-            $service.Connect($machine)
+        $service.Connect($machine)
         }
- 
-        $rootFolder = $service.GetFolder("\")
- 
-        if($enable)
-        {
-            $TaskDefinition = $service.NewTask(0) 
-            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
+
+    $rootFolder = $service.GetFolder("\")
+
+    if($enable)
+    {
+    $TaskDefinition = $service.NewTask(0)
+    $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
             # 2k8r2 is 65539 (0x10003) 1.3
             # procmon needs at least 2k8r2 compat
             #$TaskDefinition.Settings.Compatibility = 3
-            $TaskDefinition.Settings.Enabled = $true
-            $TaskDefinition.Settings.AllowDemandStart = $true
- 
-            $triggers = $TaskDefinition.Triggers
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
-            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
-            $trigger.Enabled = $true
- 
-            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
-            $Action = $TaskDefinition.Actions.Create(0)
-            $action.Path = "$TaskCommand"
-            $action.Arguments = "$TaskArg"
-            $action.WorkingDirectory = $TaskDir
-            
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
-            $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
- 
-            #start task
-            $task = $rootFolder.GetTask($TaskName)
- 
-            $task.Run($null)
- 
-        }
-        else
-        {
-            # stop task if its running
-            foreach($task in $service.GetRunningTasks(1))
-            {
-                if($task.Name -ieq $TaskName)
-                {
+    $TaskDefinition.Settings.Enabled = $true
+    $TaskDefinition.Settings.AllowDemandStart = $true
+
+    $triggers = $TaskDefinition.Triggers
+    #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
+    $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+    #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
+    $trigger.Enabled = $true
+
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
+    $Action = $TaskDefinition.Actions.Create(0)
+    $action.Path = "$TaskCommand"
+    $action.Arguments = "$TaskArg"
+    $action.WorkingDirectory = $TaskDir
+    
+#http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
+    $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
+
+    #start task
+    $task = $rootFolder.GetTask($TaskName)
+
+    $task.Run($null)
+
+    }
+    else
+    {
+    # stop task if its running
+    foreach($task in $service.GetRunningTasks(1))
+    {
+    if($task.Name -ieq $TaskName)
+    {
                     log-info "found task"
-                    $task.Stop()
-                }
-            }
- 
-            # delete task
-            $rootFolder.DeleteTask($TaskName,$null)
-        }
- 
-        if($wait)
+    $task.Stop()
+    }
+    }
+
+    # delete task
+    $rootFolder.DeleteTask($TaskName,$null)
+    }
+
+       if($wait)
         {
             log-info "waiting for task to complete"
             while($true)
             {
                 $foundTask = $false
-                # stop task if its running
-                foreach($task in $service.GetRunningTasks(1))
-                {
-                    if($task.Name -ieq $TaskName)
-                    {
+            # stop task if its running
+        foreach($task in $service.GetRunningTasks(1))
+        {
+        if($task.Name -ieq $TaskName)
+        {
                         log-info "found task"
-                        $foundTask = $true
-                    }
-                }
+        $foundTask = $true
+        }
+        }
 
                 if(!$foundTask)
                 {
@@ -273,41 +273,41 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
     {
         return $true
     }
- 
+
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {
     [string] $retVal = ""
- 
+
     if (Test-Path variable:\hostinvocation)
     {
-        $retVal = $hostinvocation.MyCommand.Path
+    $retVal = $hostinvocation.MyCommand.Path
     }
     else
     {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
     }
-  
-    if (Test-Path $retVal)
+ 
+if (Test-Path $retVal)
     {
-        $retVal = (Split-Path $retVal)
+    $retVal = (Split-Path $retVal)
     }
     else
     {
-        $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
-    } 
- 
+    $retVal = (Get-Location).path
+    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     
-    Set-Location $retVal
- 
+} 
+
+    
+Set-Location $retVal
+
     return $retVal
- 
+
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin([string] $arguments)
 {
@@ -328,27 +328,27 @@ function deploy-files($machine)
         log-info "unable to find source path $($sourcePath). exiting"
         return
     }
- 
+
     if(![IO.Directory]::Exists("\\127.0.0.1\$($destPath)"))
     {
         log-info "unable to determine destination path \\127.0.0.1\$($destPath). exiting"
         return
     }
- 
+
     
 
     # get source files
     $sourceFiles = [IO.Directory]::GetFiles($sourcePath, "*.*", [System.IO.SearchOption]::AllDirectories)
- 
+
     # copy files
     foreach($sourceFile in $sourceFiles)
     {
         #$destFile = [IO.Path]::GetFileName($sourceFile)
         $destFile = $sourceFile.Replace("$($sourcePath)\","")
         $destFile = "\\$($machine)\$($destPath)\$($destFile)"
- 
+
         log-info "copying file $($sourceFile) to $($destFile)"
- 
+
         try
         {
             if(![IO.Directory]::Exists([IO.Path]::GetDirectoryName($destFile)))
@@ -365,10 +365,10 @@ function deploy-files($machine)
         }
     }
         
- 
+
     #create scheduled task
     manage-scheduledTask -enable $true -machine $machine -taskInfo $taskInfoDeploy
- 
+
     if($requiresRestart)
     {
         $retVal = Read-Host -Prompt "server needs to be restarted. Do you want to do this now? [yes|no]" 
@@ -382,9 +382,9 @@ function deploy-files($machine)
             Restart-Computer -ComputerName $machine -Force -Impersonation Impersonate 
         }
     }
- 
+
     return
-} 
+}
 
 # ----------------------------------------------------------------------------------------------------------------
 function undeploy-files($machine)
@@ -401,7 +401,7 @@ function undeploy-files($machine)
         $directoryInfo = new-object IO.DirectoryInfo ($remotePath)
 
         [IO.FileInfo[]] $sourceFiles = ($directoryInfo.EnumerateFiles($gatherFilePattern,[IO.SearchOption]::TopDirectoryOnly))
- 
+
         # copy files
         foreach($sourceFile in $sourceFiles)
         {
@@ -433,9 +433,9 @@ function undeploy-files($machine)
             $destFile = "$($destFileBase)-$($sourceFile.CreationTime.ToString("yy-MM-dd-hh-mm-ss"))$($destFileExtension)"
 
             $destFile = "$($gatherPath)\$($machine)\$($destFile)"
- 
+
             log-info "copying file $($sourceFile.FullName) to $($destFile)"
- 
+
             try
             {
                 if(![IO.Directory]::Exists([IO.Path]::GetDirectoryName($destFile)))
@@ -453,7 +453,7 @@ function undeploy-files($machine)
             }
         }
     }
- 
+
     if($requiresRestart)
     {
         $retVal = Read-Host -Prompt "server needs to be restarted. Do you want to do this now? [yes|no]" 
@@ -466,7 +466,7 @@ function undeploy-files($machine)
             log-info "restarting server."
             Restart-Computer -ComputerName $machine -Force -Impersonation Impersonate 
         }
-    }
+   }
         
 
     return
@@ -503,8 +503,8 @@ function is-fileLocked([string] $file)
         return $true
     }
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 main
- 
+
 log-info "finished"

@@ -14,7 +14,7 @@
 .EXAMPLE  
     .\dump-configurator.ps1 -dumpType complete -machines server1,server2
     query azure rm for all resource groups with ip name containing 'GWPIP' by default.
- 
+
 .PARAMETER dumpType
     type of dump, mini, kernel, complete, auto
 
@@ -29,14 +29,14 @@
 #>  
 
 param(
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [switch]$dumpType,
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string[]]$machines = ".",
-    [Parameter(Mandatory=$false)]
-    [string]$dumpFile= "c:\windows\memory.dmp",
-    [Parameter(Mandatory=$false)]
-    [switch]$restart=$false
+    [Parameter(Mandatory = $false)]
+    [string]$dumpFile = "c:\windows\memory.dmp",
+    [Parameter(Mandatory = $false)]
+    [switch]$restart = $false
 )
 
 $HKCR = 2147483648 #HKEY_CLASSES_ROOT
@@ -101,21 +101,21 @@ function log-info($data)
 {
     $dataWritten = $false
     $data = "$([System.DateTime]::Now):$($data)`n"
-    if([regex]::IsMatch($data.ToLower(),"error|exception|fail|warning"))
+    if ([regex]::IsMatch($data.ToLower(), "error|exception|fail|warning"))
     {
         write-host $data -foregroundcolor Yellow
     }
-    elseif([regex]::IsMatch($data.ToLower(),"running"))
+    elseif ([regex]::IsMatch($data.ToLower(), "running"))
     {
-       write-host $data -foregroundcolor Green
+        write-host $data -foregroundcolor Green
     }
-    elseif([regex]::IsMatch($data.ToLower(),"job completed"))
+    elseif ([regex]::IsMatch($data.ToLower(), "job completed"))
     {
-       write-host $data -foregroundcolor Cyan
+        write-host $data -foregroundcolor Cyan
     }
-    elseif([regex]::IsMatch($data.ToLower(),"starting"))
+    elseif ([regex]::IsMatch($data.ToLower(), "starting"))
     {
-       write-host $data -foregroundcolor Magenta
+        write-host $data -foregroundcolor Magenta
     }
     else
     {
@@ -140,7 +140,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 
     $retVal = new-object Text.StringBuilder
     
-    if([string]::IsNullOrEmpty($value))
+    if ([string]::IsNullOrEmpty($value))
     {
         [void]$retVal.AppendLine("-----------------------------------------")
         [void]$retVal.AppendLine("enumerating $($key)")
@@ -159,9 +159,9 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
-        for($i = 0; $i -lt $sNames.count; $i++)
+        for ($i = 0; $i -lt $sNames.count; $i++)
         {
-            if(![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
+            if (![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
             {
                 continue
             }
@@ -169,9 +169,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             switch ($sTypes[$i])
             {
                 # REG_SZ 
-                1{ 
+                1
+                { 
                     $keyValue = $reg.GetStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -182,26 +183,28 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_EXPAND_SZ 
-                2{
+                2
+                {
                     $keyValue = $reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }                    
                     else 
                     {
-                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
                     }
                 }            
                 
                 # REG_BINARY 
-                3{ 
+                3
+                { 
                     $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
-                    if($enumValue -and $displayBinaryBlob)
+                    if ($enumValue -and $displayBinaryBlob)
                     {
                         return $keyValue
                     }
-                    elseif($displayBinaryBlob)
+                    elseif ($displayBinaryBlob)
                     {
                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
                     }
@@ -213,9 +216,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_DWORD 
-                4{ 
+                4
+                { 
                     $keyValue = $reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -226,9 +230,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_MULTI_SZ 
-                7{
+                7
+                {
                     $keyValue = (($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ',')
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -239,9 +244,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
 
                 # REG_QWORD
-                11{ 
+                11
+                { 
                     $keyValue = $reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -256,12 +262,12 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
         
-        if([string]::IsNullOrEmpty($value) -and $subKeySearch)
+        if ([string]::IsNullOrEmpty($value) -and $subKeySearch)
         {
             
-            foreach($subKey in $reg.EnumKey($hive, $key).sNames)
+            foreach ($subKey in $reg.EnumKey($hive, $key).sNames)
             {
-                if([string]::IsNullOrEmpty($subKey))
+                if ([string]::IsNullOrEmpty($subKey))
                 {
                     continue
                 }
@@ -302,39 +308,34 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
 
 
- 
-    [void]$process.Start()
- 
-    if($wait -and !$process.HasExited)
+
+[void]$process.Start()
+
+    if ($wait -and !$process.HasExited)
     {
- 
-        if($process.StandardOutput.Peek() -gt -1)
+       if ($process.StandardOutput.Peek() -gt -1)
         {
-            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut = $process.StandardOutput.ReadToEnd()
             log-info $stdOut
-        }
- 
- 
-        if($process.StandardError.Peek() -gt -1)
+       }
+
+        if ($process.StandardError.Peek() -gt -1)
         {
             $stdErr = $process.StandardError.ReadToEnd()
             log-info $stdErr
-            $Error.Clear()
-        }
-            
+            $Error.Clear()
+        }
     }
-    elseif($wait)
+    elseif ($wait)
     {
-        log-info "Error:Process ended before capturing output."
+        log-info "Error:Process ended before capturing output."
     }
     
- 
-    
-    $exitVal = $process.ExitCode
- 
+   $exitVal = $process.ExitCode
+
     log-info "Running process exit $($processName) : $($exitVal)"
     $Error.Clear()
- 
+
     return $stdOut
 }
 
@@ -342,9 +343,9 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 function manage-wmiExecute([string] $command, [string] $workingDir, [string] $machine)
 {
     log-info "wmiExecute: $($machine) : $($command) : $($workingDir)"
-   # $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
-   # $result = $wmi.Create($command)
-    if($useCreds)
+    # $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
+    # $result = $wmi.Create($command)
+    if ($useCreds)
     {
         $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList ($command, $workingDir) -Credential $Creds -ComputerName $computer
     }
@@ -353,42 +354,42 @@ function manage-wmiExecute([string] $command, [string] $workingDir, [string] $ma
         $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList ($command, $workingDir) -ComputerName $computer
     }
     
-    switch($result.ReturnValue)
+    switch ($result.ReturnValue)
     {
         0
-            {
-                log-info "$($machine) return:success"
-            }
+        {
+            log-info "$($machine) return:success"
+        }
 
         2
-            {
-                log-info "$($machine) return:access denied"
-            }
+        {
+            log-info "$($machine) return:access denied"
+        }
 
         3
-            {
-                log-info "$($machine) return:insufficient privilege"
-            }
+        {
+            log-info "$($machine) return:insufficient privilege"
+        }
         
         8
-            {
-                log-info "$($machine) return:unknown failure"
-            }
+        {
+            log-info "$($machine) return:unknown failure"
+        }
 
         9
-            {
-                log-info "$($machine) return:path not found"
-            }
+        {
+            log-info "$($machine) return:path not found"
+        }
 
         21
-            {
-                log-info "$($machine) return:invalid parameter"
-            }
+        {
+            log-info "$($machine) return:invalid parameter"
+        }
 
         default
-            {
-                log-info "$($machine) return:unknown $($result.ReturnValue)"
-            }
+        {
+            log-info "$($machine) return:unknown $($result.ReturnValue)"
+        }
     }
 
     return $result.ReturnValue
@@ -401,15 +402,15 @@ function runas-admin()
     write-verbose "checking for admin"
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {
-        if(!$noretry)
+        if (!$noretry)
         { 
             write-host "restarting script as administrator. exiting..."
             Write-Host "run-process -processName "powershell.exe" -arguments $($SCRIPT:MyInvocation.MyCommand.Path) -noretry"
             run-process -processName "powershell.exe" -arguments "$($SCRIPT:MyInvocation.MyCommand.Path) -noretry"
-       }
+        }
        
-       exit 1
-   }
+        exit 1
+    }
     write-verbose "running as admin"
 }
 

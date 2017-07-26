@@ -1,5 +1,5 @@
 ﻿ 
- 
+
 <#  
 .SYNOPSIS  
     powershell script to manage umdh on local or remote machine
@@ -25,13 +25,13 @@
 
 .PARAMETER action
     The action to take. Currently this is either 'deploy' or 'undeploy'. 
- 
+
 .PARAMETER machine
     The remote machine to deploy to. if deploying to local machine do not use this argument.
 #>  
- 
+
 Param(
- 
+
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter the action to take: [deploy|undeploy]")]
     [string] $action,
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter machine name to deploy to:")]
@@ -41,7 +41,7 @@ Param(
     [parameter(Position=3,Mandatory=$false,HelpMessage='Enter relative destination share path folder containing files. example: admin$\temp')]
     [string] $destPath
     )
- 
+
 $scriptName = "umdh-script-start.bat"
 $logFile = "umdh-manager.log"
 $processWaitMs = 1000
@@ -59,12 +59,12 @@ $sleepTimeHours = 1
 $requiresRestart = $false
 $procDumpExe = "procdump.exe"
 $procArguments = "-accepteula -ma"
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
     runas-admin
- 
+
     
     if(![string]::IsNullOrEmpty($machine))
     {
@@ -75,7 +75,7 @@ function main()
         $machine = [Environment]::MachineName
         $isRemote = $false
     }
- 
+
     if($action -ieq "deploy")
     {
         #[Environment]::SetEnvironmentVariable( "_NT_SYMBOL_PATH", "c:\mysymbols;srv*c:\mycache*http://msdl.microsoft.com/download/symbols", [System.EnvironmentVariableTarget]::Machine )
@@ -84,13 +84,13 @@ function main()
             log-info "unable to find source path $($sourcePath). exiting"
             return
         }
- 
+
         if(![IO.Directory]::Exists("\\127.0.0.1\$($destPath)"))
         {
             log-info "unable to determine destination path \\127.0.0.1\$($destPath). exiting"
             return
         }
- 
+
         # verify $svcHostService is in its own process
         if($svcHostService -ne $null)
         {
@@ -108,9 +108,9 @@ function main()
                 }
 
                 $svc.Start()
- 
+
                 log-info "$svcHostService has been configured to run in its own process." 
- 
+
             }
             else
             {
@@ -120,15 +120,15 @@ function main()
 
         # get source files
         $sourceFiles = [IO.Directory]::GetFiles($sourcePath, "*.*", [System.IO.SearchOption]::TopDirectoryOnly)
- 
+
         # copy files
         foreach($sourceFile in $sourceFiles)
         {
             $destFile = [IO.Path]::GetFileName($sourceFile)
             $destFile = "\\$($machine)\$($destPath)\$($destFile)"
- 
+
             log-info "copying file $($sourceFile) to $($destFile)"
- 
+
             try
             {
                 [IO.File]::Copy($sourceFile, $destFile, $true)
@@ -140,10 +140,10 @@ function main()
             }
         }
         
- 
+
         #create scheduled task
         manage-scheduledTask -enable $true -machine $machine
- 
+
         if($requiresRestart)
         {
             $retVal = Read-Host -Prompt "server needs to be restarted. Do you want to do this now? [yes|no]" 
@@ -157,7 +157,7 @@ function main()
                 Restart-Computer -ComputerName $machine -Force -Impersonation Impersonate 
             }
         }
- 
+
         return
     }
     elseif($action -ieq "undeploy")
@@ -178,17 +178,17 @@ function main()
                 }
 
                 $svc.Start()
- 
+
                 log-info "$svcHostService set back to sharing process (default)."
             }   
             else
             {
                 log-info "$svcHostService already set to use share process"
             }
-        }
+       }
 
         manage-scheduledTask -enable $false -machine $machine
- 
+
         if($requiresRestart)
         {
             $retVal = Read-Host -Prompt "server needs to be restarted. Do you want to do this now? [yes|no]" 
@@ -201,24 +201,24 @@ function main()
                 log-info "restarting server."
                 Restart-Computer -ComputerName $machine -Force -Impersonation Impersonate 
             }
-        }
+       }
         
         return
     }
- 
+
    # no arguments so do task
 
     $workingDir = get-workingDirectory
     $umdhExe = "$($workingDir)\umdh.exe"
- 
+
     if(![System.IO.File]::Exists($umdhExe))
     {
         log-info "$($umdhExe) does not exist. copy umdh.exe into same directory as script. exiting"
         return
     }
- 
+
     $procDumpExe = "$($workingDir)\$($procDumpExe)"
- 
+
     if(![System.IO.File]::Exists($procDumpExe))
     {
         log-info "$($procDumpExe) does not exist. copy umdh.exe into same directory as script. exiting"
@@ -235,8 +235,8 @@ function main()
             return
        }
    }
- 
- 
+
+
     $dumpSchedule = @{100 = $false; 200 = $false; 300 = $false; 400 = $false  }
     
    # do work
@@ -267,15 +267,15 @@ function main()
             }
        }
        
- 
+
        $arguments = "-p:$($processId) -f:$($outputFile)"
        run-process -processName $umdhExe -arguments $arguments -wait $true
- 
+
        # check size of private bytes
        # dump at 100,200,300,400,quit
        $process = Get-Process -id $processId
        $privateMBytes = $process.PrivateMemorySize / 1024 / 1024
- 
+
        if(($privateMBytes -gt 100) -and ($dumpSchedule[100] -eq $false))
        {
             $dumpSchedule[100] = $true
@@ -297,8 +297,8 @@ function main()
             run-process -processName $procDumpExe -arguments "$procArguments $processId" -wait $true
             return;
        }
- 
- 
+
+
        if($sleepTimeHours -eq 0)
        {
             #test mode sleep 1 second
@@ -310,10 +310,10 @@ function main()
        }
    }
 
- 
+
 }
- 
- 
+
+
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
@@ -328,32 +328,32 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.CreateNoWindow = $true
     #only needed if useshellexecute is true
     $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
- 
-    [void]$process.Start()
+
+[void]$process.Start()
     if($wait -and !$process.HasExited)
     {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
- 
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
+    $process.WaitForExit($processWaitMs)
+    $exitVal = $process.ExitCode
+    $stdOut = $process.StandardOutput.ReadToEnd()
+    $stdErr = $process.StandardError.ReadToEnd()
+    log-info "Process output:$stdOut"
+
+    if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+    {
+    log-info "Error:$stdErr `n $Error"
+    $Error.Clear()
+    }
     }
     elseif($wait)
     {
-        log-info "Process ended before capturing output."
+    log-info "Process ended before capturing output."
     }
     
-    #return $exitVal
+#return $exitVal
     return $stdOut
 }
- 
- 
+
+
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
 {
@@ -361,16 +361,16 @@ function log-info($data)
     Write-Host $data
     out-file -Append -InputObject $data -FilePath $logFile
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function manage-scheduledTask([bool] $enable, [string] $machine)
 {
-        # win 2k8r2 and below have to use com object
-        # 2012 can use cmdlets
-        $error.Clear()
-        $service = new-object -ComObject("Schedule.Service")
-        # connect to the local machine. 
-        # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
+    # win 2k8r2 and below have to use com object
+    # 2012 can use cmdlets
+       $error.Clear()
+    $service = new-object -ComObject("Schedule.Service")
+    # connect to the local machine.
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
 	    # for remote machine connect do $service.Connect(serverName,user,domain,password)
         if([string]::IsNullOrEmpty($machine))
         {
@@ -378,58 +378,58 @@ function manage-scheduledTask([bool] $enable, [string] $machine)
         }
         else
         {
-            $service.Connect($machine)
+        $service.Connect($machine)
         }
- 
-        $rootFolder = $service.GetFolder("\")
- 
-        if($enable)
-        {
-            $TaskDefinition = $service.NewTask(0) 
-            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
+
+    $rootFolder = $service.GetFolder("\")
+
+    if($enable)
+    {
+    $TaskDefinition = $service.NewTask(0)
+    $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
             # 2k8r2 is 65539 (0x10003) 1.3
             # procmon needs at least 2k8r2 compat
             #$TaskDefinition.Settings.Compatibility = 3
-            $TaskDefinition.Settings.Enabled = $true
-            $TaskDefinition.Settings.AllowDemandStart = $true
- 
-            $triggers = $TaskDefinition.Triggers
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
-            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
-            $trigger.Enabled = $true
- 
-            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
-            $Action = $TaskDefinition.Actions.Create(0)
-            $action.Path = "$TaskCommand"
-            $action.Arguments = "$TaskArg"
-            $action.WorkingDirectory = $TaskDir
-            
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
-            $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
- 
-            #start task
-            $task = $rootFolder.GetTask($TaskName)
- 
-            $task.Run($null)
- 
-        }
-        else
-        {
-            # stop task if its running
-            foreach($task in $service.GetRunningTasks(1))
-            {
-                if($task.Name -ieq $TaskName)
-                {
+    $TaskDefinition.Settings.Enabled = $true
+    $TaskDefinition.Settings.AllowDemandStart = $true
+
+    $triggers = $TaskDefinition.Triggers
+    #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
+    $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+    #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
+    $trigger.Enabled = $true
+
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
+    $Action = $TaskDefinition.Actions.Create(0)
+    $action.Path = "$TaskCommand"
+    $action.Arguments = "$TaskArg"
+    $action.WorkingDirectory = $TaskDir
+    
+#http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
+    $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
+
+    #start task
+    $task = $rootFolder.GetTask($TaskName)
+
+    $task.Run($null)
+
+    }
+    else
+    {
+    # stop task if its running
+    foreach($task in $service.GetRunningTasks(1))
+    {
+    if($task.Name -ieq $TaskName)
+    {
                     log-info "found task"
-                    $task.Stop()
-                }
-            }
- 
-            # delete task
-            $rootFolder.DeleteTask($TaskName,$null)
-        }
- 
+    $task.Stop()
+    }
+    }
+
+    # delete task
+    $rootFolder.DeleteTask($TaskName,$null)
+    }
+
     
     if($error.Count -ge 1)
     {
@@ -441,41 +441,41 @@ function manage-scheduledTask([bool] $enable, [string] $machine)
     {
         return $true
     }
- 
+
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {
     [string] $retVal = ""
- 
+
     if (Test-Path variable:\hostinvocation)
     {
-        $retVal = $hostinvocation.MyCommand.Path
+    $retVal = $hostinvocation.MyCommand.Path
     }
     else
     {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
     }
-  
-    if (Test-Path $retVal)
+ 
+if (Test-Path $retVal)
     {
-        $retVal = (Split-Path $retVal)
+    $retVal = (Split-Path $retVal)
     }
     else
     {
-        $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
-    } 
- 
+    $retVal = (Get-Location).path
+    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     
-    Set-Location $retVal
- 
+} 
+
+    
+Set-Location $retVal
+
     return $retVal
- 
+
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin([string] $arguments)
 {
@@ -486,9 +486,9 @@ function runas-admin([string] $arguments)
        exit
     }
 }
- 
- 
+
+
 # ----------------------------------------------------------------------------------------------------------------
 main
- 
+
 log-info "finished"

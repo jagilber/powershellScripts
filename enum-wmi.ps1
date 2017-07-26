@@ -33,12 +33,12 @@ $ErrorActionPreference = "silentlycontinue"
 $logFile = "wmi-enumLog.txt"
 
 cls
- 
+
 #-----------------------------------------------------------------------------------------------
 function main()
 {
     Stop-Transcript
- 
+
     $error.Clear()
         
     Start-Transcript -Path $logfile
@@ -47,7 +47,7 @@ function main()
     log-info "starting"
     log-info "*******************************************"
     log-info "*******************************************"
- 
+
     $wmiNamespaces = enumerate-namespaces -wminamespace $nameSpace
     foreach($wmiNamespace in $wmiNamespaces)
     {
@@ -58,7 +58,7 @@ function main()
         "*******************************************"
         "Namespace:$($wmiNamespace)"
         "*******************************************"
- 
+
         $wmiClasses = Get-CimClass -ClassName * -Namespace $wmiNamespace
         
         foreach ($wmiClass in $wmiClasses)
@@ -110,7 +110,7 @@ function main()
             
         }
     }
- 
+
     "*******************************************"
     log-info "*******************************************"
     log-info "finished"
@@ -120,22 +120,22 @@ function main()
     
 }
 #-----------------------------------------------------------------------------------------------
- 
+
 function enumerate-namespaces($wmiNamespace)
 {
     $wmiRootNamespaces = new-object Collections.ArrayList
     [void]$wmiRootNamespaces.Add($wmiNamespace)
- 
+
     foreach($name in (Get-WmiObject -Namespace $wmiNamespace -Class __NAMESPACE).Name)
     {
         $tempName = "$($wmiNamespace)\$($name)"
         [void]$wmiRootNamespaces.AddRange(@(enumerate-namespaces -wminamespace $tempName ))
     }
- 
+
     return $wmiRootNamespaces
 }
 #-----------------------------------------------------------------------------------------------
- 
+
 function log-info($data)
 {
     $data = "$([System.DateTime]::Now):$($data)`n"
@@ -143,5 +143,5 @@ function log-info($data)
     #out-file -Append -InputObject $data -FilePath $logFile
 }
 #-----------------------------------------------------------------------------------------------
- 
+
 main 

@@ -30,7 +30,7 @@
 .EXAMPLE  
     .\rdv-vdi-query.ps1 -update
     check github for updated script file.
- 
+
 .PARAMETER activeBroker
     optional parameter to specify active connection broker
 

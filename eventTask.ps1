@@ -1,15 +1,15 @@
-﻿<#  
-.SYNOPSIS  
-    powershell script to monitor debug event logs for event match
-.DESCRIPTION  
-    This script will monitor 'analytic' and 'debug' event logs of format .etl for certain event entries.
+﻿<# 
+.SYNOPSIS 
+powershell script to monitor debug event logs for event match
+.DESCRIPTION 
+This script will monitor 'analytic' and 'debug' event logs of format .etl for certain event entries.
     Optionally on match, the script can send an email or run an action.
-.NOTES  
-   File Name  : eventTask.ps1  
-   Author     : jagilber
-   Version    : 141206
-.EXAMPLE  
-    .\eventTask.ps1 -install $true
+.NOTES 
+File Name : eventTask.ps1 
+Author    : jagilber
+ Version    : 141206
+.EXAMPLE 
+.\eventTask.ps1 -install $true
     .\eventTask.ps1 -uninstall $true
     .\eventTask.ps1 -test $true
 .PARAMETER install
@@ -20,10 +20,10 @@
     will test script and sent email if settings are configured.
 .PARAMETER workingDir
     working script directory
-#>  
- 
+#> 
+
 Param(
- 
+
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to install event log monitor")]
     [bool] $install = $false,
     [parameter(Position=0,Mandatory=$false,HelpMessage="Enter `$true to uninstall event log monitor")]
@@ -33,14 +33,14 @@ Param(
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter working directory")]
     [string] $workingDir
     )
- 
+
 $error.Clear()
- 
+
 $ErrorActionPreference = "SilentlyContinue"
 $logFile = "eventTask.log"
 $sleepItervalSecs = 60
- 
- 
+
+
 # event information
 $eventLog = "Microsoft-Windows-PrintService/Debug"
 $eventId = 119
@@ -62,7 +62,7 @@ $To = ""
 $From = ""
 $Subject = "$($env:computername): monitored event received"
 $Body = "event was received that matches filter"
- 
+
 # SMTP Relay Settings
 $Server = ""
 $Port = 
@@ -70,7 +70,7 @@ $passFile = ""
 $username = ""
 $useSSL = $false
 $useCreds = $false
- 
+
 # scheduled task info
 $TaskName = "EventLog Monitor"
 $TaskDescr = "Monitors eventlog for event"
@@ -78,26 +78,26 @@ $TaskCommand = "powershell.exe"
 $TaskScript = (get-variable myinvocation -scope script).Value.Mycommand.Definition #"$($workingDir)\eventTask.ps1"
 $TaskArg = "-WindowStyle Hidden -NonInteractive -Executionpolicy unrestricted -file $TaskScript"
 $time = (get-date) #- (new-timespan -day 12)
- 
- 
+
+
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
     try
     {
- 
+
         if($useCreds)
         {
-           set-credentials
+       set-credentials
         }
- 
- 
+
+
         if([string]::IsNullOrEmpty($workingDir))
         {
-            $workingDir = get-workingDirectory
+        $workingDir = get-workingDirectory
         }
- 
-        if($install)
+
+      if($install)
         {
             install-task
             exit
@@ -117,17 +117,17 @@ function main()
             runas-admin $scriptName
             install-task
 
-            new-eventLog -LogName $eventLog -source "TEST" 
-            Write-EventLog -LogName $eventLog -Source "TEST" -Message "TEST" -EventId $eventId -EntryType Information
-            remove-eventlog -source "TEST"
+        new-eventLog -LogName $eventLog -source "TEST" 
+       Write-EventLog -LogName $eventLog -Source "TEST" -Message "TEST" -EventId $eventId -EntryType Information
+        remove-eventlog -source "TEST"
         
             monitor-events
             uninstall-task
-            exit
+         exit
         }
-        else
+       else
         {
-            monitor-events
+         monitor-events
         }
 
         log-info "exiting"
@@ -146,27 +146,27 @@ function main()
 function set-credentials()
 {
     $Creds
-    # if storing creds for smtp, password will have to be saved one time
-    # uncomment following to prompt for credentials
-    #$Creds = Get-Credential
- 
-    if(!$Creds)
-    {
-        if(!(test-path $passFile))
-        {
-            read-host -assecurestring | convertfrom-securestring | out-file $passFile
-        }
- 
-        $password = cat $passFile | convertto-securestring
-        $creds = new-object -typename System.Management.Automation.PSCredential -argumentlist $username, $password
-    }
+# if storing creds for smtp, password will have to be saved one time
+# uncomment following to prompt for credentials
+#$Creds = Get-Credential
+
+if(!$Creds)
+{
+    if(!(test-path $passFile))
+    {
+    read-host -assecurestring | convertfrom-securestring | out-file $passFile
+    }
+
+    $password = cat $passFile | convertto-securestring
+    $creds = new-object -typename System.Management.Automation.PSCredential -argumentlist $username, $password
+}
 }
 
 # ----------------------------------------------------------------------------------------------------------------
 function monitor-events()
 {
-    $matchCount = 0
-    $monitoring = $true
+  $matchCount = 0
+$monitoring = $true
     $lastRecordId = 0
 
   
@@ -174,11 +174,11 @@ function monitor-events()
     # monitor specified eventlog
     while($monitoring)
     {
-        $events = get-winEvent -Oldest -FilterHashTable @{LogName=$eventLog; StartTime=$time; Id=$eventId}
-        log-info "new event count matching filter:$($events.Length) startTime:$($time)"
- 
-        foreach($event in $events)
-        {
+    $events = get-winEvent -Oldest -FilterHashTable @{LogName=$eventLog; StartTime=$time; Id=$eventId}
+    log-info "new event count matching filter:$($events.Length) startTime:$($time)"
+
+    foreach($event in $events)
+    {
             
             if([string]::IsNullOrEmpty($event.TimeCreated))
             {
@@ -186,7 +186,7 @@ function monitor-events()
                 continue    
             }
 
-            $time = $event.TimeCreated
+    $time = $event.TimeCreated
             log-info "last event TimeCreated:$($time) recordId: $($event.RecordId) matchCount: $($matchCount)"
 
             # bump time by a second so that we do not get duplicate returns
@@ -203,29 +203,29 @@ function monitor-events()
                 $lastRecordId = $event.RecordId
             }
 
-            log-info $event.Message
- 
-            [xml] $xml = $event.ToXml()
- 
-            $label = $xml.Event.UserData.SpoolerGenericEvent.Label 
-            $errorCode = $xml.Event.UserData.SpoolerGenericEvent.ErrorCode
-            
-            
-            if($test)
-            {
+log-info $event.Message
+
+    [xml] $xml = $event.ToXml()
+
+    $label = $xml.Event.UserData.SpoolerGenericEvent.Label 
+$errorCode = $xml.Event.UserData.SpoolerGenericEvent.ErrorCode
+    
+
+if($test)
+    {
                 # with a test source, message will not be stored in event object correctly
-                $eventLabel = $xml.Event.EventData.Data #$event.Message
-                $label = "TEST"
-                $errorCode = $eventErrorCode 
+    $eventLabel = $xml.Event.EventData.Data #$event.Message
+    $label = "TEST"
+    $errorCode = $eventErrorCode 
                 $monitoring = $false
-            }
- 
-            if(($label -match $eventLabel) -and $errorCode -match $eventErrorCode)
-            {
-                log-info "found match:$($event)"
+}
+
+    if(($label -match $eventLabel) -and $errorCode -match $eventErrorCode)
+    {
+    log-info "found match:$($event)"
                 $matchCount++
                 
-                send-mail
+     send-mail
 
                 # stop tracing to gather information
                 run-process -processName $eventTaskProcessUnDeploy -arguments $eventTaskArgumentsUnDeploy -wait $true
@@ -238,15 +238,15 @@ function monitor-events()
                 else
                 {
                     # still monitoring so restart tracing
-                    run-process -processName $eventTaskProcessDeploy -arguments $eventTaskArgumentsDeploy -wait $true                 
+                    run-process -processName $eventTaskProcessDeploy -arguments $eventTaskArgumentsDeploy -wait $true                
                 }
-            }
-        }
- 
-        if($monitoring)
-        {
-           sleep $sleepItervalSecs
-        }
+    }
+    }
+
+    if($monitoring)
+    {
+    sleep $sleepItervalSecs
+    }
     }
 }
 
@@ -256,11 +256,11 @@ function install-task()
     # run as administrator
     runas-admin $scriptName
 
-    # add to task scheduler as a computer startup script
+  # add to task scheduler as a computer startup script
     if(manage-scheduledTask -enable $true)
     {
         $eventLog = Get-WinEvent -ListLog $eventLog
-        $eventLog.IsEnabled = $true
+     $eventLog.IsEnabled = $true
         $eventLog.SaveChanges()
         log-info "create scheduled task and enabled debug eventlog"
     }
@@ -280,12 +280,12 @@ function uninstall-task()
     runas-admin $scriptName
     
     # remove from task scheduler
-    if(manage-scheduledTask -enable $false)
+if(manage-scheduledTask -enable $false)
     {
-        $eventLog = Get-WinEvent -ListLog $eventLog
-        $eventLog.IsEnabled = $false
-        $eventLog.SaveChanges()
-        log-info "deleted scheduled task and disabled debug eventlog"
+       $eventLog = Get-WinEvent -ListLog $eventLog
+       $eventLog.IsEnabled = $false
+       $eventLog.SaveChanges()
+       log-info "deleted scheduled task and disabled debug eventlog"
     }
     else
     {
@@ -306,20 +306,20 @@ function send-mail()
         return
     }    
 
-    if($useSSL -and $useCreds)
+if($useSSL -and $useCreds)
     {
-        Send-MailMessage -To $To -From $From -SmtpServer $Server -Port $Port -UseSsl -Credential $Creds -Subject $Subject -Body $Body
+    Send-MailMessage -To $To -From $From -SmtpServer $Server -Port $Port -UseSsl -Credential $Creds -Subject $Subject -Body $Body
     }
     elseif($useCreds)
     {
-      Send-MailMessage -To $To -From $From -SmtpServer $Server -Port $Port -Credential $Creds -Subject $Subject -Body $Body
+    Send-MailMessage -To $To -From $From -SmtpServer $Server -Port $Port -Credential $Creds -Subject $Subject -Body $Body
     }
     else
     {
-       Send-MailMessage -To $To -From $From -SmtpServer $Server -Port $Port -Subject $Subject -Body $Body
+    Send-MailMessage -To $To -From $From -SmtpServer $Server -Port $Port -Subject $Subject -Body $Body
     }
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
 {
@@ -327,7 +327,7 @@ function log-info($data)
     Write-Host $data
     out-file -Append -InputObject $data -FilePath $logFile
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
 {
@@ -342,85 +342,85 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.CreateNoWindow = $true
     $process.StartInfo.WorkingDirectory = get-location
 
-    [void]$process.Start()
+[void]$process.Start()
     if($wait -and !$process.HasExited)
     {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
- 
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
+    $process.WaitForExit($processWaitMs)
+    $exitVal = $process.ExitCode
+    $stdOut = $process.StandardOutput.ReadToEnd()
+    $stdErr = $process.StandardError.ReadToEnd()
+    log-info "Process output:$stdOut"
+
+    if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+    {
+    log-info "Error:$stdErr `n $Error"
+    $Error.Clear()
+    }
     }
     elseif($wait)
     {
-        log-info "Process ended before capturing output."
+    log-info "Process ended before capturing output."
     }
     
-    #return $exitVal
+#return $exitVal
     return $stdOut
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function manage-scheduledTask([bool] $enable)
 {
-        # win 2k8r2 and below have to use com object
-        # 2012 can use cmdlets
-        $error.Clear()
-        $service = new-object -ComObject("Schedule.Service")
-        # connect to the local machine. 
-        # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
-        $service.Connect()
-        $rootFolder = $service.GetFolder("\")
- 
-        if($enable)
-        {
-            $TaskDefinition = $service.NewTask(0) 
-            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
-            $TaskDefinition.Settings.Enabled = $true
-            $TaskDefinition.Settings.AllowDemandStart = $true
- 
-            $triggers = $TaskDefinition.Triggers
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
-            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
-            $trigger.Enabled = $true
- 
-            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
-            $Action = $TaskDefinition.Actions.Create(0)
-            $action.Path = "$TaskCommand"
-            $action.Arguments = "$TaskArg"
-            $action.WorkingDirectory = $workingDir
-            
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
-            $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
- 
-            #start task
-            $task = $rootFolder.GetTask($TaskName)
+    # win 2k8r2 and below have to use com object
+    # 2012 can use cmdlets
+       $error.Clear()
+    $service = new-object -ComObject("Schedule.Service")
+    # connect to the local machine.
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
+    $service.Connect()
+    $rootFolder = $service.GetFolder("\")
 
-            $task.Run($null)
- 
-        }
-        else
-        {
-            # stop task if its running
-            foreach($task in $service.GetRunningTasks(1))
-            {
-                if($task.Name -ieq $TaskName)
-                {
+    if($enable)
+    {
+    $TaskDefinition = $service.NewTask(0)
+    $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
+    $TaskDefinition.Settings.Enabled = $true
+    $TaskDefinition.Settings.AllowDemandStart = $true
+
+    $triggers = $TaskDefinition.Triggers
+    #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
+    $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+    #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
+    $trigger.Enabled = $true
+
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
+    $Action = $TaskDefinition.Actions.Create(0)
+    $action.Path = "$TaskCommand"
+    $action.Arguments = "$TaskArg"
+    $action.WorkingDirectory = $workingDir
+    
+#http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
+    $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
+
+    #start task
+    $task = $rootFolder.GetTask($TaskName)
+
+    $task.Run($null)
+
+    }
+    else
+    {
+    # stop task if its running
+    foreach($task in $service.GetRunningTasks(1))
+    {
+    if($task.Name -ieq $TaskName)
+    {
                     log-info "found task"
-                    $task.Stop()
-                }
-            }
- 
-            # delete task
-            $rootFolder.DeleteTask($TaskName,$null)
-        }
+    $task.Stop()
+    }
+    }
+
+    # delete task
+    $rootFolder.DeleteTask($TaskName,$null)
+    }
 
     
     if($error.Count -ge 1)
@@ -435,38 +435,38 @@ function manage-scheduledTask([bool] $enable)
     }
 
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {
     $retVal
- 
+
     if (Test-Path variable:\hostinvocation)
     {
-        $retVal = $hostinvocation.MyCommand.Path
+    $retVal = $hostinvocation.MyCommand.Path
     }
     else
     {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
     }
-  
-    if (Test-Path $retVal)
+ 
+if (Test-Path $retVal)
     {
-        $retVal = (Split-Path $retVal)
+    $retVal = (Split-Path $retVal)
     }
     else
     {
-        $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
-    } 
- 
+    $retVal = (Get-Location).path
+    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     
-    Set-Location $retVal
- 
+} 
+
+    
+Set-Location $retVal
+
     return $retVal
 }
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin([string] $arguments)
 {

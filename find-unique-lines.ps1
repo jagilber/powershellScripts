@@ -12,17 +12,17 @@
     
 .PARAMETER file
     the text file for compare
- 
+
 #>  
- 
+
 Param(
- 
+
     [parameter(Position=0,Mandatory=$true,HelpMessage="Enter path to first file")]
     [string] $file,
     [parameter(Position=1,Mandatory=$false,HelpMessage="Enter regex")]
     [string] $regex
     )
- 
+
 cls
 $count = 0
 $lineList = @{}
@@ -50,7 +50,7 @@ function main()
 
             }
 
-            $count++
+           $count++
             if(!$lineList.ContainsKey($line))
             {
                 $lineList.Add($line,1)
@@ -61,7 +61,7 @@ function main()
                 $linelist.Remove($line)
                 $lineList.Add($line,++$oldvalue)
             }
- 
+
         }
     }
     else
@@ -82,8 +82,8 @@ function main()
     log-info "Total lines:$($count)"
 
     log-info "finished"
- }
- 
+}
+
 
 # ----------------------------------------------------------------------------------------------------------------
 function log-info($data)
@@ -96,4 +96,4 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 
 main
- 
+

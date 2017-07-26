@@ -1,50 +1,50 @@
-﻿<#  
-.SYNOPSIS  
-    powershell script to enumerate customer RDS environment for UPD information
+﻿<# 
+.SYNOPSIS 
+powershell script to enumerate customer RDS environment for UPD information
     
-.DESCRIPTION  
-    powershell script to enumerate customer RDS environment for UPD information
+.DESCRIPTION 
+powershell script to enumerate customer RDS environment for UPD information
     
 
-.NOTES  
+.NOTES 
     Version:
         160520 original 
     
     History:
-  
-.EXAMPLE  
-    .\rds-upd-mgr.ps1 -user jagilber
+
+.EXAMPLE 
+.\rds-upd-mgr.ps1 -user jagilber
     .\rds-upd-mgr.ps1 -sid S-1-5-21-124525095-708259637-1543119021-1234567
     
 .PARAMETER user
     users ad account with issue
- 
+
 .PARAMETER sid
     users sid or sid from vhd with issue
 
 .PARAMETER machine
     machine to query or connection broker to query
-#>  
- 
- 
+#> 
+
+
 Param(
- 
-    [parameter(HelpMessage="Enter user name:")]
+
+    [parameter(HelpMessage = "Enter user name:")]
     [string] $user,
-    [parameter(HelpMessage="Enter collection:")]
+    [parameter(HelpMessage = "Enter collection:")]
     [string] $collection,
-    [parameter(HelpMessage="Enter connection Broker:")]
+    [parameter(HelpMessage = "Enter connection Broker:")]
     [string] $server = $env:COMPUTERNAME,
-    [parameter(HelpMessage="Enter `$true to prompt / use alternate credentials. Default is `$false")]
+    [parameter(HelpMessage = "Enter `$true to prompt / use alternate credentials. Default is `$false")]
     [bool] $useCreds = $false,
-    [parameter(HelpMessage="Enter `$true to store alternate credentials. Default is `$false")]
+    [parameter(HelpMessage = "Enter `$true to store alternate credentials. Default is `$false")]
     [bool] $storeCreds = $false,
-    [parameter(HelpMessage="Select this switch to check for script update")]
+    [parameter(HelpMessage = "Select this switch to check for script update")]
     [switch] $getUpdate
 
-    )
+)
 
- 
+
 $ErrorActionPreference = "SilentlyContinue"
 $Creds = $null
 # if storing creds, password will have to be saved one time
@@ -72,12 +72,12 @@ function main ()
 
     log-info $MyInvocation.ScriptName
     # run as administrator
-    if(!(runas-admin))
+    if (!(runas-admin))
     {
         return
     }
     
-    if($getUpdate)
+    if ($getUpdate)
     {
         get-update -updateUrl $updateUrl
     }
@@ -93,14 +93,14 @@ function main ()
     $machines = @(get-machines -server $server)
     
     # get list of users for upd's using sid from upd name
-    foreach($upd in get-upds -shares $global:updShares)
+    foreach ($upd in get-upds -shares $global:updShares)
     {
-        if([string]::IsNullOrEmpty($upd) -or !$upd.Contains("UVHD-")) 
+        if ([string]::IsNullOrEmpty($upd) -or !$upd.Contains("UVHD-")) 
         {
             continue
         }
 
-        $sid = [IO.Path]::GetFileNameWithoutExtension($upd).Replace("UVHD-","")
+        $sid = [IO.Path]::GetFileNameWithoutExtension($upd).Replace("UVHD-", "")
         $userObj = ([wmi]"Win32_SID.SID='$($sid)'")
 
         $info = @{}
@@ -140,16 +140,16 @@ function main ()
 #----------------------------------------------------------------------------
 function check-creds()
 {
-    if($useCreds)
+    if ($useCreds)
     {
-        if((test-path $passFile) -and $storeCreds)
+        if ((test-path $passFile) -and $storeCreds)
         {
 
             $password = cat $passFile | convertto-securestring
             $Creds = new-object -typename System.Management.Automation.PSCredential -argumentlist $username, $password
 
         }
-        elseif($storeCreds)
+        elseif ($storeCreds)
         {
             read-host -assecurestring | convertfrom-securestring | out-file $passFile
 
@@ -170,12 +170,12 @@ function check-creds()
 function get-machines($server)
 {
     $machines = @($server)
-    if(!(get-service -DisplayName 'Remote Desktop Connection Broker' -ErrorAction SilentlyContinue))
+    if (!(get-service -DisplayName 'Remote Desktop Connection Broker' -ErrorAction SilentlyContinue))
     {
         log-info "$($server) is not a connection broker. trying to find broker."
         $global:brokers = @((read-reg -machine $server -hive $HKLM -key $deploymentReg -value "SessionDirectoryLocation").Split(';'))
 
-        if($global:brokers.Count -gt 0 -and ![string]::IsNullOrEmpty($global:brokers[0]))
+        if ($global:brokers.Count -gt 0 -and ![string]::IsNullOrEmpty($global:brokers[0]))
         {
             $global:broker = $global:brokers[0]
         }
@@ -188,7 +188,7 @@ function get-machines($server)
         # look for upd share in reg in case it rds. only cb can query for upd via ps
         $global:updShares = @(read-reg -machine $server -hive $HKLM -key $deploymentReg -value "UvhdShareUrl")
 
-        if($global:updShares.Count -lt 1)
+        if ($global:updShares.Count -lt 1)
         {
             log-info "server is part of rds deployment, but does not have upd configured. exiting"
             exit
@@ -201,19 +201,19 @@ function get-machines($server)
         $global:brokers = get-rdserver -ConnectionBroker $global:broker -Role RDS-CONNECTION-BROKER
         $global:broker = $server
 
-        foreach($farmSettings in ((Get-WmiObject -Namespace root\cimv2\terminalservices -Class Win32_RDCentralPublishedFarm).VmFarmSettings))
+        foreach ($farmSettings in ((Get-WmiObject -Namespace root\cimv2\terminalservices -Class Win32_RDCentralPublishedFarm).VmFarmSettings))
         {
-            if([string]::IsNullOrEmpty($farmSettings))
+            if ([string]::IsNullOrEmpty($farmSettings))
             {
                 continue
             }
 
             #$config = (Get-RDSessionCollectionConfiguration -CollectionName $collection)
             $pattern = 'name="UvhdProfRoamingEnabled" value="True"'
-            if([regex]::IsMatch($farmSettings, $pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase))
+            if ([regex]::IsMatch($farmSettings, $pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase))
             {
                 $pattern = 'name="UvhdShareUrl" value="(.+?)"'
-                $match = [regex]::Match($farmSettings,$pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                $match = [regex]::Match($farmSettings, $pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
                 $global:updShares.Add($match.Groups[1].Value)
             }
         }
@@ -222,7 +222,7 @@ function get-machines($server)
 
     #make sure it is active broker
     $ha = Get-RDConnectionBrokerHighAvailability -ConnectionBroker $global:broker
-    if($ha -ne $null)
+    if ($ha -ne $null)
     {
         log-info $ha
         $global:broker = $ha.ActiveManagementServer
@@ -234,23 +234,23 @@ function get-machines($server)
         
         # get rdsh machines
         $machines = (Get-RDServer -ConnectionBroker $global:broker -Role RDS-RD-SERVER).Server
-        if($machines -ne $null)
+        if ($machines -ne $null)
         {
-            foreach($machine in $machines)
+            foreach ($machine in $machines)
             {
                 log-info $machine
             }
 
-#            $result = Read-Host "do you want to collect data from entire deployment? [y:n]"
-#            if([regex]::IsMatch($result, "y",[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
-#            {
-#                log-info "adding rds collection machines"
-#                 return $machines
-#           }
-#            else
-#            {
-#                return $server
-#            }
+            #            $result = Read-Host "do you want to collect data from entire deployment? [y:n]"
+            #            if([regex]::IsMatch($result, "y",[System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
+            #            {
+            #                log-info "adding rds collection machines"
+            #                 return $machines
+            #           }
+            #            else
+            #            {
+            #                return $server
+            #            }
         }
     }
     catch 
@@ -266,7 +266,7 @@ function get-machines($server)
 function get-upds([string[]] $shares)
 {
     $list = new-object System.Collections.ArrayList
-    foreach($share in $shares)
+    foreach ($share in $shares)
     {
         try
         {
@@ -280,7 +280,7 @@ function get-upds([string[]] $shares)
         }
     }
 
-    return ,$list
+    return , $list
 }
 
 #----------------------------------------------------------------------------
@@ -296,13 +296,13 @@ function is-fileLocked([string] $file)
   
     try
     {
-	    $fileStream = $fileInfo.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
-	    if ($fileStream)
-	    {
+        $fileStream = $fileInfo.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        if ($fileStream)
+        {
             $fileStream.Close()
-	    }
+        }
  
-	    log-info "File is NOT locked:$($file)"
+        log-info "File is NOT locked:$($file)"
         return $false
     }
     catch
@@ -316,11 +316,11 @@ function is-fileLocked([string] $file)
 #----------------------------------------------------------------------------
 function log-info($data)
 {
-    if($data.ToString().ToLower().StartsWith("error"))
+    if ($data.ToString().ToLower().StartsWith("error"))
     {
         $ForegroundColor = "Yellow"
     }
-    elseif($data.ToString().ToLower().StartsWith("fail"))
+    elseif ($data.ToString().ToLower().StartsWith("fail"))
     {
         $ForegroundColor = "Red"
     }
@@ -328,12 +328,12 @@ function log-info($data)
     {
         $ForegroundColor = "Green"
     }
- 
+
     write-host $data -ForegroundColor $ForegroundColor
 
     try
     {
-        if(![string]::IsNullOrEmpty($logFile))
+        if (![string]::IsNullOrEmpty($logFile))
         {
             out-file -Append -FilePath $logFile -InputObject "$([DateTime]::Now):$($data)" -Encoding ascii
         }
@@ -359,39 +359,39 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.Arguments = $arguments
     $process.StartInfo.CreateNoWindow = $wait
     $process.StartInfo.WorkingDirectory = get-location
- 
-    [void]$process.Start()
- 
-    if($wait -and !$process.HasExited)
+
+[void]$process.Start()
+
+    if ($wait -and !$process.HasExited)
     {
- 
-        if($process.StandardOutput.Peek() -gt -1)
+
+        if ($process.StandardOutput.Peek() -gt -1)
         {
-            $stdOut = $process.StandardOutput.ReadToEnd()
+            $stdOut = $process.StandardOutput.ReadToEnd()
             log-info $stdOut
-        }
- 
- 
-        if($process.StandardError.Peek() -gt -1)
+       }
+
+
+        if ($process.StandardError.Peek() -gt -1)
         {
             $stdErr = $process.StandardError.ReadToEnd()
             log-info $stdErr
-            $Error.Clear()
-        }
+            $Error.Clear()
+        }
             
     }
-    elseif($wait)
+    elseif ($wait)
     {
-        log-info "Error:Process ended before capturing output."
+        log-info "Error:Process ended before capturing output."
     }
     
- 
+
     
     $exitVal = $process.ExitCode
- 
+
     log-info "Running process exit $($processName) : $($exitVal)"
     $Error.Clear()
- 
+
     return $stdOut
 }
 
@@ -399,9 +399,9 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 function manage-wmiExecute([string] $command, [string] $machine)
 {
     log-info "wmiExecute: $($machine) : $($command) : $($workingDir)"
-   # $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
-   # $result = $wmi.Create($command)
-    if($useCreds)
+    # $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\cimv2:Win32_Process" 
+    # $result = $wmi.Create($command)
+    if ($useCreds)
     {
         $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList ($command, $workingDir) -Credential $Creds -ComputerName $computer
     }
@@ -410,36 +410,42 @@ function manage-wmiExecute([string] $command, [string] $machine)
         $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList ($command, $workingDir) -ComputerName $computer
     }
     
-    switch($result.ReturnValue)
+    switch ($result.ReturnValue)
     {
-        0 {
-                log-info "$($machine) return:success"
-          }
+        0
+        {
+            log-info "$($machine) return:success"
+        }
 
-        2 {
-                log-info "$($machine) return:access denied"
-          }
+        2
+        {
+            log-info "$($machine) return:access denied"
+        }
 
-        3 {
-                log-info "$($machine) return:insufficient privilege"
-          }
+        3
+        {
+            log-info "$($machine) return:insufficient privilege"
+        }
         
-        8 {
-                log-info "$($machine) return:unknown failure"
-          }
+        8
+        {
+            log-info "$($machine) return:unknown failure"
+        }
 
-        9 {
-                log-info "$($machine) return:path not found"
-          }
+        9
+        {
+            log-info "$($machine) return:path not found"
+        }
 
-        21 {
-                log-info "$($machine) return:invalid parameter"
-           }
+        21
+        {
+            log-info "$($machine) return:invalid parameter"
+        }
 
         default
-            {
-                log-info "$($machine) return:unknown $($result.ReturnValue)"
-            }
+        {
+            log-info "$($machine) return:unknown $($result.ReturnValue)"
+        }
     }
 
     return $result.ReturnValue
@@ -451,7 +457,7 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
 {
     $retVal = new-object Text.StringBuilder
     
-    if([string]::IsNullOrEmpty($value))
+    if ([string]::IsNullOrEmpty($value))
     {
         [void]$retVal.AppendLine("-----------------------------------------")
         [void]$retVal.AppendLine("enumerating $($key)")
@@ -470,9 +476,9 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
         $sNames = $reg.EnumValues($hive, $key).sNames
         $sTypes = $reg.EnumValues($hive, $key).Types
         
-        for($i = 0; $i -lt $sNames.count; $i++)
+        for ($i = 0; $i -lt $sNames.count; $i++)
         {
-            if(![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
+            if (![string]::IsNullOrEmpty($value) -and $sNames[$i] -inotlike $value)
             {
                 continue
             }
@@ -480,9 +486,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             switch ($sTypes[$i])
             {
                 # REG_SZ 
-                1{ 
+                1
+                { 
                     $keyValue = $reg.GetStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -493,26 +500,28 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_EXPAND_SZ 
-                2{
+                2
+                {
                     $keyValue = $reg.GetExpandStringValue($hive, $key, $sNames[$i]).sValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }                    
                     else 
                     {
-                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
+                        [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)") 
                     }
                 }            
                 
                 # REG_BINARY 
-                3{ 
+                3
+                { 
                     $keyValue = (($reg.GetBinaryValue($hive, $key, $sNames[$i]).uValue) -join ',')
-                    if($enumValue -and $displayBinaryBlob)
+                    if ($enumValue -and $displayBinaryBlob)
                     {
                         return $keyValue
                     }
-                    elseif($displayBinaryBlob)
+                    elseif ($displayBinaryBlob)
                     {
                         [void]$retval.AppendLine("$($sNames[$i]):$($keyValue)")
                     }
@@ -524,9 +533,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_DWORD 
-                4{ 
+                4
+                { 
                     $keyValue = $reg.GetDWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -537,9 +547,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
                 
                 # REG_MULTI_SZ 
-                7{
+                7
+                {
                     $keyValue = (($reg.GetMultiStringValue($hive, $key, $sNames[$i]).sValue) -join ',')
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -550,9 +561,10 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
                 }
 
                 # REG_QWORD
-                11{ 
+                11
+                { 
                     $keyValue = $reg.GetQWORDValue($hive, $key, $sNames[$i]).uValue
-                    if($enumValue)
+                    if ($enumValue)
                     {
                         return $keyValue
                     }
@@ -567,12 +579,12 @@ function read-reg($machine, $hive, $key, $value, $subKeySearch = $true)
             }
         }
         
-        if([string]::IsNullOrEmpty($value) -and $subKeySearch)
+        if ([string]::IsNullOrEmpty($value) -and $subKeySearch)
         {
             
-            foreach($subKey in $reg.EnumKey($hive, $key).sNames)
+            foreach ($subKey in $reg.EnumKey($hive, $key).sNames)
             {
-                if([string]::IsNullOrEmpty($subKey))
+                if ([string]::IsNullOrEmpty($subKey))
                 {
                     continue
                 }
@@ -604,7 +616,7 @@ function get-update($updateUrl)
         $gitClean = [regex]::Replace($git, '\W+', "")
         $fileClean = [regex]::Replace(([IO.File]::ReadAllBytes($MyInvocation.ScriptName)), '\W+', "")
 
-        if(([string]::Compare($gitClean, $fileClean) -ne 0))
+        if (([string]::Compare($gitClean, $fileClean) -ne 0))
         {
             log-info "updating new script"
             [IO.File]::WriteAllText($MyInvocation.ScriptName, $git)
@@ -632,8 +644,8 @@ function runas-admin()
 {
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
-       log-info "please restart script as administrator. exiting..."
-       return $false
+        log-info "please restart script as administrator. exiting..."
+        return $false
     }
 
     return $true

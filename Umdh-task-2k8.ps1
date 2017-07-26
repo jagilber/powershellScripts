@@ -84,28 +84,28 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.CreateNoWindow = $true
     #only needed if useshellexecute is true
     $process.StartInfo.WorkingDirectory = get-location #$workingDirectory
- 
-    [void]$process.Start()
+
+[void]$process.Start()
     if($wait -and !$process.HasExited)
     {
-        $process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        log-info "Process output:$stdOut"
- 
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            log-info "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
+    $process.WaitForExit($processWaitMs)
+    $exitVal = $process.ExitCode
+    $stdOut = $process.StandardOutput.ReadToEnd()
+    $stdErr = $process.StandardError.ReadToEnd()
+    log-info "Process output:$stdOut"
+
+    if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
+    {
+    log-info "Error:$stdErr `n $Error"
+    $Error.Clear()
+    }
     }
     elseif($wait)
     {
-        log-info "Process ended before capturing output."
+    log-info "Process ended before capturing output."
     }
     
-    #return $exitVal
+#return $exitVal
     return $stdOut
 }
 
@@ -117,36 +117,36 @@ function log-info($data)
     #Write-Host $data
     out-file -Append -InputObject $data -FilePath ([Environment]::ExpandEnvironmentVariables($logFile))
 }
- 
+
 
 # ----------------------------------------------------------------------------------------------------------------
 function get-workingDirectory()
 {
     [string] $retVal = ""
- 
+
     if (Test-Path variable:\hostinvocation)
     {
-        $retVal = $hostinvocation.MyCommand.Path
+    $retVal = $hostinvocation.MyCommand.Path
     }
     else
     {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
+    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
     }
-  
-    if (Test-Path $retVal)
+ 
+if (Test-Path $retVal)
     {
-        $retVal = (Split-Path $retVal)
+    $retVal = (Split-Path $retVal)
     }
     else
     {
-        $retVal = (Get-Location).path
-        log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-        
-    } 
- 
+    $retVal = (Get-Location).path
+    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
     
-    Set-Location $retVal
- 
+} 
+
+    
+Set-Location $retVal
+
     return $retVal
 
 }

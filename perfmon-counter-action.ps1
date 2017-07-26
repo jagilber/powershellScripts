@@ -116,7 +116,7 @@ function run-process([string] $processName, [string] $arguments, [string] $worki
     $process.StartInfo.Arguments = $arguments
     $process.StartInfo.CreateNoWindow = $true
     $process.StartInfo.WorkingDirectory = $workingDir
- 
+
     [void]$process.Start()
     if($wait -and !$process.HasExited)
     {
@@ -125,7 +125,7 @@ function run-process([string] $processName, [string] $arguments, [string] $worki
         $stdOut = $process.StandardOutput.ReadToEnd()
         $stdErr = $process.StandardError.ReadToEnd()
         log-info "Process output:$stdOut"
- 
+
         if(![String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
         {
             log-info "Error:$stdErr `n $Error"
@@ -141,7 +141,7 @@ function run-process([string] $processName, [string] $arguments, [string] $worki
     return $stdOut
 }
 
- 
+
 # ----------------------------------------------------------------------------------------------------------------
 function runas-admin()
 {
@@ -153,5 +153,5 @@ function runas-admin()
     }
 }
 
-#------------------------------------------------------------------------------------------------- 
+#-------------------------------------------------------------------------------------------------
 main

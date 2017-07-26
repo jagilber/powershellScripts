@@ -247,6 +247,8 @@ ModelManifest.xml
 # CUSTOM
 
 *.txt
+*.ini
+*.req
 *.cer
 *.pfx
 **/gather
