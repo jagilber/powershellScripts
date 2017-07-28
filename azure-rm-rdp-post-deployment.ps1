@@ -20,11 +20,10 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170722 fix exception in dnsresolve
+   Version    : 170728 add -addPublicIp
    History    : 
-                170717 changed mstsc / rdweb logic after entry
-                170715 add to gallery
-                170625.2 added background jobs
+                170726 force look in 'root' store for self signed. changed wildcard url option
+                170722 fix exception in dnsresolve
                 
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
@@ -33,6 +32,9 @@
 .EXAMPLE
     .\azure-rm-rdp-post-deployment.ps1 -rdWebUrl https://contoso.eastus.cloudapp.azure.com/RDWeb
     used to bypass Azure enumeration and to copy cert from url to local cert store
+
+.PARAMETER addPublicIp
+    add public ip address and nsg to selected virtual machine
 
 .PARAMETER enumerateSubscriptions
     to query all subscriptions and not just current one
@@ -56,6 +58,7 @@
  
 
 param(
+    [switch]$addPublicIp,
     [string][ValidateSet('LocalMachine', 'CurrentUser')] $certLocation = "LocalMachine",
     [switch]$enumerateSubscriptions,
     [switch]$noprompt,
@@ -69,7 +72,7 @@ param(
 set-strictmode -version Latest
 $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference = "SilentlyContinue"
-
+$global:redisplay = $true
 $global:selfSigned = $false
 $global:san = $false
 $global:wildcard = $false
@@ -82,7 +85,6 @@ $throttle = 10
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
-    cls
     $error.Clear()
     $subList = @{}
     $rg = $null
@@ -129,9 +131,14 @@ function main()
     # connect to azure
     authenticate-azureRm
     $subscriptions = @(get-subscriptions)
-    $redisplay = $true
+    
+    if($addPublicIp -and $subscriptions.Count -gt 0)
+    {
+        add-publicIp
+        #return
+    }
 
-    while ($redisplay -and $subscriptions.Count -gt 0)
+    while ($global:redisplay -and $subscriptions.Count -gt 0)
     {
         foreach ($sub in $subscriptions)
         {
@@ -151,11 +158,20 @@ function main()
 
             if (!($resourceList = enum-resourcegroup $sub))
             {
-                write-host "no ip addresses found. returning..."
+                write-host "no ip addresses found." -ForegroundColor Yellow
+                if(($ret = read-host "do you want to add a public ip address to an existing vm?[y|n]") -imatch "y")
+                {
+                    add-publicIp
+                    $global:redisplay = $true
+                    #return
+                }
+
                 continue
             }
 
             $count = 1
+            write-host "Displaying ONLY Azure RM resources with public IP addresses that are currently connectable." -ForegroundColor Cyan
+            Write-Host "Green indicates RDWeb site:" -ForegroundColor Green
 
             foreach($resource in $resourceList)
             {
@@ -182,25 +198,8 @@ function main()
                 exit 1
             }
 
-            #check ids for comma and range
-            if ($idsEntry.ToLower().Contains("c"))
-            {
-                # redisplay list to choose again
-                $idsEntry = $idsEntry.ToLower().Replace("c", "")
-            }
-            else
-            {
-                $redisplay = $false
-            }
+            $ids = check-response -response $idsEntry
 
-            if ($idsEntry.Contains(","))
-            {
-                $ids = @($idsEntry.Split(","))
-            }
-            else
-            {
-                $ids = @($idsEntry)
-            }
 
             foreach ($id in $ids)
             {
@@ -322,6 +321,183 @@ function add-hostsEntry($ipAddress, $subject)
     catch
     {
         write-host "add-hostname:exception: $($error | out-string)"
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function add-publicIp()
+{
+    try
+    {
+        # verify 
+        Write-host "This process will attempt to add a dynamic public ip address to an existing vm that only has private ip address" -ForegroundColor Yellow
+        Write-host "It will attempt to use an existing NSG or will create a new one. The only port open will be 3389 for RDP" -ForegroundColor Yellow
+        Write-host "If this is NOT correct, press ctrl-c to exit script." -ForegroundColor Yellow
+
+        if(($ret = Read-Host "Confirm you want to continue:[y|n]") -imatch "n")
+        {
+            exit
+        }
+        
+        $nsgnames = $Null
+        $ret = $null
+        $resourceGroups = $null
+        $vms = new-object Collections.ArrayList
+        write-host "resource groups:" -ForegroundColor Cyan
+        $resourceGroups = Get-AzureRmResourceGroup
+        write-host ($resourceGroups.ResourceGroupName | out-string)
+        $resourceGroupName = read-host "Enter name of resource group to enumerate"
+
+        if(!$resourceGroupName)
+        {
+            exit
+        }
+        else
+        {
+            foreach($vm in (Get-AzureRmVM -ResourceGroupName $resourceGroupName))
+            {
+                [void]$vms.Add($vm)
+            }
+
+        }
+        
+        write-host "virtual machines:" -ForegroundColor Cyan
+        write-host ($vms.Name | out-string)
+        $vmName = read-host "Enter name of vm to add public ip address"
+
+        if(!$vmName)
+        {
+            exit
+        }
+
+        $modifiedVm = get-azurermvm -ResourceGroupName $resourceGroupName -Name $vmName
+
+        $vmNicName = [IO.Path]::GetFileName(@($modifiedVm.NetworkProfile.NetworkInterfaces.Id)[0])
+        $vmNic = Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName -Name $vmNicName
+        $vmSubnetName = [IO.Path]::GetFileName(@($vmNic.IpConfigurations)[0].subnet.id)
+        $vmPrivateIpAddress = $vmNic.IpConfigurations.privateipaddress
+        $vmPublicIpAddress = $vmNic.IpConfigurations.publicipaddress
+        #$publicIp = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $vmNicName -ErrorAction SilentlyContinue
+        $vmStatus = (get-azurermvm -ResourceGroupName $resourceGroupName -Name $vmName -Status).Statuses
+
+        if(!($vmStatus.Code -imatch "running"))
+        {
+            write-host "error: vm is NOT running! start vm and restart script. exiting" -ForegroundColor Red
+            exit    
+        }
+
+        write-host "vm name: $($modifiedVm.Name)"
+        write-host "`tprivate ip address: $($vmPrivateIpAddress)"
+        write-host "`tpublic ip address: $($vmPublicIpAddress)"
+        write-host "`tsubnet: $($vmSubnetName)"
+        write-host "`tstatus: running"
+        
+
+        if($vmPublicIpAddress)
+        {
+            write-host "server $($vm.Name) already has public ip address $($vmPublicIpAddress). exiting" -ForegroundColor Red
+            exit
+        }
+        
+        $rgLocation = (get-azurermresourcegroup -Name $resourceGroupName).Location
+        write-host "using location: $($rgLocation)"
+        write-host "creating public ip. this may take some time. please wait..." -ForegroundColor Yellow
+        
+        $vmPublicIP = New-AzureRmPublicIpAddress -Name "$($vmName)-pubIp" `
+            -ResourceGroupName $resourceGroupName `
+            -AllocationMethod Dynamic `
+            -Location $rgLocation
+        
+        write-host "saving interface change. this may take some time. please wait..." -ForegroundColor Yellow
+        $vmNic.IpConfigurations[0].PublicIpAddress = $vmPublicIp
+        $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
+        
+        $nsg = $vmNic.NetworkSecurityGroup
+        $nsgs = @(Get-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName)
+
+        if(!$nsg)
+        {
+            write-host "nsg's in resource group on same subnet:" -ForegroundColor Cyan
+            try
+            {
+                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+            }
+            catch {}
+
+            write-host ($nsgNames | out-string)
+
+            $newNsgName = "$($vmName)-nsg"
+            $nsgName = read-host "enter name of existing nsg to use, type in new nsg name to create new nsg, or press {enter} to use '$($newNsgName)'"
+
+            if(!$nsgName)
+            {
+                $nsgName = $newNsgName
+            }
+
+            if($nsgName -and !($nsgNames -imatch $nsgName))
+            {
+                write-host "creating new nsg. this may take some time. please wait..." -ForegroundColor Yellow
+                $nsg = New-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Name $nsgName -Location $rgLocation
+            }
+            elseif($nsgName -and ($nsgNames -imatch $nsgName))
+            {
+                # on same subnet
+                $nsg = Get-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Name $nsgName
+            }
+            else
+            {
+                exit
+            }
+        }
+        elseif($nsg)
+        {
+            # no need to check subnet or add interface
+            # check for 3389 and if not ask to add    
+        }
+
+        if(!$nsg)
+        {
+            exit
+        }
+        
+        $vmPublicIpAddress = (get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $vmPublicIP.Name).IpAddress
+
+        if($vmPublicIpAddress)
+        {
+            write-host "new public ip address: $($vmPublicIpAddress)" -ForegroundColor Green
+            write-host "creating security rule for 3389. this may take some time. please wait..." -ForegroundColor Yellow
+
+            Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
+                -Name "AllowRDP" `
+                -Direction Inbound `
+                -Priority 100 `
+                -Access Allow `
+                -SourceAddressPrefix '*' `
+                -SourcePortRange '*' `
+                -DestinationAddressPrefix $vmPrivateIPAddress `
+                -DestinationPortRange "3389" `
+                -Protocol TCP `
+                -ErrorAction Stop
+            
+            write-host "saving security rule for 3389. this may take some time. please wait..." -ForegroundColor Yellow
+            Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
+
+            write-host "setting vm nic to use nsg. this may take some time. please wait..." -ForegroundColor Yellow
+            $vmNic.NetworkSecurityGroup = $nsg
+            $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
+        }
+        else
+        {
+            write-host "unable to acquire public ip address"
+            exit
+        }
+        
+        write-host "successfully added public ip address $($vmPublicIPAddress)" -ForegroundColor Green
+    }
+    catch
+    {
+        write-host "add-publicIp:error: $($error | out-string)"
+        exit
     }
 }
 
@@ -461,6 +637,40 @@ function check-jobs()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function check-response($response)
+{
+    [string[]] $ids = @()
+    #check ids for comma and range
+    if ($response.ToLower().Contains("c"))
+    {
+        # redisplay list to choose again
+        $response = $response.ToLower().Replace("c", "")
+        $global:redisplay = $true
+    }
+    elseif ($response.ToLower().Contains("p"))
+    {
+        # go through public ip setup
+        add-publicIp
+        exit
+    }
+    else
+    {
+        $global:redisplay = $false
+    }
+
+    if ($response.Contains(","))
+    {
+        $ids = @($response.Split(","))
+    }
+    else
+    {
+        $ids = @($response)
+    }
+
+    return $ids
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function enum-certSubject($cert)
 {
     # get certificate from RDWeb site
@@ -503,24 +713,50 @@ function enum-resourcegroup([string] $subid)
 
     try
     {
-        $pubIps = @(Get-AzureRmPublicIpAddress | ? IpAddress -ine "Not Assigned")
-        write-host "checking $($pubIps.count) ip addresses. please wait..."
+        if(!$noprompt -and !$resourceGroupName)
+        {
+            write-host "resource group names:" -ForegroundColor Cyan
+            $resourceGroupNames = new-object Collections.ArrayList (,@(Get-AzureRmResourceGroup).ResourceGroupName)
+            $count = 1
+
+            foreach($name in $resourceGroupNames)
+            {
+                write-host "$($count). $($name)"
+                $count++
+            }
+
+            Write-Host
+            $resourceGroupName = read-host "enter number for resource group to enumerate or press {enter} to enumerate all:"
+            $resourceGroupName = check-response -response $resourceGroupName
+        }
 
         # find resource group
         if (!$resourceGroupName)
         {
-            write-host "Azure RM resources with public IP addresses. Green indicates RDWeb site:"
             #$Null = Set-AzureRmContext -SubscriptionId $subid
             $resourceGroups = Get-AzureRmResourceGroup -WarningAction SilentlyContinue
             $count = 1
         }
         else
         {
-            $resourceGroups = @(Get-AzureRmResourceGroup -Name $resourceGroupName -WarningAction SilentlyContinue)
+            try
+            {
+                if([Convert]::ToInt32($resourceGroupName))
+                {
+                    $resourceGroups = @(Get-AzureRmResourceGroup -Name ($resourceGroupNames[$resourceGroupName - 1]) -WarningAction SilentlyContinue)
+                }
+            }
+            catch 
+            {
+                $resourceGroups = @(Get-AzureRmResourceGroup -Name $resourceGroupName -WarningAction SilentlyContinue)
+            }
         }
 
         foreach($resourceGroup in $resourceGroups.ResourceGroupName)
         {
+            $pubIps = @(Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroup | ? IpAddress -ine "Not Assigned")
+            write-host "checking $($pubIps.count) ip addresses in $($resourceGroup)."
+
             foreach($ip in $pubIps)
             {
                 if($resourceGroup -imatch $ip.ResourceGroupName)
@@ -616,8 +852,13 @@ function enum-resourcegroup([string] $subid)
             [void]$jobs.Add($job)
         }
 
+        $jobsCount = $jobs.Count
+        $activity = "checking connectivity to $($jobsCount) public ips. please wait.."
+
         while(get-job)
         {
+            $jobCount = @(get-job).Count
+            Write-Progress -Activity $activity -Status "$($jobsCount - $jobCount) of $($jobsCount) completed" -PercentComplete (($jobsCount - $jobCount) / $jobsCount * 100)
             $ret = check-jobs
 
             if($ret)
@@ -631,8 +872,11 @@ function enum-resourcegroup([string] $subid)
                     $resultList.Add($ret)
                 }
             }
+
             Start-Sleep -Seconds 1
         }
+
+        Write-Progress -Activity $activity -Completed
 
         if($resultList.Count)
         {
@@ -645,7 +889,7 @@ function enum-resourcegroup([string] $subid)
     }
     catch
     {
-        write-host "enum-resourcegroup:exception: $($error)"
+        write-host "enum-resourcegroup:exception: $($error | out-string )"
         $error.Clear()
         return $false
     }
@@ -907,7 +1151,7 @@ function import-cert($cert, $certFile, $subject)
         }
     }
     
-    $certList = @(Get-ChildItem -Recurse -Path cert:\ -DnsName "$($subject)")
+    $certList = @(Get-ChildItem -Recurse -Path $certStore -DnsName "$($subject)")
     
     if ($certList.Count -lt 1)
     {
@@ -926,20 +1170,20 @@ function import-cert($cert, $certFile, $subject)
     # if wildcard prompt for name for hosts entry
     if ($global:wildcard)
     {
-        write-host "certificate is wildcard. what host name do you want to use to connect to RDWeb site?"
-        $hostName = "$($resourceGroup.ResourceGroupName)$($subject.Replace('*',''))"    
-        write-host "https://$($hostname)/RDWeb"    
-        $ret = read-host "select {enter} to continue with above name, or type in hostname to use, or {ctrl-c} to quit:"
+        write-host "certificate is wildcard. what host name do you want to use to connect to RDWeb site?" -ForegroundColor Yellow
+        $domainName = "gateway.$($resourceGroup.ResourceGroupName)$($subject.Replace('*.',''))"    
+        write-host "https://<hostname>.$($domainName)/RDWeb"    
+        write-host "https://$($domainName)/RDWeb"    
+        $ret = read-host "select {enter} to continue with 'gateway' hostname above, or enter <hostname> to use, or {ctrl-c} to quit:"
                         
         if (!$ret)
         {
-            $subject = $hostname
+            $subject = $domainName
         }
         else
         {
             $subject = "$($ret)$($subject.Replace('*',''))"
         }
-
     }
                     
     write-host "using $($subject) as hostname"
