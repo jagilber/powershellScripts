@@ -472,7 +472,7 @@ function add-publicIp()
                 -Direction Inbound `
                 -Priority 100 `
                 -Access Allow `
-                -SourceAddressPrefix '*' `
+                -SourceAddressPrefix '*' `
                 -SourcePortRange '*' `
                 -DestinationAddressPrefix $vmPrivateIPAddress `
                 -DestinationPortRange "3389" `
