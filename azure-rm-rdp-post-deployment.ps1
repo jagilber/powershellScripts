@@ -67,7 +67,8 @@ param(
     [string]$publicIpAddressName = ".",
     [string]$rdWebUrl = "",
     [string]$resourceGroupName,
-    [switch]$update
+    [switch]$update,
+    [string]$vmName
 )
 
 set-strictmode -version Latest
@@ -342,36 +343,43 @@ function add-publicIp()
         
         $nsgnames = $Null
         $ret = $null
-        $resourceGroups = $null
-        $vms = new-object Collections.ArrayList
-        write-host "resource groups:" -ForegroundColor Cyan
         $resourceGroups = Get-AzureRmResourceGroup
-        write-host ($resourceGroups.ResourceGroupName | out-string)
-        $resourceGroupName = read-host "Enter name of resource group to enumerate"
+        $vms = new-object Collections.ArrayList
+
+        if(!$resourceGroupName -and $resourceGroups -or !($resourceGroups.ResourceGroupName -imatch $resourceGroupName))
+        {
+            write-host "resource groups:" -ForegroundColor Cyan
+            write-host ($resourceGroups.ResourceGroupName | out-string)
+            $resourceGroupName = read-host "Enter name of resource group to enumerate"
+        }
 
         if(!$resourceGroupName)
         {
             exit
         }
-        else
-        {
-            foreach($vm in (Get-AzureRmVM -ResourceGroupName $resourceGroupName))
-            {
-                [void]$vms.Add($vm)
-            }
 
+        foreach($vm in (Get-AzureRmVM -ResourceGroupName $resourceGroupName))
+        {
+            [void]$vms.Add($vm)
         }
-        
-        write-host "virtual machines:" -ForegroundColor Cyan
-        write-host ($vms.Name | out-string)
-        $vmName = read-host "Enter name of vm to add public ip address"
 
         if(!$vmName)
+        {
+            write-host "virtual machines:" -ForegroundColor Cyan
+            write-host ($vms.Name | out-string)
+            $modifiedVmName = read-host "Enter name of vm to add public ip address"
+        }
+        else
+        {
+            $modifiedVmName = $vmName
+        }
+
+        if(!$modifiedVmName)
         {
             exit
         }
 
-        $modifiedVm = get-azurermvm -ResourceGroupName $resourceGroupName -Name $vmName
+        $modifiedVm = get-azurermvm -ResourceGroupName $resourceGroupName -Name $modifiedVmName
 
         $vmNicName = [IO.Path]::GetFileName(@($modifiedVm.NetworkProfile.NetworkInterfaces.Id)[0])
         $vmNic = Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName -Name $vmNicName
@@ -379,7 +387,7 @@ function add-publicIp()
         $vmPrivateIpAddress = $vmNic.IpConfigurations.privateipaddress
         $vmPublicIpAddress = $vmNic.IpConfigurations.publicipaddress
         #$publicIp = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $vmNicName -ErrorAction SilentlyContinue
-        $vmStatus = (get-azurermvm -ResourceGroupName $resourceGroupName -Name $vmName -Status).Statuses
+        $vmStatus = (get-azurermvm -ResourceGroupName $resourceGroupName -Name $modifiedVmName -Status).Statuses
 
         if(!($vmStatus.Code -imatch "running"))
         {
@@ -396,20 +404,20 @@ function add-publicIp()
 
         if($vmPublicIpAddress)
         {
-            write-host "server $($vm.Name) already has public ip address $($vmPublicIpAddress). exiting" -ForegroundColor Red
+            write-host "vm $($vm.Name) already has public ip address $($vmPublicIpAddress). exiting" -ForegroundColor Red
             exit
         }
         
         $rgLocation = (get-azurermresourcegroup -Name $resourceGroupName).Location
         write-host "using location: $($rgLocation)"
-        write-host "creating public ip. this may take some time. please wait..." -ForegroundColor Yellow
+        write-host "creating public ip. please wait..." -ForegroundColor Yellow
         
-        $vmPublicIP = New-AzureRmPublicIpAddress -Name "$($vmName)-pubIp" `
+        $vmPublicIP = New-AzureRmPublicIpAddress -Name "$($modifiedVmName)-pubIp" `
             -ResourceGroupName $resourceGroupName `
             -AllocationMethod Dynamic `
             -Location $rgLocation
         
-        write-host "saving interface change. this may take some time. please wait..." -ForegroundColor Yellow
+        write-host "saving interface change. please wait..." -ForegroundColor Yellow
         $vmNic.IpConfigurations[0].PublicIpAddress = $vmPublicIp
         $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         
@@ -427,7 +435,7 @@ function add-publicIp()
 
             write-host ($nsgNames | out-string)
 
-            $newNsgName = "$($vmName)-nsg"
+            $newNsgName = "$($modifiedVmName)-nsg"
             $nsgName = read-host "enter name of existing nsg to use, type in new nsg name to create new nsg, or press {enter} to use '$($newNsgName)'"
 
             if(!$nsgName)
@@ -437,7 +445,7 @@ function add-publicIp()
 
             if($nsgName -and !($nsgNames -imatch $nsgName))
             {
-                write-host "creating new nsg. this may take some time. please wait..." -ForegroundColor Yellow
+                write-host "creating new nsg $($nsgName). please wait..." -ForegroundColor Yellow
                 $nsg = New-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Name $nsgName -Location $rgLocation
             }
             elseif($nsgName -and ($nsgNames -imatch $nsgName))
@@ -466,7 +474,7 @@ function add-publicIp()
         if($vmPublicIpAddress)
         {
             write-host "new public ip address: $($vmPublicIpAddress)" -ForegroundColor Green
-            write-host "creating security rule for 3389. this may take some time. please wait..." -ForegroundColor Yellow
+            write-host "creating security rule for 3389. please wait..." -ForegroundColor Yellow
 
             Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
                 -Name "AllowRDP" `
@@ -480,20 +488,20 @@ function add-publicIp()
                 -Protocol TCP `
                 -ErrorAction Stop
             
-            write-host "saving security rule for 3389. this may take some time. please wait..." -ForegroundColor Yellow
+            write-host "saving security rule for TCP RDP 3389. please wait..." -ForegroundColor Yellow
             Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
 
-            write-host "setting vm network interface to use nsg. this may take some time. please wait..." -ForegroundColor Yellow
+            write-host "setting vm $($modifiedVmName) network interface to use nsg $($nsgName). please wait..." -ForegroundColor Yellow
             $vmNic.NetworkSecurityGroup = $nsg
             $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         }
         else
         {
-            write-host "unable to acquire public ip address"
+            write-host "unable to acquire public ip address. exiting"
             exit
         }
         
-        write-host "successfully added public ip address $($vmPublicIPAddress)" -ForegroundColor Green
+        write-host "successfully added public ip address $($vmPublicIPAddress) to vm $($modifiedVmName)" -ForegroundColor Green
     }
     catch
     {
