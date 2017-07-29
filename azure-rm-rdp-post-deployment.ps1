@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170728 add -addPublicIp
+   Version    : 170729 changed hostname options for wildcard certs
    History    : 
+                170728 add -addPublicIp
                 170726 force look in 'root' store for self signed. changed wildcard url option
                 170722 fix exception in dnsresolve
                 
@@ -112,7 +113,7 @@ function main()
         $certFile = [IO.Path]::GetFullPath("$($rdWebUrl -replace '\W','').cer")
         $cert = get-cert -url $rdWebUrl -certFile $certFile
         $subject = enum-certSubject -cert $cert
-        $subject = import-cert -cert $cert -certFile $certFile -subject $subject
+        $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname "gateway"
         
         if ($subject)
         {
@@ -219,7 +220,7 @@ function main()
 
                 $resource = $resourceList | where Id -eq $id
                 
-                write-host $resourceGroup.ResourceGroupName
+                write-host $resource.ResourceGroup
                 write-verbose "enum-resourcegroup returning:$($resource | fl | out-string)"
 
                 $ip = $resource.publicIp
@@ -232,7 +233,7 @@ function main()
                     $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
                     $cert = get-cert -url $gatewayUrl -certFile $certFile
                     $subject = enum-certSubject -cert $resource.certInfo
-                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject    
+                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname $resource.ResourceGroup
                     add-hostsEntry -ipAddress $ip -subject $subject
                     open-RdWebSite -site "https://$($subject)/RDWeb"
                 }
@@ -482,7 +483,7 @@ function add-publicIp()
             write-host "saving security rule for 3389. this may take some time. please wait..." -ForegroundColor Yellow
             Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
 
-            write-host "setting vm nic to use nsg. this may take some time. please wait..." -ForegroundColor Yellow
+            write-host "setting vm network interface to use nsg. this may take some time. please wait..." -ForegroundColor Yellow
             $vmNic.NetworkSecurityGroup = $nsg
             $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         }
@@ -1070,7 +1071,7 @@ function get-update($updateUrl, $destinationFile)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function import-cert($cert, $certFile, $subject)
+function import-cert($cert, $certFile, $subject, $wildcardName)
 {
     write-verbose "import-cert $($certFile) $($subject)"
     if (!$subject)
@@ -1171,10 +1172,10 @@ function import-cert($cert, $certFile, $subject)
     if ($global:wildcard)
     {
         write-host "certificate is wildcard. what host name do you want to use to connect to RDWeb site?" -ForegroundColor Yellow
-        $domainName = "gateway.$($resourceGroup.ResourceGroupName)$($subject.Replace('*.',''))"    
-        write-host "https://<hostname>.$($domainName)/RDWeb"    
+        $domainName = "$($wildcardName)$($subject.Replace('*',''))"    
+        write-host "https://<hostname>$($subject.Replace('*',''))/RDWeb"    
         write-host "https://$($domainName)/RDWeb"    
-        $ret = read-host "select {enter} to continue with 'gateway' hostname above, or enter <hostname> to use, or {ctrl-c} to quit:"
+        $ret = read-host "select {enter} to continue with '$($domainName)' hostname above, or enter <hostname> to use, or {ctrl-c} to quit:"
                         
         if (!$ret)
         {
