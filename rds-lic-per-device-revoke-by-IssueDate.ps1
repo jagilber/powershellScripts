@@ -26,11 +26,11 @@
 #>  
 
 Param(
-    [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the IssueDate. Any cal with a issue date older than provided date will be revoked!")]
+    [parameter(Position = 0, Mandatory = $true, HelpMessage = "Enter the IssueDate. Any cal with a issue date older than provided date will be revoked!")]
     [string] $issueDate,
-    [parameter(Position=1,Mandatory=$false,HelpMessage="Use -test to test revocation but not perform.")]
+    [parameter(Position = 1, Mandatory = $false, HelpMessage = "Use -test to test revocation but not perform.")]
     [switch] $test
- )
+)
 
 $ErrorActionPreference = "Stop"
 $activeLicenses = @()
@@ -52,7 +52,7 @@ write-host "converted issueDate: $($issueDate)"
 write-host "----------------------------------"
 write-host "key packs:"
 $keyPacks = Get-WmiObject Win32_TSLicenseKeyPack
-foreach($keyPack in $keyPacks)
+foreach ($keyPack in $keyPacks)
 {
     write-host "----------------------------------"
     $keyPack
@@ -62,18 +62,18 @@ write-host "----------------------------------"
 
 $licenses = get-wmiobject Win32_TSIssuedLicense
 
-if($licenses -eq $null)
+if ($licenses -eq $null)
 {
     write-host "no issued licenses. returning"
     return
 }
 
 #licenseStatus = 4 = revoked, 1 = temp, 2 = permanent
-$activelicenses = @($licenses | where { $_.licenseStatus -eq 2 -and $_.IssueDate.SubString(0,8) -le $issueDate })
+$activelicenses = @($licenses | where { $_.licenseStatus -eq 2 -and $_.IssueDate.SubString(0, 8) -le $issueDate })
 
-if($activeLicenses.Count -ge 1)
+if ($activeLicenses.Count -ge 1)
 {
-    if(!((Read-Host "WARNING:This will revoke up to $($activeLicenses.Count) cals, are you sure you want to continue?[y|n") -icontains "y"))
+    if (!((Read-Host "WARNING:This will revoke up to $($activeLicenses.Count) cals, are you sure you want to continue?[y|n") -icontains "y"))
     {
         return
     }
@@ -84,11 +84,11 @@ if($activeLicenses.Count -ge 1)
         $lic
         write-host "----------------------------------"
 
-        if(($keypacks | Where { $_.KeyPackId -eq $lic.KeyPackId -and $_.ProductType -eq 0 }))
+        if (($keypacks | Where { $_.KeyPackId -eq $lic.KeyPackId -and $_.ProductType -eq 0 }))
         {
             write-host "revoking license:$($lic.sIssuedToComputer) $($lic.sIssuedToUser) $($lic.IssueDate)"
         
-            if(!$test)
+            if (!$test)
             {
                 $ret = $lic.Revoke()
                 write-host "----------------------------------"
@@ -97,15 +97,15 @@ if($activeLicenses.Count -ge 1)
                 write-host "next revoke allowed on: $($ret.NextRevokeAllowedOn)"
                 write-host "----------------------------------"
 
-                if($ret.ReturnValue -ne 0)
+                if ($ret.ReturnValue -ne 0)
                 {
-                    if(!((Read-Host "WARNING:error revoking cal, do you you want to continue?[y|n]") -icontains "y"))
+                    if (!((Read-Host "WARNING:error revoking cal, do you you want to continue?[y|n]") -icontains "y"))
                     {
                         return
                     }
                 }
 
-                if($ret.RevokableCals -eq 0 -or ($ret.NextRevokeAllowedOn.Substring(0,8) -gt [DateTime]::Now.ToString("yyyyMMdd")))
+                if ($ret.RevokableCals -eq 0 -or ($ret.NextRevokeAllowedOn.Substring(0, 8) -gt [DateTime]::Now.ToString("yyyyMMdd")))
                 {
                     write-host "unable to revoke any more cals until 'Next Revoke Allowed On' above in format yyyyMMdd. exiting"
                     return

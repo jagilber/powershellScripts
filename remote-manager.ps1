@@ -40,30 +40,30 @@
 #>
   
 Param(
-    [parameter(HelpMessage="Use to enable debug output")]
+    [parameter(HelpMessage = "Use to enable debug output")]
     [switch] $debugScript,
-    [parameter(HelpMessage="json path and file name for command export")]
+    [parameter(HelpMessage = "json path and file name for command export")]
     [string] $export,
-    [parameter(HelpMessage="Use to force overwrite of file copy")]
+    [parameter(HelpMessage = "Use to force overwrite of file copy")]
     [switch] $force,
-    [parameter(HelpMessage="Enter path for upload directory")]
+    [parameter(HelpMessage = "Enter path for upload directory")]
     [string] $gatherDir = "",
-    [parameter(HelpMessage="json path and file name for command import")]
+    [parameter(HelpMessage = "json path and file name for command import")]
     [string] $import,
-    [parameter(HelpMessage="Enter comma separated list of machine names")]
+    [parameter(HelpMessage = "Enter comma separated list of machine names")]
     [string[]] $machines = @($env:COMPUTERNAME),
-    [parameter(HelpMessage="Enter number of minutes from now for event log gathering. Default is 60")]
+    [parameter(HelpMessage = "Enter number of minutes from now for event log gathering. Default is 60")]
     [string[]] $minutes = 60,
-   [parameter(HelpMessage="Use to not clean remote working directory on stop")]
+    [parameter(HelpMessage = "Use to not clean remote working directory on stop")]
     [switch] $noclean,
-   [parameter(HelpMessage="Use to start")]
+    [parameter(HelpMessage = "Use to start")]
     [switch] $start,
-    [parameter(HelpMessage="Use to stop")]
+    [parameter(HelpMessage = "Use to stop")]
     [switch] $stop,
-    [parameter(HelpMessage="Enter integer for concurrent jobs limit. default is 10")]
+    [parameter(HelpMessage = "Enter integer for concurrent jobs limit. default is 10")]
     [int] $throttle = 10
 
-    )
+)
 
 cls
 Add-Type -assembly "system.io.compression.filesystem"
@@ -88,7 +88,7 @@ function main()
     {
         $Error.Clear()
         $nameStamp = [DateTime]::Now.ToString("yyyy-MM-dd-HH-mm-ss")
-        if([string]::IsNullOrEmpty($gatherDir)) 
+        if ([string]::IsNullOrEmpty($gatherDir)) 
         { 
             $gatherDir = "$(get-Location)\gather\$($nameStamp)" 
         }
@@ -101,16 +101,16 @@ function main()
         build-jobsList
 
         # export default jobs into json file
-        if(![string]::IsNullOrEmpty($export))
+        if (![string]::IsNullOrEmpty($export))
         {
             export-jobs
             return
         }
 
         # import jobs from json file
-        if(![string]::IsNullOrEmpty($import))
+        if (![string]::IsNullOrEmpty($import))
         {
-            if(!(import-jobs))
+            if (!(import-jobs))
             {
                 return
             }
@@ -119,13 +119,13 @@ function main()
         runas-admin
 
         # make sure action is specified
-        if($start -and $stop)
+        if ($start -and $stop)
         {
             log-info "argument has to be start or stop, not both, exiting"
             return
         }
 
-        if(!$start -and !$stop)
+        if (!$start -and !$stop)
         {
             log-info "argument has to be start or stop, none specified, exiting"
             return
@@ -137,36 +137,36 @@ function main()
         $workingDir = Get-Location
  
         # add local machine if empty
-        if($machines.Count -lt 1)
+        if ($machines.Count -lt 1)
         {
             $machines += $env:COMPUTERNAME
         }
-        elseif($machines.Count -eq 1 -and $machines[0].Contains(","))
+        elseif ($machines.Count -eq 1 -and $machines[0].Contains(","))
         {
             # when passing comma separated list of machines from bat, it does not get separated correctly
             $machines = $machines[0].Split(",")
         }
-        elseif($machines.Count -eq 1 -and [IO.File]::Exists($machines))
+        elseif ($machines.Count -eq 1 -and [IO.File]::Exists($machines))
         {
             # file passed in
             $machines = [IO.File]::ReadAllLines($machines);
         }
 
-        foreach($machine in $machines)
+        foreach ($machine in $machines)
         {
-            if(!(test-path "\\$($machine)\admin`$"))
+            if (!(test-path "\\$($machine)\admin`$"))
             {
                 log-info "machine $($machine) not accessible. skipping"
                 continue
             }
 
             log-info "# ---------------------------------------------------------------"
-            if($start)
+            if ($start)
             {
                 log-info "running start commands for $($machine)"
                 process-commands -commands $global:startCommands -machine $machine
             }
-            elseif($stop)
+            elseif ($stop)
             {
                 log-info "running stop commands for machine $($machine)"
                 process-commands -commands $global:stopCommands -machine $machine
@@ -176,17 +176,17 @@ function main()
         wait-forJobs
         log-info "finished"
 
-        if($stop)
+        if ($stop)
         {
             # process cleanup list
             clean-machines
 
             # zip and display            
-            if([IO.Directory]::Exists($gatherDir))
+            if ([IO.Directory]::Exists($gatherDir))
             {
                 tree /a /f $($gatherDir)
 
-                if([IO.File]::Exists("$($gatherDir).zip"))
+                if ([IO.File]::Exists("$($gatherDir).zip"))
                 {
                     [IO.File]::Delete("$($gatherDir).zip")
                 }
@@ -200,7 +200,7 @@ function main()
     }
     catch
     {
-        if(get-job)
+        if (get-job)
         {
             clean-jobs
         }
@@ -210,14 +210,14 @@ function main()
 # ----------------------------------------------------------------------------------------------------------------
 function clean-jobs()
 {
-    if(get-job)
+    if (get-job)
     {
         [string] $ret = read-host -Prompt "There are existing jobs, do you want to clear?[y:n]" 
-        if($ret -ieq "y")
+        if ($ret -ieq "y")
         {
             get-job 
 
-            while(get-job)
+            while (get-job)
             {
                 get-job | remove-job -Force
             }
@@ -228,19 +228,19 @@ function clean-jobs()
 # ----------------------------------------------------------------------------------------------------------------
 function clean-machines()
 {
-    if(!$noClean -and $global:cleanupList.Count -gt 0)
+    if (!$noClean -and $global:cleanupList.Count -gt 0)
     {
         log-info "cleaning files from machines..."
-        foreach($machine in $machines)
+        foreach ($machine in $machines)
         {
             # clean managed dir first
             $remoteDirectory = "\\$($machine)\$($managedRemoteDirectory)"
             $directoryFile = "$($remoteDirectory)\$($managedDirectoryTagFile)"
 
-            if([IO.Directory]::Exists($remoteDirectory) -and [IO.File]::Exists($directoryFile))
+            if ([IO.Directory]::Exists($remoteDirectory) -and [IO.File]::Exists($directoryFile))
             {
                 # check for tag for cleanup when removing directory
-                if([IO.File]::ReadAllText($directoryFile) -ieq $managedDirectoryFileTag)
+                if ([IO.File]::ReadAllText($directoryFile) -ieq $managedDirectoryFileTag)
                 {
                     # ok to delete directory
                     [IO.Directory]::Delete($remoteDirectory, $true)
@@ -248,9 +248,9 @@ function clean-machines()
                 }
             }
 
-            foreach($destinationDirectory in ($global:cleanupList.$machine).GetEnumerator())
+            foreach ($destinationDirectory in ($global:cleanupList.$machine).GetEnumerator())
             {
-                if($destinationDirectory.Contains($remoteDirectory))
+                if ($destinationDirectory.Contains($remoteDirectory))
                 {
                     continue
                 }
@@ -258,7 +258,7 @@ function clean-machines()
                 log-info "checking $($machine) : $($destinationDirectory.Key)"
                 $directoryFile = "$($destinationDirectory.Key)\$($managedDirectoryTagFile)"
 
-                if(![IO.Directory]::Exists($destinationDirectory.Key) -or ![IO.File]::Exists($directoryFile))
+                if (![IO.Directory]::Exists($destinationDirectory.Key) -or ![IO.File]::Exists($directoryFile))
                 {
                     continue
                 }
@@ -266,7 +266,7 @@ function clean-machines()
                 try
                 {
                     # check for tag for cleanup when removing directory
-                    if([IO.File]::ReadAllText($directoryFile) -ieq $managedDirectoryFileTag)
+                    if ([IO.File]::ReadAllText($directoryFile) -ieq $managedDirectoryFileTag)
                     {
                         # ok to delete directory
                         [IO.Directory]::Delete($destinationDirectory.Key, $true)
@@ -288,9 +288,9 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
 {
     $resultFiles = @()
  
-    foreach($kvp in $files.GetEnumerator())
+    foreach ($kvp in $files.GetEnumerator())
     {
-        if($kvp -eq $null)
+        if ($kvp -eq $null)
         {
             continue
         }
@@ -298,7 +298,7 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
         $destinationFile = $kvp.Value
         $sourceFile = $kvp.Key
  
-        if(!(Test-Path $sourceFile))
+        if (!(Test-Path $sourceFile))
         {
             log-info "Warning:Copying File:No source. skipping:$($sourceFile)"
             continue
@@ -306,18 +306,18 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
  
         $count = 0
  
-        while($count -lt 60)
+        while ($count -lt 60)
         {
             try
             {
                 # copy only if newer if not forced
-                if(!$force -and [IO.File]::Exists($destinationFile))
+                if (!$force -and [IO.File]::Exists($destinationFile))
                 {
                     [IO.FileInfo] $dfileInfo = new-object IO.FileInfo ($destinationFile)    
                     [IO.FileInfo] $sfileInfo = new-object IO.FileInfo ($sourceFile)    
-                    if($dfileInfo.LastWriteTimeUtc -eq $sfileInfo.LastWriteTimeUtc)
+                    if ($dfileInfo.LastWriteTimeUtc -eq $sfileInfo.LastWriteTimeUtc)
                     {
-                        if($debugScript)
+                        if ($debugScript)
                         {
                             log-info "skipping file copy $($destinationFile)"
                         }
@@ -326,18 +326,18 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
                     }
                 }
  
-                if(is-fileLocked $sourceFile)
+                if (is-fileLocked $sourceFile)
                 {
                     start-sleep -Seconds 1
-	                $count++          
+                    $count++          
 				    
-                    if($count -lt 60)          
-				    {
-					    Continue
-				    }
+                    if ($count -lt 60)          
+                    {
+                        Continue
+                    }
                 }
                 
-                if(![IO.Directory]::Exists([IO.Path]::GetDirectoryName($destinationFile)))
+                if (![IO.Directory]::Exists([IO.Path]::GetDirectoryName($destinationFile)))
                 {
                     $destinationDirectory = [IO.Path]::GetDirectoryName($destinationFile)
                     log-info "creating directory:$($destinationDirectory)"
@@ -349,7 +349,7 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
                 log-info "Copying File:$($sourceFile) to $($destinationFile)"
                 [IO.File]::Copy($sourceFile, $destinationFile, $true)
             
-                if($delete)
+                if ($delete)
                 {
                     log-info "Deleting File:$($sourceFile)"
                     [IO.File]::Delete($sourceFile)
@@ -376,9 +376,9 @@ function copy-files([hashtable] $files, [bool] $delete = $false)
 # ----------------------------------------------------------------------------------------------------------------
 function deploy-files($command, $machine)
 {
-    if(!$start)
+    if (!$start)
     {
-        if($debugScript)
+        if ($debugScript)
         {
             log-info "deploy-files action not start. returning"
         }
@@ -392,15 +392,15 @@ function deploy-files($command, $machine)
     {
         $subDirSearch = [IO.SearchOption]::TopDirectoryOnly
 
-        if($command.searchSubDir)
+        if ($command.searchSubDir)
         {
             $subDirSearch = [IO.SearchOption]::AllDirectories
         }
         
-        foreach($sourceFiles in $command.sourcefiles.Split(';', [StringSplitOptions]::RemoveEmptyEntries))
+        foreach ($sourceFiles in $command.sourcefiles.Split(';', [StringSplitOptions]::RemoveEmptyEntries))
         {
             $copyFiles = @{}
-            if([string]::IsNullOrEmpty($sourceFiles))
+            if ([string]::IsNullOrEmpty($sourceFiles))
             {
                 log-info "deploy-files: no source files. returning"
                 return
@@ -408,7 +408,7 @@ function deploy-files($command, $machine)
 
             log-info "deploy-files searching $($sourceFiles)"
 
-            if($sourceFiles.Contains("?") -or $sourceFiles.Contains("*"))
+            if ($sourceFiles.Contains("?") -or $sourceFiles.Contains("*"))
             {
                 $sourceFilter = [IO.Path]::GetFileName($sourceFiles)
                 $sourceFiles = [IO.Path]::GetDirectoryName($sourceFiles)
@@ -416,7 +416,7 @@ function deploy-files($command, $machine)
             }
             else
             {
-                if([IO.Directory]::Exists($sourceFiles))
+                if ([IO.Directory]::Exists($sourceFiles))
                 {
                     $sourceFilter = "*"
                     $isDir = $true
@@ -424,8 +424,8 @@ function deploy-files($command, $machine)
                 else
                 {
                     #assume file
-                    $copyFiles.Add($sourcefiles, $sourcefiles.Replace([IO.Path]::GetDirectoryName($sourcefiles),"\\$($machine)\$($command.destfiles)"))
-                    if($debugScript)
+                    $copyFiles.Add($sourcefiles, $sourcefiles.Replace([IO.Path]::GetDirectoryName($sourcefiles), "\\$($machine)\$($command.destfiles)"))
+                    if ($debugScript)
                     {
                         $copyfiles | fl *
                     }
@@ -435,25 +435,25 @@ function deploy-files($command, $machine)
                 }
             }
 
-            $files = [IO.Directory]::GetFiles($sourceFiles,$sourceFilter,$subDirSearch)
+            $files = [IO.Directory]::GetFiles($sourceFiles, $sourceFilter, $subDirSearch)
 
-            foreach($file in $files)
+            foreach ($file in $files)
             {
                 $destFile = $null
-                if(!$isDir)
+                if (!$isDir)
                 {
                     $destFile = "\$([IO.Path]::GetFileName($file))"
                 }
 
-                $copyFiles.Add($file, $file.Replace($sourcefiles,"\\$($machine)\$($command.destfiles)$($destFile)"))
+                $copyFiles.Add($file, $file.Replace($sourcefiles, "\\$($machine)\$($command.destfiles)$($destFile)"))
             }
 
-            if($debugScript)
+            if ($debugScript)
             {
                 $copyfiles | fl *
             }
 
-            if($debugScript)
+            if ($debugScript)
             {
                 $copyfiles | fl *
             }
@@ -471,7 +471,7 @@ function deploy-files($command, $machine)
 # ----------------------------------------------------------------------------------------------------------------
 function export-jobs()
 {
-    if(![string]::IsNullOrEmpty($export))
+    if (![string]::IsNullOrEmpty($export))
     {
         $commands = @{}
         $commands.StartCommands = $global:startCommands
@@ -484,19 +484,19 @@ function export-jobs()
 # ----------------------------------------------------------------------------------------------------------------
 function find-commandFromJob($jobName)
 {
-    foreach($machine in $machines)
+    foreach ($machine in $machines)
     {
-        foreach($command in $global:stopCommands)
+        foreach ($command in $global:stopCommands)
         {
-            if($job.Name -ieq "$($machine)-$($command.Name)")
+            if ($job.Name -ieq "$($machine)-$($command.Name)")
             {
                 return $command
             }
         }
         
-        foreach($command in $global:startCommands)
+        foreach ($command in $global:startCommands)
         {
-            if($job.Name -ieq "$($machine)-$($command.Name)")
+            if ($job.Name -ieq "$($machine)-$($command.Name)")
             {
                 return $command
             }
@@ -510,9 +510,9 @@ function find-commandFromJob($jobName)
 function gather-files($command, $machine)
 {
 
-    if(!$stop)
+    if (!$stop)
     {
-        if($debugScript)
+        if ($debugScript)
         {
             log-info "gather-files action not stop. returning"
         }
@@ -523,43 +523,43 @@ function gather-files($command, $machine)
     {
         $subDirSearch = [IO.SearchOption]::TopDirectoryOnly
 
-        if($command.searchSubDir)
+        if ($command.searchSubDir)
         {
             $subDirSearch = [IO.SearchOption]::AllDirectories
         }
 
-        if([string]::IsNullOrEmpty($command.destfiles))
+        if ([string]::IsNullOrEmpty($command.destfiles))
         {
             $command.destfiles = $gatherDir
         }
-        elseif($command.destfiles.StartsWith("."))
+        elseif ($command.destfiles.StartsWith("."))
         {
-            $command.destfiles = $command.destfiles.Replace(".",$gatherDir)
+            $command.destfiles = $command.destfiles.Replace(".", $gatherDir)
         }
 
         $copyFiles = @{}
         # directory, files, wildcard
-        foreach($sourceFiles in $command.sourcefiles.Split(';', [StringSplitOptions]::RemoveEmptyEntries))
+        foreach ($sourceFiles in $command.sourcefiles.Split(';', [StringSplitOptions]::RemoveEmptyEntries))
         {
-            $sourceFilesPath  = "\\$($machine)\$($sourcefiles)"
+            $sourceFilesPath = "\\$($machine)\$($sourcefiles)"
             log-info "gather-files searching $($sourceFilesPath)"
 
-            if($sourceFilesPath.Contains("?") -or $sourceFilesPath.Contains("*"))
+            if ($sourceFilesPath.Contains("?") -or $sourceFilesPath.Contains("*"))
             {
                 $sourceFilter = [IO.Path]::GetFileName($sourceFilesPath)
                 $sourceFilesPath = [IO.Path]::GetDirectoryName($sourceFilesPath)
             }
             else
             {
-                if([IO.Directory]::Exists($sourceFilesPath))
+                if ([IO.Directory]::Exists($sourceFilesPath))
                 {
                     $sourceFilter = "*"
                 }
                 else
                 {
                     #assume file
-                    $copyFiles.Add($sourcefilesPath, $sourcefilesPath.Replace([IO.Path]::GetDirectoryName($sourcefilesPath),"$($command.destfiles)\$($machine)"))
-                    if($debugScript)
+                    $copyFiles.Add($sourcefilesPath, $sourcefilesPath.Replace([IO.Path]::GetDirectoryName($sourcefilesPath), "$($command.destfiles)\$($machine)"))
+                    if ($debugScript)
                     {
                         $copyfiles | fl *
                     }
@@ -570,27 +570,27 @@ function gather-files($command, $machine)
             }
 
             # add to cleanup list
-            if(!$global:cleanupList.Contains($machine))
+            if (!$global:cleanupList.Contains($machine))
             {
                 $global:cleanupList.Add($machine, @{})
             }
 
-            if(!($global:cleanupList.$machine).Contains($sourceFilesPath))
+            if (!($global:cleanupList.$machine).Contains($sourceFilesPath))
             {
                 log-info "adding $($machine) $($sourceFilesPath) to cleanup list"
-                ($global:cleanupList.$machine).Add($sourceFilesPath,"")
+                ($global:cleanupList.$machine).Add($sourceFilesPath, "")
             }
 
             log-info "gather-files searching $($sourceFilesPath) for $($sourceFilter)"
             $files = [IO.Directory]::GetFiles($sourceFilesPath, $sourceFilter, $subDirSearch)
 
             # save in global list to copy at end of all job completion
-            foreach($file in $files)
+            foreach ($file in $files)
             {
                 $copyFiles.Add($file, $file.Replace($sourceFilesPath, "$($command.destfiles)\$($machine)"))
             }
 
-            if($debugScript)
+            if ($debugScript)
             {
                 $copyfiles | fl *
             }
@@ -608,9 +608,9 @@ function gather-files($command, $machine)
 # ----------------------------------------------------------------------------------------------------------------
 function import-jobs()
 {
-    if(![string]::IsNullOrEmpty($import))
+    if (![string]::IsNullOrEmpty($import))
     {
-        if(test-path $import)
+        if (test-path $import)
         {
             $global:startCommands.Clear()
             $global:stopCommands.Clear()
@@ -643,16 +643,16 @@ function is-fileLocked([string] $file)
   
     try
     {
-	    $fileStream = $fileInfo.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        $fileStream = $fileInfo.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
 
-	    if ($fileStream)
-	    {
-            $fileStream.Close()
-	    }
-        
-        if($debugScript)
+        if ($fileStream)
         {
-	        log-info "File is NOT locked:$($file)"
+            $fileStream.Close()
+        }
+        
+        if ($debugScript)
+        {
+            log-info "File is NOT locked:$($file)"
         }
 
         return $false
@@ -670,13 +670,13 @@ function log-info($data)
 {
     $dataWritten = $false
     $data = "$([System.DateTime]::Now):$($data)`n"
-    if([regex]::IsMatch($data.ToLower(),"error|exception|fail|warning"))
+    if ([regex]::IsMatch($data.ToLower(), "error|exception|fail|warning"))
     {
         write-host $data -foregroundcolor Yellow
     }
-    elseif([regex]::IsMatch($data.ToLower(),"running"))
+    elseif ([regex]::IsMatch($data.ToLower(), "running"))
     {
-       write-host $data -foregroundcolor Green
+        write-host $data -foregroundcolor Green
     }
     else
     {
@@ -684,7 +684,7 @@ function log-info($data)
     }
 
     $counter = 0
-    while(!$dataWritten -and $counter -lt 1000)
+    while (!$dataWritten -and $counter -lt 1000)
     {
         try
         {
@@ -719,110 +719,110 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
             # win 2k8r2 and below have to use com object
             # 2012 can use cmdlets
         
-                log-info "manage-scheduledTask $($taskInfo.taskname) $($machine)"
+            log-info "manage-scheduledTask $($taskInfo.taskname) $($machine)"
         
-                $TaskName = $taskInfo.taskname
-                $TaskDescr = $taskInfo.taskdescr
-                $TaskCommand = $taskInfo.taskcommand
-                $TaskDir = $taskInfo.taskdir
-                $TaskArg = $taskInfo.taskarg
+            $TaskName = $taskInfo.taskname
+            $TaskDescr = $taskInfo.taskdescr
+            $TaskCommand = $taskInfo.taskcommand
+            $TaskDir = $taskInfo.taskdir
+            $TaskArg = $taskInfo.taskarg
 
-               $error.Clear()
+            $error.Clear()
             $service = new-object -ComObject("Schedule.Service")
             # connect to the local machine.
             # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381833(v=vs.85).aspx
-	            # for remote machine connect do $service.Connect(serverName,user,domain,password)
-                if([string]::IsNullOrEmpty($machine))
-                {
-                    $service.Connect()
-                }
-                else
-                {
+            # for remote machine connect do $service.Connect(serverName,user,domain,password)
+            if ([string]::IsNullOrEmpty($machine))
+            {
+                $service.Connect()
+            }
+            else
+            {
                 $service.Connect($machine)
-                }
+            }
 
             $rootFolder = $service.GetFolder("\")
 
-            if($enable)
+            if ($enable)
             {
-            $TaskDefinition = $service.NewTask(0)
-            $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
-                    # 2k8r2 is 65539 (0x10003) 1.3
-                    # procmon needs at least 2k8r2 compat
-                    #$TaskDefinition.Settings.Compatibility = 3
-            $TaskDefinition.Settings.Enabled = $true
-            $TaskDefinition.Settings.AllowDemandStart = $true
+                $TaskDefinition = $service.NewTask(0)
+                $TaskDefinition.RegistrationInfo.Description = "$TaskDescr"
+                # 2k8r2 is 65539 (0x10003) 1.3
+                # procmon needs at least 2k8r2 compat
+                #$TaskDefinition.Settings.Compatibility = 3
+                $TaskDefinition.Settings.Enabled = $true
+                $TaskDefinition.Settings.AllowDemandStart = $true
 
-            $triggers = $TaskDefinition.Triggers
-            #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
-            $trigger = $triggers.Create(8) # Creates a "boot time" trigger
-            #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
-            $trigger.Enabled = $true
+                $triggers = $TaskDefinition.Triggers
+                #http://msdn.microsoft.com/en-us/library/windows/desktop/aa383915(v=vs.85).aspx
+                $trigger = $triggers.Create(8) # Creates a "boot time" trigger
+                #$trigger.StartBoundary = $TaskStartTime.ToString("yyyy-MM-dd'T'HH:mm:ss")
+                $trigger.Enabled = $true
 
-            # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
-            $Action = $TaskDefinition.Actions.Create(0)
-            $action.Path = "$TaskCommand"
-            $action.Arguments = "$TaskArg"
-            $action.WorkingDirectory = $TaskDir
+                # http://msdn.microsoft.com/en-us/library/windows/desktop/aa381841(v=vs.85).aspx
+                $Action = $TaskDefinition.Actions.Create(0)
+                $action.Path = "$TaskCommand"
+                $action.Arguments = "$TaskArg"
+                $action.WorkingDirectory = $TaskDir
     
-           #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
-               $rootFolder.RegisterTaskDefinition("$TaskName",$TaskDefinition,6,"System",$null,5)
+                #http://msdn.microsoft.com/en-us/library/windows/desktop/aa381365(v=vs.85).aspx
+                $rootFolder.RegisterTaskDefinition("$TaskName", $TaskDefinition, 6, "System", $null, 5)
 
-            #start task
-            $task = $rootFolder.GetTask($TaskName)
+                #start task
+                $task = $rootFolder.GetTask($TaskName)
 
-            $task.Run($null)
+                $task.Run($null)
 
             }
             else
             {
-            # stop task if its running
-            foreach($task in $service.GetRunningTasks(1))
-            {
-            if($task.Name -ieq $TaskName)
-            {
-                            if($debugScript)
-                            {
-                                log-info "found task $($TaskName)"
-                            }
-
-            $task.Stop()
-            }
-            }
-
-            # delete task
-            $rootFolder.DeleteTask($TaskName,$null)
-            }
-
-               if($wait)
+                # stop task if its running
+                foreach ($task in $service.GetRunningTasks(1))
                 {
-                    log-info "waiting for task to complete"
-                    while($true)
+                    if ($task.Name -ieq $TaskName)
                     {
-                        $foundTask = $false
-                    # stop task if its running
-                foreach($task in $service.GetRunningTasks(1))
-                {
-                if($task.Name -ieq $TaskName)
-                {
-                                if($debugScript)
-                                {
-                                    log-info "found task $($TaskName)"
-                                }
-                $foundTask = $true
-                }
-                }
-
-                        if(!$foundTask)
+                        if ($debugScript)
                         {
-                            break
+                            log-info "found task $($TaskName)"
                         }
 
-                        Start-Sleep -Seconds 5
+                        $task.Stop()
                     }
                 }
 
-            if($error.Count -ge 1)
+                # delete task
+                $rootFolder.DeleteTask($TaskName, $null)
+            }
+
+            if ($wait)
+            {
+                log-info "waiting for task to complete"
+                while ($true)
+                {
+                    $foundTask = $false
+                    # stop task if its running
+                    foreach ($task in $service.GetRunningTasks(1))
+                    {
+                        if ($task.Name -ieq $TaskName)
+                        {
+                            if ($debugScript)
+                            {
+                                log-info "found task $($TaskName)"
+                            }
+                            $foundTask = $true
+                        }
+                    }
+
+                    if (!$foundTask)
+                    {
+                        break
+                    }
+
+                    Start-Sleep -Seconds 5
+                }
+            }
+
+            if ($error.Count -ge 1)
             {
                 log-info $error
                 $error.Clear()
@@ -839,7 +839,7 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
     } # end functions
 
     #throttle
-    While((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
+    While ((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         Start-Sleep -Milliseconds 100
     }
@@ -847,11 +847,11 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
     log-info "starting task job: $($machine)-$($command.Name)"
 
     $job = Start-Job -Name "$($machine)-$($command.Name)" -InitializationScript $functions -ScriptBlock {
-        param($command,$machine, $taskInfo,$wait,$enable,$start)
+        param($command, $machine, $taskInfo, $wait, $enable, $start)
 
         try
         {
-            if($start)
+            if ($start)
             {
                 log-info "manage-scheduledTaskJob 'start' job"
                 # stop old task using current task name
@@ -870,12 +870,12 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
                 manage-scheduledTask -enable $false -machine $machine -taskInfo $taskInfo -wait $false
             }
         }
-            catch
+        catch
         {
             log-info "Exception:manage-scheduledTaskJob: $($Error)"
             $Error.Clear()
         }
-    } -ArgumentList ($command,$machine, $taskInfo,$wait,$enable,$start)
+    } -ArgumentList ($command, $machine, $taskInfo, $wait, $enable, $start)
     
     $global:jobs = $global:jobs + $job
 }
@@ -883,22 +883,22 @@ function manage-scheduledTaskJob([string] $machine, $taskInfo, [bool] $wait = $f
 # ----------------------------------------------------------------------------------------------------------------
 function process-commands($commands, [string] $machine)
 {
-    foreach($command in $commands) 
+    foreach ($command in $commands) 
     {
-        if(!$command.enabled)
+        if (!$command.enabled)
         {
             continue
         }
 
         deploy-files -command $command -machine $machine
 
-        if([string]::IsNullOrEmpty($command.command))
+        if ([string]::IsNullOrEmpty($command.command))
         {
             log-info "skipping empty command"
             continue
         }
 
-        if($command.useWmi)
+        if ($command.useWmi)
         {
             run-wmiCommandJob -command $command -machine $machine
         }
@@ -906,11 +906,11 @@ function process-commands($commands, [string] $machine)
         {
 
             manage-scheduledTaskJob -wait $command.wait -machine $machine -taskInfo @{
-                "taskname" = $command.Keys;
-                "taskdescr" = $command.Keys;
+                "taskname"    = $command.Keys;
+                "taskdescr"   = $command.Keys;
                 "taskcommand" = $command.command;
-                "taskdir" = $command.workingDir;
-                "taskarg" = $command.arguments
+                "taskdir"     = $command.workingDir;
+                "taskarg"     = $command.arguments
             }
         }
     }
@@ -931,7 +931,7 @@ function run-wmiCommandJob($command, $machine)
     }
 
     #throttle
-    While((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
+    While ((Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         Start-Sleep -Milliseconds 100
     }
@@ -939,29 +939,29 @@ function run-wmiCommandJob($command, $machine)
     log-info "starting wmi job: $($machine)-$($command.Name)"
 
     $job = Start-Job -Name "$($machine)-$($command.Name)" -InitializationScript $functions -ScriptBlock {
-        param($command,$machine)
+        param($command, $machine)
 
         try
         {
             $commandline = "$($command.command) $($command.arguments)"
             log-info "running wmi command: $($commandline)"
         
-            $startup=[wmiclass]"Win32_ProcessStartup"
-            $startup.Properties['ShowWindow'].value=$False
+            $startup = [wmiclass]"Win32_ProcessStartup"
+            $startup.Properties['ShowWindow'].value = $False
             $ret = Invoke-WmiMethod -ComputerName $machine -Class Win32_Process -Name Create -Impersonation Impersonate -ArgumentList @($commandline, $command.workingDir, $startup)
 
-            if($ret.ReturnValue -ne 0 -or $ret.ProcessId -eq 0)
+            if ($ret.ReturnValue -ne 0 -or $ret.ProcessId -eq 0)
             {
                 log-info "Error:run-wmiCommand: $($ret.ReturnValue)"
                 return
             }
 
-            if($command.wait)
+            if ($command.wait)
             {
-                while($true)
+                while ($true)
                 {
                     #log-info "waiting on process: $($ret.ProcessId)"
-                    if((Get-WmiObject -ComputerName $machine -Class Win32_Process -Filter "ProcessID = '$($ret.ProcessId)'"))
+                    if ((Get-WmiObject -ComputerName $machine -Class Win32_Process -Filter "ProcessID = '$($ret.ProcessId)'"))
                     {
                         Start-Sleep -Seconds 1
                     }
@@ -978,7 +978,7 @@ function run-wmiCommandJob($command, $machine)
             log-info "Exception:run-wmiCommand: $($Error)"
             $Error.Clear()
         }
-    } -ArgumentList ($command,$machine)
+    } -ArgumentList ($command, $machine)
     
     $global:jobs = $global:jobs + $job
 }
@@ -988,8 +988,8 @@ function runas-admin()
 {
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
-       log-info "please restart script as administrator. exiting..."
-       exit
+        log-info "please restart script as administrator. exiting..."
+        exit
     }
 }
  
@@ -1001,13 +1001,13 @@ function wait-forJobs()
     $waiting = $true
     $failedJobs = New-Object System.Collections.ArrayList
 
-    if($global:jobs -ne @())
+    if ($global:jobs -ne @())
     {
-        while($waiting)
+        while ($waiting)
         {
             #Wait-Job -Job $global:jobs
             $waiting = $false
-            foreach($job in Get-Job)
+            foreach ($job in Get-Job)
             {
 
                 #log-info "waiting on $($job.Name):$($job.State)"
@@ -1019,14 +1019,14 @@ function wait-forJobs()
                     'Running' { $waiting = $true }
                 }
 
-                if($stop -and $job.State -ieq 'Completed')
+                if ($stop -and $job.State -ieq 'Completed')
                 {
                     # gather files
-                    foreach($machine in $machines)
+                    foreach ($machine in $machines)
                     {
-                        foreach($command in $global:stopCommands)
+                        foreach ($command in $global:stopCommands)
                         {
-                            if($job.Name -ieq "$($machine)-$($command.Name)")
+                            if ($job.Name -ieq "$($machine)-$($command.Name)")
                             {
                                 log-info "job completed, copying files from: $($machine) for command: $($command.Name)"
                                 gather-files -command $command -machine $machine
@@ -1038,10 +1038,10 @@ function wait-forJobs()
                 }
                 
                 # restart failed jobs
-                if($job.State -ieq 'Failed')
+                if ($job.State -ieq 'Failed')
                 {
                     Receive-Job -Job $job
-                    if(!$failedJobs.Contains($job))
+                    if (!$failedJobs.Contains($job))
                     {
                         $failedJobs.Add($job)
                         log-info "** restarting failed job $($job.Name) **"
@@ -1059,18 +1059,18 @@ function wait-forJobs()
                 }
 
                 # Getting the information back from the jobs
-                if($job.State -ieq 'Completed')
+                if ($job.State -ieq 'Completed')
                 {
                     Receive-Job -Job $job
                     Remove-Job -Job $job
                 }
             }
             
-            if($debugScript -or $job.State -ieq 'Completed')
+            if ($debugScript -or $job.State -ieq 'Completed')
             {
-                foreach($job in $global:jobs)
+                foreach ($job in $global:jobs)
                 {
-                    if($job.State -ine 'Completed')
+                    if ($job.State -ine 'Completed')
                     {
                         log-info ("$($job.Name):$($job.State):$($job.Error):$((find-commandFromJob -jobName $job.Name).Keys)")
                         Receive-Job -Job $job 
@@ -1097,109 +1097,109 @@ function build-jobsList()
     ##################
 
     $global:startCommands.Add(@{ 
-        'name' = "rdgateway-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\rdgateway.mgr.bat start";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\rdgateway\rdgateway.mgr.bat";
-        'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $false
-    })
+            'name'         = "rdgateway-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "cmd.exe";
+            'arguments'    = "/c $($managedDirectory)\rdgateway.mgr.bat start";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$(get-Location)\rdgateway\rdgateway.mgr.bat";
+            'destfiles'    = $managedRemoteDirectory;
+            'searchSubDir' = $false
+        })
 
 
     $global:startCommands.Add(@{ 
-        'name' = "perfmon-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\perfmon.mgr.bat start";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\perfmon\perfmon.mgr.bat";
-        'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $false
-    })
+            'name'         = "perfmon-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "cmd.exe";
+            'arguments'    = "/c $($managedDirectory)\perfmon.mgr.bat start";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$(get-Location)\perfmon\perfmon.mgr.bat";
+            'destfiles'    = $managedRemoteDirectory;
+            'searchSubDir' = $false
+        })
 
     $global:startCommands.Add(@{ 
-        'name' = "event-log-manager-debug";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -enableDebugLogs -rds -eventLogNamePattern `"hyper|host|virtual`"";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\events-export";
-        'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $true
-    })
+            'name'         = "event-log-manager-debug";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -enableDebugLogs -rds -eventLogNamePattern `"hyper|host|virtual`"";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$(get-Location)\events-export";
+            'destfiles'    = $managedRemoteDirectory;
+            'searchSubDir' = $true
+        })
 
     $global:startCommands.Add(@{ 
-        'name' = "event-log-manager";
-        'enabled' = $true;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "";
-        'arguments' = "";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\events-export";
-        'destfiles' = $managedRemoteDirectory;   
-        'searchSubDir' = $true
-    })
+            'name'         = "event-log-manager";
+            'enabled'      = $true;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "";
+            'arguments'    = "";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$(get-Location)\events-export";
+            'destfiles'    = $managedRemoteDirectory;   
+            'searchSubDir' = $true
+        })
 
     $global:startCommands.Add(@{ 
-        'name' = "rds-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file logman-wrapper.ps1 -rds -action deploy -configurationfile .\single-session.xml";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\2k12-rds-tracing";
-        'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $false
-    })
+            'name'         = "rds-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file logman-wrapper.ps1 -rds -action deploy -configurationfile .\single-session.xml";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$(get-Location)\2k12-rds-tracing";
+            'destfiles'    = $managedRemoteDirectory;
+            'searchSubDir' = $false
+        })
 
     $global:startCommands.Add(@{ 
-        'name' = "network-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "netsh.exe";
-        'arguments' = "trace start capture=yes overwrite=yes maxsize=1024 filemode=circular tracefile=$($managedDirectory)\net.etl";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "network-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "netsh.exe";
+            'arguments'    = "trace start capture=yes overwrite=yes maxsize=1024 filemode=circular tracefile=$($managedDirectory)\net.etl";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:startCommands.Add(@{ 
-        'name' = "xperf-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat set&&$($managedDirectory)\xperf\xperf.mgr.bat start slowlogon";
-        'workingDir' = "$($managedDirectory)\xperf";
-        'sourceFiles' = "$(get-Location)\xperf";
-        'destfiles' = "$($managedRemoteDirectory)\xperf";
-        'searchSubDir' = $true
-    })
+            'name'         = "xperf-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "cmd.exe";
+            'arguments'    = "/c $($managedDirectory)\xperf\xperf.mgr.bat set&&$($managedDirectory)\xperf\xperf.mgr.bat start slowlogon";
+            'workingDir'   = "$($managedDirectory)\xperf";
+            'sourceFiles'  = "$(get-Location)\xperf";
+            'destfiles'    = "$($managedRemoteDirectory)\xperf";
+            'searchSubDir' = $true
+        })
 
     $global:startCommands.Add(@{ 
-        'name' = "procmon-tracing";
-        'enabled' = $false;
-        'useWmi' = $false; 
-        'wait' = $false;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\procmon-tracing";
-        'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $true
-    })
+            'name'         = "procmon-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $false; 
+            'wait'         = $false;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$(get-Location)\procmon-tracing";
+            'destfiles'    = $managedRemoteDirectory;
+            'searchSubDir' = $true
+        })
 
     #################
     #               #
@@ -1208,122 +1208,122 @@ function build-jobsList()
     #################
 
     $global:stopCommands.Add(@{ 
-        'name' = "procmon-tracing";
-        'enabled' = $false;
-        'useWmi' = $false; 
-        'wait' = $true;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1 -terminate";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\*.pml";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "procmon-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $false; 
+            'wait'         = $true;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1 -terminate";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$($managedRemoteDirectory)\*.pml";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "xperf-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat stop slowlogon";
-        'workingDir' = "$($managedDirectory)\xperf";
-        'sourceFiles' = "$($managedRemoteDirectory)\xperf\*.etl";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "xperf-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "cmd.exe";
+            'arguments'    = "/c $($managedDirectory)\xperf\xperf.mgr.bat stop slowlogon";
+            'workingDir'   = "$($managedDirectory)\xperf";
+            'sourceFiles'  = "$($managedRemoteDirectory)\xperf\*.etl";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "rds-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file logman-wrapper.ps1 -rds -action undeploy -configurationfile .\single-session.xml -nodynamicpath";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\gather";
-        'destfiles' = "";
-        'searchSubDir' = $true
-    })
+            'name'         = "rds-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file logman-wrapper.ps1 -rds -action undeploy -configurationfile .\single-session.xml -nodynamicpath";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$($managedRemoteDirectory)\gather";
+            'destfiles'    = "";
+            'searchSubDir' = $true
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "network-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "netsh.exe";
-        'arguments' = "trace stop";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\net.etl";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "network-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "netsh.exe";
+            'arguments'    = "trace stop";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$($managedRemoteDirectory)\net.etl";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "event-log-manager";
-        'enabled' = $true;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "powershell.exe";
-    #   'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -clearEventLogsOnGather -rds -uploadDir $($managedDirectory)\events";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -minutes $($minutes) -rds -uploadDir $($managedDirectory)\events -nodynamicpath -eventLogNamePattern `'hyper|host|virtual`'";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\events\*.csv";
-        'destfiles' = "";
-        'searchSubDir' = $true
-    })
+            'name'         = "event-log-manager";
+            'enabled'      = $true;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "powershell.exe";
+            #   'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -clearEventLogsOnGather -rds -uploadDir $($managedDirectory)\events";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -minutes $($minutes) -rds -uploadDir $($managedDirectory)\events -nodynamicpath -eventLogNamePattern `'hyper|host|virtual`'";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$($managedRemoteDirectory)\events\*.csv";
+            'destfiles'    = "";
+            'searchSubDir' = $true
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "event-log-manager-debug";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $false;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -disableDebugLogs -listEventLogs";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "event-log-manager-debug";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $false;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -disableDebugLogs -listEventLogs";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "process-list";
-        'enabled' = $true;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass &`"{get-process | fl * > $($managedDirectory)\processList.txt}`"";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\processList.txt";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "process-list";
+            'enabled'      = $true;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "powershell.exe";
+            'arguments'    = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass &`"{get-process | fl * > $($managedDirectory)\processList.txt}`"";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$($managedRemoteDirectory)\processList.txt";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "perfmon-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\perfmon.mgr.bat stop";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\*.blg";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "perfmon-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "cmd.exe";
+            'arguments'    = "/c $($managedDirectory)\perfmon.mgr.bat stop";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "$($managedRemoteDirectory)\*.blg";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
     $global:stopCommands.Add(@{ 
-        'name' = "rdgateway-tracing";
-        'enabled' = $false;
-        'useWmi' = $true; 
-        'wait' = $true;
-        'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\rdgateway.mgr.bat stop";
-        'workingDir' = $managedDirectory;
-        'sourceFiles' = "c`$\windows\tracing\*;c`$\windows\debug\i*.log;c$\windows\debug\n*.log";
-        'destfiles' = "";
-        'searchSubDir' = $false
-    })
+            'name'         = "rdgateway-tracing";
+            'enabled'      = $false;
+            'useWmi'       = $true; 
+            'wait'         = $true;
+            'command'      = "cmd.exe";
+            'arguments'    = "/c $($managedDirectory)\rdgateway.mgr.bat stop";
+            'workingDir'   = $managedDirectory;
+            'sourceFiles'  = "c`$\windows\tracing\*;c`$\windows\debug\i*.log;c$\windows\debug\n*.log";
+            'destfiles'    = "";
+            'searchSubDir' = $false
+        })
 
 }
 

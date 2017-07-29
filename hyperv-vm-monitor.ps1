@@ -51,7 +51,7 @@ $newVmStates = new-object Collections.ArrayList
 
 if (!$hypervisors)
 {
-    if((Get-WindowsFeature -Name Hyper-v).InstallState -eq "Installed")
+    if ((Get-WindowsFeature -Name Hyper-v).InstallState -eq "Installed")
     {
         $hypervisors = @($env:COMPUTERNAME)
     }

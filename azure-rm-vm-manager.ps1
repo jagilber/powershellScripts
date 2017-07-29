@@ -64,7 +64,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
+    [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list')]
     [string]$action = 'list',
     [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
@@ -73,7 +73,7 @@ param(
     [string[]]$resourceGroupNames = @(),
     [int]$throttle = 20,
     [float]$timerHours = 0,
-    [ValidateSet('start','stop','restart','listRunning','listDeallocated','list')]
+    [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list')]
     [string]$timerAction,
     [string[]]$vms = @()
 )
@@ -113,29 +113,29 @@ function main()
 
         $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
 
-        if(!$allVms)
+        if (!$allVms)
         {
             log-info "warning:no vm's found. exiting"
             exit 1
         }
 
         # if neither passed in use all
-        if(!$vms -and !$resourceGroupNames -and !$excludeVms -and !$excludeResourceGroupNames -and !($action -imatch 'list'))
+        if (!$vms -and !$resourceGroupNames -and !$excludeVms -and !$excludeResourceGroupNames -and !($action -imatch 'list'))
         {
             log-info "warning: managing all vm's in subscription! use -resourcegroupnames or -vms to filter.`r`nif this is wrong, press ctrl-c to exit..."
         }
 
-        if(!$resourceGroupNames)
+        if (!$resourceGroupNames)
         {
             $resourceGroupNames = (Get-AzureRmResourceGroup).ResourceGroupName
         }
 
         # check passed in resource group names
-        foreach($resourceGroupName in $resourceGroupNames)
+        foreach ($resourceGroupName in $resourceGroupNames)
         {
-            foreach($vm in $allVms)
+            foreach ($vm in $allVms)
             {
-                if($resourceGroupName -ieq $vm.ResourceGroupName)
+                if ($resourceGroupName -ieq $vm.ResourceGroupName)
                 {
                     [void]$filteredVms.Add($vm)
                 }
@@ -143,11 +143,11 @@ function main()
         }
 
         # check for excludeResourceGroup names
-        foreach($excludeResourceGroup in $excludeResourceGroupNames)
+        foreach ($excludeResourceGroup in $excludeResourceGroupNames)
         {
-            foreach($vm in $allVms)
+            foreach ($vm in $allVms)
             {
-                if($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
+                if ($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
                 {
                     log-info "verbose: removing vm $($vm)"
                     [void]$filteredVms.Remove($vm)
@@ -155,12 +155,12 @@ function main()
             }
         }
 
-        if($vms -and $filteredVms)
+        if ($vms -and $filteredVms)
         {
             # remove vm's not matching $vms list
-            foreach($filteredVm in (new-object Collections.ArrayList (,$filteredVms)))
+            foreach ($filteredVm in (new-object Collections.ArrayList (, $filteredVms)))
             {
-                if(!($vms -ieq $filteredVm.Name))
+                if (!($vms -ieq $filteredVm.Name))
                 {
                     log-info "verbose: removing vm $($filteredVm)"
                     [void]$filteredVms.Remove($filteredVm)
@@ -169,26 +169,26 @@ function main()
         }
 
         # check for excludeVms names
-        foreach($excludeVm in $excludeVms)
+        foreach ($excludeVm in $excludeVms)
         {
-            if(($filteredVms.Name -ieq $excludeVm) -and ($allVms.Name -ieq $excludeVm))
+            if (($filteredVms.Name -ieq $excludeVm) -and ($allVms.Name -ieq $excludeVm))
             {
                 log-info "verbose: removing excluded vm $($excludeVm)"
                 
-                foreach($vm in @($allVms | Where-Object Name -ieq $excludeVm))
+                foreach ($vm in @($allVms | Where-Object Name -ieq $excludeVm))
                 {
                     [void]$filteredVms.Remove($vm)
                 }
             }
         }
 
-        if(!$filteredVms -or $filteredVms.Count -lt 1)
+        if (!$filteredVms -or $filteredVms.Count -lt 1)
         {
             log-info "0 vms matched command given."
             return
         }
 
-        foreach($filteredVm in $filteredVms)
+        foreach ($filteredVm in $filteredVms)
         {
             log-info "$($filteredVm.resourceGroupName)\$($filteredVm.Name)"
         }
@@ -224,18 +224,18 @@ function main()
         # wait for action to complete
         monitor-backgroundJobs 
 
-        if($timerAction -and $timerHours -ne 0)
+        if ($timerAction -and $timerHours -ne 0)
         {
             $totalMinutes = ($global:startTime.AddHours($timerHours) - $global:startTime).TotalMinutes
 
-            while($true)
+            while ($true)
             {
                 $minutesLeft = ($global:startTime.AddHours($timerHours) - (get-date)).TotalMinutes
                 Write-Progress -Activity "timer for timerAction '$($timerAction) vms'. Ctrl-C to stop script / timerAction." `
-                        -Status "minutes left until timerAction starts: $($minutesLeft.ToString("0.0"))" `
-                        -PercentComplete ($minutesLeft / $totalMinutes * 100)
+                    -Status "minutes left until timerAction starts: $($minutesLeft.ToString("0.0"))" `
+                    -PercentComplete ($minutesLeft / $totalMinutes * 100)
 
-                if($minutesLeft -le 0)
+                if ($minutesLeft -le 0)
                 {
                     # perform action
                     perform-action -currentAction $timerAction
@@ -258,7 +258,7 @@ function main()
     {
         remove-backgroundJobs
 
-        if(test-path $profileContext)
+        if (test-path $profileContext)
         {
             Remove-Item -Path $profileContext -Force
         }
@@ -280,18 +280,18 @@ function authenticate-azureRm()
     }
 
     #  verify NuGet package
-	$nuget = get-packageprovider nuget -Force
+    $nuget = get-packageprovider nuget -Force
 
-	if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
-	{
-		log-info "installing nuget package..."
-		install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
-	}
+    if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
+    {
+        log-info "installing nuget package..."
+        install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
+    }
 
     $allModules = (get-module azure* -ListAvailable).Name
-	#  install AzureRM module
-	if ($allModules -inotcontains "AzureRM")
-	{
+    #  install AzureRM module
+    if ($allModules -inotcontains "AzureRM")
+    {
         # at least need profile, resources, compute, network
         if ($allModules -inotcontains "AzureRM.profile")
         {
@@ -312,7 +312,7 @@ function authenticate-azureRm()
         Import-Module azurerm.profile        
         Import-Module azurerm.resources        
         Import-Module azurerm.compute            
-	}
+    }
     else
     {
         Import-Module azurerm
@@ -360,13 +360,13 @@ function check-backgroundJobs($writeStatus = $false)
         {
             $ret = Receive-Job -Job $job
 
-            if($ret)
+            if ($ret)
             {
                 log-info "`twarning:receive job $($job.Name) data: $($ret)"
             }
         }            
 
-        if($writeStatus)
+        if ($writeStatus)
         {
             log-info "`tjob status: $($jobInfo)"
         }
@@ -391,14 +391,14 @@ function check-vmRunning($jobInfo)
 
     foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
     {
-        if($status.Code -imatch "PowerState")
+        if ($status.Code -imatch "PowerState")
         {
-            $jobInfo.powerState = $status.Code.ToString().Replace("PowerState/","")
+            $jobInfo.powerState = $status.Code.ToString().Replace("PowerState/", "")
         }
         
-        if($status.Code -imatch "ProvisioningState")
+        if ($status.Code -imatch "ProvisioningState")
         {
-            $jobInfo.provisioningState = $status.Code.ToString().Replace("ProvisioningState/","")
+            $jobInfo.provisioningState = $status.Code.ToString().Replace("ProvisioningState/", "")
         }
 
         if ($status.Code -eq "PowerState/running")
@@ -424,20 +424,20 @@ function do-backgroundJob($jobInfo)
    
     # for job debugging
     # when attached with -debug switch, set $jobInfo.debugPreference to SilentlyContinue to debug
-    while($jobInfo.debugPreference -imatch "Inquire")
+    while ($jobInfo.debugPreference -imatch "Inquire")
     {
-		log-info "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
-		log-info "set $jobInfo.debugPreference = SilentlyContinue to break debug loop"
+        log-info "waiting to debug background job $($jobInfo.action) : $($jobInfo.debugPreference)"
+        log-info "set $jobInfo.debugPreference = SilentlyContinue to break debug loop"
         start-sleep -Seconds 1
     }
     
     $jobInfo = check-vmRunning -jobInfo $jobInfo
 
-    switch($jobInfo.vmRunning)
+    switch ($jobInfo.vmRunning)
     {
         $true 
         {
-            switch($jobInfo.action)
+            switch ($jobInfo.action)
             {
                 "stop" 
                 {
@@ -462,7 +462,7 @@ function do-backgroundJob($jobInfo)
 
         $false 
         {
-            switch($jobInfo.action)
+            switch ($jobInfo.action)
             {
                 "start" 
                 {
@@ -532,23 +532,23 @@ function log-info($data)
     $counter = 0
     $foregroundColor = "white"
 
-    if($data -imatch "error:|fail")
+    if ($data -imatch "error:|fail")
     {
         $foregroundColor = "red"
     }
-    elseif($data -imatch "warning")
+    elseif ($data -imatch "warning")
     {
         $foregroundColor = "yellow"
     }
-    elseif($data -imatch "running")
+    elseif ($data -imatch "running")
     {
         $foregroundColor = "green"
     }
-    elseif($data -imatch "deallocated|stopped")
+    elseif ($data -imatch "deallocated|stopped")
     {
         $foregroundColor = "gray"
     }
-    elseif($data -imatch "unknown")
+    elseif ($data -imatch "unknown")
     {
         $foregroundColor = "cyan"
     }
@@ -567,9 +567,9 @@ function log-info($data)
         }
     }
 
-    if($data -imatch "verbose:")
+    if ($data -imatch "verbose:")
     {
-        if($VerbosePreference -ine "SilentlyContinue")
+        if ($VerbosePreference -ine "SilentlyContinue")
         {
             write-host $data -ForegroundColor $foregroundColor
         }
@@ -595,7 +595,7 @@ function monitor-backgroundJobs()
 # ----------------------------------------------------------------------------------------------------------------
 function perform-action($currentAction)
 {
-    switch($currentAction)
+    switch ($currentAction)
     {
         "list" 
         { 
@@ -646,7 +646,7 @@ function perform-action($currentAction)
 # ----------------------------------------------------------------------------------------------------------------
 function remove-backgroundJobs()
 {
-    foreach($job in get-job)
+    foreach ($job in get-job)
     {
         log-info "verbose:removing job"
         log-info "verbose: $(Receive-Job -Job $Job | fl * | out-string)"
@@ -674,7 +674,7 @@ function start-backgroundJob($jobInfo)
 
     } -Name $jobInfo.jobName -ArgumentList $jobInfo
 
-    if($DebugPreference -ine "SilentlyContinue")
+    if ($DebugPreference -ine "SilentlyContinue")
     {
         ### debug job
         Start-Sleep -Seconds 5
@@ -688,7 +688,7 @@ function start-backgroundJob($jobInfo)
 # ----------------------------------------------------------------------------------------------------------------
 function start-backgroundJobs($jobInfos, $throttle)
 {
-    if(!$jobInfos)
+    if (!$jobInfos)
     {
         log-info "no vm's need action: '$($action)' performed"
         return
@@ -721,7 +721,7 @@ function update-progress()
 {
     $globalJobsCount = $global:jobsCount
 
-    if($globalJobsCount -gt 0)
+    if ($globalJobsCount -gt 0)
     {
         $finishedJobsCount = $globalJobsCount - @(get-job).Count
         $status = "$($finishedJobsCount) / $($globalJobsCount) vm jobs completed. " `

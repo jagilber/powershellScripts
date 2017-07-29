@@ -584,17 +584,17 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 
 
 
-[void]$process.Start()
+    [void]$process.Start()
 
     if ($wait -and !$process.HasExited)
     {
-       if ($process.StandardOutput.Peek() -gt -1)
+        if ($process.StandardOutput.Peek() -gt -1)
         {
             $stdOut = $process.StandardOutput.ReadToEnd()
             log-info $stdOut
-       }
+        }
 
-       if ($process.StandardError.Peek() -gt -1)
+        if ($process.StandardError.Peek() -gt -1)
         {
             $stdErr = $process.StandardError.ReadToEnd()
             log-info $stdErr

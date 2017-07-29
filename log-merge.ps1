@@ -41,17 +41,17 @@
 
 Param(
  
-    [parameter(Position=0,Mandatory=$true,HelpMessage="Enter the source folder for searching:")]
+    [parameter(Position = 0, Mandatory = $true, HelpMessage = "Enter the source folder for searching:")]
     [string] $sourceFolder,
-    [parameter(Position=1,Mandatory=$true,HelpMessage="Enter the file filter pattern (dos style *.*):")]
+    [parameter(Position = 1, Mandatory = $true, HelpMessage = "Enter the file filter pattern (dos style *.*):")]
     [string] $filePattern,
-    [parameter(Position=2,Mandatory=$true,HelpMessage="Enter the new file name:")]
+    [parameter(Position = 2, Mandatory = $true, HelpMessage = "Enter the new file name:")]
     [string] $outputFile = "log-merge.csv",
-    [parameter(Position=3,Mandatory=$false,HelpMessage="Use to enable subdir search")]
+    [parameter(Position = 3, Mandatory = $false, HelpMessage = "Use to enable subdir search")]
     [switch] $subDir,
     [string] $startDate,
     [string] $endDate
-    )
+)
 
 
 
@@ -304,14 +304,14 @@ Add-Type $Code
 
 [DateTime] $time = new-object DateTime
 
-if(![DateTime]::TryParse($startDate,[ref] $time))
+if (![DateTime]::TryParse($startDate, [ref] $time))
 {
-   $startDate = [DateTime]::MinValue
+    $startDate = [DateTime]::MinValue
 }
 
-if(![DateTime]::TryParse($endDate,[ref] $time))
+if (![DateTime]::TryParse($endDate, [ref] $time))
 {
-   $endDate = [DateTime]::Now
+    $endDate = [DateTime]::Now
 }
 
 [LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate)

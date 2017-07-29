@@ -1446,7 +1446,7 @@ function merge-files()
     foreach ($machine in $machines)
     {
         log-info "running merge for $($machine) in path $($uDir)"
-        if([IO.Directory]::Exists("$($uDir)\$($machine)"))
+        if ([IO.Directory]::Exists("$($uDir)\$($machine)"))
         {
             log-merge -sourceFolder "$($uDir)\$($machine)" -filePattern "*.csv" -outputFile "$($uDir)\events-$($machine)-all.csv" -subDir $true
 

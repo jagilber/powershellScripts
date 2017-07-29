@@ -23,21 +23,21 @@ function main()
     #init
     $currentProcessList = enum-processes -processName $processName
 
-    while($true)
+    while ($true)
     {
         $newList = enum-processes -processName $processName
 
-        foreach($id in $newList.GetEnumerator())
+        foreach ($id in $newList.GetEnumerator())
         {
-            if(!$currentProcessList.ContainsKey($id.Key))
+            if (!$currentProcessList.ContainsKey($id.Key))
             {
                 write-host "Adding process to list: $($id.key):$($id.Value)"
                 $currentProcessList.Add($id.Key, $process);
                 
-                if($processArgs -ne $null)
+                if ($processArgs -ne $null)
                 {
                     $cmdline = Get-WmiObject Win32_Process -Filter "ProcessId like `'$($id.key)`'" 
-                    if(!$cmdline.CommandLine.Contains($processArgs))
+                    if (!$cmdline.CommandLine.Contains($processArgs))
                     {
                         continue
                     }
@@ -49,9 +49,9 @@ function main()
 
         $tempList = $currentProcessList.Clone();
 
-        foreach($id in $tempList.GetEnumerator())
+        foreach ($id in $tempList.GetEnumerator())
         {
-            if(!$newList.ContainsKey($id.Key))
+            if (!$newList.ContainsKey($id.Key))
             {
                 write-host "Removing process from list: $($id.key):$($id.Value)"
                 $currentProcessList.Remove($id.Key);
@@ -69,7 +69,7 @@ function enum-processes($processName)
 {
     $tempL = @{}
         
-    foreach($process in [System.Diagnostics.Process]::GetProcessesByName($processName))
+    foreach ($process in [System.Diagnostics.Process]::GetProcessesByName($processName))
     {
         $tempL.Add($process.Id, $process)
     }
@@ -84,7 +84,7 @@ function start-process($process, $arguments)
     $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo;
     $processStartInfo.FileName = $process;
     $processStartInfo.WorkingDirectory = (Get-Location).Path;
-    if($arguments) { $processStartInfo.Arguments = $arguments }
+    if ($arguments) { $processStartInfo.Arguments = $arguments }
     #$processStartInfo.UseShellExecute = $false;
     #$processStartInfo.RedirectStandardOutput = $true;
 
