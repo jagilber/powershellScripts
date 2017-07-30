@@ -332,11 +332,12 @@ function add-publicIp()
     try
     {
         # verify 
-        Write-host "This process will attempt to add a dynamic public ip address to an existing vm that only has private ip address" -ForegroundColor Yellow
-        Write-host "It will attempt to use an existing NSG or will create a new one. The only port open will be 3389 for RDP" -ForegroundColor Yellow
+        Write-host "This process will add a dynamic public ip address to an existing vm that only has a private ip address" -ForegroundColor Yellow
+        Write-host "It will use an existing NSG or will create a new one. The only port open will be 3389 for RDP" -ForegroundColor Yellow
+        Write-host "WARNING: this is exposing the selected virtual machines TCP port 3389 externally on internet." -ForegroundColor Yellow
         Write-host "If this is NOT correct, press ctrl-c to exit script." -ForegroundColor Yellow
 
-        if(($ret = Read-Host "Confirm you want to continue:[y|n]") -imatch "n")
+        if(!($ret = Read-Host "Confirm you want to continue:[y|n]") -imatch "y")
         {
             exit
         }
@@ -404,29 +405,31 @@ function add-publicIp()
 
         if($vmPublicIpAddress)
         {
-            write-host "vm $($vm.Name) already has public ip address $($vmPublicIpAddress). exiting" -ForegroundColor Red
+            write-host "vm $($modifiedVm.Name) already has public ip address $($vmPublicIpAddress). exiting" -ForegroundColor Red
             exit
         }
         
         $rgLocation = (get-azurermresourcegroup -Name $resourceGroupName).Location
         write-host "using location: $($rgLocation)"
-        write-host "creating public ip. please wait..." -ForegroundColor Yellow
-        
-        $vmPublicIP = New-AzureRmPublicIpAddress -Name "$($modifiedVmName)-pubIp" `
-            -ResourceGroupName $resourceGroupName `
-            -AllocationMethod Dynamic `
-            -Location $rgLocation
-        
-        write-host "saving interface change. please wait..." -ForegroundColor Yellow
-        $vmNic.IpConfigurations[0].PublicIpAddress = $vmPublicIp
-        $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         
         $nsg = $vmNic.NetworkSecurityGroup
         $nsgs = @(Get-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName)
 
         if(!$nsg)
         {
+            write-host "all nsg's in resource group:" -ForegroundColor Cyan
+            write-host ($nsgs.Name | out-string)
             write-host "nsg's in resource group on same subnet:" -ForegroundColor Cyan
+
+            try
+            {
+                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+            }
+            catch {}
+
+            write-host ($nsgNames | out-string)
+
+            write-host "nsg's in resource group with TCP 3389 Allow Rule:" -ForegroundColor Cyan
             try
             {
                 $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
@@ -468,36 +471,44 @@ function add-publicIp()
         {
             exit
         }
+
+        write-host "creating security rule for 3389. please wait..." -ForegroundColor Yellow
+
+        $ret = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
+            -Name "AllowRDP" `
+            -Direction Inbound `
+            -Priority 100 `
+            -Access Allow `
+            -SourceAddressPrefix '*' `
+            -SourcePortRange '*' `
+            -DestinationAddressPrefix $vmPrivateIPAddress `
+            -DestinationPortRange "3389" `
+            -Protocol TCP `
+            -ErrorAction Stop
+            
+        write-host "saving security rule for TCP RDP 3389. please wait..." -ForegroundColor Yellow
+        $ret = Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
+        $vmNic.NetworkSecurityGroup = $nsg
+
+        write-host "creating public ip. please wait..." -ForegroundColor Yellow
+        $vmPublicIP = New-AzureRmPublicIpAddress -Name "$($modifiedVmName)-pubIp" `
+            -ResourceGroupName $resourceGroupName `
+            -AllocationMethod Dynamic `
+            -Location $rgLocation
+
+        write-host "setting vm $($modifiedVmName) network interface to use public ip. please wait..." -ForegroundColor Yellow
+        $vmNic.IpConfigurations[0].PublicIpAddress = $vmPublicIp
+        $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         
         $vmPublicIpAddress = (get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $vmPublicIP.Name).IpAddress
 
         if($vmPublicIpAddress)
         {
             write-host "new public ip address: $($vmPublicIpAddress)" -ForegroundColor Green
-            write-host "creating security rule for 3389. please wait..." -ForegroundColor Yellow
-
-            Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
-                -Name "AllowRDP" `
-                -Direction Inbound `
-                -Priority 100 `
-                -Access Allow `
-                -SourceAddressPrefix '*' `
-                -SourcePortRange '*' `
-                -DestinationAddressPrefix $vmPrivateIPAddress `
-                -DestinationPortRange "3389" `
-                -Protocol TCP `
-                -ErrorAction Stop
-            
-            write-host "saving security rule for TCP RDP 3389. please wait..." -ForegroundColor Yellow
-            Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
-
-            write-host "setting vm $($modifiedVmName) network interface to use nsg $($nsgName). please wait..." -ForegroundColor Yellow
-            $vmNic.NetworkSecurityGroup = $nsg
-            $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         }
         else
         {
-            write-host "unable to acquire public ip address. exiting"
+            write-host "unable to acquire public ip address. exiting" -ForegroundColor Red
             exit
         }
         
