@@ -20,11 +20,10 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170729 changed hostname options for wildcard certs
+   Version    : 170802 fix for ipaddress check
    History    : 
+                170729 changed hostname options for wildcard certs
                 170728 add -addPublicIp
-                170726 force look in 'root' store for self signed. changed wildcard url option
-                170722 fix exception in dnsresolve
                 
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
@@ -269,8 +268,22 @@ function add-hostsEntry($ipAddress, $subject)
     {
         $dnsresolve = @(Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue)
         $dnsIP0 = ""
+        $addIp = $false
+        
+        if(!$dnsresolve)
+        {
+            $addIp = $true
+        }
+        elseif(!$dnsresolve.IpAddress)
+        {
+            $addIp = $true
+        }
+        elseif(!$dnsresolve.IpAddress.Contains($ipAddress.IpAddress))
+        {
+            $addIp = $true
+        }
 
-        if (!$dnsresolve -or !$dnsresolve.IpAddress.Contains($ipAddress.IpAddress))
+        if ($addIp)
         {
             if($dnsresolve -and $dnsresolve.IpAddress)
             {
@@ -278,7 +291,7 @@ function add-hostsEntry($ipAddress, $subject)
             }
         
             write-host "$($ipAddress.IpAddress) not same as $($dnsIP0), checking hosts file"
-            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress.IpAddress)?[y|n]") -ieq 'n')
+            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress.IpAddress)?[y|n]") -ine '')
             {
                 return $false
             }
