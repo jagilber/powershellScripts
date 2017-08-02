@@ -18,9 +18,9 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170714 v2
+   Version    : 170802 add resourcegroup name to all deployment events
    History    : 
-
+                170714 v2
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
     query azure rm for all resource manager and deployment logs
@@ -267,7 +267,7 @@ function main()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function add-depitem($lbitem, $color)
+function add-depitem($lbitem, $color, $resourceGroup)
 {
     try
     {
@@ -311,7 +311,7 @@ function add-depitem($lbitem, $color)
         }
 
         $lbi.Content = "$((get-localTime -time (get-time -item $lbitem)))" `
-            + "   DEPLOYMENT: $($lbitem.ResourceGroupName)" `
+            + "   DEPLOYMENT: $($resourceGroup)" `
             + "   $($lbItem.DeploymentName)" `
             + "   $($state)" `
             + "   $($operation)" `
@@ -1145,7 +1145,7 @@ function process-results($jobResults)
                 {
                     foreach ($item in $result.Value)
                     {
-                        add-depitem -lbitem $item -color "DarkOrange"                
+                        add-depitem -lbitem $item -color "DarkOrange" -resourceGroup $result.Key               
                     }
                 }
             }
@@ -1422,8 +1422,6 @@ function run-commands($jobObject = $null)
         $error.clear()
     }
 }
-
-
 
 #-------------------------------------------------------------------
 function start-backgroundJob()
