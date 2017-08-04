@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170802 fix for ipaddress check
+   Version    : 170803 add check for existing security rule. changed destination to *
    History    : 
+                170802 fix for ipaddress check
                 170729 changed hostname options for wildcard certs
                 170728 add -addPublicIp
                 
@@ -187,7 +188,7 @@ function main()
             if ($resourceList.Count -gt 1)
             {
                 write-verbose "query time: $(((get-date) - $startTime).TotalSeconds)"
-                $idsEntry = Read-Host ("Enter number for site / ip address to connect to")
+                $idsEntry = Read-Host ("Enter number for site / ip address to connect to.")
             }
             elseif ($resourceList.Count -eq 1)
             {
@@ -270,11 +271,12 @@ function add-hostsEntry($ipAddress, $subject)
         $dnsIP0 = ""
         $addIp = $false
         
-        if(!$dnsresolve)
+        if($error)
         {
             $addIp = $true
+            $error.Clear()
         }
-        elseif(!$dnsresolve.IpAddress)
+        elseif(!$dnsresolve -or $dnsresolve.Count -lt 1)
         {
             $addIp = $true
         }
@@ -445,14 +447,14 @@ function add-publicIp()
             write-host "nsg's in resource group with TCP 3389 Allow Rule:" -ForegroundColor Cyan
             try
             {
-                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.SecurityRules.DestinationPortRange -imatch 3389 }).Name)
             }
             catch {}
 
             write-host ($nsgNames | out-string)
 
             $newNsgName = "$($modifiedVmName)-nsg"
-            $nsgName = read-host "enter name of existing nsg to use, type in new nsg name to create new nsg, or press {enter} to use '$($newNsgName)'"
+            $nsgName = read-host "enter name of existing nsg to use, new nsg name to create new nsg, or press {enter} to use new name '$($newNsgName)'"
 
             if(!$nsgName)
             {
@@ -485,19 +487,57 @@ function add-publicIp()
             exit
         }
 
-        write-host "creating security rule for 3389. please wait..." -ForegroundColor Yellow
+        write-host "checking for security rule for 3389. please wait..."
 
-        $ret = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
-            -Name "AllowRDP" `
-            -Direction Inbound `
-            -Priority 100 `
-            -Access Allow `
-            -SourceAddressPrefix '*' `
-            -SourcePortRange '*' `
-            -DestinationAddressPrefix $vmPrivateIPAddress `
-            -DestinationPortRange "3389" `
-            -Protocol TCP `
-            -ErrorAction Stop
+        if($nsg.SecurityRules -and $nsg.SecurityRules.Count -gt 0 `
+            -and ([Linq.Enumerable]::Where($nsg.SecurityRules, [Func[object,bool]] `
+            { 
+                param($x) $x.DestinationPortRange -imatch 3389 -and $x.DestinationAddressPrefix -eq "*" 
+            })))
+        {
+           write-host "using existing security rule for 3389..." -ForegroundColor Green
+        }
+        else
+        {
+            write-host "creating security rule for 3389. please wait..." -ForegroundColor Yellow
+            # check for open priority
+            $priority = $Null
+            
+            if($nsg.SecurityRules.Count -gt 0)
+            {            
+            
+            $priorities = $nsg.SecurityRules.Priority
+
+            foreach($priority in 100..4096)
+            {
+                    if ($priorities -ieq $priority)
+                    {
+                        continue
+                    }
+                    else
+                    {
+                        break
+                    }
+                }
+            }
+            else
+            {
+                $priority = 100
+            }
+
+            $ret = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
+                -Name "AllowRDP" `
+                -Direction Inbound `
+                -Priority $priority `
+                -Access Allow `
+                -SourceAddressPrefix '*' `
+                -SourcePortRange '*' `
+                -DestinationAddressPrefix '*' `
+                -DestinationPortRange "3389" `
+                -Protocol TCP `
+                -ErrorAction Stop
+                #$vmPrivateIPAddress `
+        }
             
         write-host "saving security rule for TCP RDP 3389. please wait..." -ForegroundColor Yellow
         $ret = Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
@@ -526,6 +566,10 @@ function add-publicIp()
         }
         
         write-host "successfully added public ip address $($vmPublicIPAddress) to vm $($modifiedVmName)" -ForegroundColor Green
+        write-host "To remove public ip address and nsg, use the following commands:" -ForegroundColor Yellow
+        write-host "`tRemove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
+        write-host "`tRemove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
+        
     }
     catch
     {
