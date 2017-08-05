@@ -95,6 +95,12 @@
     .\remote-tracing.ps1 -action stop -configurationFile single-session.xml -network -machines 192.168.1.1,192.168.1.2 
     undeploy ETW configuration file "single-session.xml" (generated after first start action) and network tracing from machines 192.168.1.1 and 192.168.1.2 using default etl output folder ".\gather"
 
+.EXAMPLE
+    >netsh trace convert input=lmw-single-sesion.etl output=lmw-single-sesion.etl.csv report=yes
+    format traces in .etl file and output to .csv 
+    NOTE: not all traces will be formatted. some require TMF files that are not available externally.
+    Traces that can be converted are 'Manifest' tracing that is same / similar to events outputted to event logs.
+
 .PARAMETER action
     The action to take. Currently this is 'start','stop','generateConfig'. start will enable logman ETW sessions on specified computer(s). stop will disable logman ETW sessions on specified computer(s).
     GenerateConfig, will query logman for currently running traces for baseline, pause for new logman / etw traces to be added, on resume will query logman again
@@ -154,6 +160,8 @@ Param(
     [bool] $continue = $true,
     [parameter(HelpMessage = "Enter to check for script update.")]
     [switch] $getUpdate,
+    [parameter(HelpMessage = "Enter single, comma separated, process list of processes to enable for ldap client")]
+    [string[]] $ldap,
     [parameter(HelpMessage = "Enter single, comma separated, or file name with list of machines to manage")]
     [string[]] $machines,
     [parameter(HelpMessage = "Select this switch to capture network tracing.")]
