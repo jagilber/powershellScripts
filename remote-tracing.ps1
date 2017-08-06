@@ -159,7 +159,7 @@ Param(
     [parameter(HelpMessage = "Enter false to stop after error.")]
     [bool] $continue = $true,
     [parameter(HelpMessage = "Enter etl file to format.")]
-    [string] $formatEtl = $null,
+    [switch] $formatEtl,
     [parameter(HelpMessage = "Enter to check for script update.")]
     [switch] $getUpdate,
     [parameter(HelpMessage = "Enter single, comma separated, process list of processes to enable for ldap client")]
@@ -1230,6 +1230,7 @@ function run-logman([string] $arguments, [bool] $shouldHaveSession = $false, [bo
         }
 
         log-info "retrying..."
+        Start-Sleep -Seconds 
         $count++
     }
 
@@ -1318,7 +1319,7 @@ function run-wmiCommandJob($command, $machine)
 
         try
         {
-            log-info "running wmi command: $($command.command) from dir: $($command.workingDir)"
+            write-host "running wmi command: $($command.command) from dir: $($command.workingDir)"
             $startup = [wmiclass]"Win32_ProcessStartup"
             $startup.Properties['ShowWindow'].value = $False
             # $ret = Invoke-WmiMethod -ComputerName $machine -Class Win32_Process -Name Create -Impersonation Impersonate -ArgumentList @($command.command, $command.workingDir, $startup)
@@ -1331,35 +1332,35 @@ function run-wmiCommandJob($command, $machine)
                 {
                     0
                     {
-                        log-info "$($machine) return:success" 
+                        write-host "$($machine) return:success" 
                     }
                     2
                     {
-                        log-info "$($machine) return:access denied" 
+                        write-host "$($machine) return:access denied" 
                     }
                     3
                     {
-                        log-info "$($machine) return:insufficient privilege" 
+                        write-host "$($machine) return:insufficient privilege" 
                     }
                     8
                     {
-                        log-info "$($machine) return:unknown failure" 
+                        write-host "$($machine) return:unknown failure" 
                     }
                     9
                     {
-                        log-info "$($machine) return:path not found" 
+                        write-host "$($machine) return:path not found" 
                     }
                     21
                     {
-                        log-info "$($machine) return:invalid parameter" 
+                        write-host "$($machine) return:invalid parameter" 
                     }
                     default
                     {
-                        log-info "$($machine) return:unknown" 
+                        write-host "$($machine) return:unknown" 
                     }
                 }
 
-                log-info "Error:run-wmiCommand: $($ret.ReturnValue)"
+                write-host "Error:run-wmiCommand: $($ret.ReturnValue)"
                 return
             }
 
@@ -1367,14 +1368,14 @@ function run-wmiCommandJob($command, $machine)
             {
                 while ($true)
                 {
-                    #log-info "waiting on process: $($ret.ProcessId)"
+                    #write-host "waiting on process: $($ret.ProcessId)"
                     if ((Get-WmiObject -ComputerName $machine -Class Win32_Process -Filter "ProcessID = '$($ret.ProcessId)'"))
                     {
                         Start-Sleep -Seconds 1
                     }
                     else
                     {
-                        #log-info "no process"
+                        #write-host "no process"
                         break
                     }
                 }
@@ -1382,7 +1383,7 @@ function run-wmiCommandJob($command, $machine)
         }
         catch
         {
-            log-info "Exception:run-wmiCommand: $($Error)"
+            write-host "Exception:run-wmiCommand: $($Error)"
             $Error.Clear()
         }
     } -ArgumentList ($command, $machine)
