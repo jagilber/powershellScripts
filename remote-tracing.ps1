@@ -158,10 +158,12 @@ Param(
     [string] $configurationFolder = "",
     [parameter(HelpMessage = "Enter false to stop after error.")]
     [bool] $continue = $true,
+    [parameter(HelpMessage = "Enter etl file to format.")]
+    [string] $formatEtl = $null,
     [parameter(HelpMessage = "Enter to check for script update.")]
     [switch] $getUpdate,
     [parameter(HelpMessage = "Enter single, comma separated, process list of processes to enable for ldap client")]
-    [string[]] $ldap,
+    [string[]] $ldap = @(),
     [parameter(HelpMessage = "Enter single, comma separated, or file name with list of machines to manage")]
     [string[]] $machines,
     [parameter(HelpMessage = "Select this switch to capture network tracing.")]
@@ -209,6 +211,7 @@ $minBuild = 9200
 $networkEtlFile = "network.etl"
 $networkStartCommand = "netsh.exe trace start capture=yes report=disabled persistent=no filemode=circular overwrite=yes maxsize=1024 tracefile="
 $networkStopCommand = "netsh.exe trace stop"
+$retryCount = 3
 $processWaitMs = 10000
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/remote-tracing.ps1"
 $workingDir = ""
@@ -526,9 +529,18 @@ function copy-files($files)
                         break
                     }
                 }
- 
-                # add file if exists local to return array for further processing
-                $resultFiles += $destinationFile
+                
+                if($formatEtl)
+                {
+                    run-process -processName "cmd.exe" -arguments "/c netsh.exe trace convert input=$($destinationFile) output=$($destinationFile).csv report=no" -wait $false
+                }
+
+                if(test-path $destinationFile)
+                {
+                    # add file if exists local to return array for further processing
+                    $resultFiles += $destinationFile
+                }
+
                 break
             }
             catch
@@ -788,6 +800,42 @@ function log-info($data)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function manage-ldapRegistry([ActionType] $currentAction, [string] $machine, [string[]] $processNames = @("svchost.exe"))
+{
+    $hklm = 2147483650
+    $key = "SYSTEM\CurrentControlSet\Services\ldap\Tracing"
+    $wmi = new-object Management.ManagementClass "\\$($machine)\Root\default:StdRegProv" 
+    $ret = $null
+
+    foreach ($processName in $processNames)
+    {
+        switch ($currentAction)
+        {
+            ([ActionType]::start)
+            {
+                # to enable
+                $ret = $wmi.CreateKey($hklm, "$($key)\$($processName)")
+            }
+ 
+            ([ActionType]::stop)
+            {
+                # to disable
+                $ret = $wmi.DeleteKey($hklm, "$($key)\$($processName)")
+            }
+ 
+            default
+            {
+                log-info "Unknown action:$($currentAction): should be start or stop. exiting"
+                exit 1
+            }
+        }
+    }
+ 
+    log-info $ret
+    return
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
 {
     # level is typically 0xff
@@ -795,11 +843,9 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
  
     $levelValue = "0xff"
     $flagsValue = "0xffffffff"
- 
     $hklm = 2147483650
     $key = "SYSTEM\CurrentControlSet\Control\Terminal Server"
-    #CaptureStackTrace
- 
+    $ret = $null 
     $valueNames = @(
         "lsm",
         "termsrv",
@@ -812,7 +858,7 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
         "SessionEnv",
         "SessionMsg")
     
-    $wmi = new-object System.Management.ManagementClass "\\$($machine)\Root\default:StdRegProv" 
+    $wmi = new-object Management.ManagementClass "\\$($machine)\Root\default:StdRegProv" 
     
     foreach ($valueName in $valueNames)
     {
@@ -850,6 +896,7 @@ function manage-rdsRegistry([ActionType] $currentAction, [string] $machine)
         }
     }
  
+    log-info $ret
     return
 }
 
@@ -960,6 +1007,12 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
         if ([String]::IsNullOrEmpty($machine))
         {
             continue
+        }
+
+        # add / remove ldap etw registry settings
+        if ($ldap)
+        {
+            manage-ldapRegistry -currentAction $currentAction -machine $machine -processNames $ldap
         }
  
         # add / remove rds debug registry settings
@@ -1155,13 +1208,29 @@ function run-commands([ActionType] $currentAction, [string[]] $configFiles)
 # ----------------------------------------------------------------------------------------------------------------
 function run-logman([string] $arguments, [bool] $shouldHaveSession = $false, [bool] $shouldNotHaveSession = $false, [switch] $returnResults, [string] $sessionName = "")
 {
-    $retval = run-process -processName $logman -arguments $arguments -wait $true
-    
-    if (!(check-processOutput -output $retval -action $currentAction -shouldHaveSession $shouldHaveSession -shouldNotHaveSession $shouldNotHaveSession -sessionName $sessionName) -and !$continue)
+    $count = 1
+    while($count -le $retryCount)
     {
-        log-info "error in logman command. exiting. use -continue switch to ignore errors"
-        log-info "error: $($retval)"
-        exit 1
+        $retval = run-process -processName $logman -arguments $arguments -wait $true
+        $result = check-processOutput -output $retval `
+            -action $currentAction `
+            -shouldHaveSession $shouldHaveSession `
+            -shouldNotHaveSession $shouldNotHaveSession `
+            -sessionName $sessionName
+    
+        if($result)
+        {
+            break
+        }
+        elseif (!$result -and !$continue)
+        {
+            log-info "error in logman command. exiting. use -continue switch to ignore errors"
+            log-info "error: $($retval)"
+            exit 1
+        }
+
+        log-info "retrying..."
+        $count++
     }
 
     if ($returnResults)
