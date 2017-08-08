@@ -462,6 +462,7 @@ function add-publicIp()
             if($nsgName -and !($nsgNames -imatch $nsgName))
             {
                 write-host "creating new nsg $($nsgName). please wait..." -ForegroundColor Yellow
+                write-host "`t New-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Name $nsgName -Location $rgLocation" -ForegroundColor Gray
                 $nsg = New-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Name $nsgName -Location $rgLocation
             }
             elseif($nsgName -and ($nsgNames -imatch $nsgName))
@@ -485,7 +486,7 @@ function add-publicIp()
             exit
         }
 
-        write-host "checking for security rule for 3389. please wait..."
+        write-host "checking for security rule for 3389"
 
         if($nsg.SecurityRules -and $nsg.SecurityRules.Count -gt 0 `
             -and ([Linq.Enumerable]::Where($nsg.SecurityRules, [Func[object,bool]] `
@@ -497,7 +498,7 @@ function add-publicIp()
         }
         else
         {
-            write-host "creating security rule for 3389. please wait..." -ForegroundColor Yellow
+            write-host "creating security rule for 3389"
             # check for open priority
             $priority = $Null
             
@@ -523,6 +524,18 @@ function add-publicIp()
                 $priority = 100
             }
 
+            write-host "`t Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
+                -Name AllowRDP `
+                -Direction Inbound `
+                -Priority $priority `
+                -Access Allow `
+                -SourceAddressPrefix '*' `
+                -SourcePortRange '*' `
+                -DestinationAddressPrefix '*' `
+                -DestinationPortRange 3389 `
+                -Protocol TCP `
+                -ErrorAction Stop" -foregroundColor Gray
+
             $ret = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
                 -Name "AllowRDP" `
                 -Direction Inbound `
@@ -542,15 +555,23 @@ function add-publicIp()
         $vmNic.NetworkSecurityGroup = $nsg
 
         write-host "creating public ip. please wait..." -ForegroundColor Yellow
+        write-host "`t New-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp `
+            -ResourceGroupName $resourceGroupName `
+            -AllocationMethod Dynamic `
+            -Location $rgLocation" -ForegroundColor Gray
+
         $vmPublicIP = New-AzureRmPublicIpAddress -Name "$($modifiedVmName)-pubIp" `
             -ResourceGroupName $resourceGroupName `
             -AllocationMethod Dynamic `
             -Location $rgLocation
 
         write-host "setting vm $($modifiedVmName) network interface to use public ip. please wait..." -ForegroundColor Yellow
+        #$ret = Add-AzureRmNetworkInterfaceIpConfig -Name $vmPublicIP.Name -NetworkInterface $vmNic
+        #$ret = Set-AzureRmNetworkInterfaceIpConfig -name $vmPublicIP.Name -NetworkInterface $vmNic -PublicIpAddress $vmPublicIP
         $vmNic.IpConfigurations[0].PublicIpAddress = $vmPublicIp
         $ret = Set-AzureRmNetworkInterface -NetworkInterface $vmNic
         
+        write-host "`t (get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $vmPublicIP.Name).IpAddress" -ForegroundColor Gray
         $vmPublicIpAddress = (get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName -Name $vmPublicIP.Name).IpAddress
 
         if($vmPublicIpAddress)
@@ -565,6 +586,7 @@ function add-publicIp()
         
         write-host "successfully added public ip address $($vmPublicIPAddress) to vm $($modifiedVmName)" -ForegroundColor Green
         write-host "To remove public ip address and nsg, use the following commands:" -ForegroundColor Yellow
+        write-host "`t Remove-AzureRmNetworkInterfaceIpConfig -Name $($vmPublicIp.Name) -NetworkInterface (Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName -Name $vmNicName)" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
         
@@ -726,7 +748,7 @@ function check-response($response)
     {
         # go through public ip setup
         add-publicIp
-        exit
+        return
     }
     else
     {
