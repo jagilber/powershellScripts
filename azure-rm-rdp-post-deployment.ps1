@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170803 add check for existing security rule. changed destination to *
+   Version    : 170807 fix for $ipAddress.IPAddress
    History    : 
+                170803 add check for existing security rule. changed destination to *
                 170802 fix for ipaddress check
                 170729 changed hostname options for wildcard certs
                 170728 add -addPublicIp
@@ -158,19 +159,8 @@ function main()
 
             write-host "subscription id $($sub)"
 
-            if (!($resourceList = enum-resourcegroup $sub))
-            {
-                write-host "no ip addresses found." -ForegroundColor Yellow
-                if(($ret = read-host "do you want to add a public ip address to an existing vm?[y|n]") -imatch "y")
-                {
-                    add-publicIp
-                    $global:redisplay = $true
-                    #return
-                }
-
-                continue
-            }
-
+            $resourceList = enum-resourcegroup $sub
+            
             $count = 1
             write-host "Displaying ONLY Azure RM resources with public IP addresses that are currently connectable." -ForegroundColor Cyan
             Write-Host "Green indicates RDWeb site:" -ForegroundColor Green
@@ -185,21 +175,29 @@ function main()
                 }
             }
 
-            if ($resourceList.Count -gt 1)
+            if(!$resourceList -or $resourceList.Count -lt 1)
+            {
+                write-host "no ip addresses found.."
+                if((read-host "do you want to add a public ip address to an existing vm?[y|n]") -imatch "y")
+                {
+                    add-publicIp
+                    $global:redisplay = $true
+                    #return
+                }
+
+                continue
+            }
+            elseif ($resourceList.Count -gt 1)
             {
                 write-verbose "query time: $(((get-date) - $startTime).TotalSeconds)"
+                write-host "(advanced) if site / server is not listed and site / server is running, enter 'p' if you want to add public ip address"
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to.")
             }
             elseif ($resourceList.Count -eq 1)
             {
                 $id = 1
             }
-            else
-            {
-                write-host "no ip addresses found. exiting..."
-                exit 1
-            }
-
+            
             $ids = check-response -response $idsEntry
 
 
@@ -235,7 +233,7 @@ function main()
                     $cert = get-cert -url $gatewayUrl -certFile $certFile
                     $subject = enum-certSubject -cert $resource.certInfo
                     $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname $resource.ResourceGroup
-                    add-hostsEntry -ipAddress $ip -subject $subject
+                    add-hostsEntry -ipAddress $ip.IpAddress -subject $subject
                     open-RdWebSite -site "https://$($subject)/RDWeb"
                 }
                 else
@@ -280,7 +278,7 @@ function add-hostsEntry($ipAddress, $subject)
         {
             $addIp = $true
         }
-        elseif(!$dnsresolve.IpAddress.Contains($ipAddress.IpAddress))
+        elseif(!$dnsresolve.IpAddress.Contains($ipAddress))
         {
             $addIp = $true
         }
@@ -292,8 +290,8 @@ function add-hostsEntry($ipAddress, $subject)
                 $dnsIP0 = @($dnsresolve.IpAddress)[0]
             }
         
-            write-host "$($ipAddress.IpAddress) not same as $($dnsIP0), checking hosts file"
-            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress.IpAddress)?[y|n]") -ine '')
+            write-host "$($ipAddress) not same as $($dnsIP0), checking hosts file"
+            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress)?[y|n]") -ine '')
             {
                 return $false
             }
@@ -324,7 +322,7 @@ function add-hostsEntry($ipAddress, $subject)
             }
 
             # add to hosts file
-            $newEntry = "$($ipAddress.IpAddress)`t$($subject)`t# $($hostsTag) $([IO.Path]::GetFileName($MyInvocation.ScriptName)) $([DateTime]::Now.ToShortDateString())`r`n"
+            $newEntry = "$($ipAddress)`t$($subject)`t# $($hostsTag) $([IO.Path]::GetFileName($MyInvocation.ScriptName)) $([DateTime]::Now.ToShortDateString())`r`n"
             write-host "adding new entry:$($newEntry)"
                 
             [IO.File]::AppendAllText($hostsFile, $newEntry)
@@ -332,7 +330,7 @@ function add-hostsEntry($ipAddress, $subject)
         }
         else
         {
-            write-host "dns resolution for $($subject) same as ip:$($ipAddress.IpAddress)"
+            write-host "dns resolution for $($subject) same as ip:$($ipAddress)"
         }
     }
     catch
@@ -352,7 +350,7 @@ function add-publicIp()
         Write-host "WARNING: this is exposing the selected virtual machines TCP port 3389 externally on internet." -ForegroundColor Yellow
         Write-host "If this is NOT correct, press ctrl-c to exit script." -ForegroundColor Yellow
 
-        if(!($ret = Read-Host "Confirm you want to continue:[y|n]") -imatch "y")
+        if((Read-Host "Confirm you want to continue:[y|n]") -inotmatch "y")
         {
             exit
         }
