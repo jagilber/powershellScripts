@@ -25,8 +25,9 @@
 .NOTES  
    File Name  : azure-rm-sql-create.ps1
    Author     : jagilber
-   Version    : 170522 adding to wiki
+   Version    : 170808 made $sqlVersion a variable defaulting to 12.0. authenticate-azurerm
    History    : 
+                170522 adding to wiki
                 170516 added -generateUniqueName
                 170514 added description
 .EXAMPLE  
@@ -97,8 +98,12 @@
     if specified, will use the provided service tier.
     by default, will use cheapest tier 'Basic'
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-performance-guidance
+
+.PARAMETER sqlServerVersion
+    sql server version. default is 12.0
 #>  
 
+[CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
     [string]$resourceGroupName,
@@ -125,7 +130,9 @@ param(
     [Parameter(Mandatory=$false)]
     [switch]$listAvailable,
     [Parameter(Mandatory=$false)]
-    [string]$serviceTier="Basic" #cheapest
+    [string]$serviceTier="Basic", #cheapest
+    [Parameter(Mandatory=$false)]
+    [string]$sqlServerVersion="12.0"
 )
 
 $erroractionpreference = "Continue"
@@ -144,7 +151,7 @@ function main()
 
     if(!(Get-Module AzureRM -ListAvailable))
     {
-        if(read-host "powershell module azure rm sdk (azurerm) is required for this script. is it ok to install?[y|n]")
+        if((read-host "powershell module azure rm sdk (azurerm) is required for this script. is it ok to install?[y|n]") -imatch "y")
         {
             Install-Module AzureRM
             Import-Module AzureRM
@@ -156,14 +163,7 @@ function main()
     }
 
     # see if we need to auth
-    try
-    {
-        $ret = Get-AzureRmTenant
-    }
-    catch 
-    {
-        Login-AzureRmAccount
-    }
+    authenticate-azureRm
 
     if($listAvailable)
     {
@@ -221,6 +221,26 @@ function main()
         return
     }
 
+    # verify edition
+    $editions = $sqlAvailable.SupportedServerVersions.supportedEditions.EditionName
+    if(!($editions -ieq $serviceTier))
+    {
+        log-info "please choose another service tier."
+        log-info "tiers available in this location:"
+        log-info $editions
+        return
+    }
+
+    # verify version
+    $versions = $sqlAvailable.SupportedServerVersions.ServerVersionName
+    if(!($versions -ieq $sqlServerVersion))
+    {
+        log-info "please choose another version."
+        log-info "versions available in this location:"
+        log-info $versions
+        return
+    }
+
     $created = create-database
    
     if(!$created -and $generateUniqueName)
@@ -246,6 +266,78 @@ function main()
     }
 
     return $false
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function authenticate-azureRm()
+{
+    # make sure at least wmf 5.0 installed
+    if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
+    {
+        log-info "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
+        start-process "https://www.bing.com/search?q=download+windows+management+framework+5.0"
+        # start-process "https://www.microsoft.com/en-us/download/details.aspx?id=50395"
+        exit
+    }
+
+    #  verify NuGet package
+    $nuget = get-packageprovider nuget -Force
+
+    if (-not $nuget -or ($nuget.Version -lt [version]::New("2.8.5.22")))
+    {
+        log-info "installing nuget package..."
+        install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
+    }
+
+    $allModules = (get-module azure* -ListAvailable).Name
+    #  install AzureRM module
+    if ($allModules -inotcontains "AzureRM")
+    {
+        # at least need profile, resources, sql
+        if ($allModules -inotcontains "AzureRM.profile")
+        {
+            log-info "installing AzureRm.profile powershell module..."
+            install-module AzureRM.profile -force
+        }
+        if ($allModules -inotcontains "AzureRM.resources")
+        {
+            log-info "installing AzureRm.resources powershell module..."
+            install-module AzureRM.resources -force
+        }
+        if ($allModules -inotcontains "AzureRM.compute")
+        {
+            log-info "installing AzureRm.compute powershell module..."
+            install-module AzureRM.sql -force
+        }
+            
+        Import-Module azurerm.profile        
+        Import-Module azurerm.resources        
+        Import-Module azurerm.sql            
+    }
+    else
+    {
+        Import-Module azurerm
+    }
+
+    # authenticate
+    try
+    {
+        Get-AzureRmResourceGroup | Out-Null
+    }
+    catch
+    {
+        try
+        {
+            Add-AzureRmAccount
+        }
+        catch
+        {
+            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
+            exit 1
+        }
+    }
+
+    #Save-AzureRmContext -Path $profileContext -Force
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -398,7 +490,7 @@ function create-database()
                 -ServerName $script:servername `
                 -Location $location `
                 -SqlAdministratorCredentials $script:credential `
-                -ServerVersion 12.0
+                -ServerVersion $sqlServerVersion
 
             if($error)
             {
