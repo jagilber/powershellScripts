@@ -565,8 +565,8 @@ function add-publicIp()
         
         write-host "successfully added public ip address $($vmPublicIPAddress) to vm $($modifiedVmName)" -ForegroundColor Green
         write-host "To remove public ip address and nsg, use the following commands:" -ForegroundColor Yellow
-        write-host "`tRemove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
-        write-host "`tRemove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
+        write-host "`t Remove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
+        write-host "`t Remove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
         
     }
     catch
