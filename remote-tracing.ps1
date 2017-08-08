@@ -1230,7 +1230,7 @@ function run-logman([string] $arguments, [bool] $shouldHaveSession = $false, [bo
         }
 
         log-info "retrying..."
-        Start-Sleep -Seconds 
+        Start-Sleep -Seconds 1
         $count++
     }
 
