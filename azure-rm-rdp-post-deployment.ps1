@@ -20,8 +20,9 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170807 fix for $ipAddress.IPAddress
+   Version    : 170809 checking vm for 3389 and 443 for nsg
    History    : 
+                170807 fix for $ipAddress.IPAddress
                 170803 add check for existing security rule. changed destination to *
                 170802 fix for ipaddress check
                 170729 changed hostname options for wildcard certs
@@ -486,73 +487,88 @@ function add-publicIp()
             exit
         }
 
-        write-host "checking for security rule for 3389"
+        $ports = @(3389,443)
 
-        if($nsg.SecurityRules -and $nsg.SecurityRules.Count -gt 0 `
-            -and ([Linq.Enumerable]::Where($nsg.SecurityRules, [Func[object,bool]] `
-            { 
-                param($x) $x.DestinationPortRange -imatch 3389 -and $x.DestinationAddressPrefix -eq "*" 
-            })))
+        foreach($port in $ports)
         {
-           write-host "using existing security rule for 3389..." -ForegroundColor Green
-        }
-        else
-        {
-            write-host "creating security rule for 3389"
-            # check for open priority
-            $priority = $Null
-            
-            if($nsg.SecurityRules.Count -gt 0)
-            {            
-            
-            $priorities = $nsg.SecurityRules.Priority
-
-            foreach($priority in 100..4096)
+            if(test-port -ipAddress $vmPrivateIpAddress -port $port)
             {
-                    if ($priorities -ieq $priority)
+
+                write-host "checking for security rule for $($port)"
+
+                if($nsg.SecurityRules -and $nsg.SecurityRules.Count -gt 0 `
+                    -and ([Linq.Enumerable]::Where($nsg.SecurityRules, [Func[object,bool]] `
+                    { 
+                        param($x) $x.DestinationPortRange -imatch $port -and $x.DestinationAddressPrefix -eq "*" 
+                    })))
+                {
+                   write-host "using existing security rule for $($port)..." -ForegroundColor Green
+                }
+                else
+                {
+                    write-host "creating security rule for $($port)"
+                    # check for open priority
+                    $priority = $Null
+            
+                    if($nsg.SecurityRules.Count -gt 0)
+                    {            
+            
+                    $priorities = $nsg.SecurityRules.Priority
+
+                    foreach($priority in 100..4096)
                     {
-                        continue
+                            if ($priorities -ieq $priority)
+                            {
+                                continue
+                            }
+                            else
+                            {
+                                break
+                            }
+                        }
                     }
                     else
                     {
-                        break
+                        $priority = 100
                     }
+
+                    write-host "`t Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
+                        -Name AllowRDP `
+                        -Direction Inbound `
+                        -Priority $priority `
+                        -Access Allow `
+                        -SourceAddressPrefix '*' `
+                        -SourcePortRange '*' `
+                        -DestinationAddressPrefix '*' `
+                        -DestinationPortRange $($port) `
+                        -Protocol TCP `
+                        -ErrorAction Stop" -foregroundColor Gray
+
+                    $ret = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
+                        -Name "Allow$($port)" `
+                        -Direction Inbound `
+                        -Priority $priority `
+                        -Access Allow `
+                        -SourceAddressPrefix '*' `
+                        -SourcePortRange '*' `
+                        -DestinationAddressPrefix '*' `
+                        -DestinationPortRange $($port) `
+                        -Protocol TCP `
+                        -ErrorAction Stop
+                        #$vmPrivateIPAddress `
                 }
+            
+                write-host "saving security rule for TCP RDP $($port). please wait..." -ForegroundColor Yellow
+                $ret = Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
+                $vmNic.NetworkSecurityGroup = $nsg
+
             }
             else
             {
-                $priority = 100
+                write-host "warning:port $($port) not responding. skipping"
             }
 
-            write-host "`t Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
-                -Name AllowRDP `
-                -Direction Inbound `
-                -Priority $priority `
-                -Access Allow `
-                -SourceAddressPrefix '*' `
-                -SourcePortRange '*' `
-                -DestinationAddressPrefix '*' `
-                -DestinationPortRange 3389 `
-                -Protocol TCP `
-                -ErrorAction Stop" -foregroundColor Gray
-
-            $ret = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg `
-                -Name "AllowRDP" `
-                -Direction Inbound `
-                -Priority $priority `
-                -Access Allow `
-                -SourceAddressPrefix '*' `
-                -SourcePortRange '*' `
-                -DestinationAddressPrefix '*' `
-                -DestinationPortRange "3389" `
-                -Protocol TCP `
-                -ErrorAction Stop
-                #$vmPrivateIPAddress `
-        }
-            
-        write-host "saving security rule for TCP RDP 3389. please wait..." -ForegroundColor Yellow
-        $ret = Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $nsg -ErrorAction Stop
-        $vmNic.NetworkSecurityGroup = $nsg
+        } # end foreach
 
         write-host "creating public ip. please wait..." -ForegroundColor Yellow
         write-host "`t New-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp `
@@ -1399,6 +1415,26 @@ function start-mstsc($ip)
     # add to nag list
     New-ItemProperty -Path "HKCU:\Software\Microsoft\Terminal Server Client\LocalDevices" -Name $ip.IpAddress -Value 0xc5 -PropertyType DWORD -Force 
     run-process -processName "mstsc.exe" -arguments "/v $($ip.IpAddress) /admin" -wait $false
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function test-port($ipAddress,$port)
+{
+   $t = New-Object Net.Sockets.TcpClient
+
+    try
+    {
+        $t.Connect($ipAddress,$port)
+        return $true
+    }
+    catch 
+    {
+        return $false
+    }
+    finally
+    {
+        [void]$t.Dispose()
+    }
 }
 
 # ----------------------------------------------------------------------------------------------------------------
