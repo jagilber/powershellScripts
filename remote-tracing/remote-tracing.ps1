@@ -1228,10 +1228,16 @@ function run-logman([string] $arguments, [bool] $shouldHaveSession = $false, [bo
             log-info "error: $($retval)"
             exit 1
         }
-
-        log-info "retrying..."
-        Start-Sleep -Seconds 1
-        $count++
+        elseif (!$resut -and $arguments -imatch "query")
+        {
+            log-info "retrying..."
+            Start-Sleep -Seconds 1
+            $count++
+        }
+        else
+        {
+            break
+        }
     }
 
     if ($returnResults)
