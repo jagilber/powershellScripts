@@ -60,22 +60,25 @@
 .PARAMETER vms
     string array list of vm's to include for command
 
+.PARAMETER vmsss
+    enumerate virtual machine scale set information
 #>  
 
 [CmdletBinding()]
 param(
     [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list')]
     [string]$action = 'list',
+    [string[]]$resourceGroupNames = @(),
+    [string[]]$vms = @(),
+    [switch]$vmss,
     [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
     [switch]$getUpdate,
     [switch]$noLog,
-    [string[]]$resourceGroupNames = @(),
     [int]$throttle = 20,
     [float]$timerHours = 0,
     [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list')]
-    [string]$timerAction,
-    [string[]]$vms = @()
+    [string]$timerAction
 )
 
 $ErrorActionPreference = "Continue"
@@ -110,6 +113,12 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
+
+        if($vmss)
+        {
+            log-info "checking virtual machine scale sets"
+            #$vmssvms = Get-AzureRmVmss -ResourceGroupName 
+        }
 
         $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
 
