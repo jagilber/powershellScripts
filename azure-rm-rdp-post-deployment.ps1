@@ -491,18 +491,24 @@ function add-publicIp()
 
         foreach($port in $ports)
         {
-            if(test-port -ipAddress $vmPrivateIpAddress -port $port)
+            #if(test-port -ipAddress $vmPrivateIpAddress -port $port)
+            $foundRule = $false
+
+            if($true)
             {
 
                 write-host "checking for security rule for $($port)"
-
-                if($nsg.SecurityRules -and $nsg.SecurityRules.Count -gt 0 `
-                    -and ([Linq.Enumerable]::Where($nsg.SecurityRules, [Func[object,bool]] `
-                    { 
-                        param($x) $x.DestinationPortRange -imatch $port -and $x.DestinationAddressPrefix -eq "*" 
-                    })))
+                foreach($rule in $nsg.SecurityRules)
                 {
-                   write-host "using existing security rule for $($port)..." -ForegroundColor Green
+                    if($rule.DestinationPortRange -imatch $port -and $rule.DestinationAddressPrefix -eq "*")
+                    {
+                        $foundRule = $true
+                    }
+                }
+
+                if($foundRule)
+                {
+                    write-host "using existing security rule for $($port)..." -ForegroundColor Green
                 }
                 else
                 {
@@ -763,7 +769,9 @@ function check-response($response)
     elseif ($response.ToLower().Contains("p"))
     {
         # go through public ip setup
+        $response = $response.ToLower().Replace("p", "")
         add-publicIp
+        $global:redisplay = $true
         return
     }
     else
@@ -816,6 +824,7 @@ function enum-resourcegroup([string] $subid)
     $resourceList =  New-Object Collections.ArrayList
     $resultList =  New-Object Collections.ArrayList
     $ret =  New-Object Collections.ArrayList
+    $response = $null
 
     # cleanup
     if(get-job)
@@ -839,8 +848,8 @@ function enum-resourcegroup([string] $subid)
             }
 
             Write-Host
-            $resourceGroupName = read-host "enter number for resource group to enumerate or press {enter} to enumerate all:"
-            $resourceGroupName = check-response -response $resourceGroupName
+            $response = read-host "enter number for resource group to enumerate or press {enter} to enumerate all:"
+            $resourceGroupName = check-response -response $response
         }
 
         # find resource group
