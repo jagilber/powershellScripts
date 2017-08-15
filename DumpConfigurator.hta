@@ -1,0 +1,1289 @@
+<html>
+<!-- 
+Warranty Disclaimer
+--------------------------
+This sample code, utilities, and documentation are provided as is, without warranty of any kind. Microsoft further disclaims all
+implied warranties including without limitation any implied warranties of merchantability or of fitness for a particular  purpose.
+The entire risk arising out of the use or performance of the product and documentation remains with you.
+
+In no event shall Microsoft be liable for any damages whatsoever  (including, without limitation, damages for loss of business
+profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to
+use the sample code, utilities, or documentation, even if  Microsoft has been advised of the possibility of such damages.
+Because some states do not allow the exclusion or limitation of liability for consequential or incidental damages, the above
+limitation may not apply to you.
+ver 150412 added dedicateddumpfile functionality. fixed windows 10 bug
+ver 150531 fixed CInt when calculating kernel mem dump for x64. changed to Clng
+-->
+
+<head>
+<title>Windows Memory Dump Configuration Editor</title>
+<HTA:APPLICATION 
+     ID="objMemDumpConfig"
+     APPLICATIONNAME="DumpConfigurator"
+     BORDER="thin"
+     ICON="appverif.ico"
+     INNERBORDER = "yes"
+     MAXIMIZEBUTTON = "yes"
+     NAVIGABLE = "no"
+     SCROLL="yes"
+     SINGLEINSTANCE="yes"  
+     SHOWINTASKBAR="yes"
+     WINDOWSTATE="normal"
+>
+<style type="text/css">
+BODY
+{
+    FONT-FAMILY: verdana;
+    FONT-SIZE: 90%
+}
+H1
+{
+    FONT-SIZE: 170%
+}
+TABLE.tblWinDialog
+{
+    BACKGROUND-COLOR: buttonface;
+    FONT-SIZE: 85%
+}
+TABLE.tblWinDialog CAPTION
+{
+    BACKGROUND-COLOR: activecaption;
+    COLOR: captiontext;
+    FONT-WEIGHT: bold;
+    TEXT-ALIGN: center;
+}
+TABLE.tblWinDialog INPUT
+{
+    FONT-FAMILY: verdana;
+    FONT-SIZE: 100%
+}
+TABLE.tblWinDialog SELECT
+{
+    FONT-FAMILY: verdana;
+    FONT-SIZE: 100%
+}
+TABLE.tblWinDialog TABLE
+{
+    FONT-SIZE: 100%
+    BORDER: 10px
+
+    CELLSPACING: 2
+    CELLPADDING: 2
+    
+}
+TABLE.tblWinDialog INPUT READONLY
+{
+    BACKGROUND-COLOR: buttonface
+}
+
+TABLE.tblWinDialog BUTTON
+{
+	FONT-FAMILY: verdana;
+	FONT-SIZE: 100%
+}
+
+input.customButton { 
+   FONT-FAMILY: verdana;
+   FONT-SIZE: 100%
+   padding: 2px; 
+   height: 25px; 
+   width: 110px; 
+
+}
+
+TABLE.t_noborder TD{
+	BORDER: 0px
+} 
+</style>
+</head>
+
+
+<SCRIPT Language="VBScript">
+' Create constants for access rights and registry hive 
+Const HKEY_CLASSES_ROOT  = &H80000000
+Const HKEY_CURRENT_USER  = &H80000001
+Const HKEY_LOCAL_MACHINE = &H80000002
+Const HKEY_USERS         = &H80000003
+const KEY_QUERY_VALUE	  = 1
+Const KEY_SET_VALUE		  = 2
+
+Const DUMP_HEADER_32BIT = 1
+Const DUMP_HEADER_64BIT = 1
+
+Dim Shell : Set Shell = CreateObject("Wscript.Shell")
+Dim fso : Set fso = CreateObject("Scripting.FileSystemObject")
+
+'Declare globals
+Dim g_strComputer, g_StatusWindow, g_TempDir
+Dim g_intMemTotal : g_intMemTotal = 0 		'Total Physical Memory in the System
+Dim g_intMemVisible : g_intMemVisible = 0 	'Memory visible to the system
+Dim g_pfInitialSize, g_pfPeakUsage, g_pfName
+Dim g_strSystemDrive, g_strSystemRoot, g_strOSCaption, g_strOSArch, g_isPAEEnabled, g_has3gb, g_strServicePackMajorVersion, g_strOSVersion
+Dim g_intDumpType, g_strDumpType, g_dumpAutoReboot, g_dumpOverwrite, g_dumpFileLocation, g_miniDumpLocation, g_LogEvent, g_CtrlScrolli8042
+Dim g_NMIDump, g_SystemDriveFree, g_intDumpRequiredMB, g_RequiredFreeMB, g_CtrlScrollKbHid
+Dim g_DedicatedDumpFile, g_DedicatedDumpFileChecked, g_DedicatedDumpFileLocation, g_isLegacyOS
+Dim g_DumpTargetDrive, g_DumpTargetDriveFree, g_DriveType
+Dim g_i8042Checked, g_nmichecked, g_autorebootChecked, g_dumpoverwriteChecked
+Dim g_HasAdminPerms, g_RequiredPageFileMB, g_HtmlLoaded
+
+
+g_TempDir = Shell.ExpandEnvironmentStrings("%TEMP%")
+g_isLegacyOS = False	'Assume we are dealing with at Least Windows XP until the OS check is run
+g_strComputer = "."
+g_RequiredPageFileMB = 0
+
+
+Sub Window_Onload
+	
+	ResizeHTAWindow 900, 650	'Set Window size and position
+	document.focus
+	Call Main()
+	
+End Sub
+
+
+
+'********** Main ***********
+Sub Main()
+   g_HtmlLoaded = False
+   document.body.style.cursor = "wait"
+  
+    'Check for admin access to the registry
+	g_HasAdminPerms = hasRequiredRegAccess(g_strComputer,HKEY_LOCAL_MACHINE,"System\CurrentControlSet\Control\CrashControl",KEY_SET_VALUE)
+	
+	'compensate for the output size difference when elevation warning is not displayed
+	If g_HasAdminPerms Then ResizeHTAWindow 900, 600
+   
+   'Check Physical Memory Size
+	g_intMemTotal = ConvertBytes(GetTotalPhysicalMemory(g_strComputer), "MB")
+	g_intMemVisible = ConvertBytes(GetVisibleMem(g_strComputer),"KB")
+	
+	'Populate our global variables
+	GetSystemInfo g_strComputer, g_strSystemDrive, g_strSystemRoot, g_strOSCaption, g_strOSArch, g_isPAEEnabled, g_strServicePackMajorVersion, g_strOSVersion
+	
+	'Check for Legacy OS (Windows 2000)
+	If Instr(g_strOSCaption,"2000") > 0 Then
+		g_isLegacyOS = True
+	Else
+		g_isLegacyOS = False
+	End If 
+	
+	'Skip Pagefile Info for Windows 2000 because the WMI classes are not supported
+	If g_isLegacyOS Then
+		g_pfInitialSize = "<font size=-3 color=red>WMI CLASS NOT SUPPORTED ON THIS OS</font>"
+		g_pfPeakUsage = "<font size=-3 color=red>WMI CLASS NOT SUPPORTED ON THIS OS</font>"
+		g_pfName = "<font size=-3 color=red>WMI CLASS NOT SUPPORTED ON THIS OS</font>"
+		g_SystemDriveFree = -1
+		
+	Else
+	
+		GetPageFileInfo g_strComputer, g_strSystemDrive, g_pfInitialSize, g_pfPeakUsage, g_pfName
+		GetDiskFreeSpace g_strComputer, g_strSystemDrive, g_SystemDriveFree, g_DriveType
+		
+	End If
+	
+	
+	'Populate variables with current crash dump settings
+	GetCrashDumpInfo g_strComputer, g_intDumpType, g_dumpAutoReboot, g_dumpOverwrite, g_dumpFileLocation, g_miniDumpLocation, g_LogEvent, g_CtrlScrolli8042, g_NMIDump, g_has3GB, g_DedicatedDumpFile, g_DedicatedDumpFileLocation
+	
+	'Check for an alternate dump location
+    SetDumpTargetDrive()	
+	
+	'Check to see if we are returning from the Status Window and close it
+	If TypeName(g_StatusWindow) <> "Empty" Then g_StatusWindow.close
+	
+		
+	'set up the dump type string
+	Select Case g_intDumpType
+		Case 0
+			g_strDumpType = "NONE"
+		Case 1
+			g_strDumpType = "FULL"
+		Case 2
+			g_strDumpType = "KERNEL ONLY"
+		Case 3
+			g_strDumpType = "SMALL"
+		Case Else
+			'This should never happen unless this script is incorrectly modified
+			g_strDumpType = "INVALID TYPE: " & intDumpType
+	End Select  
+	
+ 
+    'Set g_strComputername for display purposes
+    If g_strComputer = "." Then
+    	Dim network : Set network = CreateObject("Wscript.network")
+    	g_strComputer = network.ComputerName
+    End If  
+ 	
+	
+	If g_CtrlScrolli8042 = 1 Then
+		g_i8042Checked = "checked"
+		g_CtrlScrolli8042 = "&nbsp;<strong>Enabled</strong>"
+	Else
+		g_i8042Checked = ""
+		g_CtrlScrolli8042 = ""
+	End If
+	
+	
+	
+	If g_NMIDump = 1 Then
+		g_nmichecked = "checked"
+		g_NMIDump = "&nbsp;<strong>Enabled</strong>"
+	Else
+		g_nmichecked = ""
+		g_NMIDump = ""
+	End If
+	
+	
+	If g_dumpAutoReboot = 1 Then
+		g_autorebootChecked = "checked"
+		g_dumpAutoReboot = "&nbsp;<strong>Enabled</strong>"
+	Else
+		g_autorebootChecked = ""
+		g_dumpAutoReboot = ""
+	End If
+	
+  	If g_DedicatedDumpFile = True Then
+		g_DedicatedDumpFileChecked = "checked"
+		g_DedicatedDumpFile = "&nbsp;<strong>Enabled</strong>"
+	Else
+		g_DedicatedDumpFileChecked = ""
+		g_DedicatedDumpFile = ""
+	End If
+
+	
+	If g_dumpOverwrite = 1 Then
+		g_dumpoverwriteChecked = "checked"
+		g_dumpOverwrite = "&nbsp;<strong>Enabled</strong>"
+	Else
+		g_dumpoverwriteChecked = ""
+		g_dumpOverwrite = ""
+	End If
+	
+	OutputHTML()
+
+End Sub
+
+'*****************************************************
+' Formats strInput as an HTML table row
+'*****************************************************
+Function TableRow(strInput)
+	TableRow = "<tr><td>&nbsp;" & strInput & "&nbsp;</td></tr>"
+End Function
+
+'*************************************************************
+'	Resizes and Centers the Window takes (x,y) size as input
+'*************************************************************
+Sub ResizeHTAWindow( intWidth, intHeight)
+        self.ResizeTo intWidth, intHeight
+        self.MoveTo (screen.Width - intWidth)/2, (screen.Height - intHeight)/2
+End Sub
+
+  
+'*********************************************************************
+'	Opens the status window when we try to connect to a remote system
+'*********************************************************************
+Sub DisplayStatusWindow(strComputer)
+	
+     Dim OptionString
+     OptionString = "dialogHeight: 65px; dialogWidth: 450px;"
+              
+     Set g_StatusWindow = window.showModelessDialog("about:blank", window, OptionString)
+     g_StatusWindow.document.body.style.fontFamily = "verdana"
+     g_StatusWindow.document.body.style.margin = "1%"
+     g_StatusWindow.document.body.style.cursor = "wait"
+     g_StatusWindow.document.body.style.backgroundColor = "buttonface"
+     g_StatusWindow.document.body.innerhtml = "<html><body><strong>&nbsp;Trying to connect to " & ucase(strComputer) & "<br>&nbsp;This may take up to 60 seconds. Please wait...&nbsp</strong></body></html>" 
+   
+End Sub
+
+'*****************************************************
+' Retrieves information about current crashdump config
+'*****************************************************
+Sub GetCrashDumpInfo(ByVal strComputer, ByRef DumpType, ByRef AutoReboot, ByRef Overwrite, ByRef DumpLocation, _  
+					 ByRef miniDumpDir, ByRef LogEvent, ByRef CtrlScrolli8042, ByRef NMIDump, ByRef has3GB, ByRef hasDedicatedDumpFile, ByRef dedicatedDumpFileLocation)
+					 
+	Dim oReg, strKeyPath, strValueName, dwValue, strValue
+	Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & _
+    strComputer & "\root\default:StdRegProv")
+ 
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "CrashDumpEnabled"
+	oReg.GetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dwValue
+	DumpType = dwValue 
+ 
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "AutoReboot"
+	oReg.GetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dwValue
+	AutoReboot = dwValue 
+	
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "LogEvent"
+	oReg.GetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dwValue
+	LogEvent = dwValue 
+ 
+ 	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "Overwrite"
+	oReg.GetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dwValue
+	Overwrite = dwValue 
+	
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "NMICrashDump"
+	oReg.GetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dwValue
+	NMIDump = dwValue 
+ 
+ 	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "DumpFile"
+	oReg.GetExpandedStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
+	DumpLocation = strValue
+	
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "MiniDumpDir"
+	oReg.GetExpandedStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
+	miniDumpDir = strValue
+	
+	'Check for existence of dedicated dump file value (Vista/Windows 2008+)
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "DedicatedDumpFile"
+	oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
+    
+	If Not IsNull(strValue) Then
+		hasDedicatedDumpFile = True
+        dedicatedDumpFileLocation = strValue
+	Else
+		hasDedicatedDumpFile = False
+        dedicatedDumpFileLocation = Null
+	End If
+		
+	strKeyPath = "System\CurrentControlSet\Services\i8042prt\Parameters"
+	strValueName = "CrashOnCtrlScroll"
+	oReg.GetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dwValue
+	CtrlScrolli8042 = dwValue
+	
+	' The following sections checks the boot options for 3GB
+	strKeyPath = "System\CurrentControlSet\Control"
+	strValueName = "SystemStartOptions"
+	oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
+		
+		strValue = UCase(strValue)	
+		If InStr(strValue, "3GB") > 0 Then
+			has3GB = True
+		Else 
+			has3GB = False
+		End If
+
+End Sub
+			
+'*****************************************************
+' Sets system crashdump configuration
+'*****************************************************
+Sub SetCrashDumpInfo(ByVal strComputer, ByVal DumpType, ByVal AutoReboot, ByVal Overwrite, ByVal DumpLocation, _  
+					 ByVal miniDumpDir, ByVal LogEvent, ByVal CtrlScrolli8042, ByVal NMIDump, ByVal dedicatedDumpFile, ByVal dedicatedDumpFileLocation)
+	document.body.style.cursor = "wait"
+	
+	Dim oReg, strKeyPath, strValueName, dwValue, strValue
+	Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & _
+    strComputer & "\root\default:StdRegProv")
+ 
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "CrashDumpEnabled"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,DumpType
+ 
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "AutoReboot"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,AutoReboot
+	
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "LogEvent"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,LogEvent
+ 
+ 	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "Overwrite"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,Overwrite
+	
+	strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	strValueName = "NMICrashDump"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,NMIDump
+ 
+	strKeyPath = "System\CurrentControlSet\Services\i8042prt\Parameters"
+	strValueName = "CrashOnCtrlScroll"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,CtrlScrolli8042
+	
+	strKeyPath = "System\CurrentControlSet\Services\kbdhid\Parameters"
+	strValueName = "CrashOnCtrlScroll"
+	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,CtrlScrolli8042
+
+	'If OS is Vista or Higher set the IgnorePagefileSize value as per KB949052
+	If GetMajorOSVer() => 6 Then
+		strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+		strValueName = "IgnorePagefileSize"
+	 	oReg.SetDWORDValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,1
+    
+        ' for dedicated dump file if enabled
+        If dedicatedDumpFile = True Then
+            strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	        strValueName = "DedicatedDumpFile"
+	        oReg.SetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dedicatedDumpFileLocation
+        Else
+            ' remove key
+            strKeyPath = "System\CurrentControlSet\Control\CrashControl"
+	        strValueName = "DedicatedDumpFile"
+            oReg.DeleteValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName
+        End If
+
+	End If
+
+		
+	document.body.style.cursor = "default"
+End Sub
+			
+			
+'*****************************************************************
+'  Checks to see if the system was booted with /3gb
+'  returns true or false
+'*****************************************************************
+Function BootedWith3gb()
+
+	On Error Resume Next
+	Dim oReg, strKeyPath, strValueName, dwValue, strValue
+	Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & _
+    g_strComputer & "\root\default:StdRegProv")
+ 
+	strKeyPath = "System\CurrentControlSet\Control"
+	strValueName = "SystemStartOptions"
+	oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
+	
+	strValue = UCase(strValue)	
+		
+	If InStr(strValue, "3GB") > 0 Then
+		BootedWith3gb = True
+	Else 
+		BootedWith3gb = False
+	End If
+
+End Function
+
+			
+'*****************************************************************
+'  Calculates the estimated requirement for the selected dump types
+'*****************************************************************
+Function GetEstimatedDumpMB(intDumpType)
+		
+		Select Case intDumpType
+			Case "1"   			'Complete Dump Selected
+								'32bit and 64bit actually return the same values for complete (visible mem + 1MB)
+				If g_strOSArch = "32-bit" Then
+										
+					GetEstimatedDumpMB = g_IntMemVisible + DUMP_HEADER_32BIT 'Return Visible MEM +1MB for dump header 
+					
+				ElseIf g_strOSArch = "64-bit" Then
+					
+					GetEstimatedDumpMB = g_IntMemVisible + DUMP_HEADER_64BIT 'Return Visible MEM +64 bit dump header size 
+				
+				End If
+				
+			Case "2"			'Kernel Dump Selected
+				If g_strOSArch = "32-bit" Then
+					
+					If g_has3gb Then
+					
+						GetEstimatedDumpMB = 1024 + DUMP_HEADER_32BIT  ' with 3gb max kernel memory is 1GB
+						
+					Else
+					
+						'Maximum amount of kernel VA on x86 is 2GB
+						If g_intMemVisible < 2048 Then
+				
+							GetEstimatedDumpMB = g_intMemVisible + DUMP_HEADER_32BIT	'less than 2gb ram just use size of complete dump
+							
+						Else	
+										
+							GetEstimatedDumpMB = 2048 + DUMP_HEADER_32BIT 'Return 2GB (rounded up) potential 32-bit kernel VA +1MB for dump header 
+									
+						End If
+						
+					End If
+					
+				ElseIf g_strOSArch = "64-bit" Then
+					
+					'Return 33% of visible memory value as ESTIMATED Kernel dump size as per
+					'http://msdn.microsoft.com/en-us/library/cc266504.aspx
+					GetEstimatedDumpMB = CLng(g_intMemVisible/3) + DUMP_HEADER_64BIT
+					
+					 
+				End If
+		End Select
+		
+
+End Function
+
+
+'*****************************************************************
+'  Checks to see if there is enough room on 
+'  the system drive to expand the pagefile (assumes +500MB free after expand)
+'*****************************************************************
+Sub CheckRoomOnSystemDriveForPageFileExpand(ByVal intSystemDriveFreeSpace, ByVal intCurrentPageFileSize, ByVal intRequiredPageFileSize, ByRef intRequiredFree)
+	
+	'added 500MB required free space after expand for padding
+	If intSystemDriveFreeSpace >= (intRequiredPageFileSize - intCurrentPageFileSize + 500) Then
+		intRequiredFree = 0
+	Else
+		intRequiredFree = intRequiredPageFileSize - intCurrentPageFileSize + 500
+	End If 
+
+
+End Sub
+
+'*****************************************************************
+'  Checks to see if dump will fit in current systemdrive pagefile 
+'*****************************************************************
+Function DumpFitsInPageFile()
+		
+		If g_pfInitialSize => g_intDumpRequiredMB Then
+			DumpFitsInPageFile = True
+		Else
+			g_RequiredPageFileMB = g_intDumpRequiredMB - g_pfInitialSize
+			DumpFitsInPageFile = False
+		End If
+		
+
+End Function
+			
+
+'*****************************************************************
+'  Checks to see if dump will fit on the target Drive
+'*****************************************************************
+Function DumpFitsOnTargetDrive()
+	
+	'If we're on the system drive we need to account for potential required
+	'space for a pagefile expansion that will not happen until we reboot	
+	If g_DumpTargetDrive = g_strSystemDrive Then
+	
+		
+		If ConvertBytes(g_DumpTargetDriveFree,"MB") => (g_intDumpRequiredMB + g_RequiredPageFileMB + 500) Then
+			DumpFitsOnTargetDrive = True
+		Else
+			DumpFitsOnTargetDrive = False
+		End If
+		
+	
+	Else
+		
+		'If dump target freespace is at least 500MB larger than required 
+		'dump size then return true
+		If ConvertBytes(g_DumpTargetDriveFree,"MB") => (g_intDumpRequiredMB + 500) Then
+			DumpFitsOnTargetDrive = True
+		Else
+			DumpFitsOnTargetDrive = False
+		End If
+		
+	End If	
+
+End Function
+			
+'**************************************************************
+' Retrieves information about pagefile on the specified Drive
+'**************************************************************
+Sub GetPageFileInfo(ByVal strComputer, ByVal strDrive, ByRef InitialSize, ByRef PeakUsage, byRef pfName)
+
+	Dim objWMIService, colItems, objItem
+	Set objWMIService = GetObject("winmgmts:{impersonationlevel=impersonate}\\" & strComputer & "\root\CIMV2") 
+	Set colItems = objWMIService.Instancesof("Win32_PageFileUsage where Name like '" & Left(strDrive,1) & "%'") 
+	For Each objItem In colItems 
+		InitialSize = objItem.AllocatedBaseSize
+		PeakUsage = objItem.PeakUsage
+		pfName = objItem.Name
+	Next
+	
+End Sub
+
+
+
+'*****************************************************
+' Sets PageFile size on the target system
+'*****************************************************
+Sub SetPageFileInfo(ByVal strComputer, ByVal strSystemDrive, ByVal pfInitialSizeInMB, ByVal pfMaxSizeInMB)
+
+	Dim objWMIService, colPageFiles, objPageFile
+	Set objWMIService = GetObject("winmgmts:{impersonationlevel=impersonate}\\" & strComputer & "\root\cimv2")
+	
+	Set colPageFiles = objWMIService.ExecQuery _
+		("Select * from Win32_PageFileSetting where Name='" & strSystemDrive & "\\pagefile.sys'")
+	
+	For Each objPageFile in colPageFiles
+		objPageFile.InitialSize = pfInitialSizeInMB
+		objPageFile.MaximumSize = pfMaxSizeinMB
+		objPageFile.Put_
+	Next
+	
+
+End Sub
+
+
+'*****************************************************
+' Retrieves information about the system configuration
+'*****************************************************
+Sub GetSystemInfo(ByVal strComputer, ByRef strSystemDrive, ByRef strSystemRoot, ByRef strOSCaption, ByRef strOSArch, ByRef isPAEEnabled, ByRef strServicePackMajorVersion, ByRef strOSVersion)
+	On Error Resume Next
+	Dim objWMIService, colItems, objItem
+	strOSArch = ""  'initialize this to blank until try to set it
+	Set objWMIService = GetObject("winmgmts:{impersonationlevel=impersonate}\\" & strComputer & "\root\CIMV2") 
+	Set colItems = objWMIService.ExecQuery( _
+		"SELECT * FROM Win32_OperatingSystem",,48) 
+	For Each objItem In colItems 
+		strSystemDrive = ucase(objItem.SystemDrive)
+		strSystemRoot = objItem.WindowsDirectory
+		strOSCaption = objItem.Caption
+				
+		strOSArch = objItem.OSArchitecture
+		
+		If strOSArch = "" Then   'System was pre Vista/Longhorn and strOSArch was not supported
+			Err.Clear			 'clear error for unsupported value
+			If Is64bit(strComputer) Then		
+				strOSArch = "64-bit"
+			Else
+				strOSArch = "32-bit"
+			End If
+		End If	
+		
+		If strOSArch = "64-bit" Then		' PAE is not used on 64-bit systems
+			isPAEEnabled = "N/A"
+		Else
+			isPAEEnabled = objItem.PAEEnabled
+		End If
+		
+		strServicePackMajorVersion = objItem.ServicePackMajorVersion
+		strOSVersion = objItem.Version
+	Next
+		
+End Sub 
+
+'************************************************
+'  Returns the total physical memory in bytes
+'************************************************
+Function GetTotalPhysicalMemory(strComputer)
+	Dim intMem
+	intMem = 0
+	Set objWMIService = GetObject("winmgmts:{impersonationlevel=impersonate}\\" & strComputer & "\root\CIMV2") 
+	Set colItems = objWMIService.ExecQuery( _
+		"SELECT * FROM Win32_PhysicalMemory",,48) 
+	For Each objItem In colItems 
+		intMem = intMem + Int(objItem.Capacity)
+	Next
+	
+	GetTotalPhysicalMemory = intMem
+End Function
+
+
+'******************************************************
+' Returns an integer conversion of bytes to KB,MB,or GB
+'******************************************************
+Function ConvertBytes(intBytes, strConvertTo)
+	strConvertTo = ucase(strConvertTo)
+	Dim tempval
+	Select Case strConvertTo
+		Case "KB"
+			tempval = round((intBytes/1024 +.49 ),0)	'added .49 to round up
+		Case "MB"
+			tempval = round((intBytes/1048576 ),2)
+		Case "GB"
+			tempval = round((intBytes/1073741824 ),2)
+		Case Else
+			'raise error
+	End Select
+	
+	ConvertBytes = tempval
+End Function
+
+
+'************************************************
+'  Returns the total visible memory in bytes
+'************************************************
+Function GetVisibleMem(ByVal strComputer)
+	Dim intMemTotal, objWMIService, colItems, objItem
+	intMemTotal = 0
+	Set objWMIService = GetObject("winmgmts:{impersonationlevel=impersonate}\\" & strComputer & "\root\CIMV2") 
+	Set colItems = objWMIService.ExecQuery( _
+		"SELECT TotalVisibleMemorySize FROM Win32_OperatingSystem",,48) 
+	For Each objItem in colItems 
+		intMemTotal = Int(objItem.TotalVisibleMemorySize)
+	Next
+	
+	GetVisibleMem = intMemTotal
+End Function
+
+
+'**************************************************
+'  Returns true if system is 64-bit or false if 32
+'**************************************************
+Function Is64bit(ByVal strComputer)
+	On Error Resume Next
+	Dim oReg, strKeyPath, strValueName, strValue, retval
+	Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & _
+    strComputer & "\root\default:StdRegProv")
+ 
+	strKeyPath = "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion"
+	strValueName = "ProgramFilesDir (x86)"
+	retval = oReg.GetStringValue(HKEY_LOCAL_MACHINE, strKeyPath, strValueName, strValue)
+	
+	If retval <> 0 Then
+		Is64bit = False
+	Else
+		Is64bit = True
+	End If
+	
+End Function
+
+
+'*******************************************************
+'  Returns the freespace of the specified drive in bytes
+'*******************************************************
+Sub GetDiskFreeSpace(ByVal strComputer, ByVal strDrive, ByRef intFreeSpace, ByRef intDriveType)
+    On Error Resume Next
+	Dim objWMIService, colItems, objItem
+	
+	Set objWMIService = GetObject("winmgmts:{impersonationlevel=impersonate}\\" & strComputer & "\root\CIMV2") 
+	Set colItems = objWMIService.ExecQuery("Select * from Win32_LogicalDisk where Name ='" & strDrive & "'",,48)
+	For Each objItem in colItems
+		intFreeSpace = objItem.FreeSpace
+        intDriveType = objItem.DriveType
+	Next
+	
+End Sub
+
+'******************************************************
+' Pings a system to see if it is available
+'******************************************************
+Function IsUp(ByVal strComputer)
+	On Error Resume Next
+		
+	Dim objWMIService, propValue, objItem, SWBemlocator, UserName, Password, colItems
+	UserName = ""
+	Password = ""
+	Set SWBemlocator = CreateObject("WbemScripting.SWbemLocator")
+	Set objWMIService = SWBemlocator.ConnectServer(".","root\CIMV2",UserName,Password,,,128)
+	Set colItems = objWMIService.ExecQuery("Select * from Win32_PingStatus where address = " & "'" & strComputer & "'",,48)
+	For Each objItem in colItems
+		If objItem.StatusCode = 0 Then
+			IsUp = True
+		Else
+			IsUp = False
+		End If
+	Next
+End Function
+
+
+'**********************************************************************
+'  Gets a new computername to attach To (modifies global g_strComputer)
+'**********************************************************************
+Sub GetNewComputerName()
+		
+	Dim strComputername
+	strComputername = Trim(InputBox("Please enter the name or IP address of the computer you would like to attach to:","Connect to a remote system","."))
+	If (strComputername <> "." And strComputername <> "") Then
+		document.body.style.cursor = "wait"
+		
+		DisplayStatusWindow(ucase(strComputername))
+				
+		If IsUp(strComputername) Then
+			g_strComputer = Ucase(strComputername)
+			document.body.style.cursor = "default"
+			Call Main()
+			
+		Else
+			MsgBox ucase(strComputername) & " could not be reached via ping!" & VbCrLf &  "Please check the spelling and try again.",vbOKOnly+vbExclamation,"System could not be pinged..."
+			document.body.style.cursor = "default"
+			Call Main()
+		End If
+	Else
+		If strComputername = "." Then
+			g_strComputer = "."
+			Call Main()
+		End If
+	End If	
+	
+End Sub
+
+
+'*******************************************************
+'  Checks access to the specified registry key
+'*******************************************************
+Function HasRequiredRegAccess(ByVal strComputer, ByVal hive, ByVal strKeyPath, ByVal AccessMask)
+	On Error Resume Next
+	
+	Dim objReg, bHasAccessRight
+	Err.Clear
+	Set objReg=GetObject("winmgmts:"_
+		& "{impersonationLevel=impersonate}!\\" &_ 
+		strComputer & "\root\default:StdRegProv")
+	
+	If Err.Number <> 0 Then 
+		
+		Msgbox "Could not connect to: " & strComputer & VbCrLf & VbCrLf & "Error: " & Err.Number & " - " & Err.Description & _ 
+		VbCrLf & VbCrLf & "Please make sure the system's firewall rules allow RPC traffic for WMI/DCOM and that you have administrative "& _ 
+		"rights on the machine." & VbCrLf & VbCrLf & "Click OK to Exit.",VBExclamation+vbOKOnly
+		
+		'There was a fatal error that may cause the HTA to hang so let's terminate mshta.exe, but only if it contains DumpConfigurator in the name
+		For each Process in GetObject("winmgmts:{impersonationLevel=impersonate}!//.").ExecQuery("select * from Win32_Process where Name='mshta.exe' and CommandLine like '%DumpConfigurator%'")
+			Process.Terminate
+		Next	
+
+		
+	Else
+		'Check the access rights to the registry
+		objReg.CheckAccess hive, strKeyPath, AccessMask, bHasAccessRight
+		
+		If bHasAccessRight = True Then
+			HasRequiredRegAccess = True
+		Else
+			HasRequiredRegAccess = False
+		End If
+		
+	End If
+	
+End Function
+
+
+'****************************************************************
+'  Auto configures system for dump w/autoreboot
+'  overwrite, ps2, nmi, and LogEvent
+'  intDumptype is passed in to set either full (1) or kernel (2)
+'****************************************************************
+Sub AutoConfigureDump(intDumpType)
+	'Backup current dump config in unique file
+
+    SetDumpTargetDrive()
+
+	g_intDumpRequiredMB = GetEstimatedDumpMB(intDumpType)
+	
+	'First check to see if the dump fits in the pagefile, then check for free disk space
+	If Not DumpFitsInPageFile Then
+		
+		'Dump too large for pagefile, check for dedicated dump file (Vista/2008+)
+        If Not g_DedicatedDumpFile Then
+			
+			'No dedicated dump file, let's check to see if we can expand the pagefile
+			CheckRoomOnSystemDriveForPageFileExpand g_SystemDriveFree, g_pfInitialSize, g_intDumpRequiredMB, g_RequiredFreeMB
+			
+			If (g_RequiredFreeMB = 0) Then		'we have room for a larger pagefile let's see if they want it expanded 
+			
+				retval = MsgBox("Your system does not currently have a pagefile large enough to accommodate the selected dump type. You need a pagefile initial size of at least " & g_intDumpRequiredMB & "MB.  Would you like this application to expand the pagefile for you?",vbYesNo+vbExclamation,"Pagefile Size Warning...")
+				If retval = vbYes Then
+					
+					SetPageFileInfo g_strComputer, g_strSystemDrive, g_intDumpRequiredMB, g_intDumpRequiredMB
+				Else
+					
+					window.alert("You have chosen not to automatically increase the pagefile size.  Your settings will be saved but a manual increase of the pagefile size and reboot will be required in order to obtain the selected memory dump type from your system.")
+					
+				End If
+	
+			Else
+			
+				MsgBox "Your system does not have enough free space to expand the pagefile to the required sized for the selected dump type.  Please free up the required space of at least " & g_RequiredFreeMB & "MB or select a different dump type.",vbOKOnly+vbExclamation,"Disk Space Warning..."
+			
+			End If
+		
+		Else
+		
+			MsgBox "Your system has the DedicatedDumpFile value configured.  Your registry settings will be saved, but pagefile checks will be skipped.",vbOKOnly+vbInformation
+			
+		End If
+			
+	End If
+	
+	'If there's not enough room on the target drive display a warning.
+	If Not DumpFitsOnTargetDrive Then
+		If g_RequiredPageFileMB <> 0 Then
+			
+			MsgBox "Once the PageFile is expanded the target drive for your dump file does not have enough free space to save the selected dump type." & VbCrLf & _ 
+			VbCrLf & "Estimated memory dump size: " & g_intDumpRequiredMB & " MB" & VbCrLf & "Drive Free Space after PF Expansion: " & (ConvertBytes(g_DumpTargetDriveFree,"MB")-g_RequiredPageFileMB) & " MB" & _ 
+			VbCrLf & VbCrLf & "You may need to change the target location for the dump or free up some space.",vbOKOnly+vbExclamation,"Disk Space Warning..."
+			
+		
+		Else
+			
+			MsgBox "The target drive for your dump file does not have enough free space to save the selected dump type." & VbCrLf & _ 
+			VbCrLf & "Estimated dump size: " & g_intDumpRequiredMB & " MB" & VbCrLf & "Target Drive Free Space: " & ConvertBytes(g_DumpTargetDriveFree,"MB") & " MB" & _ 
+			VbCrLf & VbCrLf & "You may need to change the target location for the dump or free up some space.",vbOKOnly+vbExclamation,,"Disk Space Warning..."
+			
+		End If
+	End If
+	
+	
+	document.form1.selDumpType.value = intDumpType
+	document.form1.chkAutoReboot.checked = True
+	document.form1.chkdumpoverwrite.checked = True
+	document.form1.chki8042dump.checked = True 
+	document.form1.chknmidump.checked = True
+	g_LogEvent = 1
+	SaveSettings()
+	
+	
+End Sub
+
+
+'*******************************************************
+'  Saves settings and checks for configuration problems
+'*******************************************************
+Sub SaveSettings()
+	g_intDumpType = document.form1.selDumpType.value
+	
+	If document.form1.chkAutoReboot.checked Then
+		g_dumpAutoReboot = 1
+	Else
+		g_dumpAutoReboot = 0
+	End If
+	
+	If document.form1.chkdumpoverwrite.checked Then
+		g_dumpOverwrite = 1
+	Else
+		g_dumpOverwrite = 0
+	End If
+		
+	If document.form1.chki8042dump.checked Then
+		g_CtrlScrolli8042 = 1
+	Else
+		g_CtrlScrolli8042 = 0
+	End If
+	
+	
+	If document.form1.chknmidump.checked Then
+		g_NMIDump = 1
+	Else
+		g_NMIDump = 0
+	End If
+
+    SetDumpTargetDrive()
+
+	SetCrashDumpInfo g_strComputer, g_intDumpType, g_dumpAutoReboot, g_dumpOverwrite, g_dumpFileLocation, g_miniDumpLocation, LogEvent, g_CtrlScrolli8042, g_NMIDump, g_DedicatedDumpFile, g_DedicatedDumpFileLocation
+	MsgBox "Your Settings have been saved." & VbCrLf & VbCrLf & "The target system must be rebooted before" & VbCrLf &  "any changes will take effect.",vbOKOnly+vbInformation,"Saved Dump Settings..."
+	
+	Call Main()
+	
+End Sub
+
+
+'***************************************************
+' Modifies HTML elements on the page to display data
+' Also contains extra data that has been remarked 
+' out for the final version
+'***************************************************
+Sub OutputHTML()
+			
+	Dim strHTML
+	
+	strHTML = "<table class=tblWinDialog border=1 name=table1><Caption>Memory Dump Configuration</caption>"
+
+	If Not g_HasAdminPerms Then
+		strHTML = strHTML & "<th align=center colspan=3><font color=darkred>WARNING:  You do not have admin permissions on the target.  Settings will not be saved!<br>Please run this program with an account that has a full administrative token for the target system.</font>"
+		strHTML = strHTML & "<br><input type=button value='Elevate this HTA' onClick=ElevateThisHTA()></th>"
+	End If
+	
+	strHTML = strHTML & "<tr><td style='border-right: none; border-collapse: collapse'>&nbsp;Computername:</td><td style='border-right:none;'>&nbsp;<strong> " & g_strComputer & "</strong></td><td style='border-left:none;' align=right><input type=button value='Change' name=cmdSetComputer onclick=GetNewComputerName()>&nbsp;</td></tr>"
+	strHTML = strHTML & TableRow("Operating System:</td><td colspan=2>&nbsp; " & g_strOSCaption)
+	strHTML = strHTML & TableRow("OS Architecture:</td><td colspan=2>&nbsp; " & g_strOSArch)
+	'strHTML = strHTML & TableRow("Service Pack:</td><td colspan=2>&nbsp;&nbsp;Service Pack " & g_strServicePackMajorVersion)
+	'strHTML = strHTML & TableRow("OS Version:</td><td colspan=2>&nbsp; " & g_strOSVersion) 
+	'strHTML = strHTML & TableRow("Windows Directory:</td><td colspan=2>&nbsp; " & g_strSystemRoot)
+	'strHTML = strHTML & TableRow("System Drive:</td><td colspan=2>&nbsp; " & g_strSystemDrive)
+	strHTML = strHTML & TableRow("Total Physical Memory:</td><td colspan=2>&nbsp; " & g_intMemTotal & " MB")
+	'strHTML = strHTML &  TableRow("Current Memory Visible to System:</td><td colspan=2>&nbsp; " & g_intMemVisible & "MB") 
+	'strHTML = strHTML & TableRow("PAE Status:</td><td colspan=2>&nbsp; " & g_isPAEEnabled)
+	strHTML = strHTML & TableRow("System Drive Page File:</td><td colspan=2>&nbsp; " & g_pfName)
+	strHTML = strHTML & TableRow("Page File Initial Size:</td><td colspan=2>&nbsp; " & g_pfInitialSize)
+	'strHTML = strHTML & TableRow("Pagefile Peak Usage:</td><td colspan=2>&nbsp; " & g_pfPeakUsage)
+	strHTML = strHTML & TableRow("Memory Dump Type:</td><td colspan=2>&nbsp;<select size=1 name=selDumpType onChange=''>" & _ 
+	"<option name=full value=1> COMPLETE </option><option value=2> KERNEL ONLY </option><option value=3> SMALL </option><option value=0> NONE </option></select>")
+	
+	strHTML = strHTML & TableRow("AutoReboot after Memory Dump:</td><td colspan=2>&nbsp;<input type='checkbox' name='chkAutoreboot' " & g_autorebootChecked &"> " & g_dumpAutoReboot)
+	strHTML = strHTML & TableRow("Overwrite previous dump file:</td><td colspan=2>&nbsp;<input type='checkbox' name='chkdumpoverwrite' " & g_dumpoverwriteChecked &">  " & g_dumpOverwrite)
+	'strHTML = strHTML & TableRow("Log Event:</td><td colspan=2>&nbsp; " & LogEvent)
+     If GetMajorOSVer() => 6 Then
+        strHTML = strHTML & TableRow("Dedicated Dump File: (if enabled, location should be on a fixed disk and named dedicateddumpfile.sys. example: e:\dedicateddumpfile.sys)</td><td colspan=2>&nbsp;<input type='checkbox' name='chkDedicateddumpfile' " & g_DedicatedDumpFileChecked &">&nbsp;" & g_DedicatedDumpFile &"&nbsp;<input type='text' name='txtDedicateddumpfilelocation' size='25' value=" & g_DedicatedDumpFileLocation & ">")
+    End If
+
+	strHTML = strHTML & TableRow("Dump Location:</td><td colspan=2>&nbsp; " & g_dumpFileLocation)
+	'strHTML = strHTML & TableRow("MiniDump Location:</td><td colspan=2>&nbsp; " & g_miniDumpLocation)
+	strHTML = strHTML & TableRow("Right Ctrl-Scroll-Scroll via Keyboard:</td><td colspan=2>&nbsp;<input type='checkbox' name='chki8042dump' " & g_i8042Checked &"> " & g_CtrlScrolli8042)
+	strHTML = strHTML & TableRow("Dump on Non-Maskable Iterrupt (NMI):</td><td colspan=2>&nbsp;<input type='checkbox' name='chknmidump' " & g_nmichecked & "> " & g_NMIDump)
+	
+	If Not g_isLegacyOS Then
+		strHTML = strHTML & TableRow("System Drive Free Space:</td><td colspan=2>&nbsp; " & FormatNumber(ConvertBytes(g_SystemDriveFree,"MB"),0,0,0,-1) & " MB")
+	Else
+		strHTML = strHTML & TableRow("System Drive Free Space:</td><td colspan=2>&nbsp;<font size=-3 color=red>WMI CLASS NOT SUPPORTED ON THIS OS</font>") 
+	End If
+	
+	strHTML = strHTML & "<tr><td colspan=3>&nbsp;</td></tr>"
+	strHTML = strHTML & "<tr><td align=left class=t_noborder><input type=button name=cmdConfigureForFull onclick=AutoConfigureDump(1) value='Auto Config Complete'>&nbsp;&nbsp;"
+	strHTML = strHTML & "<input type=button name=cmdConfigureForKernel onclick=AutoConfigureDump(2) value='Auto Config Kernel'></td><td colspan=2 class=t_noborder align=right>&nbsp;"
+	strHTML = strHTML & "<input type=button class=customButton name=cmdSaveSettings onclick=SaveSettings() value='Save Settings'>&nbsp;"
+	strHTML = strHTML & "<input type=button class=customButton value='About' onClick=DisplayAboutWindow()>&nbsp;"
+	strHTML = strHTML & "<input type=button class=customButton value='Quit' onClick=window.close>&nbsp;</td></tr>"
+	strHTML = strHTML & "</table>"
+	
+	outputField.Innerhtml = strHTML						'Write the HTML to the window
+	
+	'Disable save settings buttons if current user does not have admin privileges
+	If not g_HasAdminPerms Then	
+		document.form1.cmdSaveSettings.disabled = true
+		document.form1.cmdConfigureForFull.disabled = true
+		document.form1.cmdConfigureForKernel.disabled = True
+	End If
+	
+	'Disable AutoConfigure buttons if Legacy OS was detected
+	If g_isLegacyOS Then
+		document.form1.cmdConfigureForFull.disabled = True
+		document.form1.cmdConfigureForKernel.disabled = True
+	End If
+	
+	document.form1.selDumpType.value = g_intDumpType		'Set the current dumptype display
+	document.body.style.cursor = "default"
+	g_HtmlLoaded = True
+End Sub
+
+'*********************************************************************************
+'	Subroutine: ElevateThisHTA()	
+'
+'	Author:  Windows Platforms Support
+'	Last Modified:  May 12, 2008
+'	
+'	Purpose: (Intended for Vista and Windows Server 2008)
+'	Causes a prompt for UAC elevation if it detects that the current user credentials
+'   does not have administrative privileges and launches a new instance of the currently
+'   running HTA.   HTA property SINGLEINSTANCE must be set to "no" for this to work.
+'
+'	If run on Windows XP this routine will cause the RunAs dialog to appear if the user
+'	does not have administrative rights, giving the opportunity to run as an administrator  
+'
+'	
+'	Usage:  Add a call to this sub (ElevateThisHTA) to the beginning of your HTA to ensure
+'	        that it gets an administrative token, or add it as a button onclick action
+'**********************************************************************************		
+Sub ElevateThisHTA()
+	
+	Const HKEY_CLASSES_ROOT  = &H80000000
+	Const HKEY_CURRENT_USER  = &H80000001
+	Const HKEY_LOCAL_MACHINE = &H80000002
+	Const HKEY_USERS         = &H80000003
+	const KEY_QUERY_VALUE	  = 1
+	Const KEY_SET_VALUE		  = 2
+
+	Dim scriptEngine, engineFolder, argString, arg, Args, scriptCommand
+	Dim objShellApp : Set objShellApp = CreateObject("Shell.Application")
+	Dim HTAPath : HTAPath = document.location.pathname	
+	Dim WshShell : Set WshShell = CreateObject("Wscript.Shell")
+	Dim Windir : Windir = WshShell.ExpandEnvironmentStrings("%WINDIR%")
+	scriptEngine = "mshta.exe"
+	
+	engineFolder = Windir & "\system32\"
+	
+	scriptCommand = engineFolder & scriptEngine
+		
+	Dim strComputer : strComputer = "."
+		
+	Dim objReg, bHasAccessRight
+	Set objReg=GetObject("winmgmts:"_
+		& "{impersonationLevel=impersonate}!\\" &_ 
+		strComputer & "\root\default:StdRegProv")
+	
+
+	'Check for administrative registry access rights
+	objReg.CheckAccess HKEY_LOCAL_MACHINE, "System\CurrentControlSet\Control\CrashControl", _
+		KEY_SET_VALUE, bHasAccessRight
+	
+	If bHasAccessRight = True Then
+	
+		Exit Sub
+		
+	Else
+		
+		objShellApp.ShellExecute scriptCommand, " """ & HTAPath & """", "", "runas"
+		
+		window.close
+		
+	End If
+		
+	
+End Sub
+
+Sub DisplayAboutWindow()
+	
+	Dim objAbout
+	Set objAbout = window.showModelessDialog("about:blank",window,"dialogHeight: 800px; dialogWidth: 650px;")
+	   
+    Set objDoc = objAbout.Document.Body
+    
+    
+	strHTML = "<html><head>"
+	strHTML = strHTML & "<meta http-equiv='Content-Language' content='en-us' />"
+	strHTML = strHTML & "<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />"
+	strHTML = strHTML & "<title><font size=+1>About the Memory Dump Configuration Editor</title>"
+	strHTML = strHTML & "<style type='text/css'>"
+	strHTML = strHTML & ".style1 {"
+	strHTML = strHTML & "		font-family: Calibri;"
+	strHTML = strHTML & "		}"
+	strHTML = strHTML & "	.style2 {"
+	strHTML = strHTML & "		font-family: Calibri;"
+	strHTML = strHTML & "font-size: small;"
+		strHTML = strHTML & "}"
+		strHTML = strHTML & "</style>"
+ 		strHTML = strHTML & "</head>"
+		strHTML = strHTML & "<body><div style='margin:25px;auto'><font face='Calibri'>"
+		strHTML = strHTML & "<p class='style1' align=center><strong>About the Memory Dump Configuration Editor</strong>&nbsp;</p>"
+		strHTML = strHTML & "<p class='style1' align=center><strong>The registry values modified by this tool are "
+		strHTML = strHTML & "documented in the following KB articles:</strong></p>"
+		strHTML = strHTML & "<p class='style1'>&nbsp;</p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>254649 Overview of memory dump "
+		strHTML = strHTML & "file options for Windows Server 2003, Windows XP, and Windows 2000</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;254649'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;254649</span></a><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>307973 How to configure system "
+		strHTML = strHTML & "failure and recovery options in Windows</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;307973'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;307973</span></a><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>927069 How to generate a complete "
+		strHTML = strHTML & "or kernel crash dump file by using NMI switch in Windows 2000 Server</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;927069'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;927069</span></a><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>244139 Windows feature lets you "
+		strHTML = strHTML & "generate a memory dump file by using the keyboard</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;244139'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;244139</span></a><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>928839 How to use the keyboard to "
+		strHTML = strHTML & "generate a memory dump file on a Virtual Server 2005 guest computer</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;928839'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;928839</span></a><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p><span class='style1'><strong><span class='style2'>944564 How to generate a "
+		strHTML = strHTML & "memory dump file by using a PS/2 keyboard in Windows Server 2008</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;944564'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;944564</span></a></span><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p><span class='style1'><strong><span class='style2'>949052 Kernel memory dump files may Not be generated"
+		strHTML = strHTML & "On Windows Server 2008-based And Windows Vista SP1-based computers when system memory is larger than the size of the page file</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;949052'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;949052</span></a></span><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>950904 When a Windows Vista-based "
+		strHTML = strHTML & "computer receives a nonmaskable interrupt, the system stops responding, and no "
+		strHTML = strHTML & "dump file is generated</span></strong><span class='style2'><br />"
+		strHTML = strHTML & "</span><a href='http://support.microsoft.com/default.aspx?scid=kb;EN-US;950904'>"
+		strHTML = strHTML & "<span class='style2'>http://support.microsoft.com/default.aspx?scid=kb;EN-US;950904</span></a><span class='style2'><br />"
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p class='style1'><strong><span class='style2'>version 150424 "
+		strHTML = strHTML & "</span></p>"
+		strHTML = strHTML & "<p>&nbsp;</p>"
+		strHTML = strHTML & "</body></html>"
+ 
+    objDoc.InnerHTML = strHTML
+    
+End Sub
+
+'******************************************************
+' Returns Major OS version number
+'******************************************************
+Function GetMajorOSVer()
+    GetMajorOSVer = Split(g_strOSVersion,".",-1,1)(0)
+End Function
+
+'******************************************************
+' Sets g_DumpTargetDrive based on dump file location and dedicated dump file location
+' returns true if using dedicateddumpfile
+'******************************************************
+Function SetDumpTargetDrive()
+    'Check for an alternate dump location
+    If Not CanUseDedicatedDumpFile() Then
+        g_DumpTargetDrive = ucase(Left(g_dumpFileLocation,2))
+    End If
+
+	If g_DumpTargetDrive = g_strSystemDrive Then	
+		g_DumpTargetDriveFree = g_SystemDriveFree
+	Else
+		'Check for free disk space on alternate dump location
+		GetDiskFreeSpace g_strComputer, g_DumpTargetDrive, g_DumpTargetDriveFree, g_DriveType
+	End If
+End Function
+
+'******************************************************
+' Checks and sets validity of DedicatedDumpFile based on settings and config
+'******************************************************
+Function CanUseDedicatedDumpFile()
+    ' checking dedicated dump file settings
+    If (GetMajorOSVer() < 6) Then
+        CanUseDedicatedDumpFile = False
+		Exit Function
+    End If
+	
+    dim retVal
+    dim oldDumpTargetDrive 
+    dim ret
+
+    ' return false if document isnt loaded
+    If Not g_HtmlLoaded Then
+        CanUseDedicatedDumpFile = False
+        Exit Function
+    End If
+
+    retVal = False
+    oldDumpTargetDrive = g_DumpTargetDrive
+
+	
+	If (document.form1.chkDedicateddumpfile.checked = True) And Not (IsNull(document.form1.txtDedicatedDumpFileLocation.Value)) Then
+		g_DedicatedDumpFile = True
+		g_DedicatedDumpFileLocation = document.form1.txtDedicatedDumpFileLocation.Value
+	
+		' does drive exist and is it fixed?
+		g_DumpTargetDrive = ucase(Left(g_DedicatedDumpFileLocation,2))
+		g_intDumpRequiredMB = GetEstimatedDumpMB(g_intDumpType)
+
+		GetDiskFreeSpace g_strComputer, g_DumpTargetDrive, g_DumpTargetDriveFree, g_DriveType
+		If (g_DumpTargetDriveFree <> "") And (g_DriveType <> "") Then    
+			If g_DriveType = 3 Then
+				If DumpFitsOnTargetDrive() Then
+					retVal = True
+				Else
+					ret = MsgBox("You have configured the DedicatedDumpFile setting but it appears there is not enough space. Required MB:" & g_intDumpRequiredMB & ". Do you want to continue anyway?",vbYesNo+vbExclamation,"Dedicated Dump File Warning...")
+					If ret = vbYes Then
+						retVal = True
+					End If
+				End If
+			Else
+				ret = MsgBox("You have configured the DedicatedDumpFile setting but drive type appears to NOT be a fixed disk which is required. Do you want to continue anyway?",vbYesNo+vbExclamation,"Dedicated Dump File Warning...")
+				If ret = vbYes Then
+					retVal = True
+				End If
+			End If
+		Else
+			ret = MsgBox("You have configured the DedicatedDumpFile setting but drive letter appears to be invalid: " & g_DumpTargetDrive & ". Do you want to continue anyway?",vbYesNo+vbExclamation,"Dedicated Dump File Warning...")
+			If ret = vbYes Then
+				retVal = True
+			End If
+		End If
+	End If
+
+    If retVal = False Then
+        document.form1.chkDedicateddumpfile.checked = False
+        g_DumpTargetDrive = oldDumpTargetDrive
+        g_DedicatedDumpFile = False
+        g_DedicatedDumpFileLocation = Null
+        CanUseDedicatedDumpFile = False
+    Else
+        CanUseDedicatedDumpFile = True      
+    End If
+
+End Function
+
+</SCRIPT>
+</head>
+<body style="margin:1%;">
+	<div align=center>
+		<form name=form1>
+			<span align="center" valign=center id="outputField"></span>
+		</form>
+	</div>
+</body>
+</html>
