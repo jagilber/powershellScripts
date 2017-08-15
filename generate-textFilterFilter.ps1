@@ -1,4 +1,5 @@
-# script to populate textFilter rvf filter file from etw inf.txt file
+﻿# script to populate textFilter rvf filter file from etw inf.txt file
+# 170519 added multi file support
 
 param(
     $infFile
@@ -19,7 +20,24 @@ function main()
 {
     $infFile = [IO.Path]::GetFullPath($infFile)
 
-    populate-textFilterFile -filterFile "$($infFile).rvf" -infFile $infFile
+    if([IO.File]::Exists($infFile))
+    {
+        $infFiles = @($infFile)
+    }
+    elseif([IO.Directory]::Exists($infFile))
+    {
+        $infFiles = @([IO.Directory]::GetFiles($infFile,"*!inf.txt",[IO.SearchOption]::TopDirectoryOnly))
+    }
+    else
+    {
+        write-error "infFile doesnt exist. returning $($infFile)"
+        return
+    }
+
+    foreach($file in $infFiles)
+    {
+        populate-textFilterFile -filterFile "$($file).rvf" -infFile $file
+    }
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -45,19 +63,9 @@ function populate-textFilterFile([string] $filterFile, $infFile)
     #  </filters>
     #</filterinfo>
 
-    
-    if([IO.File]::Exists($infFile))
-    {
-        $infFileContent = [IO.File]::ReadAllText($infFile)
-    }
-    else
-    {
-        write-error "infFile doesnt exist. returning $($infFile)"
-        return
-    }
+    $infFileContent = [IO.File]::ReadAllText($infFile)
 
     [xml.xmldocument] $xmlDoc = xml-reader $filterFile
- 
  
     $xmlDoc.DocumentElement.filterversion = [DateTime]::Now.ToString("yyMMddhh")
     $xmlDoc.DocumentElement.filternotes = $infFileContent
@@ -68,12 +76,12 @@ function populate-textFilterFile([string] $filterFile, $infFile)
 
         foreach($match in [regex]::Matches($infFileContent,  $regexPattern))
         {
-            $eventCount = $match.Groups["eventCount"].Value
+            $eventCount = $match.Groups["eventCount"].Value.PadLeft(6, "0")
             $eventModule = $match.Groups["module"].Value
             $eventType = $match.Groups["eventType"].Value
             $eventTmf = $match.Groups["tmf"].Value
             $eventSource = $match.Groups["source"].Value
-            $notes = "source:$($eventSource) eventCount: $($eventCount) eventModule: $($eventModule) eventTmf: $($eventTmf)"
+            $notes = "eventCount: $($eventCount) eventModule: $($eventModule) source:$($eventSource) eventTmf: $($eventTmf)"
 
             [Xml.XmlElement] $xmlFilter = $xmlDoc.CreateElement("filter")
             
