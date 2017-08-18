@@ -292,7 +292,7 @@ function add-hostsEntry($ipAddress, $subject)
             }
         
             write-host "$($ipAddress) not same as $($dnsIP0), checking hosts file"
-            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress)?[y|n]") -ine '')
+            if (!$noPrompt -and (read-host "Is it ok to modify hosts file and add $($ipAddress)?[y|n]") -ine 'y')
             {
                 return $false
             }
