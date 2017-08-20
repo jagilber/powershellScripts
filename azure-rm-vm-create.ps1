@@ -1,34 +1,37 @@
-﻿# script to create multiple vm's into existing azure rm infrastructure
+# script to create multiple vm's into existing azure rm infrastructure
 # 161120
 
 param(
-    [string]$admin="vmadmin", # todo:remove
-    [string]$adminPassword="", # todo:remove
+    [parameter(Mandatory=$true,HelpMessage="Enter admin user name: ex:vmadmin")]
+    [string]$adminUsername="",
+    [parameter(Mandatory=$true,HelpMessage="Enter admin password complex 13 char:")]
+    [string]$adminPassword="",
     [switch]$enumerateSub,
     [switch]$force,
     [string]$galleryImage="2016-Datacenter",
-    [string]$location="eastus", # todo:remove
+    [parameter(Mandatory=$true,HelpMessage="Enter location: ex:eastus")]
+    [string]$location="",
     [string]$offername="WindowsServer",
-    [switch]$publicIp=$true,
+    [switch]$publicIp,
     [string]$pubName="MicrosoftWindowsServer",
+    [parameter(Mandatory=$true,HelpMessage="Enter resource group name:")]
     [string]$resourceGroupName,
     [string]$StorageAccountName,
     [string]$StorageType = "Standard_GRS",
     [string]$subnetName="",
     [string]$subscription,
     
-    [string]$vmBaseName="tpl", # todo:remove
+    [string]$vmBaseName="",
     [int]$vmCount= 1,
-    [string]$vmSize="Standard_A1",
+    [string]$vmSize="Standard_A2",
     [int]$vmStartCount=1,
     [string]$VNetAddressPrefix = "10.0.0.0/16",
     [string]$VNetSubnetAddressPrefix = "10.0.0.0/24",
     [string]$vnetName=""
 )
 
-$ErrorActionPreference = "SilentlyContinue"
-$vnetNamePrefix = "ADVNET"
-$subnetNamePrefix = "ADStaticSubnet"
+$vnetNamePrefix = "vnet"
+$subnetNamePrefix = "subnet"
 $storagePrefix = "storage"
 $global:credential
 $global:storageAccount
@@ -54,7 +57,7 @@ function main()
         [string]::IsNullOrEmpty($VMSize))
         {
             write-host "missing required argument"
-            return
+            turn
         }
 
 
@@ -128,6 +131,15 @@ function authenticate-azureRm()
     {
         Login-AzureRmAccount
     }
+
+
+    #if($force -or ([string]::IsNullOrEmpty($adminPassword) -or [string]::IsNullOrEmpty($adminUsername)))
+    #{
+        if($global:credential -eq $null)
+        {
+            $global:Credential = Get-Credential
+        }
+    #}
 }
 # ----------------------------------------------------------------------------------------------------------------
 
@@ -205,37 +217,33 @@ function check-storageAccountName($resourceGroupName, $StorageAccountName)
 
 function check-vnetName($resourceGroupName, $vnetName)
 {
-    $global:vnet = @(Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName)
+    # see if only one vnet if name empty and use that
+    if([string]::IsNullOrEmpty($vnetName) -and @(Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName).Count -eq 1)
+    {
+        $global:vnet = Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName
+        write-host = "using default vnet:$($vnet.Name)"
+    }
+    elseif(!(Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $resourceGroupName))
+    {
+        if([string]::IsNullOrEmpty($VNetName))
+        {
+            $VNetName = "$vnetNamePrefix$($resourceGroupName)"
+        }
 
-    if(!$vnetName -and $global:vnet.Count -eq 1)
-    {
-        $vnetName = $global:vnet[0]
-    }
-    elseif(!$vnetName -and $global:vnet.count -gt 1)
-    {
-        $global:vnet
-        $vnetName = read-host "Enter vnet name to use:"
-    }
-    elseif((!$vnetName -and $global:vnet.Count -lt 1) -or ($vnetName -and !(Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $resourceGroupName)))
-    {
-        $VNetName = "$vnetNamePrefix$($resourceGroupName)"
-        $subNetName = "$subnetNamePrefix$($resourceGroupName)"
+        if([string]::IsNullOrEmpty($subnetName))
+        {
+            $subNetName = "$subnetNamePrefix$($resourceGroupName)"
+        }
+
         write-host "creating vnet: $($vnetName)"
         write-host "creating subnet: $($subnetName)"
         $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix $VNetSubnetAddressPrefix 
         $global:vnet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfig
-
-    }
-    elseif($vnetName -and (Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $resourceGroupName))
-    {
-        return $vnetName
     }
     else
     {
-        Write-Host "error determining vnet name. exiting"
-        exit
+        $global:vnet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location
     }
-
 
     return $vnetName
 }
@@ -244,12 +252,12 @@ function check-vnetName($resourceGroupName, $vnetName)
 function check-subnetName($resourceGroupName, $vnetName, $subnetName)
 {
     # see if only one subnet if name empty and use that
-    if([string]::IsNullOrEmpty($subnetName) -and @(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnetName).Count -eq 1)
+    if([string]::IsNullOrEmpty($subnetName) -and @(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet).Count -eq 1)
     {
-        $subnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnetName
+        $subnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet
         write-host = "using default subnet:$($subnetConfig.Name)"
     }
-    elseif(!(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnetName -Name $subnetName))
+    elseif(!(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $subnetName))
     {
         write-host "creating subnet: $($subnetName)"
         $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix $VNetSubnetAddressPrefix
@@ -311,14 +319,14 @@ function enum-subscription()
 function manage-credential()
 {
     
-    if([string]::IsNullOrEmpty($adminPassword) -or [string]::IsNullOrEmpty($admin))
+    if([string]::IsNullOrEmpty($adminPassword) -or [string]::IsNullOrEmpty($adminUsername))
     {
         write-host "either admin and / or adminpassword were empty, returning."
         return
     }
 
     $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-    $global:credential = new-object System.Management.Automation.PSCredential -ArgumentList $admin, $SecurePassword
+    $global:credential = new-object System.Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
 }
 # ----------------------------------------------------------------------------------------------------------------
 

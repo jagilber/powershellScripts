@@ -264,25 +264,31 @@ function main()
 function add-hostsEntry($ipAddress, $subject)
 {
     # see if it needs to be added to hosts file
+    $addIp = $false
+
     try
     {
-        $dnsresolve = @(Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue)
-        $dnsIP0 = ""
-        $addIp = $false
+        try
+        {
+            $dnsresolve = @(Resolve-DnsName -Name $subject -ErrorAction SilentlyContinue)
+            $dnsIP0 = ""
+
         
-        if($error)
-        {
-            $addIp = $true
-            $error.Clear()
+            if($error)
+            {
+                $addIp = $true
+                $error.Clear()
+            }
+            elseif(!$dnsresolve -or $dnsresolve.Count -lt 1)
+            {
+                $addIp = $true
+            }
+            elseif(!$dnsresolve.IpAddress -or !$dnsresolve.IpAddress.Contains($ipAddress))
+            {
+                $addIp = $true
+            }
         }
-        elseif(!$dnsresolve -or $dnsresolve.Count -lt 1)
-        {
-            $addIp = $true
-        }
-        elseif(!$dnsresolve.IpAddress.Contains($ipAddress))
-        {
-            $addIp = $true
-        }
+        catch {}
 
         if ($addIp)
         {
@@ -487,7 +493,7 @@ function add-publicIp()
             exit
         }
 
-        $ports = @(3389,443)
+        $ports = @(3389) #@(3389,443)
 
         foreach($port in $ports)
         {
