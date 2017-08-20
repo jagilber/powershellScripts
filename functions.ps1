@@ -284,10 +284,10 @@ function get-update($updateUrl, $destinationFile)
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
 
         # git may not have carriage return
-        if ([regex]::Matches($git, "`r").Count -eq 0)
-        {
-            $git = [regex]::Replace($git, "`n", "`r`n")
-        }
+        # reset by setting all to just lf
+        $git = [regex]::Replace($git, "`r`n","`n")
+        # add cr back
+        $git = [regex]::Replace($git, "`n", "`r`n")
 
         if ([IO.File]::Exists($destinationFile))
         {
