@@ -437,26 +437,29 @@ function add-publicIp()
 
         if(!$nsg)
         {
-            write-host "all nsg's in resource group:" -ForegroundColor Cyan
-            write-host ($nsgs.Name | out-string)
-            write-host "nsg's in resource group on same subnet:" -ForegroundColor Cyan
-
-            try
+            if($nsgs)
             {
-                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+                write-host "all nsg's in resource group:" -ForegroundColor Cyan
+                write-host ($nsgs.Name | out-string)
+                write-host "nsg's in resource group on same subnet:" -ForegroundColor Cyan
+
+                try
+                {
+                    $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+                }
+                catch {}
+
+                write-host ($nsgNames | out-string)
+
+                write-host "nsg's in resource group with TCP 3389 Allow Rule:" -ForegroundColor Cyan
+                try
+                {
+                    $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.SecurityRules.DestinationPortRange -imatch 3389 }).Name)
+                }
+                catch {}
+
+                write-host ($nsgNames | out-string)
             }
-            catch {}
-
-            write-host ($nsgNames | out-string)
-
-            write-host "nsg's in resource group with TCP 3389 Allow Rule:" -ForegroundColor Cyan
-            try
-            {
-                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.SecurityRules.DestinationPortRange -imatch 3389 }).Name)
-            }
-            catch {}
-
-            write-host ($nsgNames | out-string)
 
             $newNsgName = "$($modifiedVmName)-nsg"
             $nsgName = read-host "enter name of existing nsg to use, new nsg name to create new nsg, or press {enter} to use new name '$($newNsgName)'"
@@ -1264,7 +1267,7 @@ function import-cert($cert, $certFile, $subject, $wildcardName)
             }
             else
             {
-                if ((read-host "cert has different thumbprint, do you want to delete?[y|n]") -ilike 'y')
+                if ((read-host "cert '$($c.pspath)' has different thumbprint, do you want to delete?[y|n]") -imatch 'y')
                 {
                     remove-item $c.pspath -Force
                     $count--
