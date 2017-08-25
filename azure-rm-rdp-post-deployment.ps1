@@ -191,7 +191,7 @@ function main()
             elseif ($resourceList.Count -gt 1)
             {
                 write-verbose "query time: $(((get-date) - $startTime).TotalSeconds)"
-                write-host "(advanced) if site / server is not listed and site / server is running, enter 'p' if you want to add public ip address"
+                write-host "(advanced) if connection is not listed and vm is running, enter 'p' to add public ip address"
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to.")
             }
             elseif ($resourceList.Count -eq 1)
@@ -233,7 +233,7 @@ function main()
                     $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
                     $cert = get-cert -url $gatewayUrl -certFile $certFile
                     $subject = enum-certSubject -cert $resource.certInfo
-                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname $resource.ResourceGroup
+                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname "gateway" # $resource.ResourceGroup
                     add-hostsEntry -ipAddress $ip.IpAddress -subject $subject
                     open-RdWebSite -site "https://$($subject)/RDWeb"
                 }
