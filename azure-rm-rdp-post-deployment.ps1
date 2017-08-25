@@ -191,7 +191,7 @@ function main()
             elseif ($resourceList.Count -gt 1)
             {
                 write-verbose "query time: $(((get-date) - $startTime).TotalSeconds)"
-                write-host "(advanced) if site / server is not listed and site / server is running, enter 'p' if you want to add public ip address"
+                write-host "(advanced) if connection is not listed and vm is running, enter 'p' to add public ip address"
                 $idsEntry = Read-Host ("Enter number for site / ip address to connect to.")
             }
             elseif ($resourceList.Count -eq 1)
@@ -233,7 +233,7 @@ function main()
                     $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
                     $cert = get-cert -url $gatewayUrl -certFile $certFile
                     $subject = enum-certSubject -cert $resource.certInfo
-                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname $resource.ResourceGroup
+                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname "gateway" # $resource.ResourceGroup
                     add-hostsEntry -ipAddress $ip.IpAddress -subject $subject
                     open-RdWebSite -site "https://$($subject)/RDWeb"
                 }
@@ -437,26 +437,29 @@ function add-publicIp()
 
         if(!$nsg)
         {
-            write-host "all nsg's in resource group:" -ForegroundColor Cyan
-            write-host ($nsgs.Name | out-string)
-            write-host "nsg's in resource group on same subnet:" -ForegroundColor Cyan
-
-            try
+            if($nsgs)
             {
-                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+                write-host "all nsg's in resource group:" -ForegroundColor Cyan
+                write-host ($nsgs.Name | out-string)
+                write-host "nsg's in resource group on same subnet:" -ForegroundColor Cyan
+
+                try
+                {
+                    $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
+                }
+                catch {}
+
+                write-host ($nsgNames | out-string)
+
+                write-host "nsg's in resource group with TCP 3389 Allow Rule:" -ForegroundColor Cyan
+                try
+                {
+                    $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.SecurityRules.DestinationPortRange -imatch 3389 }).Name)
+                }
+                catch {}
+
+                write-host ($nsgNames | out-string)
             }
-            catch {}
-
-            write-host ($nsgNames | out-string)
-
-            write-host "nsg's in resource group with TCP 3389 Allow Rule:" -ForegroundColor Cyan
-            try
-            {
-                $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.SecurityRules.DestinationPortRange -imatch 3389 }).Name)
-            }
-            catch {}
-
-            write-host ($nsgNames | out-string)
 
             $newNsgName = "$($modifiedVmName)-nsg"
             $nsgName = read-host "enter name of existing nsg to use, new nsg name to create new nsg, or press {enter} to use new name '$($newNsgName)'"
@@ -1264,7 +1267,7 @@ function import-cert($cert, $certFile, $subject, $wildcardName)
             }
             else
             {
-                if ((read-host "cert has different thumbprint, do you want to delete?[y|n]") -ilike 'y')
+                if ((read-host "cert '$($c.pspath)' has different thumbprint, do you want to delete?[y|n]") -imatch 'y')
                 {
                     remove-item $c.pspath -Force
                     $count--
