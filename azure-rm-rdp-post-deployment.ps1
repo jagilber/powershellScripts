@@ -233,7 +233,7 @@ function main()
                     $certFile = [IO.Path]::GetFullPath("$($gatewayUrl -replace '\W','').cer")
                     $cert = get-cert -url $gatewayUrl -certFile $certFile
                     $subject = enum-certSubject -cert $resource.certInfo
-                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname "gateway" # $resource.ResourceGroup
+                    $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname $resource.ResourceGroup
                     add-hostsEntry -ipAddress $ip.IpAddress -subject $subject
                     open-RdWebSite -site "https://$($subject)/RDWeb"
                 }
@@ -1301,7 +1301,7 @@ function import-cert($cert, $certFile, $subject, $wildcardName)
     # if wildcard prompt for name for hosts entry
     if ($global:wildcard)
     {
-        write-host "certificate is wildcard. what host name do you want to use to connect to RDWeb site?" -ForegroundColor Yellow
+        write-host "certificate is wildcard. what host name do you want to use to connect to RDWeb site? this most likely needs to be same fqdn as rdweb and rdgateway." -ForegroundColor Yellow
         $domainName = "$($wildcardName)$($subject.Replace('*',''))"    
         write-host "https://<hostname>$($subject.Replace('*',''))/RDWeb"    
         write-host "https://$($domainName)/RDWeb"    
