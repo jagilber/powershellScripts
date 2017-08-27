@@ -1,33 +1,49 @@
-# script to create multiple vm's into existing azure rm infrastructure
-# 161120
+<#
+script to create multiple vm's into existing azure rm infrastructure
+to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
+    Copyright 2017 Microsoft Corporation
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+#170825
+#>
 param(
-    [parameter(Mandatory=$true,HelpMessage="Enter admin user name: ex:vmadmin")]
-    [string]$adminUsername="",
-    [parameter(Mandatory=$true,HelpMessage="Enter admin password complex 13 char:")]
-    [string]$adminPassword="",
+    [parameter(Mandatory = $true, HelpMessage = "Enter admin user name: ex:vmadmin")]
+    [string]$adminUsername = "",
+    [parameter(Mandatory = $true, HelpMessage = "Enter admin password complex 13 char:")]
+    [string]$adminPassword = "",
     [switch]$enumerateSub,
     [switch]$force,
-    [string]$galleryImage="2016-Datacenter",
-    [parameter(Mandatory=$true,HelpMessage="Enter location: ex:eastus")]
-    [string]$location="",
-    [string]$offername="WindowsServer",
+    [string]$galleryImage = "2016-Datacenter",
+    [parameter(Mandatory = $true, HelpMessage = "Enter location: ex:eastus")]
+    [string]$location = "",
+    [string]$offername = "WindowsServer",
     [switch]$publicIp,
-    [string]$pubName="MicrosoftWindowsServer",
-    [parameter(Mandatory=$true,HelpMessage="Enter resource group name:")]
+    [string]$pubName = "MicrosoftWindowsServer",
+    [parameter(Mandatory = $true, HelpMessage = "Enter resource group name:")]
     [string]$resourceGroupName,
     [string]$StorageAccountName,
     [string]$StorageType = "Standard_GRS",
-    [string]$subnetName="",
+    [string]$subnetName = "",
     [string]$subscription,
     
-    [string]$vmBaseName="",
-    [int]$vmCount= 1,
-    [string]$vmSize="Standard_A2",
-    [int]$vmStartCount=1,
+    [string]$vmBaseName = "",
+    [int]$vmCount = 1,
+    [string]$vmSize = "Standard_A2",
+    [int]$vmStartCount = 1,
     [string]$VNetAddressPrefix = "10.0.0.0/16",
     [string]$VNetSubnetAddressPrefix = "10.0.0.0/24",
-    [string]$vnetName=""
+    [string]$vnetName = ""
 )
 
 $vnetNamePrefix = "vnet"
@@ -41,24 +57,23 @@ $global:vnet
 function main()
 {
     authenticate-azureRm
-    
     manage-credential
 
-    if($enumerateSub)
+    if ($enumerateSub)
     {
         enum-subscription
         return
     }
 
-    if([string]::IsNullOrEmpty($location) -or `
-        [string]::IsNullOrEmpty($resourceGroupName) -or `
-        [string]::IsNullOrEmpty($galleryImage) -or `
-        [string]::IsNullOrEmpty($pubName) -or `
-        [string]::IsNullOrEmpty($VMSize))
-        {
-            write-host "missing required argument"
-            turn
-        }
+    if (!($location) -or `
+            !($resourceGroupName) -or `
+            !($galleryImage) -or `
+            !($pubName) -or `
+            !($VMSize))
+    {
+        write-host "missing required argument"
+        turn
+    }
 
 
     # check to make sure vm doesnt exist
@@ -68,14 +83,26 @@ function main()
     $Error.Clear()
 
     $resourceGroupName = check-resourceGroupName -resourceGroupName $resourceGroupName
-
     $storageAccountName = check-storageAccountName -resourceGroupName $resourceGroupName -storageAccountName $storageAccountName
-
     $vnetName = check-vnetName -resourceGroupName $resourceGroupName -vnetName $vnetName
-    
     $subnetName = check-subnetName -resourceGroupName $resourceGroupName -vnetName $vnetName -subnetName $subnetName
 
-    foreach($VMName in $newVMNames)
+    for ($i = $vmstartCount; $i -lt $vmstartcount + $VMCount; $i++)
+    {
+        $newVmName = "$($vmBaseName)-$($i.ToString("D2"))"
+        
+        if (Get-AzureRMVM -resourceGroupName $resourceGroupName -Name $newVMName -ErrorAction SilentlyContinue)
+        {
+            Write-Host "vm already exists $newVMName. skipping..."
+        }
+        else
+        {
+            write-host "adding new machine name to list: $($newvmName)"
+            $newVmNames.Add($newVmName)
+        }
+    }
+
+    foreach ($VMName in $newVMNames)
     {
         # todo make concurrent with start-job?
         # would need cert conn to azure
@@ -85,7 +112,7 @@ function main()
         $InterfaceName = "$($vmName)Interface1"
 
         # Network
-        if($publicIp)
+        if ($publicIp)
         {
             write-host "creating public ip"
             $PIp = New-AzureRmPublicIpAddress -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic
@@ -127,35 +154,35 @@ function authenticate-azureRm()
         Add-AzureRmAccount
     }
 
-    if($force)
+    if ($force)
     {
         Login-AzureRmAccount
     }
 
 
-    #if($force -or ([string]::IsNullOrEmpty($adminPassword) -or [string]::IsNullOrEmpty($adminUsername)))
+    #if($force -or (!($adminPassword) -or !($adminUsername)))
     #{
-        if($global:credential -eq $null)
-        {
-            $global:Credential = Get-Credential
-        }
+    if ($global:credential -eq $null)
+    {
+        $global:Credential = Get-Credential
+    }
     #}
 }
 # ----------------------------------------------------------------------------------------------------------------
 
 function check-resourceGroupName($resourceGroupName)
 {
-    if([string]::IsNullOrEmpty($resourceGroupName) -and @(Get-AzureRmResourceGroup).Count -eq 1)
+    if (!($resourceGroupName) -and @(Get-AzureRmResourceGroup).Count -eq 1)
     {
         $resourceGroupName = (Get-AzureRmResourceGroup).Name
         
     }
-    elseif([string]::IsNullOrEmpty($resourceGroupName))
+    elseif (!($resourceGroupName))
     {
         write-host (Get-AzureRmResourceGroup | fl * | out-string)
         $resourceGroupName = read-host "enter resource group"
     }
-    elseif(!(Get-AzureRmResourceGroup $resourceGroupName))
+    elseif (!(Get-AzureRmResourceGroup $resourceGroupName))
     {
         write-host "creating resource group: $($resourceGroupName)"
         New-AzureRmResourceGroup -Name $resourceGroupName -Location $Location 
@@ -168,40 +195,46 @@ function check-resourceGroupName($resourceGroupName)
 function check-storageAccountName($resourceGroupName, $StorageAccountName)
 {
     # see if only one storage account if name empty and use that
-    if([string]::IsNullOrEmpty($storageAccountName) -and @(Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName).Count -eq 1)
+    if (!($storageAccountName) -and @(Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName).Count -eq 1)
     {
         $global:storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName
         write-host = "using default storage account:$($storageAccount.Name)"
     }
-    elseif([string]::IsNullOrEmpty($storageAccountName) -and @(Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName).Count -gt 1)
+    elseif (!($storageAccountName) -and @(Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName).Count -gt 1)
     {
-        foreach($storageName in Get-AzureRmStorageAccount -resourcegroupname $resourcegroupname)
+        $storageList = @{}
+        $count = 1
+        foreach ($storageName in Get-AzureRmStorageAccount -resourcegroupname $resourcegroupname)
         {
-            write-host $storageName.StorageAccountName
+            $storageList.Add($count,$storageName.StorageAccountName)
+            write-host "$($count). $($storageName.StorageAccountName)"
+            $count++
         }
 
-        $storageAccountName = read-host "enter storage account"
-        if([string]::IsNullOrEmpty($storageAccountName))
+        $storageAccountNumber = [int](read-host "enter number of storage account to use:")
+        $storageAccountName = $storageList.Item($storageAccountNumber)
+
+        if (!($storageAccountName))
         {
             return
         }
 
         $global:storageAccount = Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName
     }
-    elseif(([string]::IsNullOrEmpty($storageAccountName) -and @(Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName).Count -lt 1) `
-        -or !(Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName))
+    elseif ((!($storageAccountName) -and @(Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName).Count -lt 1) `
+            -or !(Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName))
     {
-        if([string]::IsNullOrEmpty($storageAccountName))
+        if (!($storageAccountName))
         {
 
             $storageAccountName = ("$($storagePrefix)$($resourceGroupName)").ToLower()
-            $storageAccountName = $storageAccountName.Substring(0,[Math]::Min($storageAccountName.Length,23))
+            $storageAccountName = $storageAccountName.Substring(0, [Math]::Min($storageAccountName.Length, 23))
         }
 
         write-host "creating storage account: $($storageAccountName)"
         $global:StorageAccount = New-AzureRmStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -Type $StorageType -Location $Location
     }
-    elseif((Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName))
+    elseif ((Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName))
     {
         $global:StorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName
     }
@@ -218,19 +251,19 @@ function check-storageAccountName($resourceGroupName, $StorageAccountName)
 function check-vnetName($resourceGroupName, $vnetName)
 {
     # see if only one vnet if name empty and use that
-    if([string]::IsNullOrEmpty($vnetName) -and @(Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName).Count -eq 1)
+    if (!($vnetName) -and @(Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName).Count -eq 1)
     {
         $global:vnet = Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName
         write-host = "using default vnet:$($vnet.Name)"
     }
-    elseif(!(Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $resourceGroupName))
+    elseif (!(Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $resourceGroupName))
     {
-        if([string]::IsNullOrEmpty($VNetName))
+        if (!($VNetName))
         {
             $VNetName = "$vnetNamePrefix$($resourceGroupName)"
         }
 
-        if([string]::IsNullOrEmpty($subnetName))
+        if (!($subnetName))
         {
             $subNetName = "$subnetNamePrefix$($resourceGroupName)"
         }
@@ -252,12 +285,12 @@ function check-vnetName($resourceGroupName, $vnetName)
 function check-subnetName($resourceGroupName, $vnetName, $subnetName)
 {
     # see if only one subnet if name empty and use that
-    if([string]::IsNullOrEmpty($subnetName) -and @(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet).Count -eq 1)
+    if (!($subnetName) -and @(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet).Count -eq 1)
     {
         $subnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet
         write-host = "using default subnet:$($subnetConfig.Name)"
     }
-    elseif(!(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $subnetName))
+    elseif (!(Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $subnetName))
     {
         write-host "creating subnet: $($subnetName)"
         $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix $VNetSubnetAddressPrefix
@@ -268,26 +301,12 @@ function check-subnetName($resourceGroupName, $vnetName, $subnetName)
         $SubnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -Name $SubnetName -VirtualNetwork $VNetName
     }
 
-    for($i = $vmstartCount;$i -lt $vmstartcount + $VMCount;$i++)
-    {
-        $newVmName = "$($vmBaseName)-$($i.ToString("D3"))"
-        
-        if(Get-AzureRMVM -resourceGroupName $resourceGroupName -Name $newVMName -ErrorAction SilentlyContinue)
-        {
-            Write-Host "vm already exists $newVMName. skipping..."
-        }
-        else
-        {
-            write-host "adding new machine name to list: $($newvmName)"
-            $newVmNames.Add($newVmName)
-        }
-    }
 }
 # ----------------------------------------------------------------------------------------------------------------
 
 function enum-subscription()
 {
-    If([string]::IsNullOrEmpty($location))
+    If (!($location))
     {
         write-host "AVAILABLE LOCATIONS:" -ForegroundColor Green
         write-host (Get-AzureRmLocation | fl * | out-string)
@@ -319,7 +338,7 @@ function enum-subscription()
 function manage-credential()
 {
     
-    if([string]::IsNullOrEmpty($adminPassword) -or [string]::IsNullOrEmpty($adminUsername))
+    if (!($adminPassword) -or !($adminUsername))
     {
         write-host "either admin and / or adminpassword were empty, returning."
         return
