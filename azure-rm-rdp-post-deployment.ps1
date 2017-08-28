@@ -116,19 +116,19 @@ function main()
         $certFile = [IO.Path]::GetFullPath("$($rdWebUrl -replace '\W','').cer")
         $cert = get-cert -url $rdWebUrl -certFile $certFile
         $subject = enum-certSubject -cert $cert
-        $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname "gateway"
+        #$ipv4 = ([regex]::Matches($rdWebUrl, "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])")).Captures
+        $ipv4 = [regex]::Matches($rdWebUrl, "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])")
         
-        if ($subject)
+        if($ipv4.Count -gt 1)
         {
-            $ipv4 = ([regex]::Matches($rdWebUrl, "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])")).Captures
-            
-            if ($ipv4)
+            $subject = import-cert -cert $cert -certFile $certFile -subject $subject -wildcardname "gateway"
+        
+            if ($subject)
             {
-                add-hostsEntry -ipAddress $ipv4[0].Value -subject $subject
+                add-hostsEntry -ipAddress $ipv4.Captures[0].Value -subject $subject
+                open-RdWebSite -site $rdWebUrl
+                return
             }
-
-            open-RdWebSite -site $rdWebUrl
-            return
         }
     }
     
