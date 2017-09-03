@@ -530,7 +530,7 @@ function runas-admin()
 {
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
-        log-info "please restart script as administrator. exiting..."
+        Write-Warning "please restart script in administrator powershell session. exiting..."
         return $false
     }
 

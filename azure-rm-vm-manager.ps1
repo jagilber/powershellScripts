@@ -114,7 +114,6 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
-
         $allVms = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
 
         if($vmss)
