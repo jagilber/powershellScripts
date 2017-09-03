@@ -10,11 +10,11 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170723 fix for $vms filter. fix for jobs count v2
+   Version    : 170902 added 'deallocate' action
    History    : 
+                170723 fix for $vms filter. fix for jobs count v2
                 170717 fix $jobsCount for single machine
                 170713 add progress
-                
 
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
@@ -66,7 +66,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list')]
+    [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list', 'deallocate')]
     [string]$action = 'list',
     [string[]]$resourceGroupNames = @(),
     [string[]]$vms = @(),
@@ -77,7 +77,7 @@ param(
     [switch]$noLog,
     [int]$throttle = 20,
     [float]$timerHours = 0,
-    [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list')]
+    [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list', 'deallocate')]
     [string]$timerAction
 )
 
@@ -95,7 +95,8 @@ $global:startTime = get-date
 function main()
 {
     $error.Clear()
-    $allVms = @()
+    $allVms = New-Object Collections.ArrayList
+    $allVmss = New-Object Collections.ArrayList
     $filteredVms = New-Object Collections.ArrayList
 
     try
@@ -113,14 +114,24 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
+
+        $allVms = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
 
         if($vmss)
         {
             log-info "checking virtual machine scale sets"
             #$vmssvms = Get-AzureRmVmss -ResourceGroupName 
+            $allVmss = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+            
+            if($allVmss.Count -gt 1)
+            {
+                $allVms.AddRange($allVmss)
+            }
+            elseif($allVmss.Count -eq 1)
+            {
+                $allVms.Add($allVmss)
+            }
         }
-
-        $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
 
         if (!$allVms)
         {
@@ -448,11 +459,18 @@ function do-backgroundJob($jobInfo)
         {
             switch ($jobInfo.action)
             {
+                "deallocate" 
+                {
+                    log-info "`tdeallocating vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                }
+
                 "stop" 
                 {
                     log-info "`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
-                    log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force -StayProvisioned
+                    log-info "verbose:`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
 
                 "restart" 
@@ -473,6 +491,13 @@ function do-backgroundJob($jobInfo)
         {
             switch ($jobInfo.action)
             {
+                "deallocate" 
+                {
+                    log-info "`tdeallocating vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                }
+
                 "start" 
                 {
                     log-info "`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
@@ -606,6 +631,11 @@ function perform-action($currentAction)
 {
     switch ($currentAction)
     {
+        "deallocate" 
+        { 
+            start-backgroundJobs -jobInfos ($global:jobInfos) -throttle $throttle 
+        }
+
         "list" 
         { 
             log-info "resourcegroupname   `t| vm name             `t| provisioning   `t| power"
