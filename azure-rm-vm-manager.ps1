@@ -89,14 +89,15 @@ $action = $action.ToLower()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-vm-manager.ps1"
 $global:jobInfos = New-Object Collections.ArrayList
 $global:jobsCount = 0
+$global:completedJobsCount = 0
 $global:startTime = get-date
+$global:allVms = New-Object Collections.ArrayList
+$global:allVmss = New-Object Collections.ArrayList
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
     $error.Clear()
-    $allVms = New-Object Collections.ArrayList
-    $allVmss = New-Object Collections.ArrayList
     $filteredVms = New-Object Collections.ArrayList
 
     try
@@ -114,25 +115,25 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
-        $allVms = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
+        $global:allVms = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
 
         if($vmss)
         {
             log-info "checking virtual machine scale sets"
             #$vmssvms = Get-AzureRmVmss -ResourceGroupName 
-            $allVmss = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+            $global:allVmss = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
             
-            if($allVmss.Count -gt 1)
+            if($global:allVmss.Count -gt 1)
             {
-                $allVms.AddRange($allVmss)
+                $global:allVms.AddRange($global:allVmss)
             }
-            elseif($allVmss.Count -eq 1)
+            elseif($global:allVmss.Count -eq 1)
             {
-                $allVms.Add($allVmss)
+                $global:allVms.Add($global:allVmss)
             }
         }
 
-        if (!$allVms)
+        if (!$global:allVms)
         {
             log-info "warning:no vm's found. exiting"
             exit 1
@@ -152,7 +153,7 @@ function main()
         # check passed in resource group names
         foreach ($resourceGroupName in $resourceGroupNames)
         {
-            foreach ($vm in $allVms)
+            foreach ($vm in $global:allVms)
             {
                 if ($resourceGroupName -ieq $vm.ResourceGroupName)
                 {
@@ -164,7 +165,7 @@ function main()
         # check for excludeResourceGroup names
         foreach ($excludeResourceGroup in $excludeResourceGroupNames)
         {
-            foreach ($vm in $allVms)
+            foreach ($vm in $global:allVms)
             {
                 if ($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
                 {
@@ -190,11 +191,11 @@ function main()
         # check for excludeVms names
         foreach ($excludeVm in $excludeVms)
         {
-            if (($filteredVms.Name -ieq $excludeVm) -and ($allVms.Name -ieq $excludeVm))
+            if (($filteredVms.Name -ieq $excludeVm) -and ($global:allVms.Name -ieq $excludeVm))
             {
                 log-info "verbose: removing excluded vm $($excludeVm)"
                 
-                foreach ($vm in @($allVms | Where-Object Name -ieq $excludeVm))
+                foreach ($vm in @($global:allVms | Where-Object Name -ieq $excludeVm))
                 {
                     [void]$filteredVms.Remove($vm)
                 }
@@ -372,6 +373,7 @@ function check-backgroundJobs($writeStatus = $false)
         {
             Remove-Job -Id $job.Id -Force
             log-info "`tjob status: $($jobInfo)"
+            $global:completedJobsCount++
             update-progress
             continue
         }
@@ -632,7 +634,7 @@ function perform-action($currentAction)
     {
         "deallocate" 
         { 
-            start-backgroundJobs -jobInfos ($global:jobInfos) -throttle $throttle 
+            start-backgroundJobs -jobInfos ($global:jobInfos | where-object powerState -INotMatch "deallocated") -throttle $throttle 
         }
 
         "list" 
@@ -757,16 +759,13 @@ function start-backgroundJobs($jobInfos, $throttle)
 # ----------------------------------------------------------------------------------------------------------------
 function update-progress()
 {
-    $globalJobsCount = $global:jobsCount
-
-    if ($globalJobsCount -gt 0)
+    if ($global:jobsCount -gt 0)
     {
-        $finishedJobsCount = $globalJobsCount - @(get-job).Count
-        $status = "$($finishedJobsCount) / $($globalJobsCount) vm jobs completed. " `
+        $status = "$($global:completedJobsCount) / $($global:jobsCount) vm jobs completed. " `
             + "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
-        $percentComplete = ($finishedJobsCount / $globaljobsCount * 100)
+        $percentComplete = ($global:completedJobsCount / $global:jobsCount * 100)
 
-        Write-Progress -Activity "$($action) $($globalJobsCount) vms jobs completion status:" -Status $status -PercentComplete $percentComplete -ParentId 1
+        Write-Progress -Activity "$($action) $($global:jobsCount) vms jobs completion status:" -Status $status -PercentComplete $percentComplete -ParentId 1
     }
 }
 
