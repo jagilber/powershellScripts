@@ -66,6 +66,7 @@ param(
     [switch]$enumerateSubscriptions,
     [switch]$noprompt,
     [switch]$noretry,
+    [int[]]$ports = @(3389),
     [string]$publicIpAddressName = ".",
     [string]$rdWebUrl = "",
     [string]$resourceGroupName,
@@ -491,18 +492,11 @@ function add-publicIp()
                 exit
             }
         }
-        elseif($nsg)
-        {
-            # no need to check subnet or add interface
-            # check for 3389 and if not ask to add    
-        }
 
         if(!$nsg)
         {
             exit
         }
-
-        $ports = @(3389) #@(3389,443)
 
         foreach($port in $ports)
         {
@@ -623,10 +617,12 @@ function add-publicIp()
         
         write-host "successfully added public ip address $($vmPublicIPAddress) to vm $($modifiedVmName)" -ForegroundColor Green
         write-host "To remove public ip address and nsg, use the following commands:" -ForegroundColor Yellow
-        write-host "`t Remove-AzureRmNetworkInterfaceIpConfig -Name $($vmPublicIp.Name) -NetworkInterface (Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName -Name $vmNicName)" -ForegroundColor Cyan
+        write-host "`t `$nic = (Get-AzureRmNetworkInterface -ResourceGroupName $($resourceGroupName) -Name $($vmNicName))"
+        write-host "`t `$nic.IpConfigurations.publicipaddress = `$null"
+        write-host "`t `$nic.NetworkSecurityGroup = `$null"
+        write-host "`t Set-AzureRmNetworkInterface -NetworkInterface `$nic"
         write-host "`t Remove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
-        
     }
     catch
     {
