@@ -20,13 +20,11 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170809 checking vm for 3389 and 443 for nsg
+   Version    : 170908 updated commands to remove public ip
    History    : 
+                170809 checking vm for 3389 and 443 for nsg
                 170807 fix for $ipAddress.IPAddress
                 170803 add check for existing security rule. changed destination to *
-                170802 fix for ipaddress check
-                170729 changed hostname options for wildcard certs
-                170728 add -addPublicIp
                 
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
@@ -616,13 +614,14 @@ function add-publicIp()
         }
         
         write-host "successfully added public ip address $($vmPublicIPAddress) to vm $($modifiedVmName)" -ForegroundColor Green
-        write-host "To remove public ip address and nsg, use the following commands:" -ForegroundColor Yellow
-        write-host "`t `$nic = (Get-AzureRmNetworkInterface -ResourceGroupName $($resourceGroupName) -Name $($vmNicName))"
-        write-host "`t `$nic.IpConfigurations.publicipaddress = `$null"
-        write-host "`t `$nic.NetworkSecurityGroup = `$null"
-        write-host "`t Set-AzureRmNetworkInterface -NetworkInterface `$nic"
+        write-host "To remove public ip address and nsg, use the following commands:" -ForegroundColor Magenta
+        write-host "`t `$nic = (Get-AzureRmNetworkInterface -ResourceGroupName $($resourceGroupName) -Name $($vmNicName))" -ForegroundColor Cyan
+        write-host "`t `$nic.IpConfigurations.publicipaddress = `$null" -ForegroundColor Cyan
+        write-host "`t `$nic.NetworkSecurityGroup = `$null" -ForegroundColor Cyan
+        write-host "`t Set-AzureRmNetworkInterface -NetworkInterface `$nic" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
+        write-hsot ""
     }
     catch
     {
