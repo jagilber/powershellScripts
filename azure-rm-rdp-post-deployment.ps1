@@ -447,7 +447,10 @@ function add-publicIp()
                 {
                     $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.Subnets.Id -imatch $vmSubnetName }).Name)
                 }
-                catch {}
+                catch 
+                {
+                    $error.Clear()
+                }
 
                 write-host ($nsgNames | out-string)
 
@@ -456,7 +459,10 @@ function add-publicIp()
                 {
                     $nsgNames = @([Linq.Enumerable]::Where($nsgs, [Func[object,bool]]{ param($x) $x.SecurityRules.DestinationPortRange -imatch 3389 }).Name)
                 }
-                catch {}
+                catch 
+                {
+                    $error.Clear()
+                }
 
                 write-host ($nsgNames | out-string)
             }
