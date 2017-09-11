@@ -77,14 +77,16 @@ using System.Globalization;
             "(?<DateEvt>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
             "(?<DateEvtSpace>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
             "(?<DateEvtPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{6} [AP]M)|" +
-            "(?<DateISO>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}T[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";  
+            "(?<DateISO>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}T[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})|" +
+            "(?<DateAzure>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";  
         string dateFormatEtl = "MM/dd/yyyy-HH:mm:ss.fff";
         string dateFormatEtlPrecise = "MM/dd/yy-HH:mm:ss.fffffff";
         string dateFormatEvt = "MM/dd/yyyy,hh:mm:ss tt";
         string dateFormatEvtSpace = "MM/dd/yyyy hh:mm:ss tt";
         string dateFormatEvtPrecise = "MM/dd/yyyy,hh:mm:ss.ffffff tt";
         string dateFormatISO = "yyyy-MM-ddTHH:mm:ss.ffffff"; // may have additional digits and Z
-        
+        string dateFormatAzure = "yyyy-MM-dd HH:mm:ss.fff";
+
         bool detail = false;
         CultureInfo culture = new CultureInfo("en-US");
         Int64 missedMatchCounter = 0;
@@ -193,6 +195,11 @@ using System.Globalization;
                         {
                             dateFormat = dateFormatISO;
                             traceDate = matchTraceDate.Groups["DateISO"].Value;
+                        }
+                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateAzure"].Value))
+                        {
+                            dateFormat = dateFormatAzure;
+                            traceDate = matchTraceDate.Groups["DateAzure"].Value;
                         }
                         else
                         {

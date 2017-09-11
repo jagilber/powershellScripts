@@ -76,7 +76,7 @@ function populate-textFilterFile([string] $filterFile, $infFile)
 
         foreach($match in [regex]::Matches($infFileContent,  $regexPattern))
         {
-            $eventCount = $match.Groups["eventCount"].Value.PadLeft(6, "0")
+            $eventCount = $match.Groups["eventCount"].Value.PadLeft(9, "0")
             $eventModule = $match.Groups["module"].Value
             $eventType = $match.Groups["eventType"].Value
             $eventTmf = $match.Groups["tmf"].Value

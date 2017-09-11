@@ -4,22 +4,23 @@
 
 [cmdletbinding()]
 param(
+    [string]$certSubject,
     [string]$thumbPrint,
     [string]$applicationId,
     [string]$clientSecret,
-    [string]$tenantId,
-    [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
-    [pscredential]$credentials = (get-credential)
+    [string]$tenantId#,
+ #   [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
+ #   [pscredential]$credentials = (get-credential)
 )
 
 $ErrorActionPreference = "stop"
 $error.Clear()
 
-if (!$thumbPrint)
-{
-    Write-Error "need thumbprint to authenticate to rest. use azure-rm-create-aad-application-spn.ps1 to create aad spn for cert logon to azure for script"
-    exit 1
-}
+#if (!$thumbPrint)
+#{
+#    Write-Error "need thumbprint to authenticate to rest. use azure-rm-create-aad-application-spn.ps1 to create aad spn for cert logon to azure for script"
+#    exit 1
+#}
 
 if (!$tenantId)
 {
@@ -38,7 +39,19 @@ if (!$tenantId)
     $tenantId = (Get-AzureRmSubscription).TenantId
 }
 
-#$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
+if($thumbPrint)
+{
+    $cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -ieq $thumbPrint)
+}
+elseif($certSubject)
+{
+    $cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -imatch $certSubject)
+}
+else
+{
+    Write-Warning "no cert info provided"
+}
+
 #$keyValue = [Convert]::ToBase64String($cert.GetRawCertData())
 #$clientSecret = $keyValue
 
@@ -47,6 +60,10 @@ if (!$tenantId)
 #            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
 #            $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
 #            $clientsecret = $keyValue
+ $enc = [system.Text.Encoding]::UTF8
+ $bytes = $enc.GetBytes($cert.Thumbprint)
+ $ClientSecret = [System.Convert]::ToBase64String($bytes)
+
 
 $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
 $armResource = "https://management.core.windows.net/"
