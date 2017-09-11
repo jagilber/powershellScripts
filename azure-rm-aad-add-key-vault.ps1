@@ -20,6 +20,7 @@
     # You will need 1) application id ($app.ApplicationId), and 2) the password from above step supplied as input parameters to the Template.
     # https://www.sslforfree.com/
     # 170825
+    .\azure-rm-aad-add-key-vault.ps1 -certPassword "somePassw0rd123565!" -certNameInVault "sfjagilber1cert" -vaultName "sfjagilber1vault" -resourceGroup "certsjagilber" -adApplicationName "sfjagilber1"
 #>
 
 [cmdletbinding()]
@@ -58,11 +59,6 @@ if(!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue
 {
     New-AzureRmResourceGroup -Name $resourceGroup -location eastus
 }
-    
-if(!(Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
-{
-    New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Location eastus
-}
 
 if(Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -ErrorAction SilentlyContinue)
 {
@@ -70,12 +66,31 @@ if(Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -Er
     remove-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -Force
 }
 
+    
+if((Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
+{
+    if((read-host "is it ok to remove existing vault?[y|n]") -imatch "y")
+    {
+     write-host "removing old existing vault."
+    remove-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Force
+    }
+}
+
+
+if(!(Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
+{
+    write-host "creating new azure rm key vault"
+    New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Location eastus -EnabledForDeployment -EnabledForTemplateDeployment
+}
+
 if(!$certPassword)
 {
     $certPassword = (get-credential).Password
 }
 
- if (!$uri)
+$pwd = ConvertTo-SecureString -String $certPassword -Force -AsPlainText
+
+if (!$uri)
     {
         $uri = "https://$($env:Computername)/$($adApplicationName)"
     }
@@ -86,14 +101,13 @@ if(![IO.File]::Exists($pfxPath))
     $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
             
     #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
-    $pwd = ConvertTo-SecureString -String $certPassword -Force -AsPlainText
-
+    
     Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
     #$cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
 }
 
 
-Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password ($certPassword | convertto-securestring -asplaintext -force)
+Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
 
 if($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)
 {
@@ -110,8 +124,12 @@ $sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
 
 Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
 $tenantId = (Get-AzureRmSubscription).TenantId | Select-Object -Unique
+$subscriptionId = (Get-AzureRmSubscription).subscriptionid | Select-Object -Unique
 
 write-output "spn: $($spn | format-list *)"
 write-output "application id: $($app.ApplicationId)"
 write-output "tenant id: $($tenantId)"
-
+write-output "subscription id: $($subscriptionId)"
+write-output "uri: $($uri)"
+write-output "cert thumbprint: $($cert.Thumbprint)"
+write-output "/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.KeyVault/vaults/$($vaultName)"
