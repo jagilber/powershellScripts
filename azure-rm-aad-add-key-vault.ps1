@@ -98,7 +98,9 @@ if (!$uri)
 if(![IO.File]::Exists($pfxPath))
 {
 
-    $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+    #$cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+    $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -KeySpec KeyExchange
+            
             
     #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
     
@@ -125,6 +127,12 @@ $sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
 Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
 $tenantId = (Get-AzureRmSubscription).TenantId | Select-Object -Unique
 $subscriptionId = (Get-AzureRmSubscription).subscriptionid | Select-Object -Unique
+
+if([IO.File]::Exists($pfxPath))
+{
+    [io.file]::Delete($pfxPath)
+}
+
 
 write-output "spn: $($spn | format-list *)"
 write-output "application id: $($app.ApplicationId)"

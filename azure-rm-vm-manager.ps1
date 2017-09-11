@@ -417,7 +417,7 @@ function check-vmRunning($jobInfo)
 
     if($jobInfo.vm.InstanceId)
     {
-        $statuses = (Get-AzureRmVmssVM -ResourceGroupName $jobInfo.vm.resourcegroupname -vmscalesetname "$($jobInfo.vm.Name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId 9 -InstanceView).statuses
+        $statuses = (Get-AzureRmVmssVM -ResourceGroupName $jobInfo.vm.resourcegroupname -vmscalesetname "$($jobInfo.vm.Name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -InstanceView).statuses
     }
     else
     {
