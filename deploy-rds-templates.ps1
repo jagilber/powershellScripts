@@ -251,14 +251,15 @@ param(
     [string]$dnsServer = "addc-01",
     [string]$gatewayLoadBalancer = "loadbalancer",
     [string]$gwAvailabilitySet = "gw-availabilityset",
-    [string[]][ValidateSet("ad-domain-only-test", "rds-deployment", "rds-update-certificate", "rds-deployment-ha-broker", "rds-deployment-ha-gateway", "rds-deployment-uber", "rds-deployment-existing-ad", "rds-update-rdsh-collection")]
-    $installOptions = @("rds-deployment", "rds-update-certificate", "rds-deployment-ha-broker", "rds-deployment-ha-gateway"),
+    [string[]][ValidateSet("ad-domain-only-test", "rds-deployment", "rds-update-certificate", "rds-deployment-ha-broker", "rds-deployment-ha-gateway", "rds-deployment-uber", "rds-deployment-existing-ad", "rds-update-rdsh-collection","rds-deployment-vm-scale-sets")]
+    $installOptions = @("rds-deployment", "rds-update-certificate", "rds-deployment-ha-broker", "rds-deployment-ha-gateway","rds-deployment-vm-scale-sets"),
     [string][ValidateSet('2012-R2-Datacenter', '2016-Datacenter')]$imageSku = "2016-Datacenter",
     [string]$location = "",
     [int]$logoffTimeInminutes = 60,
     [switch]$monitor,
     [int]$numberOfRdshInstances = 2,
     [int]$numberOfWebGwInstances = 1,
+    [string]$deployFileAdDeployment = "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/bb24e0c10dd73b818dc492133522ceaf72887cd5/active-directory-new-domain/azuredeploy.json",
     [string]$parameterFileAdDeployment = "$($env:TEMP)\ad-deployment-only-test.azuredeploy.parameters.json",
     [string]$parameterFileRdsDeployment = "$($env:TEMP)\rds-deployment.azuredeploy.parameters.json",
     [string]$parameterFileRdsDeploymentExistingAd = "$($env:TEMP)\rds-deployment-existing-ad.azuredeploy.parameters.json",
@@ -267,6 +268,9 @@ param(
     [string]$parameterFileRdsHaGateway = "$($env:TEMP)\rds-deployment-ha-gateway.azuredeploy.parameters.json",
     [string]$parameterFileRdsUber = "$($env:TEMP)\rds-deployment-uber.azuredeploy.parameters.json",
     [string]$parameterFileRdsUpdateRdshCollection = "$($env:TEMP)\rds-update-rdsh-collection.azuredeploy.parameters.json",
+    [string]$parameterFileRdsDeploymentVmScaleSets = "$($env:TEMP)\rds-deployment-vm-scale-sets.azuredeploy.parameters.json",
+    [string]$vmssTemplateBaseRepoUri = "https://raw.githubusercontent.com/Azure/vm-scale-sets/master/hack2017/",
+    [string]$deployFileRdsDeploymentVmScaleSets = "$($vmssTemplateBaseRepoUri)azuredeploy-rds-autoscale.json",
     [switch]$pause,
     [string]$pfxFilePath,
     [switch]$postConnect,
@@ -277,6 +281,7 @@ param(
     [string]$rdshVmSize = "Standard_A2",
     [string]$rdshTemplateImageUri = "",
     [string]$rdshUpdateIteration = "1",
+    [string]$scaleSetName = "$($resourcegroup)scaleset",
     [string]$sqlServer = "",
     [string]$subnetName = "subnet",
     [string]$templateBaseRepoUri = "https://raw.githubusercontent.com/Azure/RDS-Templates/master/",
@@ -334,6 +339,7 @@ function main()
             "rds-deployment-uber" { start-rds-deployment-uber }
             "rds-deployment-existing-ad" { start-rds-deployment-existing-ad }
             "rds-update-rdsh-collection" { start-rds-update-rdsh-collection }
+            "rds-deployment-vm-scale-sets" { start-rds-deployment-vm-scale-sets }
             default: { Write-Error "unknown option $($installOption)" }
         } # end switch
 
@@ -863,6 +869,117 @@ function create-sql
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function create-templateVm($parameterFile)
+{
+    $ujson = ConvertFrom-Json (get-content -Raw -Path $parameterFile)
+    if ((read-host "Do you want to create a new template vm from gallery into $($resourceGroup)?[y|n]") -imatch 'y')
+    {
+        $count = 0
+        while($vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-$($count.ToString("D2"))" -ErrorAction SilentlyContinue)
+        {
+            $count++
+        }
+
+        write-host "adding template vm. this will take a while..." -ForegroundColor Green
+        write-host ".\azure-rm-vm-create.ps1 -publicIp `
+                        -resourceGroupName $resourceGroup `
+                        -location $location `
+                        -adminUsername $adminUsername `
+                        -adminPassword $adminpassword `
+                        -vmBaseName $templateVmNamePrefix `
+                        -vmStartCount $count `
+                        -vmCount 1 "
+                        
+        if (!$whatIf)
+        {
+           $ret = .\azure-rm-vm-create.ps1 -publicIp `
+                -resourceGroupName $resourceGroup `
+                -location $location `
+                -adminUsername $adminUsername `
+                -adminPassword $adminpassword `
+                -vmBaseName $templateVmNamePrefix `
+                -vmStartCount $count `
+                -vmCount 1
+        }
+
+        write-host "return: $($ret)"
+        write-host "getting vhd location"
+        $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-$($count.ToString("D2"))"
+        write-host "$($vm | out-string)"
+        $vhdUri = $vm.StorageProfile.OsDisk.Vhd.Uri
+    
+        $tpIp = (Get-AzureRmPublicIpAddress -Name ([IO.Path]::GetFileName($vm.NetworkProfile.NetworkInterfaces[0].Id)) -ResourceGroupName $resourceGroup).IpAddress
+    
+        if ([string]::IsNullOrEmpty($vhdUri) -or [string]::IsNullOrEmpty($tpIp))
+        {
+            write-host "unable to find template public ip. exiting"
+            exit 1
+        }
+    
+        write-host "mstsc /v $tpIp /admin" -ForegroundColor Magenta
+        write-host "use mstsc connection to run sysprep on template c:\windows\system32\sysprep\sysprep.exe -oobe -generalize" -foregroundcolor Green
+        mstsc /v $tpIp /admin
+    
+        write-host "waiting for machine to shutdown"
+    
+        while ($true)
+        {
+            $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-01" -Status
+
+            if ($vm.Statuses.Code.Contains("PowerState/stopped"))
+            {
+                write-host "deallocating vm"
+                stop-azurermvm -name $vm.Name -Force -ResourceGroupName $resourceGroup
+            
+                write-host "setting vm to OSState/generalized"
+                set-azurermvm -ResourceGroupName $resourceGroup -Name $vm.Name -Generalized 
+                break    
+            }
+            elseif ($vm.Statuses.Code.Contains("PowerState/deallocated")) 
+            {
+                break
+            }
+    
+            start-sleep -Seconds 1
+        }
+    }
+    else
+    {
+        $vhdUri = $rdshTemplateImageUri
+
+        if (!$vhdUri)
+        {
+            $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-01"
+            $vhdUri = $vm.StorageProfile.OsDisk.Vhd.Uri
+        }
+    
+        if ($vhdUri)
+        {
+            write-host $vhdUri -foregroundcolor Magenta
+
+            if ((read-host "Is this the correct path to vhd of template image to be used?[y|n]") -imatch 'n')
+            {
+                $ujson.parameters.rdshTemplateImageUri.value = read-host "Enter new vhd path:"
+
+            }
+        }
+    
+    }
+    
+    if ($vhdUri)
+    {
+        write-host "returning rdshTemplateImageUri: $($vhdUri)"
+        return $vhdUri
+    }
+    else
+    {
+        write-host "error:invalid vhd path. exiting"
+        exit 1
+    }
+
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function deploy-template($templateFile, $parameterFile, $deployment)
 {
     write-host "validating template"
@@ -1068,9 +1185,8 @@ function start-ad-domain-only-test()
     $deployment = "ad-domain-only-test"
     write-warning "$($deployment) should only be used for testing and NOT production"
     write-host "$(get-date) starting '$($deployment)' configuration..." -foregroundcolor cyan
-    $templateFile = "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/bb24e0c10dd73b818dc492133522ceaf72887cd5/active-directory-new-domain/azuredeploy.json"
     $deployFile = "$($env:TEMP)\azuredeploy.json"
-    check-parameterFile -parameterFile $deployFile -deployment $deployment -updateUrl $templateFile
+    check-parameterFile -parameterFile $deployFile -deployment $deployment -updateUrl $deployFileAdDeployment 
     check-deployment -deployment $deployment
 
     $ajson = get-content -raw -Path $deployFile
@@ -1097,7 +1213,7 @@ function start-ad-domain-only-test()
     }
 
     $ujson.parameters
-    deploy-template -templateFile $templateFile `
+    deploy-template -templateFile $deployFileAdDeployment `
         -parameterFile $parameterFileAdDeployment `
         -deployment $installOption
 }
@@ -1322,107 +1438,10 @@ function start-rds-update-rdsh-collection()
     check-deployment -deployment $deployment
     #check-forExistingAdDeployment
     
-    $ujson = ConvertFrom-Json (get-content -Raw -Path $parameterFileRdsUpdateRdshCollection)
-    
     if (!$useExistingJson)
     {
-        if ((read-host "Do you want to create a new template vm from gallery into $($resourceGroup)?[y|n]") -imatch 'y')
-        {
-            write-host "adding template vm. this will take a while..." -ForegroundColor Green
-            write-host ".\azure-rm-vm-create.ps1 -publicIp `
-                            -resourceGroupName $resourceGroup `
-                            -location $location `
-                            -adminUsername $adminUsername `
-                            -adminPassword $adminpassword `
-                            -vmBaseName $templateVmNamePrefix `
-                            -vmStartCount 1 `
-                            -vmCount 1 "
-                            
-            if (!$whatIf)
-            {
-                .\azure-rm-vm-create.ps1 -publicIp `
-                    -resourceGroupName $resourceGroup `
-                    -location $location `
-                    -adminUsername $adminUsername `
-                    -adminPassword $adminpassword `
-                    -vmBaseName $templateVmNamePrefix `
-                    -vmStartCount 1 `
-                    -vmCount 1
-            }
-
-            write-host "getting vhd location"
-            $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-01"
-            $vm
-            $vhdUri = $vm.StorageProfile.OsDisk.Vhd.Uri
-        
-            $tpIp = (Get-AzureRmPublicIpAddress -Name ([IO.Path]::GetFileName($vm.NetworkProfile.NetworkInterfaces[0].Id)) -ResourceGroupName $resourceGroup).IpAddress
-        
-            if ([string]::IsNullOrEmpty($vhdUri) -or [string]::IsNullOrEmpty($tpIp))
-            {
-                write-host "unable to find template public ip. exiting"
-                exit 1
-            }
-        
-            write-host "use mstsc connection to run sysprep on template c:\windows\system32\sysprep\sysprep.exe -oobe -generalize" -foregroundcolor Green
-            mstsc /v $tpIp /admin
-        
-            write-host "waiting for machine to shutdown"
-        
-            while ($true)
-            {
-                $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-01" -Status
-
-                if ($vm.Statuses.Code.Contains("PowerState/stopped"))
-                {
-                    write-host "deallocating vm"
-                    stop-azurermvm -name $vm.Name -Force -ResourceGroupName $resourceGroup
-                
-                    write-host "setting vm to OSState/generalized"
-                    set-azurermvm -ResourceGroupName $resourceGroup -Name $vm.Name -Generalized 
-                    break    
-                }
-                elseif ($vm.Statuses.Code.Contains("PowerState/deallocated")) 
-                {
-                    break
-                }
-        
-                start-sleep -Seconds 1
-            }
-        }
-        else
-        {
-            $vhdUri = $rdshTemplateImageUri
-
-            if (!$vhdUri)
-            {
-                $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -Name "$($templateVmNamePrefix)-01"
-                $vhdUri = $vm.StorageProfile.OsDisk.Vhd.Uri
-            }
-        
-            if ($vhdUri)
-            {
-                write-host $vhdUri -foregroundcolor Magenta
-
-                if ((read-host "Is this the correct path to vhd of template image to be used?[y|n]") -imatch 'n')
-                {
-                    $ujson.parameters.rdshTemplateImageUri.value = read-host "Enter new vhd path:"
-
-                }
-            }
-        
-        }
-        
-        if ($vhdUri)
-        {
-            write-host "modifying json of $($quickstartTemplate) template with this path for rdshTemplateImageUri: $($vhdUri)"
-            $ujson.parameters.rdshTemplateImageUri.value = $vhdUri
-        }
-        else
-        {
-            write-host "error:invalid vhd path. exiting"
-            return
-        }
-        
+        $templateImageUri = create-templateVm -parameterFile $parameterFileRdsUpdateRdshCollection
+        $ujson = ConvertFrom-Json (get-content -Raw -Path $parameterFileRdsUpdateRdshCollection)
         write-host "checking list of vm's in $($resourceGroup) for possible duplicate"
         $vms = Get-AzureRmVM -ResourceGroupName $resourceGroup 
         
@@ -1455,6 +1474,7 @@ function start-rds-update-rdsh-collection()
         $ujson.parameters.existingSubnetName.value = $subnetName
         $ujson.parameters.existingVnetName.value = $vnetName
         $ujson.parameters.numberOfRdshInstances.value = $numberOfRdshInstances
+        $ujson.parameters.rdshTemplateImageUri.value = $templateImageUri
         $ujson.parameters.rdshUpdateIteration.value = $rdshUpdateIteration
         $ujson.parameters.rdshVmSize.value = $rdshVmSize
         $ujson.parameters.UserLogoffTimeoutInMinutes.value = $logoffTimeInminutes
@@ -1465,6 +1485,44 @@ function start-rds-update-rdsh-collection()
         
         deploy-template -templateFile "$($templateBaseRepoUri)/$($deployment)/azuredeploy.json" `
             -ParameterFile $parameterFileRdsUpdateRdshCollection `
+            -deployment $installOption
+    }
+}
+
+# ----------------------------------------------------------------------------------------------------------------
+function start-rds-deployment-vm-scale-sets()
+{
+    $deployment = "rds-deployment-vm-scale-sets"
+    write-host "$(get-date) starting '$($deployment)' configuration..." -foregroundcolor cyan
+
+    check-parameterFile -parameterFile $parameterFileRdsDeploymentVmScaleSets -deployment $deployment -updateUrl "$($vmssTemplateBaseRepoUri)/azuredeploy.parameters.json"
+    check-deployment -deployment $deployment
+    #check-forExistingAdDeployment
+    
+    if (!$useExistingJson)
+    {
+        $templateImageUri = create-templateVm -parameterFile $parameterFileRdsDeploymentVmScaleSets
+        $ujson = ConvertFrom-Json (get-content -Raw -Path $parameterFileRdsDeploymentVmScaleSets)
+        $ujson.parameters._artifactsLocation.value = $vmssTemplateBaseRepoUri
+        $ujson.parameters._artifactsLocationSasToken.value = ""
+        $ujson.parameters.connectionBrokerFqdn.value = "$($brokerName).$($domainName)"
+        $ujson.parameters.existingDomainName.value = $domainName
+        $ujson.parameters.existingAdminusername.value = $adminUsername
+        $ujson.parameters.existingAdminPassword.value = $adminPassword
+        $ujson.parameters.existingRdshCollectionName.value = $rdshCollectionName
+        $ujson.parameters.existingSubnetName.value = $subnetName
+        $ujson.parameters.existingVnetName.value = $vnetName
+        $ujson.parameters.rdshNumberOfInstances.value = $numberOfRdshInstances
+        $ujson.parameters.rdshTemplateImageUri.value = $templateImageUri
+        $ujson.parameters.rdshVmSize.value = $rdshVmSize
+        $ujson.parameters.scaleSetName.value = $scaleSetName
+        
+        $ujson | ConvertTo-Json | Out-File $parameterFileRdsDeploymentVmScaleSets
+
+        $ujson.parameters
+        
+        deploy-template -templateFile $deployFileRdsDeploymentVmScaleSets `
+            -ParameterFile $parameterFileRdsDeploymentVmScaleSets `
             -deployment $installOption
     }
 }

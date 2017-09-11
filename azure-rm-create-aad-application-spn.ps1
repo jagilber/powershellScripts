@@ -26,16 +26,22 @@
 #>
 param(
     [bool]$usecert = $true,
-    [string]$password,
+    [pscredential]$credentials,
     [Parameter(Mandatory=$true)]
     [string]$aadDisplayName,
     [string]$uri,
-    [switch]$list
+    [switch]$list,
+    [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx"
 )
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
+    if(!$credentials)
+    {
+            $credentials = (get-credentials)
+    }
+    $error.Clear()
     # authenticate
     try
     {
@@ -65,7 +71,7 @@ function main()
 
     $tenantId = (Get-AzureRmSubscription).TenantId
 
-    if ((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName))
+    if ((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName -ErrorAction SilentlyContinue))
     {
         $app = Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName
 
@@ -81,26 +87,42 @@ function main()
             }
         }
     }
-    elseif (!$list)
+    
+    if (!$list)
     {
         if ($usecert)
         {
-            if (!$password)
-            {
-                $password = (Get-Credential).Password
-            }
 
-            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\CurrentUser\My" -Subject "CN=$($aadDisplayName)" -KeySpec KeyExchange
-            $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore
+            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            
+            #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
+            $pwd = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
+
+            Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
+            $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
+            $keyValue = [System.Convert]::ToBase64String($cert509.GetRawCertData())
+            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
+            $keyCredential = New-Object  Microsoft.Azure.Commands.Resources.Models.ActiveDirectory.PSADKeyCredential
+            $keyCredential.StartDate = $cert.NotBefore
+            $keyCredential.EndDate= $cert.NotAfter
+            $keyCredential.KeyId = [guid]::NewGuid()
+            #$keyCredential.Type = "AsymmetricX509Cert"
+            #$keyCredential.Usage = "Verify"
+            $keyCredential.CertValue = $cert.Thumbprint #$keyValue
+            $keyCredential
+            #$app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential
+            $app
         }
         else
         {
+
             # to use password
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $password
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -PasswordCredentials $credentials
         }
 
         New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
+        
         Start-Sleep 15
         New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $app.ApplicationId
         New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $app.ApplicationId
@@ -113,9 +135,11 @@ function main()
         }
     } # else
 
+    $app
     write-host "application id: $($app.ApplicationId)"
     write-host "tenant id: $($tenantId)"
-    write-hsot "application identifier Uri: $($uri)"
+    write-host "application identifier Uri: $($uri)"
+    write-host "keyValue: $($keyValue)"
 }
 # ----------------------------------------------------------------------------------------------------------------
 

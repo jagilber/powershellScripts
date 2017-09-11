@@ -10,11 +10,10 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170902 added 'deallocate' action
+   Version    : 170909 add support for virtual machine scale sets -vmss
    History    : 
+                170902 added 'deallocate' action
                 170723 fix for $vms filter. fix for jobs count v2
-                170717 fix $jobsCount for single machine
-                170713 add progress
 
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
@@ -60,8 +59,8 @@
 .PARAMETER vms
     string array list of vm's to include for command
 
-.PARAMETER vmsss
-    enumerate virtual machine scale set information
+.PARAMETER vmss
+    manage virtual machine scale 
 #>  
 
 [CmdletBinding()]
@@ -78,7 +77,8 @@ param(
     [int]$throttle = 20,
     [float]$timerHours = 0,
     [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list', 'deallocate')]
-    [string]$timerAction
+    [string]$timerAction,
+    [switch]$whatIf
 )
 
 $ErrorActionPreference = "Continue"
@@ -115,21 +115,26 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
-        $global:allVms = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
+        $global:allVms = New-Object Collections.ArrayList (, @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
 
-        if($vmss)
+        if ($vmss)
         {
             log-info "checking virtual machine scale sets"
             #$vmssvms = Get-AzureRmVmss -ResourceGroupName 
-            $global:allVmss = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
-            
-            if($global:allVmss.Count -gt 1)
+            $global:allVmssSets = New-Object Collections.ArrayList (, @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+            foreach ($vmssSet in $global:allVmssSets)
             {
-                $global:allVms.AddRange($global:allVmss)
-            }
-            elseif($global:allVmss.Count -eq 1)
-            {
-                $global:allVms.Add($global:allVmss)
+                # $global:allVmss = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+                $global:allVmss = Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
+           
+                if ($global:allVmss.Count -gt 1)
+                {
+                    $global:allVms.AddRange($global:allVmss)
+                }
+                elseif ($global:allVmss.Count -eq 1)
+                {
+                    $global:allVms.Add($global:allVmss)
+                }
             }
         }
 
@@ -155,7 +160,7 @@ function main()
         {
             foreach ($vm in $global:allVms)
             {
-                if ($resourceGroupName -ieq $vm.ResourceGroupName)
+                if ($resourceGroupName -imatch $vm.ResourceGroupName)
                 {
                     [void]$filteredVms.Add($vm)
                 }
@@ -167,7 +172,7 @@ function main()
         {
             foreach ($vm in $global:allVms)
             {
-                if ($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
+                if ($excludeResourceGroup -imatch $vm.ResourceGroupName -and $filteredVms.Contains($vm))
                 {
                     log-info "verbose: removing vm $($vm)"
                     [void]$filteredVms.Remove($vm)
@@ -180,7 +185,7 @@ function main()
             # remove vm's not matching $vms list
             foreach ($filteredVm in (new-object Collections.ArrayList (, $filteredVms)))
             {
-                if (!($vms -ieq $filteredVm.Name))
+                if (!($vms -imatch $filteredVm.Name))
                 {
                     log-info "verbose: removing vm $($filteredVm)"
                     [void]$filteredVms.Remove($filteredVm)
@@ -191,11 +196,11 @@ function main()
         # check for excludeVms names
         foreach ($excludeVm in $excludeVms)
         {
-            if (($filteredVms.Name -ieq $excludeVm) -and ($global:allVms.Name -ieq $excludeVm))
+            if (($filteredVms.Name -imatch $excludeVm) -and ($global:allVms.Name -imatch $excludeVm))
             {
                 log-info "verbose: removing excluded vm $($excludeVm)"
                 
-                foreach ($vm in @($global:allVms | Where-Object Name -ieq $excludeVm))
+                foreach ($vm in @($global:allVms | Where-Object Name -imatch $excludeVm))
                 {
                     [void]$filteredVms.Remove($vm)
                 }
@@ -410,7 +415,16 @@ function check-vmRunning($jobInfo)
     $jobInfo.powerState = "unknown"
     $jobInfo.provisioningState = "unknown"
 
-    foreach ($status in (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses)
+    if($jobInfo.vm.InstanceId)
+    {
+        $statuses = (Get-AzureRmVmssVM -ResourceGroupName $jobInfo.vm.resourcegroupname -vmscalesetname "$($jobInfo.vm.Name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId 9 -InstanceView).statuses
+    }
+    else
+    {
+        $statuses = (get-azurermvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses
+    }
+
+    foreach ($status in $statuses)
     {
         if ($status.Code -imatch "PowerState")
         {
@@ -463,14 +477,33 @@ function do-backgroundJob($jobInfo)
                 "deallocate" 
                 {
                     log-info "`tdeallocating vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+
+                    if($jobInfo.vm.InstanceId)
+                    {
+                        Stop-AzureRmVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force 
+                    }
+                    else
+                    {
+                        Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    }
+
                     log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
 
                 "stop" 
                 {
                     log-info "`tstopping vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force -StayProvisioned
+
+                    
+                    if($jobInfo.vm.InstanceId)
+                    {
+                        Stop-AzureRmVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force -StayProvisioned
+                    }
+                    else
+                    {
+                        Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force -StayProvisioned
+                    }
+
                     log-info "verbose:`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
 
@@ -478,10 +511,22 @@ function do-backgroundJob($jobInfo)
                 {
                     log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     #Restart-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
-                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
-                    log-info "`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
-                    log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+
+                    
+                    if($jobInfo.vm.InstanceId)
+                    {
+                        Stop-AzureRmVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
+                        log-info "`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                        Start-AzureRmVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
+                        log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    }
+                    else
+                    {
+                        Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                        log-info "`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                        Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                        log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
+                    }
                 }
 
                 default: {}
@@ -495,14 +540,31 @@ function do-backgroundJob($jobInfo)
                 "deallocate" 
                 {
                     log-info "`tdeallocating vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    if($jobInfo.vm.InstanceId)
+                    {
+                        Stop-AzureRmVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
+                    }
+                    else
+                    {
+                        Stop-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                    }
+
                     log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
 
                 "start" 
                 {
                     log-info "`tstarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+
+                    if($jobInfo.vm.InstanceId)
+                    {
+                        Start-AzureRmVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId
+                    }
+                    else
+                    {
+                        Start-AzureRmvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                    }
+
                     log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
 
@@ -698,7 +760,13 @@ function remove-backgroundJobs()
 function start-backgroundJob($jobInfo)
 {
     log-info "verbose:starting background job $($jobInfo.jobName)"
-        
+    
+    if ($whatIf)
+    {
+        log-info "starting background job $($jobInfo.jobName)"
+        return
+    }
+    
     $job = Start-Job -ScriptBlock `
     { 
         param($jobInfo)

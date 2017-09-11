@@ -88,6 +88,7 @@ $sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
 Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
 $tenantId = (Get-AzureRmSubscription).TenantId | Select-Object -Unique
 
+write-output "spn: $($spn | format-list *)"
 write-output "application id: $($app.ApplicationId)"
 write-output "tenant id: $($tenantId)"
 
