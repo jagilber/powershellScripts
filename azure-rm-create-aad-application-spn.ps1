@@ -174,6 +174,12 @@ function main()
     write-host "keyValue: $($keyValue)"
     write-host "clientsecret: $($clientsecret)"
     write-host "thumbprint: $($thumbprint)"
+    $global:thumbprint = $thumbprint
+    $global:applicationId = $app.Applicationid
+    $global:tenantId = $tenantId
+    $global:clientSecret = $ClientSecret
+    $global:keyValue = $keyValue
+
 }
 # ----------------------------------------------------------------------------------------------------------------
 
