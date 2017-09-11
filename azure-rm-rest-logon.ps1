@@ -74,5 +74,4 @@ $token = Invoke-RestMethod @params
 #$token = Invoke-RestMethod @params -CertificateThumbprint $thumbPrint -Certificate $cert
 
 #$token | select-object access_token, @{L='Expires';E={[timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($_.expires_on))}} | Format-List *
-
-write-host "token: $($token)" -ForegroundColor Yellow
+$token | fl *
