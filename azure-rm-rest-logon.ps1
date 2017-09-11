@@ -75,3 +75,4 @@ $token = Invoke-RestMethod @params
 
 #$token | select-object access_token, @{L='Expires';E={[timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($_.expires_on))}} | Format-List *
 $token | fl *
+$global:access_token = $token.access_token
