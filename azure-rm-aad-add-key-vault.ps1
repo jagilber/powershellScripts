@@ -24,7 +24,7 @@
 
 [cmdletbinding()]
 param(
-$pfxFilePath, # existing pfx file and path
+ $pfxPath = "$($env:temp)\$($adApplicationName).pfx",
 $certPassword,           # password that was used to secure the pfx file at the time of export 
 $certNameInVault,    # cert name in vault, has to be '^[0-9a-zA-Z-]+$' pattern (digits, letters or dashes only, no spaces)
 $vaultName, # has to be unique?
@@ -54,23 +54,46 @@ catch
 }
 
 
-if(!(Get-AzureRmResourceGroup -Name $resourceGroup))
+if(!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
 {
     New-AzureRmResourceGroup -Name $resourceGroup -location eastus
 }
     
-if(!(Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup))
+if(!(Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
 {
     New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Location eastus
 }
 
-if(Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault)
+if(Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -ErrorAction SilentlyContinue)
 {
     write-host "removing old cert from existing vault."
     remove-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -Force
 }
 
-Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxFilePath -password ($certPassword | convertto-securestring -asplaintext -force)
+if(!$certPassword)
+{
+    $certPassword = (get-credential).Password
+}
+
+ if (!$uri)
+    {
+        $uri = "https://$($env:Computername)/$($adApplicationName)"
+    }
+
+if(![IO.File]::Exists($pfxPath))
+{
+
+    $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            
+    #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
+    $pwd = ConvertTo-SecureString -String $certPassword -Force -AsPlainText
+
+    Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
+    #$cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
+}
+
+
+Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password ($certPassword | convertto-securestring -asplaintext -force)
 
 if($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)
 {
