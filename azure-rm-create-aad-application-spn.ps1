@@ -26,12 +26,12 @@
 #>
 param(
     [pscredential]$credentials,
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$aadDisplayName,
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
-    [ValidateSet('cert','key','password','certthumb')]
+    [ValidateSet('cert', 'key', 'password', 'certthumb')]
     [string]$logonType
 )
 
@@ -93,10 +93,10 @@ function main()
             Write-Warning "this option is NOT currently working!!!"
             $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
             
-             if(!$credentials)
-    {
-            $credentials = (get-credential)
-    }
+            if (!$credentials)
+            {
+                $credentials = (get-credential)
+            }
             #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
             $pwd = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
 
@@ -107,7 +107,7 @@ function main()
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
             $keyCredential = New-Object  Microsoft.Azure.Commands.Resources.Models.ActiveDirectory.PSADKeyCredential
             $keyCredential.StartDate = $cert.NotBefore
-            $keyCredential.EndDate= $cert.NotAfter
+            $keyCredential.EndDate = $cert.NotAfter
             $keyCredential.KeyId = [guid]::NewGuid()
             #$keyCredential.Type = "AsymmetricX509Cert"
             #$keyCredential.Usage = "Verify"
@@ -127,7 +127,7 @@ function main()
             $ClientSecret = [System.Convert]::ToBase64String($bytes)
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $ClientSecret -EndDate $cert.NotAfter
         }
-        elseif($logontype -ieq 'key')
+        elseif ($logontype -ieq 'key')
         {
             $bytes = New-Object Byte[] 32
             $rand = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -143,10 +143,10 @@ function main()
         }
         else
         {
-         if(!$credentials)
-    {
-            $credentials = (get-credential)
-    }
+            if (!$credentials)
+            {
+                $credentials = (get-credential)
+            }
             # to use password
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -PasswordCredentials $credentials
         }

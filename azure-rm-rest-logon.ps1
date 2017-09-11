@@ -9,8 +9,8 @@ param(
     [string]$applicationId,
     [string]$clientSecret,
     [string]$tenantId#,
- #   [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
- #   [pscredential]$credentials = (get-credential)
+    #   [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
+    #   [pscredential]$credentials = (get-credential)
 )
 
 $ErrorActionPreference = "stop"
@@ -39,11 +39,11 @@ if (!$tenantId)
     $tenantId = (Get-AzureRmSubscription).TenantId
 }
 
-if($thumbPrint)
+if ($thumbPrint)
 {
     $cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -ieq $thumbPrint)
 }
-elseif($certSubject)
+elseif ($certSubject)
 {
     $cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -imatch $certSubject)
 }
@@ -60,9 +60,9 @@ else
 #            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
 #            $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
 #            $clientsecret = $keyValue
- $enc = [system.Text.Encoding]::UTF8
- $bytes = $enc.GetBytes($cert.Thumbprint)
- $ClientSecret = [System.Convert]::ToBase64String($bytes)
+$enc = [system.Text.Encoding]::UTF8
+$bytes = $enc.GetBytes($cert.Thumbprint)
+$ClientSecret = [System.Convert]::ToBase64String($bytes)
 
 
 $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
@@ -70,18 +70,18 @@ $armResource = "https://management.core.windows.net/"
 
 
 $Body = @{
-        'resource'= $armResource
-        'client_id' = $applicationId
-        'grant_type' = 'client_credentials'
-        'client_secret' = $ClientSecret
+    'resource'      = $armResource
+    'client_id'     = $applicationId
+    'grant_type'    = 'client_credentials'
+    'client_secret' = $ClientSecret
 }
 #$body = "<Binary>-----BEGIN CERTIFICATE-----`n$($clientSecret)`n-----END CERTIFICATE-----</Binary>"
 $params = @{
     ContentType = 'application/x-www-form-urlencoded'
-    Headers = @{'accept'='application/json'}
-    Body = $Body
-    Method = 'Post'
-    URI = $tokenEndpoint
+    Headers     = @{'accept' = 'application/json'}
+    Body        = $Body
+    Method      = 'Post'
+    URI         = $tokenEndpoint
 }
 
 $params
