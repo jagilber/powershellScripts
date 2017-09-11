@@ -25,13 +25,14 @@
     # 170609
 #>
 param(
-    [bool]$usecert = $true,
     [pscredential]$credentials,
     [Parameter(Mandatory=$true)]
     [string]$aadDisplayName,
     [string]$uri,
     [switch]$list,
-    [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx"
+    [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
+    [ValidateSet('cert','key','password')]
+    [string]$logonType
 )
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -90,9 +91,9 @@ function main()
     
     if (!$list)
     {
-        if ($usecert)
+        if ($logontype -imatch 'cert')
         {
-
+            Write-Warning "this option is NOT currently working!!!"
             $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
             
             #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
@@ -114,6 +115,20 @@ function main()
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential
             $app
         }
+        elseif($logontype -imatch 'key')
+        {
+            $bytes = New-Object Byte[] 32
+            $rand = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+            $rand.GetBytes($bytes)
+
+            $ClientSecret = [System.Convert]::ToBase64String($bytes)
+
+            $endDate = [System.DateTime]::Now.AddYears(2)
+
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $ClientSecret -EndDate $endDate
+            write-host "client secret: $($ClientSecret)" -ForegroundColor Yellow
+
+        }
         else
         {
 
@@ -127,7 +142,7 @@ function main()
         New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $app.ApplicationId
         New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $app.ApplicationId
 
-        if ($usecert)
+        if ($logontype -imatch 'cert')
         {
             write-host "for use in script: Add-AzureRmAccount -ServicePrincipal -CertificateThumbprint $($cert.Thumbprint) -ApplicationId $($app.ApplicationId) -TenantId $($tenantId)"
             write-host "certificate thumbprint: $($cert.Thumbprint)"
