@@ -33,11 +33,10 @@ param(
     [parameter(Mandatory = $true, HelpMessage = "Enter resource group name:")]
     [string]$resourceGroupName,
     [string]$StorageAccountName,
-    [string]$StorageType = "Premium_LRS",
+    [string]$StorageType = "Standard_GRS",
     [string]$subnetName = "",
     [string]$subscription,
-    
-    [string]$vmBaseName = "",
+    [string]$vmBaseName = "tpl",
     [int]$vmCount = 1,
     [string]$vmSize = "Standard_A2",
     [int]$vmStartCount = 1,
@@ -296,7 +295,7 @@ function check-vnetName($resourceGroupName, $vnetName)
     }
     else
     {
-        $global:vnet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location
+        $global:vnet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
     }
 
     return $vnetName
@@ -319,7 +318,7 @@ function check-subnetName($resourceGroupName, $vnetName, $subnetName)
     }
     else
     {
-        $SubnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -Name $SubnetName -VirtualNetwork $VNetName
+        $SubnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -Name $SubnetName -VirtualNetwork (Get-AzureRmVirtualNetwork -Name $vnetName -ResourceGroupName $resourceGroupName)
     }
 
 }
