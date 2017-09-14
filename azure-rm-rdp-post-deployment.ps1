@@ -621,7 +621,7 @@ function add-publicIp()
         write-host "`t Set-AzureRmNetworkInterface -NetworkInterface `$nic" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmPublicIpAddress -Name $($modifiedVmName)-pubIp -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
         write-host "`t Remove-AzureRmNetworkSecurityGroup -Name $($nsgName) -ResourceGroupName $($resourceGroupName) -Force" -ForegroundColor Cyan
-        write-hsot ""
+        write-host ""
     }
     catch
     {
