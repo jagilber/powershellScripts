@@ -15,7 +15,7 @@ to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
-#170825
+#170914
 #>
 param(
     [parameter(Mandatory = $true, HelpMessage = "Enter admin user name: ex:vmadmin")]
@@ -33,7 +33,7 @@ param(
     [parameter(Mandatory = $true, HelpMessage = "Enter resource group name:")]
     [string]$resourceGroupName,
     [string]$StorageAccountName,
-    [string]$StorageType = "Standard_GRS",
+    [string]$StorageType = "Premium_LRS",
     [string]$subnetName = "",
     [string]$subscription,
     
@@ -56,8 +56,8 @@ $global:vnet
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
-    authenticate-azureRm
     manage-credential
+    authenticate-azureRm
 
     if ($enumerateSub)
     {
@@ -206,17 +206,30 @@ function check-storageAccountName($resourceGroupName, $StorageAccountName)
         $count = 1
         foreach ($storageName in Get-AzureRmStorageAccount -resourcegroupname $resourcegroupname)
         {
-            $storageList.Add($count,$storageName.StorageAccountName)
+            $storageList.Add($count, $storageName.StorageAccountName)
             write-host "$($count). $($storageName.StorageAccountName)"
             $count++
         }
 
-        $storageAccountNumber = [int](read-host "enter number of storage account to use:")
-        $storageAccountName = $storageList.Item($storageAccountNumber)
-
-        if (!($storageAccountName))
+        $storageAccountNumber = [int](read-host "enter number of storage account to use or '0' to create new storage account:")
+        
+        if ($storageAccountNumber -eq 0)
         {
-            return
+            $storageAccountName = "vm$((get-random).ToString("D9"))"
+            New-AzureRmStorageAccount -ResourceGroupName $resourceGroupName `
+                -Location $Location `
+                -Kind Storage `
+                -SkuName $StorageType `
+                -Name $storageAccountName
+        }
+        elseif ($storageAccountNumber) 
+        {
+            $storageAccountName = $storageList.Item($storageAccountNumber)    
+        }
+        else
+        {
+            Write-Error "no storage selected. exiting"
+            exit 1
         }
 
         $global:storageAccount = Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName
@@ -226,7 +239,6 @@ function check-storageAccountName($resourceGroupName, $StorageAccountName)
     {
         if (!($storageAccountName))
         {
-
             $storageAccountName = ("$($storagePrefix)$($resourceGroupName)").ToLower()
             $storageAccountName = $storageAccountName.Substring(0, [Math]::Min($storageAccountName.Length, 23))
         }
@@ -238,12 +250,21 @@ function check-storageAccountName($resourceGroupName, $StorageAccountName)
     {
         $global:StorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName
     }
+    elseif (!(Get-AzureRmStorageAccount -Name $StorageAccountName -ResourceGroupName $resourceGroupName))
+    {
+        New-AzureRmStorageAccount -ResourceGroupName $resourceGroupName `
+            -Location $Location `
+            -Kind Storage `
+            -SkuName $StorageType `
+            -Name $storageAccountName
+    }
     else
     {
         write-host "need storage account name. exiting"
-        return
+        exit 1
     }
 
+    write-host "using name: $($storageAccountName)"
     return $storageAccountName
 }
 # ----------------------------------------------------------------------------------------------------------------

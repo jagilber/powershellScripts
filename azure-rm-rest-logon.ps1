@@ -19,13 +19,6 @@ $error.Clear()
 
 function main ()
 {
-
-    #if (!$thumbPrint)
-    #{
-    #    Write-Error "need thumbprint to authenticate to rest. use azure-rm-create-aad-application-spn.ps1 to create aad spn for cert logon to azure for script"
-    #    exit 1
-    #}
-
     if (!$tenantId)
     {
         try
@@ -66,9 +59,9 @@ function main ()
     #            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
     #            $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
     #            $clientsecret = $keyValue
-    $enc = [system.Text.Encoding]::UTF8
+    $enc = [text.encoding]::UTF8
     $bytes = $enc.GetBytes($cert.Thumbprint)
-    $ClientSecret = [System.Convert]::ToBase64String($bytes)
+    $ClientSecret = [convert]::ToBase64String($bytes)
 
 
     $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
@@ -79,7 +72,7 @@ function main ()
         'resource'      = $armResource
         'client_id'     = $applicationId
         'grant_type'    = 'client_credentials'
-        'client_secret' = $ClientSecret
+        'client_secret' = $clientSecret
     }
     #$body = "<Binary>-----BEGIN CERTIFICATE-----`n$($clientSecret)`n-----END CERTIFICATE-----</Binary>"
     $params = @{
@@ -97,7 +90,7 @@ function main ()
     #$token = Invoke-RestMethod @params -CertificateThumbprint $thumbPrint -Certificate $cert
 
     #$token | select-object access_token, @{L='Expires';E={[timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($_.expires_on))}} | Format-List *
-    $token | fl *
+    $token | format-list *
     $global:token = $token
 
 }

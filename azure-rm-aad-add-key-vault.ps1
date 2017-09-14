@@ -25,13 +25,13 @@
 
 [cmdletbinding()]
 param(
- $pfxPath = "$($env:temp)\$($adApplicationName).pfx",
-$certPassword,           # password that was used to secure the pfx file at the time of export 
-$certNameInVault,    # cert name in vault, has to be '^[0-9a-zA-Z-]+$' pattern (digits, letters or dashes only, no spaces)
-$vaultName, # has to be unique?
-$resourceGroup,
-$uri,   #  a valid formatted URL, not validated for single-tenant deployments used for identification
-$adApplicationName
+    $pfxPath = "$($env:temp)\$($adApplicationName).pfx",
+    $certPassword, # password that was used to secure the pfx file at the time of export 
+    $certNameInVault, # cert name in vault, has to be '^[0-9a-zA-Z-]+$' pattern (digits, letters or dashes only, no spaces)
+    $vaultName, # has to be unique?
+    $resourceGroup,
+    $uri, #  a valid formatted URL, not validated for single-tenant deployments used for identification
+    $adApplicationName
 )
 
 # authenticate
@@ -55,35 +55,37 @@ catch
 }
 
 
-if(!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
+if (!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
 {
     New-AzureRmResourceGroup -Name $resourceGroup -location eastus
 }
 
-if(Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -ErrorAction SilentlyContinue)
+if (Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -ErrorAction SilentlyContinue)
 {
-    write-host "removing old cert from existing vault."
-    remove-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -Force
-}
-
-    
-if((Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
-{
-    if((read-host "is it ok to remove existing vault?[y|n]") -imatch "y")
+    if ((read-host "is it ok to remove existing cert in vault?[y|n]") -imatch "y")
     {
-     write-host "removing old existing vault."
-    remove-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Force
+        write-host "removing old cert from existing vault."
+        remove-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -Force
     }
 }
 
+    
+if ((Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
+{
+    if ((read-host "is it ok to remove existing vault?[y|n]") -imatch "y")
+    {
+        write-host "removing old existing vault."
+        remove-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Force
+    }
+}
 
-if(!(Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
+if (!(Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
 {
     write-host "creating new azure rm key vault"
     New-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Location eastus -EnabledForDeployment -EnabledForTemplateDeployment
 }
 
-if(!$certPassword)
+if (!$certPassword)
 {
     $certPassword = (get-credential).Password
 }
@@ -91,31 +93,27 @@ if(!$certPassword)
 $pwd = ConvertTo-SecureString -String $certPassword -Force -AsPlainText
 
 if (!$uri)
-    {
-        $uri = "https://$($env:Computername)/$($adApplicationName)"
-    }
+{
+    $uri = "https://$($env:Computername)/$($adApplicationName)"
+}
 
-if(![IO.File]::Exists($pfxPath))
+if (![IO.File]::Exists($pfxPath))
 {
 
     #$cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
     $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -KeySpec KeyExchange
-            
-            
     #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
-    
     Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
     #$cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
 }
 
-
 Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
 
-if($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)
+if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)
 {
     Remove-AzureRmADApplication -ObjectId $oldapp.ObjectId -Force
 
-    if($sp = get-AzureRmADServicePrincipal -ServicePrincipalName $oldapp.applicationid)
+    if ($sp = get-AzureRmADServicePrincipal -ServicePrincipalName $oldapp.applicationid)
     {
         Remove-AzureRmADServicePrincipal -ObjectId $sp.ObjectId -Force
     }
@@ -128,11 +126,10 @@ Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.
 $tenantId = (Get-AzureRmSubscription).TenantId | Select-Object -Unique
 $subscriptionId = (Get-AzureRmSubscription).subscriptionid | Select-Object -Unique
 
-if([IO.File]::Exists($pfxPath))
+if ([IO.File]::Exists($pfxPath))
 {
     [io.file]::Delete($pfxPath)
 }
-
 
 write-output "spn: $($spn | format-list *)"
 write-output "application id: $($app.ApplicationId)"
