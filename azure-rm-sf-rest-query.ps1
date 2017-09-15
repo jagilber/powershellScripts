@@ -5,7 +5,7 @@
 
 param(
 [object]$token = $global:token,
-[string]$SubscriptionID = "$((Get-AzureRmSubscription).SubscriptionId)",
+[string]$SubscriptionID = "$((Get-AzureRmSubscription).Id)",
 [string]$baseURI = "https://management.azure.com" ,
 [string]$suffixURI = "?api-version=2016-09-01" ,
 [string]$resourceGroup,
@@ -44,7 +44,7 @@ $params
 $params.Body.client_id
 $params.Headers.authorization
 
-$response = Invoke-RestMethod @params 
+$response = Invoke-RestMethod @params -Verbose -Debug
 $response | convertto-json 
 
 $global:response = $response

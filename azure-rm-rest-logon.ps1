@@ -36,7 +36,14 @@ function main ()
         $tenantId = (Get-AzureRmSubscription).TenantId
     }
 
-    if ($thumbPrint)
+    $data = $null
+    $cert = $null
+
+    if ($ClientSecret)
+    {
+        
+    }
+    elseif ($thumbPrint)
     {
         $cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -ieq $thumbPrint)
     }
@@ -59,14 +66,19 @@ function main ()
     #            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
     #            $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
     #            $clientsecret = $keyValue
-    $enc = [text.encoding]::UTF8
-    $bytes = $enc.GetBytes($cert.Thumbprint)
-    $ClientSecret = [convert]::ToBase64String($bytes)
 
+    if ($cert)
+    {
+        $data = $cert.Thumbprint
+        # works if using thumbprint only
+        $enc = [text.encoding]::UTF8
+        $bytes = $enc.GetBytes($data)
+        $ClientSecret = [convert]::ToBase64String($bytes)
+    }
 
     $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
     $armResource = "https://management.core.windows.net/"
-
+    #$armResource = "https://graph.windows.net/"
 
     $Body = @{
         'resource'      = $armResource
@@ -74,25 +86,24 @@ function main ()
         'grant_type'    = 'client_credentials'
         'client_secret' = $clientSecret
     }
-    #$body = "<Binary>-----BEGIN CERTIFICATE-----`n$($clientSecret)`n-----END CERTIFICATE-----</Binary>"
+    
     $params = @{
-        ContentType = 'application/x-www-form-urlencoded'
+        ContentType = 'application/x-www-form-urlencoded' #'application/json'
         Headers     = @{'accept' = 'application/json'}
         Body        = $Body
         Method      = 'Post'
         URI         = $tokenEndpoint
     }
 
+    $body
     $params
     $clientSecret
 
-    $token = Invoke-RestMethod @params
+    $token = Invoke-RestMethod @params -Verbose -Debug
     #$token = Invoke-RestMethod @params -CertificateThumbprint $thumbPrint -Certificate $cert
-
     #$token | select-object access_token, @{L='Expires';E={[timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($_.expires_on))}} | Format-List *
     $token | format-list *
     $global:token = $token
-
 }
 
 main

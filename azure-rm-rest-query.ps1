@@ -1,5 +1,5 @@
 ﻿$token = $Global:token
-$SubscriptionID = (Get-AzureRmSubscription).SubscriptionId
+$SubscriptionID = (Get-AzureRmSubscription).Id
 $baseURI = "https://management.azure.com" 
 $suffixURI = "?api-version=2016-09-01" 
 $SubscriptionURI = $baseURI + "/subscriptions/$($SubscriptionID)" + $suffixURI

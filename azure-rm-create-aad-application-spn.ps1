@@ -38,6 +38,9 @@ param(
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
+    $keyCredential = $null
+    $thumbprint = $null
+    $ClientSecret = $null
    
     $error.Clear()
     # authenticate
@@ -90,9 +93,8 @@ function main()
     {
         if ($logontype -ieq 'cert')
         {
-            Write-Warning "this option is NOT currently working!!!"
-            #$cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
-            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -KeySpec KeyExchange
+            Write-Warning "this option is NOT currently working for rest authentication, but does work for ps auth!!!"
+            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
             
             if (!$credentials)
             {
@@ -101,26 +103,41 @@ function main()
             #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
             $pwd = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
 
+            if([io.file]::Exists($pfxPath))
+            {
+                [io.file]::Delete($pfxPath)
+            }
+
             Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
             $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
             $thumbprint = $cert509.thumbprint
             $keyValue = [System.Convert]::ToBase64String($cert509.GetRawCertData())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
-            $keyCredential = New-Object  Microsoft.Azure.Commands.Resources.Models.ActiveDirectory.PSADKeyCredential
-            $keyCredential.StartDate = $cert.NotBefore
-            $keyCredential.EndDate = $cert.NotAfter
-            $keyCredential.KeyId = [guid]::NewGuid()
+            #$keyCredential = New-Object  Microsoft.Azure.Commands.Resources.Models.ActiveDirectory.PSADKeyCredential
+            #$keyCredential.StartDate = $cert.NotBefore
+            #$keyCredential.EndDate = $cert.NotAfter
+            #$keyCredential.KeyId = [guid]::NewGuid()
             #$keyCredential.Type = "AsymmetricX509Cert"
             #$keyCredential.Usage = "Verify"
-            $keyCredential.CertValue = $cert.Thumbprint #$keyValue
-            $keyCredential
-            #$app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential
+            #$keyCredential.CertValue = $cert.Thumbprint #$keyValue
+            #$keyCredential
+
+            if($oldAdApp = Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName)
+            {
+                remove-AzureRmADApplication -ObjectId $oldAdApp.objectId
+            }
+            
+            $DebugPreference = "Continue"    
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
+            
+            $DebugPreference = "SilentlyContinue"
+            #$app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
+
         }
         elseif ($logontype -ieq 'certthumb')
         {
             
-            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
             $thumbprint = $cert.Thumbprint
             $enc = [system.Text.Encoding]::UTF8
@@ -159,6 +176,7 @@ function main()
         Start-Sleep 15
         New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $app.ApplicationId
         New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $app.ApplicationId
+        
 
         if ($logontype -ieq 'cert' -or $logontype -ieq 'certthumb')
         {
