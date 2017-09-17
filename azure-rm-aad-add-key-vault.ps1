@@ -34,7 +34,8 @@ param(
     [string]$adApplicationName,
     [switch]$noprompt,
     [string]$location = "eastus",
-    [string]$certSubject = $adApplicationName
+    [string]$certSubject = $adApplicationName,
+    [switch]$adApplicationOnly
 )
 
 # authenticate
@@ -64,7 +65,7 @@ if (!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinu
 
 if (Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -ErrorAction SilentlyContinue)
 {
-    if ($noprompt -or (read-host "is it ok to remove existing cert in vault?[y|n]") -imatch "y")
+    if ($noprompt -or (read-host "remove existing cert in vault?[y|n]") -imatch "y")
     {
         write-host "removing old cert from existing vault."
         remove-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -Force
@@ -73,7 +74,7 @@ if (Get-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -E
     
 if ((Get-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue))
 {
-    if ($noprompt -or (read-host "is it ok to remove existing vault?[y|n]") -imatch "y")
+    if ($noprompt -or (read-host "remove existing vault?[y|n]") -imatch "y")
     {
         write-host "removing old existing vault."
         remove-AzureRmKeyVault -VaultName $vaultName -ResourceGroupName $resourceGroup -Force
@@ -112,31 +113,44 @@ if (![IO.File]::Exists($pfxPath))
     {
         foreach ($cert in $certs)
         {
-            if ($noprompt -or (read-host "is it ok to remove existing cert from local store?[y|n]") -imatch "y")
+            if ($noprompt -or (read-host "remove existing cert from local My store?[y|n]") -imatch "y")
             {
                 remove-item -Path "Cert:\CurrentUser\My\$($cert.thumbprint)" -Force
             }
         }
     }
 
+    if($certs = (Get-ChildItem Cert:\CurrentUser\Root | Where-Object Subject -imatch "CN=$($certSubject)"))
+    {
+        foreach ($cert in $certs)
+        {
+            if ($noprompt -or (read-host "remove existing cert from local Root store?[y|n]") -imatch "y")
+            {
+                remove-item -Path "Cert:\CurrentUser\Root\$($cert.thumbprint)" -Force
+            }
+        }
+    }
+
     #$cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+    write-host "installing new self signed cert to cert:\currentuser\my"
     $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($certSubject)" -KeyExportPolicy Exportable #-Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
     $cert
     
     Export-PfxCertificate -cert $cert -FilePath $pfxPath -Password $pwd
+    write-host "installing new self signed cert to cert:\currentuser\root"
+    Import-PfxCertificate -Exportable -Password $pwd -CertStoreLocation Cert:\CurrentUser\Root -FilePath $pfxPath
     
 }
-else
-{
-    $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
-}
 
-$azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
-$azurecert
+if(!$adApplicationOnly)
+{
+    $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
+    $azurecert
+}
 
 if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)
 {
-    if ($noprompt -or (read-host "is it ok to remove existing ad application?[y|n]") -imatch "y")
+    if ($noprompt -or (read-host "remove existing ad application?[y|n]") -imatch "y")
     {
         Remove-AzureRmADApplication -ObjectId $oldapp.ObjectId -Force
 
@@ -159,7 +173,7 @@ $subscriptionId = (Get-AzureRmSubscription).subscriptionid | Select-Object -Uniq
 
 if ([io.file]::Exists($pfxPath))
 {
-    if ($noprompt -or (read-host "is it ok to remove existing pfx file?[y|n]") -imatch "y")
+    if ($noprompt -or (read-host "remove existing pfx file?[y|n]") -imatch "y")
     {
         write-host "removing existing file: $($pfxPath)"
         [io.file]::Delete($pfxPath)
