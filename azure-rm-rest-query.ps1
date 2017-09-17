@@ -11,10 +11,13 @@ $params = @{
     ContentType = 'application/x-www-form-urlencoded'
     Headers     = @{
         'authorization' = "Bearer $($Token.access_token)" 
+        'accept' = 'application/json'
     }
     Method      = 'Get' 
     uri         = $uri
     Body = $Body
 } 
-$response = Invoke-RestMethod @params 
-$response | convertto-json 
+$response = Invoke-RestMethod @params -Verbose -Debug
+$response
+$global:response = $response
+$global:response.value.properties | ConvertTo-Json

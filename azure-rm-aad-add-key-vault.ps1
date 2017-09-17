@@ -33,7 +33,8 @@ param(
     [string]$uri, #  a valid formatted URL, not validated for single-tenant deployments used for identification
     [string]$adApplicationName,
     [switch]$noprompt,
-    [string]$location = "eastus"
+    [string]$location = "eastus",
+    [string]$certSubject = $adApplicationName
 )
 
 # authenticate
@@ -97,16 +98,41 @@ if (!$uri)
     $uri = "https://$($env:Computername)/$($adApplicationName)"
 }
 
+$cert = $null
+
 if (![IO.File]::Exists($pfxPath))
 {
+    if(!$certSubject)
+    {
+        write-host "please provide argument certSubject. exiting"
+        exit 1
+    }
+
+    if($certs = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -imatch "CN=$($certSubject)"))
+    {
+        foreach ($cert in $certs)
+        {
+            if ($noprompt -or (read-host "is it ok to remove existing cert from local store?[y|n]") -imatch "y")
+            {
+                remove-item -Path "Cert:\CurrentUser\My\$($cert.thumbprint)" -Force
+            }
+        }
+    }
+
     #$cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($adApplicationName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
-    $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "$($adApplicationName)" -KeyExportPolicy Exportable 
-    #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
-    Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
-    $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
+    $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($certSubject)" -KeyExportPolicy Exportable #-Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+    $cert
+    
+    Export-PfxCertificate -cert $cert -FilePath $pfxPath -Password $pwd
+    
+}
+else
+{
+    $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
 }
 
-Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
+$azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
+$azurecert
 
 if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)
 {
@@ -121,10 +147,13 @@ if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction Silently
     }
 }
 
-$app = New-AzureRmADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $certPassword
-$sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
+if($adApplicationName)
+{
+    $app = New-AzureRmADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $certPassword
+    $sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
+    Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
+}
 
-Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
 $tenantId = (Get-AzureRmSubscription).TenantId | Select-Object -Unique
 $subscriptionId = (Get-AzureRmSubscription).subscriptionid | Select-Object -Unique
 
@@ -142,5 +171,5 @@ write-output "application id: $($app.ApplicationId)"
 write-output "tenant id: $($tenantId)"
 write-output "subscription id: $($subscriptionId)"
 write-output "uri: $($uri)"
-write-output "cert thumbprint: $($cert.Thumbprint)"
+write-output "cert thumbprint: $($azurecert.Thumbprint)"
 write-output "vault id: /subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.KeyVault/vaults/$($vaultName)"
