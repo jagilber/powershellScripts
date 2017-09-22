@@ -42,6 +42,8 @@ function main()
     $thumbprint = $null
     $ClientSecret = $null
    
+    # todo: add new msi option
+    
     $error.Clear()
     # authenticate
     try
