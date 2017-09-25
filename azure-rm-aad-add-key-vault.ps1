@@ -20,6 +20,7 @@
     # You will need 1) application id ($app.ApplicationId), and 2) the password from above step supplied as input parameters to the Template.
     # https://www.sslforfree.com/
     # 170914
+    https://blogs.msdn.microsoft.com/tsmatsuz/2017/03/03/azure-rest-api-with-certificate-and-service-principal-by-silent-backend-daemon-service/
     .\azure-rm-aad-add-key-vault.ps1 -certPassword "somePassw0rd123565!" -certNameInVault "sfjagilber1cert" -vaultName "sfjagilber1vault" -resourceGroup "certsjagilber" -adApplicationName "sfjagilber1"
 #>
 
@@ -144,6 +145,8 @@ if (![IO.File]::Exists($pfxPath))
 
 if(!$adApplicationOnly)
 {
+    ipconfig /flushdns
+    start-sleep -Seconds 10
     $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
     $azurecert
 }

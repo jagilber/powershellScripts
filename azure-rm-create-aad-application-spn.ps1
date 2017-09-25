@@ -31,7 +31,7 @@ param(
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
-    [ValidateSet('cert', 'key', 'password', 'certthumb')]
+    [Parameter(Mandatory = $true)][ValidateSet('cert', 'key', 'password', 'certthumb')]
     [string]$logonType
 )
 
@@ -41,6 +41,7 @@ function main()
     $keyCredential = $null
     $thumbprint = $null
     $ClientSecret = $null
+    $keyvalue
    
     $error.Clear()
     # authenticate
@@ -111,15 +112,15 @@ function main()
             Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
             $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
             $thumbprint = $cert509.thumbprint
-            $keyValue = [System.Convert]::ToBase64String($cert509.GetRawCertData())
+            $keyValue = [System.Convert]::ToBase64String($cert509.GetCertHash())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
             #$keyCredential = New-Object  Microsoft.Azure.Commands.Resources.Models.ActiveDirectory.PSADKeyCredential
             #$keyCredential.StartDate = $cert.NotBefore
             #$keyCredential.EndDate = $cert.NotAfter
             #$keyCredential.KeyId = [guid]::NewGuid()
-            #$keyCredential.Type = "AsymmetricX509Cert"
-            #$keyCredential.Usage = "Verify"
-            #$keyCredential.CertValue = $cert.Thumbprint #$keyValue
+            ##$keyCredential.Type = "AsymmetricX509Cert"
+            ##$keyCredential.Usage = "Verify"
+            #$keyCredential.CertValue = $cert.GetRawData()
             #$keyCredential
 
             if($oldAdApp = Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName)
@@ -128,10 +129,12 @@ function main()
             }
             
             $DebugPreference = "Continue"    
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
+            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $($cert.NotAfter) -StartDate $($cert.NotBefore) -verbose"
+            #$app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $cert.GetRawCertData() -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
             
             $DebugPreference = "SilentlyContinue"
-            #$app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
 
         }
         elseif ($logontype -ieq 'certthumb')
@@ -161,9 +164,11 @@ function main()
         }
         else
         {
+            write-warning "credentials need to be psadcredentials to work"
             if (!$credentials)
             {
-                $credentials = (get-credential)
+                write-warning "no credentials, exiting"
+                exit 1
             }
             # to use password
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -PasswordCredentials $credentials
