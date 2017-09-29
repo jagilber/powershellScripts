@@ -140,11 +140,13 @@ function main()
         {
             
             $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
-            $thumbprint = $cert.Thumbprint
-            $enc = [system.Text.Encoding]::UTF8
-            $bytes = $enc.GetBytes($cert.Thumbprint)
-            $ClientSecret = [System.Convert]::ToBase64String($bytes)
+            #$thumbprint = $cert.Thumbprint
+            #$enc = [system.Text.Encoding]::UTF8
+            #$bytes = $enc.GetBytes($cert.Thumbprint)
+            #$ClientSecret = [System.Convert]::ToBase64String($bytes)
+            $ClientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $ClientSecret -EndDate $cert.NotAfter
         }
         elseif ($logontype -ieq 'key')

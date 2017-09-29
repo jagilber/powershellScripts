@@ -1,4 +1,6 @@
 <#
+a4ad335c-65e5-469c-9df5-03ca816fb82b
+13a5b24bd00cb110ef4b36a141c87483661f5bef
 .\azure-rm-rest-logon.ps1 -certSubject "azure-rm-rest-logon" -applicationId "2b79cbdf-424f-48d2-a569-26ff7deb8625"
 #>
 
@@ -74,6 +76,8 @@ function main ()
         $enc = [text.encoding]::UTF8
         $bytes = $enc.GetBytes($data)
         $ClientSecret = [convert]::ToBase64String($bytes)
+        $ClientSecret = [convert]::ToBase64String($cert.GetCertHash())
+        write-host "clientsecret set to: $($clientSecret)"
     }
 
     $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 

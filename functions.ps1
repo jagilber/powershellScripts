@@ -281,7 +281,7 @@ function get-update($updateUrl, $destinationFile)
 
     try 
     {
-        $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
+        $git = Invoke-RestMethod -UseBasicParsing -Method Get -Uri $updateUrl 
 
         # git may not have carriage return
         # reset by setting all to just lf
