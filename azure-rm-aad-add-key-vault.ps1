@@ -36,7 +36,8 @@ param(
     [switch]$noprompt,
     [string]$location = "eastus",
     [string]$certSubject = $adApplicationName,
-    [switch]$adApplicationOnly
+    [switch]$adApplicationOnly,
+    [switch]$certOnly
 )
 
 # authenticate
@@ -140,7 +141,6 @@ if (![IO.File]::Exists($pfxPath))
     Export-PfxCertificate -cert $cert -FilePath $pfxPath -Password $pwd
     write-host "installing new self signed cert to cert:\currentuser\root"
     Import-PfxCertificate -Exportable -Password $pwd -CertStoreLocation Cert:\CurrentUser\Root -FilePath $pfxPath
-    
 }
 
 if(!$adApplicationOnly)
@@ -149,6 +149,11 @@ if(!$adApplicationOnly)
     start-sleep -Seconds 10
     $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
     $azurecert
+}
+
+if($certOnly)
+{
+    return
 }
 
 if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction SilentlyContinue)

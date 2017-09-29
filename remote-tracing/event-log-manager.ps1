@@ -19,11 +19,24 @@
             - smb 445
             - rpc endpoint mapper 135
             - rpc ephemeral ports
+    Copyright 2017 Microsoft Corporation
 
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+    
 .NOTES
     File Name  : event-log-manager.ps1
     Author     : jagilber
-    Version    : 170707.2 finally fix for merge getfiles multiple machines
+    Version    : 170825 fix for debug log count. showing error now on saving changes.
     History    : 
                 170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
                 170706.2 fix bugs in main finally, readalltext get-update
@@ -708,100 +721,112 @@ function enable-logs($eventLogNames, $machine)
     $debugLogsEnabled = New-Object Collections.ArrayList
     [void]$sb.Appendline("event logs:")
 
-    foreach ($eventLogName in $eventLogNames)
+    try
     {
-        $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
-        $eventLog = New-Object Diagnostics.Eventing.Reader.EventLogConfiguration ($eventLogName, $session)
-
-        if ($clearEventLogs)
+        foreach ($eventLogName in $eventLogNames)
         {
-            [void]$sb.AppendLine("clearing event log: $($eventLogName)")
-            if ($eventLog.IsEnabled -and !$eventLog.IsClassicLog)
+            $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
+            $eventLog = New-Object Diagnostics.Eventing.Reader.EventLogConfiguration ($eventLogName, $session)
+
+            if ($clearEventLogs)
             {
-                $eventLog.IsEnabled = $false
-                $eventLog.SaveChanges()
-                $eventLog.Dispose()
+                [void]$sb.AppendLine("clearing event log: $($eventLogName)")
+            
+                if ($eventLog.IsEnabled -and !$eventLog.IsClassicLog)
+                {
+                    $eventLog.IsEnabled = $false
+                    $eventLog.SaveChanges()
+                    $eventLog.Dispose()
 
-                $session.ClearLog($eventLogName)
+                    $session.ClearLog($eventLogName)
 
-                $eventLog = New-Object Diagnostics.Eventing.Reader.EventLogConfiguration ($eventLogName, $session)
+                    $eventLog = New-Object Diagnostics.Eventing.Reader.EventLogConfiguration ($eventLogName, $session)
+                    $eventLog.IsEnabled = $true
+                    $eventLog.SaveChanges()
+                }
+                elseif ($eventLog.IsClassicLog)
+                {
+                    $session.ClearLog($eventLogName)
+                }
+            }
+
+            if ($enableDebugLogs -and $eventLog.IsEnabled -eq $false)
+            {
+                if ($VerbosePreference -ine "SilentlyContinue" -or $listEventLogs)
+                {
+                    [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+                }
+         
                 $eventLog.IsEnabled = $true
                 $eventLog.SaveChanges()
-            }
-            elseif ($eventLog.IsClassicLog)
-            {
-                $session.ClearLog($eventLogName)
-            }
-        }
-
-        if ($enableDebugLogs -and $eventLog.IsEnabled -eq $false)
-        {
-            if ($VerbosePreference -ine "SilentlyContinue" -or $listEventLogs)
-            {
-                [void]$sb.AppendLine("enabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
-            }
-         
-            $eventLog.IsEnabled = $true
-            $eventLog.SaveChanges()
-        }
-
-        if ($disableDebugLogs -and $eventLog.IsEnabled -eq $true -and ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug"))
-        {
-            if ($VerbosePreference -ine "SilentlyContinue" -or $listEventLogs)
-            {
-                [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+                $global:debugLogsCount++
             }
 
-            $eventLog.IsEnabled = $false
-            $eventLog.SaveChanges()
-            $global:debugLogsCount--
-
-            if ($debugLogsEnabled.Contains($eventLog.LogName))
+            if ($disableDebugLogs -and $eventLog.IsEnabled -eq $true -and ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug"))
             {
-                $debugLogsEnabled.Remove($eventLog.LogName)
-            }
-        }
-
-        if ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug")
-        {
-            if ($eventLog.IsEnabled -eq $true)
-            {
-                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
-                $debugLogsEnabled.Add($eventLog.LogName)
-
-                if ($debugLogsMax -le $debugLogsEnabled.Count)
+                if ($VerbosePreference -ine "SilentlyContinue" -or $listEventLogs)
                 {
-                    log-info "Error: too many debug logs enabled ($($debugLogsMax))."
-                    log-info "Error: this can cause system performance / stability issues as well as inability to boot!"
-                    log-info "Error: rerun script again with these switches: .\event-log-manager.ps1 -listeventlogs -disableDebugLogs"
-                    log-info "Error: this will disable all debug logs."
-                    log-info "Warning: exiting script."
-                    exit 1
+                    [void]$sb.AppendLine("disabling debug log for $($eventLog.LogName) $($eventLog.LogMode)")
+                }
+
+                $eventLog.IsEnabled = $false
+                $eventLog.SaveChanges()
+                $global:debugLogsCount--
+
+                if ($debugLogsEnabled.Contains($eventLog.LogName))
+                {
+                    $debugLogsEnabled.Remove($eventLog.LogName)
+                }
+            }
+
+            if ($eventLog.LogType -ieq "Analytic" -or $eventLog.LogType -ieq "Debug")
+            {
+                if ($eventLog.IsEnabled -eq $true)
+                {
+                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): ENABLED")
+                    $debugLogsEnabled.Add($eventLog.LogName)
+
+                    if ($debugLogsMax -le $debugLogsEnabled.Count)
+                    {
+                        log-info "Error: too many debug logs enabled ($($debugLogsMax))."
+                        log-info "Error: this can cause system performance / stability issues as well as inability to boot!"
+                        log-info "Error: rerun script again with these switches: .\event-log-manager.ps1 -listeventlogs -disableDebugLogs"
+                        log-info "Error: this will disable all debug logs."
+                        log-info "Warning: exiting script."
+                        exit 1
+                    }
+                }
+                else
+                {
+                    [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
                 }
             }
             else
             {
-                [void]$sb.AppendLine("$($eventLog.LogName) $($eventLog.LogMode): DISABLED")
+                [void]$sb.AppendLine("$($eventLog.LogName)")
             }
         }
-        else
+
+        log-info $sb.ToString() -nocolor
+        log-info "-----------------------------------------"
+
+        if ($debugLogsEnabled.Count -gt 0)
         {
-            [void]$sb.AppendLine("$($eventLog.LogName)")
+            foreach ($eventLogName in $debugLogsEnabled)
+            {
+                log-info $eventLogName
+            }
+
+            show-debugWarning -count $debugLogsEnabled.Count
         }
+
+        return $true
     }
-
-    log-info $sb.ToString() -nocolor
-    log-info "-----------------------------------------"
-
-    if ($debugLogsEnabled.Count -gt 0)
+    catch
     {
-        $global:debugLogsCount = $global:debugLogsCount + $debugLogsEnabled.Count
-        foreach ($eventLogName in $debugLogsEnabled)
-        {
-            log-info $eventLogName
-        }
-
-        show-debugWarning -count $debugLogsEnabled.Count
+        log-info "enable logs exception: $($error | out-string)"
+        $error.Clear()
+        return $false
     }
 }
 
@@ -855,28 +880,24 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
     }
 }
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------
 function get-update($updateUrl, $destinationFile)
 {
     log-info "get-update:checking for updated script: $($updateUrl)"
+    $file = ""
     $git = $null
-    $file = $null
 
     try 
     {
         $git = Invoke-RestMethod -Method Get -Uri $updateUrl 
 
-        # git  may not have carriage return
+        # git may not have carriage return
         if ([regex]::Matches($git, "`r").Count -eq 0)
         {
             $git = [regex]::Replace($git, "`n", "`r`n")
         }
 
-        if (![IO.File]::Exists($destinationFile))
-        {
-            $file = ""    
-        }
-        else
+        if ([IO.File]::Exists($destinationFile))
         {
             $file = [IO.File]::ReadAllText($destinationFile)
         }
@@ -1450,7 +1471,7 @@ function merge-files()
     foreach ($machine in $machines)
     {
         log-info "running merge for $($machine) in path $($uDir)"
-        if([IO.Directory]::Exists("$($uDir)\$($machine)"))
+        if ([IO.Directory]::Exists("$($uDir)\$($machine)"))
         {
             log-merge -sourceFolder "$($uDir)\$($machine)" -filePattern "*.csv" -outputFile "$($uDir)\events-$($machine)-all.csv" -subDir $true
 
@@ -1491,7 +1512,12 @@ function process-eventLogs( $machines, $eventStartTime, $eventStopTime)
         if (!$global:eventLogFiles)
         {
             # enable / disable eventlog
-            $ret = enable-logs -eventLogNames $filteredLogs -machine $machine
+            if((enable-logs -eventLogNames $filteredLogs -machine $machine) -eq $false)
+            {
+                $retval = $false
+                continue
+            }
+
         }
 
         # create machine list
