@@ -1,46 +1,59 @@
 <#  
 .SYNOPSIS  
 
-    powershell script to merge multiple csv files with timestamps by timestamp into new file
+powershell script to merge multiple csv files with timestamps by timestamp into new file
 
 .DESCRIPTION  
-        
+powershell script to merge multiple csv files with timestamps by timestamp into new file
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 .NOTES  
-   File Name  : log-merge.ps1  
-   Author     : jagilber
-   Version    : 170111 added date ranges
+File Name  : log-merge.ps1  
+Author     : jagilber
+Version    : 170111 added date ranges
 
-   History    : 
-                160619 added "o" date format
-
-.EXAMPLE  
-
-    .\log-merge.ps1 -sourceFolder c:\logfiles -filePattern *evt*.csv -outputFile c:\temp\all-events.csv
-    Search c:\logfiles folder for all files matching pattern *evt*.csv and output to c:\temp\all-events.csv   
+History    : 
+            160619 added "o" date format
 
 .EXAMPLE  
 
-    .\log-merge.ps1 -sourceFolder c:\logfiles -filePattern *FMT*.csv -outputFile c:\temp\all-etw.csv
-    Search c:\logfiles folder for all files matching pattern *FMT*.txt and output to c:\temp\all-etw.csv   
+.\log-merge.ps1 -sourceFolder c:\logfiles -filePattern *evt*.csv -outputFile c:\temp\all-events.csv
+Search c:\logfiles folder for all files matching pattern *evt*.csv and output to c:\temp\all-events.csv   
+
+.EXAMPLE  
+
+.\log-merge.ps1 -sourceFolder c:\logfiles -filePattern *FMT*.csv -outputFile c:\temp\all-etw.csv
+Search c:\logfiles folder for all files matching pattern *FMT*.txt and output to c:\temp\all-etw.csv   
 
 .PARAMETER sourceFolder
-    Path to source folder to be searched. ex: c:\logfiles
+Path to source folder to be searched. ex: c:\logfiles
 
 .PARAMETER filePattern
-    Dos style file matching pattern for csv files to parse. ex: *evt*.csv
+Dos style file matching pattern for csv files to parse. ex: *evt*.csv
 
 .PARAMETER outputFile
-    Name and location of the new merged file. ex: c:\temp\test.csv
+Name and location of the new merged file. ex: c:\temp\test.csv
 
 .PARAMETER startDate
-    optional parameter to exclude lines with dates older than given date
+optional parameter to exclude lines with dates older than given date
 
 .PARAMETER endDate
-    optional parameter to exclude lines with dates newer than given date
+optional parameter to exclude lines with dates newer than given date
 #>  
 
 Param(
- 
+
     [parameter(Position = 0, Mandatory = $true, HelpMessage = "Enter the source folder for searching:")]
     [string] $sourceFolder,
     [parameter(Position = 1, Mandatory = $true, HelpMessage = "Enter the file filter pattern (dos style *.*):")]
