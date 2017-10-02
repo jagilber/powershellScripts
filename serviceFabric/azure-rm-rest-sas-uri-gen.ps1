@@ -2,9 +2,11 @@
 # jagilber
 # use to generate / account sas uri with given azure storage account access key and storage resource uri
 # references:
-#    https://blogs.msdn.microsoft.com/tsmatsuz/2016/07/06/how-to-get-azure-storage-rest-api-authorization-header/
-#    https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
-#    https://docs.microsoft.com/en-us/azure/storage/common/storage-dotnet-shared-access-signature-part-1?toc=%2fazure%2fstorage%2fblobs%2ftoc.json
+#   https://blogs.msdn.microsoft.com/tsmatsuz/2016/07/06/how-to-get-azure-storage-rest-api-authorization-header/
+#   https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
+#   https://docs.microsoft.com/en-us/azure/storage/common/storage-dotnet-shared-access-signature-part-1?toc=%2fazure%2fstorage%2fblobs%2ftoc.json
+# example output:
+#   https://sflogssf118243.table.core.windows.net/?sv=2017-04-17&ss=bqtf&srt=sco&sp=rwdlacup&st=2017-10-02T02:39:51Z&se=2017-10-03T02:39:51Z&sip=0.0.0.0-255.255.255.255&spr=https&sig=kZD90ZZ%2BsibWUNzvHgU%2BYwA52He7%2BL1CbA0Bo2mYY4M%3D
 # 20171002
 
 param(
