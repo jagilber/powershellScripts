@@ -53,55 +53,175 @@ function main()
 
         # template parameters
         $ret = $true 
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)applicationStartPort" -value ([pscustomobject]@{type = 'int'; defaultValue = 20000}) -whatif $whatif)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)applicationEndPort" -Value ([pscustomobject]@{type = 'int'; defaultValue = 30000}) -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)ephemeralStartPort" -Value ([pscustomobject]@{type = 'int'; defaultValue = 49152}) -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)ephemeralEndPort" -Value ([pscustomobject]@{type = 'int'; defaultValue = 65534}) -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)fabricTcpGatewayPort" -Value ([pscustomobject]@{type = 'int'; defaultValue = 19000}) -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)fabricHttpGatewayPort" -Value ([pscustomobject]@{type = 'int'; defaultValue = 19080}) -whatif $whatIf)
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)applicationStartPort" `
+                                    -value ([pscustomobject]@{type = 'int'; defaultValue = 20000}) `
+                                    -whatif $whatif
+                                )
         
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "subnet$($count)Name" -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "Subnet-$($count)"}) -whatif $whatIf)
-        $ret = $ret -band [bool](check-member -customObject ($jsonObject.parameters) -name "10.0.$($count).0/24")
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "subnet$($count)Prefix" -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "10.0.$($count).0/24"}) -whatif $whatIf)
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)applicationEndPort" `
+                                    -value ([pscustomobject]@{type = 'int'; defaultValue = 30000}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)ephemeralStartPort" `
+                                    -value ([pscustomobject]@{type = 'int'; defaultValue = 49152}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)ephemeralEndPort" `
+                                    -value ([pscustomobject]@{type = 'int'; defaultValue = 65534}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)fabricTcpGatewayPort" `
+                                    -value ([pscustomobject]@{type = 'int'; defaultValue = 19000}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)fabricHttpGatewayPort" `
+                                    -value ([pscustomobject]@{type = 'int'; defaultValue = 19080}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "subnet$($count)Name" `
+                                    -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "Subnet-$($count)"}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](check-member -customObject ($jsonObject.parameters) `
+                                    -name "10.0.$($count).0/24"
+                                )
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "subnet$($count)Prefix" `
+                                    -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "10.0.$($count).0/24"}) `
+                                    -whatif $whatIf
+                                )
     
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "nt$($count)InstanceCount" -value ([pscustomobject]@{'type' = 'int'; 'defaultValue' = 5}) -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "vmNodeType$($count)Name" -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "nt$($count)"}) -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) -name "vmNodeType$($count)Size" -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "Standard_D1_v2"}) -whatif $whatIf)
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "nt$($count)InstanceCount" `
+                                    -value ([pscustomobject]@{'type' = 'int'; 'defaultValue' = 5}) `
+                                    -whatif $whatIf
+                                )
+        
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "vmNodeType$($count)Name" `
+                                    -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "nt$($count)"}) `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.parameters) `
+                                    -name "vmNodeType$($count)Size" `
+                                    -value ([pscustomobject]@{'type' = 'string'; 'defaultValue' = "Standard_D1_v2"}) `
+                                    -whatif $whatIf
+                                )
     
         # template variables
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "subnet$($count)Ref" -value "[concat(variables('vnetID'),'/subnets/',parameters('subnet$($count)Name'))]" -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "lbID$($count)" -value "[resourceId('Microsoft.Network/loadBalancers', concat('LB','-', parameters('clusterName'),'-',parameters('vmNodeType$($count)Name')))]" -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "lbIPConfig$($count)" -value "[concat(variables('lbID$($count)'),'/frontendIPConfigurations/LoadBalancerIPConfig')]" -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "lbPoolID$($count)" -value "[concat(variables('lbID$($count)'),'/backendAddressPools/LoadBalancerBEAddressPool')]" -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "lbProbeID$($count)" -value "[concat(variables('lbID$($count)'),'/probes/FabricGatewayProbe')]" -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "lbHttpProbeID$($count)" -value "[concat(variables('lbID$($count)'),'/probes/FabricHttpGatewayProbe')]" -whatif $whatIf)
-        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "lbNatPoolID$($count)" -value "[concat(variables('lbID$($count)'),'/inboundNatPools/LoadBalancerBEAddressNatPool')]" -whatif $whatIf)
-        
-        # not used
-        #$ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) -name "vmStorageAccountName$($count)" -value "[toLower(concat(uniqueString(resourceGroup().id), '1', '0' ))]" -whatif $whatIf)
-    
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "subnet$($count)Ref" `
+                                    -value "[concat(variables('vnetID'),'/subnets/',parameters('subnet$($count)Name'))]" `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "lbID$($count)" `
+                                    -value "[resourceId('Microsoft.Network/loadBalancers', concat('LB','-', parameters('clusterName'),'-',parameters('vmNodeType$($count)Name')))]" `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "lbIPConfig$($count)" `
+                                    -value "[concat(variables('lbID$($count)'),'/frontendIPConfigurations/LoadBalancerIPConfig')]" `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "lbPoolID$($count)" `
+                                    -value "[concat(variables('lbID$($count)'),'/backendAddressPools/LoadBalancerBEAddressPool')]" `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "lbProbeID$($count)" `
+                                    -value "[concat(variables('lbID$($count)'),'/probes/FabricGatewayProbe')]" `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "lbHttpProbeID$($count)" `
+                                    -value "[concat(variables('lbID$($count)'),'/probes/FabricHttpGatewayProbe')]" `
+                                    -whatif $whatIf
+                                )
+
+        $ret = $ret -band [bool](add-newMember -customObject ($jsonObject.variables) `
+                                    -name "lbNatPoolID$($count)" `
+                                    -value "[concat(variables('lbID$($count)'),'/inboundNatPools/LoadBalancerBEAddressNatPool')]" `
+                                    -whatif $whatIf
+                                )
+
         # template resources
         # subnet
         $json = $jsonSubnetTemplate.Replace('$($count)', $count)
-        $virtualNetworkObject = $jsonObject.resources | Where-Object type -imatch "Microsoft.Network/virtualNetworks"
-        $ret = $ret -band [bool]($virtualNetworkObject.properties.subnets = (add-newMember -customObject @($virtualNetworkObject.properties.subnets) -name "[parameters('subnet$($count)Name')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
+        $parentObject = $jsonObject.resources | Where-Object type -imatch "Microsoft.Network/virtualNetworks"
+        $ret = $ret -band [bool]($parentObject.properties.subnets = (
+            add-newMember -customObject @($parentObject.properties.subnets) `
+            -name "[parameters('subnet$($count)Name')]" `
+            -isList $true `
+            -whatif $whatIf `
+            -value (ConvertFrom-Json $json)
+            )
+        )
 
         # public IP Address    
         $json = $jsonPublicIpTemplate.Replace('$($count)', $count)
-        $ret = $ret -band [bool]($jsonObject.resources = (add-newMember -customObject @($jsonObject.resources) -name "[concat(parameters('lbIPName'),'-','$($count)')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
+        $ret = $ret -band [bool]($jsonObject.resources = (
+            add-newMember -customObject @($jsonObject.resources) `
+                -name "[concat(parameters('lbIPName'),'-','$($count)')]" `
+                -isList $true `
+                -whatif $whatIf `
+                -value (ConvertFrom-Json $json)
+                )
+            )
     
         # load balancer
         $json = $jsonLoadBalancerTemplate.Replace('$($count)', $count)
-        $ret = $ret -band [bool]($jsonObject.resources = (add-newMember -customObject @($jsonObject.resources) -name "[concat('LB','-', parameters('clusterName'),'-',parameters('vmNodeType$($count)Name'))]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
+        $ret = $ret -band [bool]($jsonObject.resources = (
+            add-newMember -customObject @($jsonObject.resources) `
+                -name "[concat('LB','-', parameters('clusterName'),'-',parameters('vmNodeType$($count)Name'))]" `
+                -isList $true `
+                -whatif $whatIf `
+                -value (ConvertFrom-Json $json)
+                )
+            )
      
         # virtual machine scale set
         $json = $jsonVirtualMachineScaleSetTemplate.Replace('$($count)', $count)
-        $ret = $ret -band [bool]($jsonObject.resources = (add-newMember -customObject @($jsonObject.resources) -name "[parameters('vmNodeType$($count)Name')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
+        $ret = $ret -band [bool]($jsonObject.resources = (
+            add-newMember -customObject @($jsonObject.resources) `
+                -name "[parameters('vmNodeType$($count)Name')]" `
+                -isList $true `
+                -whatif $whatIf `
+                -value (ConvertFrom-Json $json)
+                )
+            )
     
         # cluster vmNodeType
         $json = $jsonVmNodeTypeTemplate.Replace('$($count)', $count)
-        $nodeTypeObject = $jsonObject.resources | Where-Object type -imatch "Microsoft.ServiceFabric/clusters"
-        $ret = $ret -band [bool]($nodeTypeObject.properties.nodetypes = (add-newMember -customObject @($nodeTypeObject.properties.nodetypes) -name "[parameters('vmNodeType$($count)Name')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
+        $parentObject = $jsonObject.resources | Where-Object type -imatch "Microsoft.ServiceFabric/clusters"
+        $ret = $ret -band [bool]($parentObject.properties.nodetypes = (
+            add-newMember -customObject @($parentObject.properties.nodetypes) `
+                -name "[parameters('vmNodeType$($count)Name')]" `
+                -isList $true `
+                -whatif $whatIf `
+                -value (ConvertFrom-Json $json)
+                )
+            )
     
         # check for success
         if ($ret)
