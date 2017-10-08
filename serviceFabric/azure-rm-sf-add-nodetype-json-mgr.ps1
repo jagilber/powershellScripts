@@ -82,29 +82,24 @@ function main()
     
         # template resources
         # subnet
-        $json = $jsonSubnetTemplate
-        $json = $json.Replace('$($count)', $count)
+        $json = $jsonSubnetTemplate.Replace('$($count)', $count)
         $virtualNetworkObject = $jsonObject.resources | Where-Object type -imatch "Microsoft.Network/virtualNetworks"
         $ret = $ret -band [bool]($virtualNetworkObject.properties.subnets = (add-newMember -customObject @($virtualNetworkObject.properties.subnets) -name "[parameters('subnet$($count)Name')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
 
         # public IP Address    
-        $json = $jsonPublicIpTemplate
-        $json = $json.Replace('$($count)', $count)
+        $json = $jsonPublicIpTemplate.Replace('$($count)', $count)
         $ret = $ret -band [bool]($jsonObject.resources = (add-newMember -customObject @($jsonObject.resources) -name "[concat(parameters('lbIPName'),'-','$($count)')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
     
         # load balancer
-        $json = $jsonLoadBalancerTemplate
-        $json = $json.Replace('$($count)', $count)
+        $json = $jsonLoadBalancerTemplate.Replace('$($count)', $count)
         $ret = $ret -band [bool]($jsonObject.resources = (add-newMember -customObject @($jsonObject.resources) -name "[concat('LB','-', parameters('clusterName'),'-',parameters('vmNodeType$($count)Name'))]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
      
         # virtual machine scale set
-        $json = $jsonVirtualMachineScaleSetTemplate
-        $json = $json.Replace('$($count)', $count)
+        $json = $jsonVirtualMachineScaleSetTemplate.Replace('$($count)', $count)
         $ret = $ret -band [bool]($jsonObject.resources = (add-newMember -customObject @($jsonObject.resources) -name "[parameters('vmNodeType$($count)Name')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
     
         # cluster vmNodeType
-        $json = $jsonVmNodeTypeTemplate 
-        $json = $json.Replace('$($count)', $count)
+        $json = $jsonVmNodeTypeTemplate.Replace('$($count)', $count)
         $nodeTypeObject = $jsonObject.resources | Where-Object type -imatch "Microsoft.ServiceFabric/clusters"
         $ret = $ret -band [bool]($nodeTypeObject.properties.nodetypes = (add-newMember -customObject @($nodeTypeObject.properties.nodetypes) -name "[parameters('vmNodeType$($count)Name')]" -isList $true -whatif $whatIf -value (ConvertFrom-Json $json)))
     
