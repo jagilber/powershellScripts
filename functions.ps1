@@ -7,12 +7,19 @@
 .DESCRIPTION
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
-    This script will optionally enable / disable debug and analytic event logs.
-    This can be against both local and remote machines.
-    It will also take a regex filter pattern for both event log names and traces.
-    For each match, all event logs will be exported to csv format.
-    Each export will be in its own file named with the event log name.
-    Script has ability to 'listen' to new events by continuously polling configured event logs.
+    Copyright 2017 Microsoft Corporation
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
 
     Requirements:
         - administrator powershell prompt
