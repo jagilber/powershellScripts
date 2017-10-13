@@ -53,25 +53,26 @@ Connect-ServiceFabricCluster -ConnectionEndpoint ($cluster.ManagementEndpoint.Re
 
 if($pause) { pause }
 $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
+$currentCapacity = $vmss.sku.capacity
+$newCapacity =  $currentCapacity + 1
 
 if($vmss.sku.capacity -gt 1)
 {
-    write-host "scaling down vmss to prevent unnecessary upgrade" -ForegroundColor Cyan
-    write-host "scale up vmss" -ForegroundColor Cyan
+    write-host "scaling up vmss to $($newCapacity)" -ForegroundColor Cyan
 
     $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-    $vmss.sku.capacity = $vmss.sku.capacity + 1
+    $vmss.sku.capacity = $newCapacity
     Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
     if($pause) { pause }
 
-    write-host "scale down vmss to original capacity" -ForegroundColor Cyan
+    write-host "scaling down vmss to original capacity $($currentCapacity)" -ForegroundColor Cyan
 
     $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
     $nodeName = $vmssVms[-1].Name
     Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Force
     if($pause) { pause }
 
-    $vmss.sku.capacity = $vmss.sku.capacity - 1
+    $vmss.sku.capacity = $currentCapacity
     Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
     if($pause) { pause }
 
