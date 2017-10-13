@@ -23,30 +23,21 @@ param(
     $resourceGroup,
     $clustername = $resourcegroup,
     $vmssName,
-    [pscredential]$credential,
     [switch]$pause
 )
 
-if(!$credential)
-{
-    if(!$Global:credential)
-    {
-        $Global:credential = $credential = get-credential
-    }
-    else
-    {
-        $credential = $Global:credential
-    }
-}
-
 import-module azurerm.servicefabric
-$securePassword = ConvertTo-SecureString -String $credential.Password -AsPlainText -Force
 
 if(!$nodename)
 {
     # get highest id instance in vmss
     $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
     $nodeName = $vmssVms[-1].Name
+}
+
+if(!(get-azurermresourcegroup))
+{
+    add-azurermaccount
 }
 
 write-host "disabling node $($nodeName)" -ForegroundColor Cyan
