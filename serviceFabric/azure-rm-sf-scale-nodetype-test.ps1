@@ -1,5 +1,5 @@
 <#
-    example script to test scaling / keyvault
+    example service fabric script to test azure sf scaling / keyvault
     171013
 
     Copyright 2017 Microsoft Corporation
@@ -19,67 +19,96 @@
 
 [cmdletbinding()]
 param(
-    $nodename,
+    [Parameter(Mandatory = $true)]
     $resourceGroup,
     $clustername = $resourcegroup,
+    [Parameter(Mandatory = $true)]
     $vmssName,
+    $nodename,
     [switch]$pause
 )
 
+$startTime = get-date
 import-module azurerm.servicefabric
 
-if(!$nodename)
+if (!(Get-AzureRmResourceGroup))
+{
+    Add-AzureRmAccount
+}
+
+if (!$nodename)
 {
     # get highest id instance in vmss
     $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
     $nodeName = $vmssVms[-1].Name
 }
 
-if(!(get-azurermresourcegroup))
-{
-    add-azurermaccount
-}
-
-write-host "disabling node $($nodeName)" -ForegroundColor Cyan
+write-host "$(get-date) connecting to cluster" -ForegroundColor Cyan
 $cluster = Get-AzureRmServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
+$endpoint = $cluster.ManagementEndpoint.Replace($cluster.NodeTypes.HttpGatewayEndpointPort.ToString(), $cluster.NodeTypes.ClientConnectionEndpointPort.ToString())
+$endpoint = [regex]::Replace($endpoint, "http.://", "")
 
-Connect-ServiceFabricCluster -ConnectionEndpoint ($cluster.ManagementEndpoint.Replace("19080","19000").Replace("https://","")) `
+$ret = Connect-ServiceFabricCluster -ConnectionEndpoint $endpoint `
     -ServerCertThumbprint $cluster.Certificate.Thumbprint `
     -StoreLocation CurrentUser `
     -X509Credential `
     -FindType FindByThumbprint `
     -FindValue $cluster.Certificate.Thumbprint
 
+if ($pause)
+{
+    pause 
+}
 
-if($pause) { pause }
 $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-$currentCapacity = $vmss.sku.capacity
-$newCapacity =  $currentCapacity + 1
 
-if($vmss.sku.capacity -gt 1)
+if ($vmss.sku.capacity -lt 1)
 {
-    write-host "scaling up vmss to $($newCapacity)" -ForegroundColor Cyan
-
-    $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-    $vmss.sku.capacity = $newCapacity
-    Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
-    if($pause) { pause }
-
-    write-host "scaling down vmss to original capacity $($currentCapacity)" -ForegroundColor Cyan
-
-    $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-    $nodeName = $vmssVms[-1].Name
-    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Force
-    if($pause) { pause }
-
-    $vmss.sku.capacity = $currentCapacity
-    Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
-    if($pause) { pause }
-
-    Remove-servicefabricnodestate -nodename $nodename
-}
-else
-{
-    write-Warning "not scaling down vmss to prevent unnecessary upgrade as only one instance. exiting"
+    write-Warning "not scaling down vmss as there is only one instance. exiting"
+    exit 1
 }
 
+write-host "$(get-date) scaling up vmss" -ForegroundColor Cyan
+$vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
+
+write-host "$(get-date) updating scale set to $($vmss.sku.capacity + 1)" -ForegroundColor Cyan
+$vmss.sku.capacity = $vmss.sku.capacity + 1
+Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
+
+if ($pause)
+{
+    pause 
+}
+
+write-host "$(get-date) scaling down vmss to original capacity" -ForegroundColor Cyan
+$vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
+$nodeName = $vmssVms[-1].Name
+
+write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
+Disable-ServiceFabricNode -NodeName "_$($nodename)" -Intent RemoveNode 
+$status = ""
+
+while ($status -ine "Disabled")
+{
+    $status = (Get-ServiceFabricNode -NodeName "_$($nodename)").NodeStatus
+    write-host "$(get-date) node status: $($status)" -foregroundcolor Cyan
+    start-sleep -seconds 10
+} 
+
+if ($pause)
+{
+    pause 
+}
+
+write-host "$(get-date) updating scale set to $($vmss.sku.capacity - 1)" -ForegroundColor Cyan
+$vmss.sku.capacity = $vmss.sku.capacity - 1
+Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
+
+if ($pause)
+{
+    pause 
+}
+
+write-host "$(get-date) removing node state" -ForegroundColor Cyan
+Remove-servicefabricnodestate -nodename $nodename -Force
+write-host "$(get-date) finished. total minutes: $(((get-date) - $startTime).TotalMinutes.ToString("D3"))" -ForegroundColor Cyan
