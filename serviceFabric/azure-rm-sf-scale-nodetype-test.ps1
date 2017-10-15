@@ -56,6 +56,10 @@
     
 .PARAMETER pause
     optional switch to disable prompt when removing test node
+
+.PARAMETER storeLocation
+    optional switch to set certificate store location
+    default is CurrentUser
 #>
 
 [cmdletbinding()]
@@ -66,11 +70,13 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$vmssName,
     [switch]$pause,
-    [switch]$noprompt
+    [switch]$noprompt,
+    [string]$storeLocation = "CurrentUser"
 )
 
+$currentActionPreference = $errorActionPreference
+$errorActionPreference = "stop"
 $startTime = get-date
-import-module azurerm.servicefabric
 
 try 
 {
@@ -81,6 +87,7 @@ catch
     Add-AzureRmAccount
 }
 
+import-module azurerm.servicefabric
 write-host "$(get-date) connecting to cluster $($clustername)" -ForegroundColor Cyan
 $cluster = Get-AzureRmServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
 $endpoint = $cluster.ManagementEndpoint.Replace($cluster.NodeTypes.HttpGatewayEndpointPort.ToString(), $cluster.NodeTypes.ClientConnectionEndpointPort.ToString())
@@ -88,15 +95,12 @@ $endpoint = [regex]::Replace($endpoint, "http.://", "")
 
 Connect-ServiceFabricCluster -ConnectionEndpoint $endpoint `
     -ServerCertThumbprint $cluster.Certificate.Thumbprint `
-    -StoreLocation CurrentUser `
+    -StoreLocation $storeLocation `
     -X509Credential `
     -FindType FindByThumbprint `
     -FindValue $cluster.Certificate.Thumbprint
 
-if ($pause)
-{
-    pause 
-}
+if ($pause) { pause }
 
 $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
 
@@ -113,14 +117,13 @@ write-host "$(get-date) updating scale set to $($vmss.sku.capacity + 1)" -Foregr
 $vmss.sku.capacity = $vmss.sku.capacity + 1
 Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
 
-if ($pause)
-{
-    pause 
-}
+if ($pause) { pause }
 
 write-host "$(get-date) scaling down vmss to original capacity" -ForegroundColor Cyan
 $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
 $nodeName = "_$($vmssVms[-1].Name)"
+
+if ($pause) { pause }
 
 write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
 
@@ -142,20 +145,15 @@ while ($status -ine "Disabled")
     start-sleep -seconds 10
 } 
 
-if ($pause)
-{
-    pause 
-}
+if ($pause) { pause }
 
 write-host "$(get-date) updating scale set to $($vmss.sku.capacity - 1)" -ForegroundColor Cyan
 $vmss.sku.capacity = $vmss.sku.capacity - 1
 Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
 
-if ($pause)
-{
-    pause 
-}
+if ($pause) { pause }
 
 write-host "$(get-date) removing node state" -ForegroundColor Cyan
 Remove-servicefabricnodestate -nodename $nodename -Force
+$errorActionPreference = $currentActionPreference
 write-host "$(get-date) finished. total minutes: $(((get-date) - $startTime).TotalMinutes)" -ForegroundColor Cyan
