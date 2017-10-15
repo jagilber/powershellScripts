@@ -1,6 +1,9 @@
 <#
-    example service fabric script to test azure sf scaling / keyvault
-    171013
+.SYNOPSIS
+    powershell script to test service fabric nodetype scaling / keyvault
+
+.DESCRIPTION
+    powershell script to test service fabric nodetype scaling / keyvault
 
     Copyright 2017 Microsoft Corporation
 
@@ -15,16 +18,53 @@
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
+
+.NOTES  
+   File Name  : azure-rm-sf-scale-nodetype-test.ps1
+   https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-rm-sf-scale-nodetype-test.ps1
+   Author     : jagilber
+   Version    : 171015
+   History    : 
+
+.EXAMPLE  
+    .\azure-rm-sf-scale-nodetype-test.ps1 -resourceGroupName someClusterResource -vmssName nt0
+    adds and removes new test node to cluster named 'someClusterResource' in resource group named 'someClusterResource' 
+    to nodetype named 'nt0'
+
+.EXAMPLE  
+    .\azure-rm-sf-scale-nodetype-test.ps1 -resourceGroupName someClusterResource -vmssName nt0 -clusterName someServiceFabricCluster
+    adds and removes new test node to cluster named 'someServiceFabricCluster' in resource group named 'someClusterResource' 
+    to nodetype named 'nt0'
+
+.EXAMPLE  
+    .\azure-rm-sf-scale-nodetype-test.ps1 -resourceGroupName someClusterResource -vmssName nt0 -clusterName someServiceFabricCluster -noprompt
+    adds and removes new test node to cluster named 'someServiceFabricCluster' in resource group named 'someClusterResource' 
+    to nodetype named 'nt0' without prompting to remove
+
+.PARAMETER resourceGroupName
+    required paramater for the resource group name for service fabric cluster
+
+.PARAMETER clusterName
+    optional parameter for the service fabric cluster name
+    default is resourceGroupName
+
+.PARAMETER vmssName
+    required parameter for the vm scale set / nodetype name to add test node to
+
+.PARAMETER pause
+    optional switch to add a pause after each command
+    
+.PARAMETER pause
+    optional switch to disable prompt when removing test node
 #>
 
 [cmdletbinding()]
 param(
     [Parameter(Mandatory = $true)]
-    $resourceGroup,
-    $clustername = $resourcegroup,
+    [string]$resourceGroup,
+    [string]$clustername = $resourcegroup,
     [Parameter(Mandatory = $true)]
-    $vmssName,
-    $nodename,
+    [string]$vmssName,
     [switch]$pause,
     [switch]$noprompt
 )
@@ -41,19 +81,12 @@ catch
     Add-AzureRmAccount
 }
 
-if (!$nodename)
-{
-    # get highest id instance in vmss
-    $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-    $nodeName = "_$($vmssVms[-1].Name)"
-}
-
 write-host "$(get-date) connecting to cluster $($clustername)" -ForegroundColor Cyan
 $cluster = Get-AzureRmServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
 $endpoint = $cluster.ManagementEndpoint.Replace($cluster.NodeTypes.HttpGatewayEndpointPort.ToString(), $cluster.NodeTypes.ClientConnectionEndpointPort.ToString())
 $endpoint = [regex]::Replace($endpoint, "http.://", "")
 
-$ret = Connect-ServiceFabricCluster -ConnectionEndpoint $endpoint `
+Connect-ServiceFabricCluster -ConnectionEndpoint $endpoint `
     -ServerCertThumbprint $cluster.Certificate.Thumbprint `
     -StoreLocation CurrentUser `
     -X509Credential `
@@ -91,7 +124,7 @@ $nodeName = "_$($vmssVms[-1].Name)"
 
 write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
 
-if($noprompt)
+if ($noprompt)
 {
     Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Force
 }
