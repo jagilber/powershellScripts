@@ -31,7 +31,11 @@ param(
 $startTime = get-date
 import-module azurerm.servicefabric
 
-if (!(Get-AzureRmResourceGroup))
+try 
+{
+    Get-AzureRmResourceGroup | Out-Null
+}
+catch 
 {
     Add-AzureRmAccount
 }
@@ -40,10 +44,10 @@ if (!$nodename)
 {
     # get highest id instance in vmss
     $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-    $nodeName = $vmssVms[-1].Name
+    $nodeName = "_$($vmssVms[-1].Name)"
 }
 
-write-host "$(get-date) connecting to cluster" -ForegroundColor Cyan
+write-host "$(get-date) connecting to cluster $($clustername)" -ForegroundColor Cyan
 $cluster = Get-AzureRmServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
 $endpoint = $cluster.ManagementEndpoint.Replace($cluster.NodeTypes.HttpGatewayEndpointPort.ToString(), $cluster.NodeTypes.ClientConnectionEndpointPort.ToString())
 $endpoint = [regex]::Replace($endpoint, "http.://", "")
@@ -68,7 +72,7 @@ if ($vmss.sku.capacity -lt 1)
     exit 1
 }
 
-write-host "$(get-date) scaling up vmss" -ForegroundColor Cyan
+write-host "$(get-date) scaling up vmss $($vmssName)" -ForegroundColor Cyan
 $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
 
 write-host "$(get-date) updating scale set to $($vmss.sku.capacity + 1)" -ForegroundColor Cyan
@@ -82,15 +86,15 @@ if ($pause)
 
 write-host "$(get-date) scaling down vmss to original capacity" -ForegroundColor Cyan
 $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-$nodeName = $vmssVms[-1].Name
+$nodeName = "_$($vmssVms[-1].Name)"
 
 write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
-Disable-ServiceFabricNode -NodeName "_$($nodename)" -Intent RemoveNode 
+Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode 
 $status = ""
 
 while ($status -ine "Disabled")
 {
-    $status = (Get-ServiceFabricNode -NodeName "_$($nodename)").NodeStatus
+    $status = (Get-ServiceFabricNode -NodeName $nodename).NodeStatus
     write-host "$(get-date) node status: $($status)" -foregroundcolor Cyan
     start-sleep -seconds 10
 } 
@@ -111,4 +115,4 @@ if ($pause)
 
 write-host "$(get-date) removing node state" -ForegroundColor Cyan
 Remove-servicefabricnodestate -nodename $nodename -Force
-write-host "$(get-date) finished. total minutes: $(((get-date) - $startTime).TotalMinutes.ToString("D3"))" -ForegroundColor Cyan
+write-host "$(get-date) finished. total minutes: $(((get-date) - $startTime).TotalMinutes)" -ForegroundColor Cyan
