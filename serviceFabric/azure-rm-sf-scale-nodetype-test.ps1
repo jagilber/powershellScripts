@@ -25,7 +25,8 @@ param(
     [Parameter(Mandatory = $true)]
     $vmssName,
     $nodename,
-    [switch]$pause
+    [switch]$pause,
+    [switch]$noprompt
 )
 
 $startTime = get-date
@@ -89,7 +90,16 @@ $vmssVms = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $
 $nodeName = "_$($vmssVms[-1].Name)"
 
 write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
-Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode 
+
+if($noprompt)
+{
+    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Force
+}
+else 
+{
+    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode 
+}
+    
 $status = ""
 
 while ($status -ine "Disabled")
