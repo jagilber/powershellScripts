@@ -23,7 +23,7 @@
    File Name  : azure-rm-sf-scale-nodetype-test.ps1
    https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-rm-sf-scale-nodetype-test.ps1
    Author     : jagilber
-   Version    : 171015
+   Version    : 171016
    History    : 
 
 .EXAMPLE  
