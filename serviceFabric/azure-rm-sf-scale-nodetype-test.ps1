@@ -78,6 +78,11 @@ $currentActionPreference = $errorActionPreference
 $errorActionPreference = "stop"
 $startTime = get-date
 
+if($verbose)
+{
+    $VerbosePreference = "continue"
+}
+
 try 
 {
     Get-AzureRmResourceGroup | Out-Null
@@ -88,11 +93,14 @@ catch
 }
 
 import-module azurerm.servicefabric
-write-host "$(get-date) connecting to cluster $($clustername)" -ForegroundColor Cyan
+write-host "$(get-date) enumerating cluster $($clustername)" -ForegroundColor Cyan
 $cluster = Get-AzureRmServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
 $endpoint = $cluster.ManagementEndpoint.Replace($cluster.NodeTypes.HttpGatewayEndpointPort.ToString(), $cluster.NodeTypes.ClientConnectionEndpointPort.ToString())
 $endpoint = [regex]::Replace($endpoint, "http.://", "")
 
+if ($pause) { pause }
+
+write-host "$(get-date) connecting to cluster endpoint $($endpoint)" -ForegroundColor Cyan
 Connect-ServiceFabricCluster -ConnectionEndpoint $endpoint `
     -ServerCertThumbprint $cluster.Certificate.Thumbprint `
     -StoreLocation $storeLocation `
@@ -102,6 +110,7 @@ Connect-ServiceFabricCluster -ConnectionEndpoint $endpoint `
 
 if ($pause) { pause }
 
+write-host "$(get-date) scaling up vmss $($vmssName)" -ForegroundColor Cyan
 $vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
 
 if ($vmss.sku.capacity -lt 1)
@@ -110,10 +119,7 @@ if ($vmss.sku.capacity -lt 1)
     exit 1
 }
 
-write-host "$(get-date) scaling up vmss $($vmssName)" -ForegroundColor Cyan
-$vmss = Get-AzureRmVmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-
-write-host "$(get-date) updating scale set to $($vmss.sku.capacity + 1)" -ForegroundColor Cyan
+write-host "$(get-date) changing scale set capacity to $($vmss.sku.capacity + 1)" -ForegroundColor Cyan
 $vmss.sku.capacity = $vmss.sku.capacity + 1
 Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
 
@@ -129,7 +135,7 @@ write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
 
 if ($noprompt)
 {
-    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Force
+    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Confirm
 }
 else 
 {
@@ -147,7 +153,7 @@ while ($status -ine "Disabled")
 
 if ($pause) { pause }
 
-write-host "$(get-date) updating scale set to $($vmss.sku.capacity - 1)" -ForegroundColor Cyan
+write-host "$(get-date) changing scale set capacity to $($vmss.sku.capacity - 1)" -ForegroundColor Cyan
 $vmss.sku.capacity = $vmss.sku.capacity - 1
 Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
 
@@ -155,5 +161,12 @@ if ($pause) { pause }
 
 write-host "$(get-date) removing node state" -ForegroundColor Cyan
 Remove-servicefabricnodestate -nodename $nodename -Force
+
 $errorActionPreference = $currentActionPreference
+
+if($verbose)
+{
+    $VerbosePreference = "silentlycontinue"
+}
+
 write-host "$(get-date) finished. total minutes: $(((get-date) - $startTime).TotalMinutes)" -ForegroundColor Cyan
