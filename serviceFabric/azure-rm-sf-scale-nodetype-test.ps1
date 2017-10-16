@@ -54,7 +54,7 @@
 .PARAMETER pause
     optional switch to add a pause after each command
     
-.PARAMETER pause
+.PARAMETER noprompt
     optional switch to disable prompt when removing test node
 
 .PARAMETER storeLocation
@@ -135,7 +135,7 @@ write-host "$(get-date) disabling node $($nodeName)" -ForegroundColor Cyan
 
 if ($noprompt)
 {
-    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Confirm
+    Disable-ServiceFabricNode -NodeName $nodename -Intent RemoveNode -Force
 }
 else 
 {
