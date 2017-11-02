@@ -155,7 +155,7 @@ if ($pause) { pause }
 
 write-host "$(get-date) changing scale set capacity to $($vmss.sku.capacity - 1)" -ForegroundColor Cyan
 $vmss.sku.capacity = $vmss.sku.capacity - 1
-Update-AzureRmVmss -ResourceGroupName $resourceGroup -Name $vmssName -VirtualMachineScaleSet $vmss 
+Update-AzureRmVmss -ResourceGroupName $resourceGroup -vmssname $vmssName -VirtualMachineScaleSet $vmss 
 
 if ($pause) { pause }
 
