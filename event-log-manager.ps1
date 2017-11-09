@@ -1209,61 +1209,66 @@ function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDat
     using System.IO;
     using System.Text.RegularExpressions;
     using System.Globalization;
-
-
+    
+    
     public class LogMerge
     {
-
-        int precision = 0;
-        Dictionary<string, string> outputList = new Dictionary<string, string>();
+        private CultureInfo culture = new CultureInfo("en-US");
+        private string dateFormatDefault = "yyyy-MM-dd HH:mm:ss.fffffff";
+        private string dateFormatAzure = "yyyy-MM-dd HH:mm:ss.fff";
+        private string dateFormatEtl = "MM/dd/yyyy-HH:mm:ss.fff";
+        private string dateFormatEtlPrecise = "MM/dd/yy-HH:mm:ss.fffffff";
+        private string dateFormatEvt = "MM/dd/yyyy,hh:mm:ss tt";
+        private string dateFormatEvtPrecise = "MM/dd/yyyy,hh:mm:ss.ffffff tt";
+        private string dateFormatEvtSpace = "MM/dd/yyyy hh:mm:ss tt";
+        private string dateFormatISO = "yyyy-MM-ddTHH:mm:ss.ffffff";
+    
         //07/22/2014-14:48:10.909 for etl and 07/22/2014,14:48:10 PM for eventlog
-        string datePattern = "(?<DateEtlPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{2,4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{7}) |" +
+        private string datePattern = "(?<DateEtlPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{2,4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{7}) |" +
             "(?<DateEtl>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}-[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3}) |" +
             "(?<DateEvt>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
             "(?<DateEvtSpace>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} [AP]M)|" +
             "(?<DateEvtPrecise>[0-9]{1,2}/[0-9]{1,2}/[0-9]{4},[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{6} [AP]M)|" +
-            "(?<DateISO>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}T[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";  
-        string dateFormatEtl = "MM/dd/yyyy-HH:mm:ss.fff";
-        string dateFormatEtlPrecise = "MM/dd/yy-HH:mm:ss.fffffff";
-        string dateFormatEvt = "MM/dd/yyyy,hh:mm:ss tt";
-        string dateFormatEvtSpace = "MM/dd/yyyy hh:mm:ss tt";
-        string dateFormatEvtPrecise = "MM/dd/yyyy,hh:mm:ss.ffffff tt";
-        string dateFormatISO = "yyyy-MM-ddTHH:mm:ss.ffffff"; // may have additional digits and Z
-        
-        bool detail = false;
-        CultureInfo culture = new CultureInfo("en-US");
-        Int64 missedMatchCounter = 0;
-        Int64 missedDateCounter = 0;
-        
-        public static void Start(string sourceFolder, string filePattern, string outputFile,string defaultDir,bool subDir,DateTime startDate, DateTime endDate)
+            "(?<DateISO>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}T[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})|" +
+            "(?<DateAzure>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";
+    
+        // may have additional digits and Z
+        private bool detail = false;
+    
+        private Int64 missedDateCounter = 0;
+        private Int64 missedMatchCounter = 0;
+        private Dictionary<string, string> outputList = new Dictionary<string, string>();
+        private int precision = 0;
+    
+        public static void Start(string sourceFolder, string filePattern, string outputFile, string defaultDir, bool subDir, DateTime startDate, DateTime endDate, bool prependFileName)
         {
             LogMerge program = new LogMerge();
-
+    
             try
             {
                 Directory.SetCurrentDirectory(defaultDir);
-
+    
                 if (!string.IsNullOrEmpty(sourceFolder) && !string.IsNullOrEmpty(filePattern) && !string.IsNullOrEmpty(outputFile))
                 {
-                    System.IO.SearchOption option; 
-
-                    if(subDir)
+                    SearchOption option;
+    
+                    if (subDir)
                     {
-                        option = System.IO.SearchOption.AllDirectories;
+                        option = SearchOption.AllDirectories;
                     }
                     else
                     {
-                        option = System.IO.SearchOption.TopDirectoryOnly;
+                        option = SearchOption.TopDirectoryOnly;
                     }
-
+    
                     string[] files = Directory.GetFiles(sourceFolder, filePattern, option);
                     if (files.Length < 1)
                     {
                         Console.WriteLine("unable to find files. returning");
                         return;
                     }
-
-                    program.ReadFiles(files, outputFile, startDate, endDate);
+    
+                    program.ReadFiles(files, outputFile, startDate, endDate, prependFileName);
                 }
                 else
                 {
@@ -1274,141 +1279,68 @@ function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDat
             }
             catch (Exception e)
             {
-                Console.WriteLine(string.Format("exception:main:precision:{0}:missed:{1}:excetion:{2}",program.precision, program.missedMatchCounter, e));
+                Console.WriteLine(string.Format("exception:main:precision:{0}:missed:{1}:excetion:{2}", program.precision, program.missedMatchCounter, e));
             }
         }
-
-        bool ReadFiles(string[] files, string outputfile, DateTime startDate, DateTime endDate)
+    
+        private bool AddToList(DateTime date, string line)
         {
-            Match match = Match.Empty;
-            long lastTicks = 0;
-            string line = string.Empty;
-
+            string key = string.Format("{0}{1}", date.Ticks.ToString(), precision.ToString("D8"));
+            if (!outputList.ContainsKey(key))
+            {
+                outputList.Add(key, line);
+            }
+            else
+            {
+                return false;
+            }
+    
+            return true;
+        }
+    
+        public bool ReadFiles(string[] files, string outputfile, DateTime startDate, DateTime endDate, bool prependFileName)
+        {
             try
             {
-
                 foreach (string file in files)
                 {
                     Console.WriteLine(file);
-                    StreamReader reader = new StreamReader(file);
-                    DateTime date = new DateTime();
                     string fileName = Path.GetFileName(file);
-                    string pidPattern = "^(.*)::";
-                    string lastPidString = string.Empty;
-                    string traceDate = string.Empty;
-                    string dateFormat = string.Empty;
-
+                    string line = string.Empty;
+                    DateTime refDate = new DateTime();
+                    StreamReader reader = new StreamReader(file);
+    
                     while (reader.Peek() >= 0)
                     {
-                        line = reader.ReadLine();
-
-                        if (Regex.IsMatch(line, pidPattern))
-                        {
-                            lastPidString = Regex.Match(line, pidPattern).Value;
-                        }
-
-                        Match matchTraceDate = Regex.Match(line, datePattern);
-
-                        if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEtlPrecise"].Value))
-                        {
-                            dateFormat = dateFormatEtlPrecise;
-                            traceDate = matchTraceDate.Groups["DateEtlPrecise"].Value;
-                        }
-                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEtl"].Value))
-                        {
-                            dateFormat = dateFormatEtl;
-                            traceDate = matchTraceDate.Groups["DateEtl"].Value;
-                        }
-                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEvt"].Value))
-                        {
-                            dateFormat = dateFormatEvt;
-                            traceDate = matchTraceDate.Groups["DateEvt"].Value;
-                        }
-                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEvtSpace"].Value))
-                        {
-                            dateFormat = dateFormatEvtSpace;
-                            traceDate = matchTraceDate.Groups["DateEvtSpace"].Value;
-                        }
-                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEvtPrecise"].Value))
-                        {
-                            dateFormat = dateFormatEvtPrecise;
-                            traceDate = matchTraceDate.Groups["DateEvtPrecise"].Value;
-                        }
-                        else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateISO"].Value))
-                        {
-                            dateFormat = dateFormatISO;
-                            traceDate = matchTraceDate.Groups["DateISO"].Value;
-                        }
-                        else
-                        {
-                            if (detail) Console.WriteLine("unable to parse date:{0}:{1}", missedDateCounter, line);
-                            missedDateCounter++;
-                        }
-
-                        if (DateTime.TryParseExact(traceDate,
-                            dateFormat,
-                            culture,
-                            DateTimeStyles.AssumeLocal,
-                            out date))
-                        {
-                            if (lastTicks != date.Ticks)
-                            {
-                                lastTicks = date.Ticks;
-                                precision = 0;
-                            }
-                        }
-                        else if (DateTime.TryParse(traceDate, out date))
-                        {
-                            if (lastTicks != date.Ticks)
-                            {
-                                lastTicks = date.Ticks;
-                                precision = 0;
-                            }
-
-                            dateFormat = dateFormatEvt;
-                        }
-                        else
-                        {
-                            // use last date and let it increment to keep in place
-                            date = new DateTime(lastTicks);
-
-                            // put cpu pid and tid back in
-
-                            if (Regex.IsMatch(line, pidPattern))
-                            {
-                                line = string.Format("{0}::{1}", lastPidString, line);
-                            }
-                            else
-                            {
-                                line = string.Format("{0}{1} -> {2}", lastPidString, date.ToString(dateFormat), line);
-                            }
-
-                            missedMatchCounter++;
-                            Console.WriteLine("unable to parse time:{0}:{1}", missedMatchCounter, line);
-                        }
-
-                        if(!(startDate < date && date < endDate))
+                        line = ParseLine(reader.ReadLine(), ref refDate);
+    
+                        if (!(startDate < refDate && refDate < endDate))
                         {
                             continue;
                         }
 
+                        if (prependFileName)
+                        {
+                            line = string.Format("{0}, {1}", fileName, line);
+                        }
+
                         while (precision < 99999999)
                         {
-                            if (AddToList(date, string.Format("{0}, {1}", fileName, line)))
+                            if (AddToList(refDate, line))
                             {
                                 break;
                             }
-
+    
                             precision++;
                         }
                     }
                 }
-
+    
                 if (File.Exists(outputfile))
                 {
                     File.Delete(outputfile);
                 }
-
+    
                 using (StreamWriter writer = new StreamWriter(outputfile, true))
                 {
                     Console.WriteLine("sorting lines.");
@@ -1417,34 +1349,120 @@ function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDat
                         writer.WriteLine(item.Value);
                     }
                 }
-
+    
                 Console.WriteLine(string.Format("finished:missed {0} lines", missedMatchCounter));
                 return true;
             }
             catch (Exception e)
             {
-                Console.WriteLine(string.Format("ReadFiles:exception:lines count:{0}: dictionary count:{1}: exception:{2}", line.Length, outputList.Count, e));
+                Console.WriteLine(string.Format("ReadFiles:exception: dictionary count:{1}: exception:{2}", outputList.Count, e));
                 return false;
             }
         }
-
-        bool AddToList(DateTime date, string line)
+    
+        public string ParseLine(string line, ref DateTime refDate)
         {
-            string key = string.Format("{0}{1}",date.Ticks.ToString(), precision.ToString("D8"));
-            if(!outputList.ContainsKey(key))
+            Match match = Match.Empty;
+            long lastTicks = refDate.Ticks + 1;
+            string lastPidString = string.Empty;
+            string traceDate = string.Empty;
+            string dateFormat = dateFormatDefault;
+            string pidPattern = "^(.*)::";
+    
+            if (Regex.IsMatch(line, pidPattern))
             {
-                outputList.Add(key,line);
+                lastPidString = Regex.Match(line, pidPattern).Value;
+            }
+    
+            Match matchTraceDate = Regex.Match(line, datePattern);
+    
+            if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEtlPrecise"].Value))
+            {
+                dateFormat = dateFormatEtlPrecise;
+                traceDate = matchTraceDate.Groups["DateEtlPrecise"].Value;
+            }
+            else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEtl"].Value))
+            {
+                dateFormat = dateFormatEtl;
+                traceDate = matchTraceDate.Groups["DateEtl"].Value;
+            }
+            else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEvt"].Value))
+            {
+                dateFormat = dateFormatEvt;
+                traceDate = matchTraceDate.Groups["DateEvt"].Value;
+            }
+            else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEvtSpace"].Value))
+            {
+                dateFormat = dateFormatEvtSpace;
+                traceDate = matchTraceDate.Groups["DateEvtSpace"].Value;
+            }
+            else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateEvtPrecise"].Value))
+            {
+                dateFormat = dateFormatEvtPrecise;
+                traceDate = matchTraceDate.Groups["DateEvtPrecise"].Value;
+            }
+            else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateISO"].Value))
+            {
+                dateFormat = dateFormatISO;
+                traceDate = matchTraceDate.Groups["DateISO"].Value;
+            }
+            else if (!string.IsNullOrEmpty(matchTraceDate.Groups["DateAzure"].Value))
+            {
+                dateFormat = dateFormatAzure;
+                traceDate = matchTraceDate.Groups["DateAzure"].Value;
             }
             else
             {
-                return false;
+                if (detail) Console.WriteLine("unable to parse date:{0}:{1}", missedDateCounter, line);
+                missedDateCounter++;
             }
-
-            return true;
+    
+            if (DateTime.TryParseExact(traceDate,
+                dateFormat,
+                culture,
+                DateTimeStyles.AssumeLocal,
+                out refDate))
+            {
+                if (lastTicks != refDate.Ticks)
+                {
+                    lastTicks = refDate.Ticks;
+                    precision = 0;
+                }
+            }
+            else if (DateTime.TryParse(traceDate, out refDate))
+            {
+                if (lastTicks != refDate.Ticks)
+                {
+                    lastTicks = refDate.Ticks;
+                    precision = 0;
+                }
+    
+                dateFormat = dateFormatEvt;
+            }
+            else
+            {
+                // use last date and let it increment to keep in place
+                refDate = new DateTime(lastTicks);
+    
+                // put cpu pid and tid back in
+    
+                if (Regex.IsMatch(line, pidPattern))
+                {
+                    line = string.Format("{0}::{1}", lastPidString, line);
+                }
+                else
+                {
+                    line = string.Format("{0}{1} -> {2}", lastPidString, refDate.ToString(dateFormat), line);
+                }
+    
+                missedMatchCounter++;
+                Console.WriteLine("unable to parse time:{0}:{1}", missedMatchCounter, line);
+            }
+    
+            return line;
         }
     }
 '@
-
     Add-Type $Code -ErrorAction SilentlyContinue
 
     [DateTime] $time = new-object DateTime
@@ -1459,7 +1477,8 @@ function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDat
         $endDate = [DateTime]::Now
     }
 
-    [LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate)
+    log-info "[LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate, $true)"
+    [LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate, $true)
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1478,6 +1497,16 @@ function merge-files()
             if ($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
             {
                 & "$($uDir)\events-$($machine)-all.csv"
+            }
+        }
+        elseif (@($machines).count -eq 1 -and $machine -eq $env:COMPUTERNAME -and [IO.Directory]::Exists($uDir))
+        {
+            # condition when converting existing event logs
+            log-merge -sourceFolder "$($uDir)" -filePattern "*.csv" -outputFile "$($uDir)\events-all.csv" -subDir $true
+
+            if ($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-all.csv"))
+            {
+                & "$($uDir)\events-all.csv"
             }
         }
     }

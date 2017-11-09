@@ -188,13 +188,13 @@ public class LogMerge
                         continue;
                     }
 
+                    if (prependFileName)
+                    {
+                        line = string.Format("{0}, {1}", fileName, line);
+                    }
+
                     while (precision < 99999999)
                     {
-                        if (prependFileName)
-                        {
-                            line = string.Format("{0}, {1}", fileName, line);
-                        }
-
                         if (AddToList(refDate, line))
                         {
                             break;
