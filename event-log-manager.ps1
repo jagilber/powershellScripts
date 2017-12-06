@@ -1474,7 +1474,7 @@ function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDat
 
     if (![DateTime]::TryParse($endDate, [ref] $time))
     {
-        $endDate = [DateTime]::Now
+        $endDate = [DateTime]::MaxValue
     }
 
     log-info "[LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate, $true)"

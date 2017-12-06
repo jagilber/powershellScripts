@@ -344,7 +344,7 @@ if (![DateTime]::TryParse($startDate, [ref] $time))
 
 if (![DateTime]::TryParse($endDate, [ref] $time))
 {
-    $endDate = [DateTime]::Now
+    $endDate = [DateTime]::MaxValue
 }
 
 [LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate, $prependFileName)

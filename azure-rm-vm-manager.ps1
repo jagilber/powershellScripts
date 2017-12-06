@@ -158,7 +158,7 @@ function main()
         }
 
         # if neither passed in use all
-        if (!$vms -and !$resourceGroupNames -and !$excludeVms -and !$excludeResourceGroupNames -and !($action -imatch 'list'))
+        if (!$vms -and !$resourceGroupNames -and !$excludeVms -and !$excludeResourceGroupNames -and !($action -ieq 'list'))
         {
             log-info "warning: managing all vm's in subscription! use -resourcegroupnames or -vms to filter.`r`nif this is wrong, press ctrl-c to exit..."
         }
@@ -173,7 +173,7 @@ function main()
         {
             foreach ($vm in $global:allVms)
             {
-                if ($resourceGroupName -imatch $vm.ResourceGroupName)
+                if ($resourceGroupName -ieq $vm.ResourceGroupName)
                 {
                     [void]$filteredVms.Add($vm)
                 }
@@ -185,7 +185,7 @@ function main()
         {
             foreach ($vm in $global:allVms)
             {
-                if ($excludeResourceGroup -imatch $vm.ResourceGroupName -and $filteredVms.Contains($vm))
+                if ($excludeResourceGroup -ieq $vm.ResourceGroupName -and $filteredVms.Contains($vm))
                 {
                     log-info "verbose: removing vm $($vm)"
                     [void]$filteredVms.Remove($vm)
