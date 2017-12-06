@@ -40,6 +40,8 @@ param(
     [switch]$certOnly
 )
 
+$error.Clear()
+
 # authenticate
 try
 {
@@ -145,9 +147,23 @@ if (![IO.File]::Exists($pfxPath))
 
 if(!$adApplicationOnly)
 {
-    ipconfig /flushdns
-    start-sleep -Seconds 10
-    $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
+    $count = 0
+    while($count -lt 5)
+    {
+        ipconfig /flushdns
+        write-host "$($count) -- sleeping 30 seconds while vault is created and registered in dns"
+        start-sleep -Seconds 30
+        $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
+        
+        if(!$error)
+        {
+            break
+        }
+
+        $count++
+        $error.Clear()
+    }
+
     $azurecert
 }
 
