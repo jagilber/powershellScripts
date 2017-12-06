@@ -171,7 +171,7 @@ if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction Silently
 
 if($adApplicationName)
 {
-    $app = New-AzureRmADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $certPassword
+    $app = New-AzureRmADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $pwd
     $sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
     Set-AzureRmKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
 }
