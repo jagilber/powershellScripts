@@ -1,4 +1,4 @@
-﻿<#
+﻿g<#
     script to add certificate to azure arm AAD key vault
     to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
@@ -38,7 +38,8 @@ param(
     [string]$location = "eastus",
     [string]$certSubject = $adApplicationName,
     [switch]$adApplicationOnly,
-    [switch]$certOnly
+    [switch]$certOnly,
+    [int]$retryCount = 5
 )
 
 $error.Clear()
@@ -149,23 +150,27 @@ if (![IO.File]::Exists($pfxPath))
 if(!$adApplicationOnly)
 {
     $count = 0
-    while($count -lt 5)
+    while($count -lt $retryCount)
     {
         ipconfig /flushdns
         write-host "$($count) -- sleeping 30 seconds while vault is created and registered in dns"
         start-sleep -Seconds 30
+        ping "$($vaultName).vault.azure.net"
+        $error.Clear()
         $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
-        
+
         if(!$error)
         {
             break
         }
 
+        write-verbose ($error | out-string)
         $count++
-        $error.Clear()
     }
-
+    
     $azurecert
+    write-host $error | out-string
+    $error.Clear()
 }
 
 if($certOnly)
