@@ -36,10 +36,10 @@
 .NOTES
     File Name  : event-log-manager.ps1
     Author     : jagilber
-    Version    : 180122 modify logmerge readfiles to handle LF only line endings
+    Version    : 170825 fix for debug log count. showing error now on saving changes.
     History    : 
-                170825 fix for debug log count. showing error now on saving changes.
                 170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
+                170706.2 fix bugs in main finally, readalltext get-update
     
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
@@ -1298,120 +1298,68 @@ function log-merge($sourceFolder, $filePattern, $outputFile, $startDate, $endDat
             return true;
         }
     
-	    public bool ReadFiles(string[] files, string outputfile, DateTime startDate, DateTime endDate, bool prependFileName)
-	    {
-		    try
-		    {
-			    foreach (string file in files)
-			    {
-				    Console.WriteLine(file);
-				    string fileName = Path.GetFileName(file);
-				    string line = string.Empty;
-				    DateTime refDate = new DateTime();
-				    BinaryReader reader = new BinaryReader(File.Open(file, FileMode.Open));
-				    StringBuilder sb = new StringBuilder();
-				    int count = 0;
-				    bool hasCr = false;
-				    int maxLfCount = 50;
-				    bool searchedCr = false;
+        public bool ReadFiles(string[] files, string outputfile, DateTime startDate, DateTime endDate, bool prependFileName)
+        {
+            try
+            {
+                foreach (string file in files)
+                {
+                    Console.WriteLine(file);
+                    string fileName = Path.GetFileName(file);
+                    string line = string.Empty;
+                    DateTime refDate = new DateTime();
+                    StreamReader reader = new StreamReader(file);
+    
+                    while (reader.Peek() >= 0)
+                    {
+                        line = ParseLine(reader.ReadLine(), ref refDate);
+    
+                        if (!(startDate < refDate && refDate < endDate))
+                        {
+                            continue;
+                        }
 
-				    while (reader.PeekChar() >= 0)
-				    {
-					    while (reader.PeekChar() >= 0 && count < maxLfCount)
-					    {
-						    Char data = reader.ReadChar();
-						    sb.Append(data);
+                        if (prependFileName)
+                        {
+                            line = string.Format("{0}, {1}", fileName, line);
+                        }
 
-						    if (data == '\r')
-						    {
-							    hasCr = true;
-
-							    if (reader.PeekChar() == '\n')
-							    {
-								    sb.Append(reader.ReadChar());
-							    }
-
-							    break;
-						    }
-						    else if (data == '\n')
-						    {
-							    if (searchedCr && !hasCr)
-							    {
-								    break;
-							    }
-							    else
-							    {
-								    count++;
-							    }
-						    }
-					    }
-
-					    if(!hasCr && count == maxLfCount && !searchedCr)
-					    {
-						    // cr not found in first maxLfCount search. assume its not being used and start over.
-						    searchedCr = true;
-						    count = 0;
-						    sb.Clear();
-						    reader.BaseStream.Seek(0, SeekOrigin.Begin);
-
-						    continue;
-					    }
-					
-					    count = 0;
-					    line = ParseLine(sb.ToString(), ref refDate);
-					    sb.Clear();
-
-
-					    if (!(startDate < refDate && refDate < endDate))
-					    {
-						    continue;
-					    }
-
-					    if (prependFileName)
-					    {
-						    line = string.Format("{0}, {1}", fileName, line);
-					    }
-
-					    while (precision < 99999999)
-					    {
-						    if (AddToList(refDate, line))
-						    {
-							    break;
-						    }
-
-						    precision++;
-					    }
-					
-				    }
-
-				    reader.Close();
-				    reader.Dispose();
-			    }
-
-			    if (File.Exists(outputfile))
-			    {
-				    File.Delete(outputfile);
-			    }
-			
-			    using (StreamWriter writer = new StreamWriter(outputfile, true))
-			    {
-				    Console.WriteLine("sorting lines.");
-				    foreach (var item in outputList.OrderBy(i => i.Key))
-				    {
-					    writer.Write(item.Value);
-				    }
-			    }
-
-			    Console.WriteLine(string.Format("finished:missed {0} lines", missedMatchCounter));
-			    return true;
-		    }
-		    catch (Exception e)
-		    {
-			    Console.WriteLine(string.Format("ReadFiles:exception: dictionary count:{1}: exception:{2}", outputList.Count, e));
-			    return false;
-		    }
-	    }   
- 
+                        while (precision < 99999999)
+                        {
+                            if (AddToList(refDate, line))
+                            {
+                                break;
+                            }
+    
+                            precision++;
+                        }
+                    }
+                }
+    
+                if (File.Exists(outputfile))
+                {
+                    File.Delete(outputfile);
+                }
+    
+                using (StreamWriter writer = new StreamWriter(outputfile, true))
+                {
+                    Console.WriteLine("sorting lines.");
+                    foreach (var item in outputList.OrderBy(i => i.Key))
+                    {
+                        writer.WriteLine(item.Value);
+                    }
+                }
+    
+                Console.WriteLine(string.Format("finished:missed {0} lines", missedMatchCounter));
+                return true;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(string.Format("ReadFiles:exception: dictionary count:{1}: exception:{2}", outputList.Count, e));
+                return false;
+            }
+        }
+    
         public string ParseLine(string line, ref DateTime refDate)
         {
             Match match = Match.Empty;
