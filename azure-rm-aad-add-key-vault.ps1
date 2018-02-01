@@ -1,4 +1,4 @@
-﻿g<#
+﻿<#
     script to add certificate to azure arm AAD key vault
     to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
