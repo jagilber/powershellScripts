@@ -31,6 +31,14 @@ IF NOT "%1" == "" (
 	Set allOperations=true
 )
 
+IF NOT "%2" == "" (
+    set startutctime=%2
+)
+
+IF NOT "%3" == "" (
+    set endutctime=%3
+)
+
 
 IF %operation%==start (
 	Echo -------------------------------------

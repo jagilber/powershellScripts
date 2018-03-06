@@ -49,7 +49,7 @@
             "command": "cmd.exe",
             "useWmi": true,
             "name": "standalonecollector",
-            "arguments": "/c standalonelogcollector.mgr.bat start",
+            "arguments": "/c standalonelogcollector.mgr.bat start 02/26/2018 22:00:00 02/27/2018 00:00:00",
             "workingDir": "c:\\windows\\temp\\Microsoft.Azure.ServiceFabric.WindowsServer.SupportPackage",
             "destfiles":  "admin$\\temp\\Microsoft.Azure.ServiceFabric.WindowsServer.SupportPackage"
         }

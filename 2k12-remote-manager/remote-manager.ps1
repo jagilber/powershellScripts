@@ -1181,7 +1181,7 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $false;
         'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat set&&$($managedDirectory)\xperf\xperf.mgr.bat start slowlogon";
+        'arguments' = "/c $($managedDirectory)\xperf\wpr.mgr.bat start";
         'workingDir' = "$($managedDirectory)\xperf";
         'sourceFiles' = "$(get-Location)\xperf";
         'destfiles' = "$($managedRemoteDirectory)\xperf";
@@ -1226,7 +1226,7 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $true;
         'command' = "cmd.exe";
-        'arguments' = "/c $($managedDirectory)\xperf\xperf.mgr.bat stop slowlogon";
+        'arguments' = "/c $($managedDirectory)\xperf\wpr.mgr.bat stop";
         'workingDir' = "$($managedDirectory)\xperf";
         'sourceFiles' = "$($managedRemoteDirectory)\xperf\*.etl";
         'destfiles' = "";
