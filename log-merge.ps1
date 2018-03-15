@@ -64,7 +64,9 @@ Param(
     [switch] $subDir,
     [string] $startDate,
     [string] $endDate,
-    [bool]$prependFileName = $true
+    [bool]$prependFileName = $true,
+    [bool]$showDetail = $false,
+    [bool]$eventLogs = $true
 )
 
 
@@ -102,16 +104,18 @@ public class LogMerge
         "(?<DateAzure>[0-9]{4}-[0-9]{1,2}-[0-9]{1,2} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}\\.[0-9]{3,7})";
 
     // may have additional digits and Z
-    private bool detail = false;
+    private bool _detail = false;
+    private bool _isEventLog = false;
+    private Int64 _missedDateCounter = 0;
+    private Int64 _missedMatchCounter = 0;
+    private Dictionary<string, string> _outputList = new Dictionary<string, string>();
+    private int _precision = 0;
 
-    private Int64 missedDateCounter = 0;
-    private Int64 missedMatchCounter = 0;
-    private Dictionary<string, string> outputList = new Dictionary<string, string>();
-    private int precision = 0;
-
-    public static void Start(string sourceFolder, string filePattern, string outputFile, string defaultDir, bool subDir, DateTime startDate, DateTime endDate, bool prependFileName)
+    public static void Start(string sourceFolder, string filePattern, string outputFile, string defaultDir, bool subDir, DateTime startDate, DateTime endDate, bool prependFileName, bool showDetail, bool eventLogs)
     {
         LogMerge program = new LogMerge();
+        program._detail = showDetail;
+        program._isEventLog = eventLogs;
 
         try
         {
@@ -148,16 +152,16 @@ public class LogMerge
         }
         catch (Exception e)
         {
-            Console.WriteLine(string.Format("exception:main:precision:{0}:missed:{1}:excetion:{2}", program.precision, program.missedMatchCounter, e));
+            Console.WriteLine(string.Format("exception:main:precision:{0}:missed:{1}:excetion:{2}", program._precision, program._missedMatchCounter, e));
         }
     }
 
     private bool AddToList(DateTime date, string line)
     {
-        string key = string.Format("{0}{1}", date.Ticks.ToString(), precision.ToString("D8"));
-        if (!outputList.ContainsKey(key))
+        string key = string.Format("{0}{1}", date.Ticks.ToString(), _precision.ToString("D8"));
+        if (!_outputList.ContainsKey(key))
         {
-            outputList.Add(key, line);
+            _outputList.Add(key, line);
         }
         else
         {
@@ -165,6 +169,46 @@ public class LogMerge
         }
 
         return true;
+    }
+
+    public DateTime FirstDate(string file)
+    {
+        StreamReader reader = new StreamReader(file);
+        string notUsed = string.Empty;
+        DateTime refDate = new DateTime();
+
+        while (reader.Peek() >= 0)
+        {
+            notUsed = ParseLine(reader.ReadLine(), ref refDate);
+
+            if (refDate != DateTime.MinValue)
+            {
+                break;
+            }
+        }
+
+        return refDate;
+    }
+
+    public DateTime LastDate(string file)
+    {
+        // not efficient but ok for small files
+        StreamReader reader = new StreamReader(file);
+        string notUsed = string.Empty;
+        DateTime refDate = new DateTime();
+        var lines = File.ReadLines(file).Reverse();
+
+        foreach (string line in lines)
+        {
+            notUsed = ParseLine(line, ref refDate);
+
+            if (refDate != DateTime.MinValue)
+            {
+                break;
+            }
+        }
+
+        return refDate;
     }
 
     public bool ReadFiles(string[] files, string outputfile, DateTime startDate, DateTime endDate, bool prependFileName)
@@ -176,31 +220,61 @@ public class LogMerge
                 Console.WriteLine(file);
                 string fileName = Path.GetFileName(file);
                 string line = string.Empty;
+                string currentLine = string.Empty;
                 DateTime refDate = new DateTime();
+                DateTime currentDate = new DateTime();
                 StreamReader reader = new StreamReader(file);
+                Int64 currentMissedDateCount = 0;
 
                 while (reader.Peek() >= 0)
                 {
+                    currentLine = line;
+                    currentMissedDateCount = _missedDateCounter;//   _missedDateCounter;
+                    currentDate = refDate;
+                    _precision = 0;
+
                     line = ParseLine(reader.ReadLine(), ref refDate);
 
-                    if (!(startDate < refDate && refDate < endDate))
+                    if (_isEventLog && (currentMissedDateCount < _missedDateCounter))
                     {
-                        continue;
-                    }
+                        // its an lf line in event log that needs to be added to previous event
+                        line = string.Format("{0}{1}", currentLine, line);
+                        string key = string.Format("{0}{1}", currentDate.Ticks.ToString(), _precision.ToString("D8"));
+                        string value = string.Empty;
+                        _outputList.TryGetValue(key, out value);
 
-                    if (prependFileName)
-                    {
-                        line = string.Format("{0}, {1}", fileName, line);
-                    }
-
-                    while (precision < 99999999)
-                    {
-                        if (AddToList(refDate, line))
+                        if (!string.IsNullOrEmpty(value))
                         {
-                            break;
+                            _outputList.Remove(key);
+                            AddToList(currentDate, line);
+                        }
+                        else
+                        {
+                            // something wrong
+                            Console.WriteLine("error");
+                        }
+                    }
+                    else
+                    {
+                        if (!(startDate < refDate && refDate < endDate))
+                        {
+                            continue;
                         }
 
-                        precision++;
+                        if (prependFileName)
+                        {
+                            line = string.Format("{0}, {1}", fileName, line);
+                        }
+
+                        while (_precision < 99999999)
+                        {
+                            if (AddToList(refDate, line))
+                            {
+                                break;
+                            }
+
+                            _precision++;
+                        }
                     }
                 }
             }
@@ -213,18 +287,18 @@ public class LogMerge
             using (StreamWriter writer = new StreamWriter(outputfile, true))
             {
                 Console.WriteLine("sorting lines.");
-                foreach (var item in outputList.OrderBy(i => i.Key))
+                foreach (var item in _outputList.OrderBy(i => i.Key))
                 {
                     writer.WriteLine(item.Value);
                 }
             }
 
-            Console.WriteLine(string.Format("finished:missed {0} lines", missedMatchCounter));
+            Console.WriteLine(string.Format("finished:missed {0} lines", _missedMatchCounter));
             return true;
         }
         catch (Exception e)
         {
-            Console.WriteLine(string.Format("ReadFiles:exception: dictionary count:{1}: exception:{2}", outputList.Count, e));
+            Console.WriteLine(string.Format("ReadFiles:exception: dictionary count:{1}: exception:{2}", _outputList.Count, e));
             return false;
         }
     }
@@ -282,8 +356,16 @@ public class LogMerge
         }
         else
         {
-            if (detail) Console.WriteLine("unable to parse date:{0}:{1}", missedDateCounter, line);
-            missedDateCounter++;
+            if (_detail)
+            {
+                Console.WriteLine("unable to parse date:{0}:{1}", _missedDateCounter, line);
+            }
+
+            _missedDateCounter++;
+            if (_isEventLog)
+            {
+                return line;
+            }
         }
 
         if (DateTime.TryParseExact(traceDate,
@@ -295,7 +377,7 @@ public class LogMerge
             if (lastTicks != refDate.Ticks)
             {
                 lastTicks = refDate.Ticks;
-                precision = 0;
+                _precision = 0;
             }
         }
         else if (DateTime.TryParse(traceDate, out refDate))
@@ -303,13 +385,14 @@ public class LogMerge
             if (lastTicks != refDate.Ticks)
             {
                 lastTicks = refDate.Ticks;
-                precision = 0;
+                _precision = 0;
             }
 
             dateFormat = dateFormatEvt;
         }
         else
         {
+
             // use last date and let it increment to keep in place
             refDate = new DateTime(lastTicks);
 
@@ -324,8 +407,13 @@ public class LogMerge
                 line = string.Format("{0}{1} -> {2}", lastPidString, refDate.ToString(dateFormat), line);
             }
 
-            missedMatchCounter++;
-            Console.WriteLine("unable to parse time:{0}:{1}", missedMatchCounter, line);
+            _missedMatchCounter++;
+
+            if (_detail)
+            {
+                Console.WriteLine("unable to parse time:{0}:{1}", _missedMatchCounter, line);
+            }
+
         }
 
         return line;
@@ -347,6 +435,6 @@ if (![DateTime]::TryParse($endDate, [ref] $time))
     $endDate = [DateTime]::MaxValue
 }
 
-[LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate, $prependFileName)
+[LogMerge]::Start($sourceFolder, $filePattern, $outputFile, (get-location), $subDir, $startDate, $endDate, $prependFileName, $showDetail, $eventLogs)
 
 
