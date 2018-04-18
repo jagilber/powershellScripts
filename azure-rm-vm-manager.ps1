@@ -23,8 +23,10 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 170909 add support for virtual machine scale sets -vmss
+   Version    : WARNING: Find-AzureRmResource: This cmdlet will be deprecated in an upcoming breaking change release. The functionality of this cmdlet will be moved into Get-AzureRmResource.
+                
    History    : 
+                170909 add support for virtual machine scale sets -vmss
                 170902 added 'deallocate' action
                 170723 fix for $vms filter. fix for jobs count v2
 
