@@ -18,8 +18,9 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 170802 add resourcegroup name to all deployment events
+   Version    : 180413 fix export of events. $item.tag | convertto-json failing with duplicate key so no longer using format-record
    History    : 
+                170802 add resourcegroup name to all deployment events
                 170714 v2
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
@@ -766,8 +767,9 @@ function export-list()
 
         $sb.AppendLine("//----------------------------------------------------------------------------------------")
         $sb.AppendLine("//$($item.Content.ToString().Trim())")
-        #$sb.AppendLine("$($item.Tag | ConvertTo-Json -Depth 100),")
-        $sb.AppendLine("$(format-record -inputString ($item.Tag | ConvertTo-Json -Depth 100)),")
+        # 180413 output has changed breaking script in multiple places
+        $sb.AppendLine("$(format-record -inputString ($item.Tag | out-string)),")
+        #$sb.AppendLine("$(format-record -inputString ($item.Tag | ConvertTo-Json -Depth 100)),")
     }
     
     out-file -Append -InputObject "$($sb.ToString().Trim(","))}" -FilePath $fileName

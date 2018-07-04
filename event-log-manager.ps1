@@ -26,7 +26,10 @@
             - to query: winrm get winrm/config
             - to enable sending credentials to remote machines: winrm set winrm/config/client '@{TrustedHosts="*"}'
             - to disable sending credentials to remote machines: winrm set winrm/config/client '@{TrustedHosts=""}'
-
+        - firewall
+            - if firewall is preventing connectivity the following can be run to disable
+            - Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+            
     Copyright 2017 Microsoft Corporation
 
     Licensed under the Apache License, Version 2.0 (the "License");

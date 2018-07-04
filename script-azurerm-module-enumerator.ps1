@@ -31,7 +31,7 @@ function main()
     {
         write-host "checking file: $($file)"
         $scriptSource = Get-Content -Raw -Path $file
-        $matches = ([regex]::Matches($scriptSource, "\W`([a-z]+?-azurerm[a-z]+?`)\W",[Text.RegularExpressions.RegexOptions]::IgnoreCase))
+        $matches = ([regex]::Matches($scriptSource, '\W([a-z]+-azure[a-z]+)\W',[Text.RegularExpressions.RegexOptions]::IgnoreCase))
         
         foreach($match in ($matches| Sort-Object -Unique))
         {

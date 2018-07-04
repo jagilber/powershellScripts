@@ -23,6 +23,7 @@
     https://blogs.msdn.microsoft.com/tsmatsuz/2017/03/03/azure-rest-api-with-certificate-and-service-principal-by-silent-backend-daemon-service/
     .\azure-rm-aad-add-key-vault.ps1 -certPassword "somePassw0rd1565233!" -certNameInVault "sfjagilber1cert" -vaultName "sfjagilber1vault" -resourceGroup "certsjagilber" -adApplicationName "sfjagilber1"
     .\azure-rm-aad-add-key-vault.ps1 -certPassword "somePassw0rd1565233!" -certNameInVault "sfjagilber1certsec3" -vaultName "sfjagilber1vault3" -resourceGroup "certsjagilber" -certOnly -certSubject "sfjagilber1certsec3.jagilber.com"
+    .\azure-rm-aad-add-key-vault.ps1 -certPassword "somePassw0rd1565233!" -certNameInVault "sfjagilberwestus" -vaultName "sfjagilberwestusvault" -resourceGroup "certsjagilberwestus" -certOnly -certSubject "*.westus.servicefabric.azure.com" -pfxPath g:\temp\westus.pfx -location westus
 #>
 
 [cmdletbinding()]
