@@ -262,15 +262,15 @@ $global:eventLogLevelsQuery = $null
 $global:eventLogIdsQuery = $null
 $global:eventLogFiles = ![string]::IsNullOrEmpty($eventLogPath)
 $global:eventLogNameSearchPattern = $eventLogNamePattern
-$script:jobs = New-Object Collections.ArrayList
+$global:jobs = New-Object Collections.ArrayList
 $global:machineRecords = @{}
 $global:uploadDir = $uploadDir
 $jobThrottle = 10
 $listenEventReadCount = 1000
 $listenSleepMs = 100
 $logFile = "event-log-manager-output.txt"
-$script:logStream = $null
-$script:logTimer = new-object Timers.Timer 
+$global:logStream = $null
+$global:logTimer = new-object Timers.Timer 
 $maxSortCount = 10000
 $silent = $true
 $startTimer = [DateTime]::Now
@@ -471,12 +471,12 @@ function main()
    
         log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds)"
 
-        if ($script:logStream -ne $null)
+        if ($global:logStream -ne $null)
         {
-            $script:logStream.Close()
+            $global:logStream.Close()
         }
 
-        $script:logTimer.Stop() 
+        $global:logTimer.Stop() 
         Unregister-Event logTimer -ErrorAction SilentlyContinue
     }
 }
@@ -706,7 +706,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
             if ($job -ne $null)
             {
                 log-info "job $($job.id) started for eventlog: $($eventLogName)"
-                $script:jobs.Add($job)
+                $global:jobs.Add($job)
             }
         } # end if
     } # end for
@@ -1181,24 +1181,24 @@ function log-info($data, [switch] $nocolor = $false, [switch] $debugOnly = $fals
 
         Write-Host $data -ForegroundColor $foregroundColor
 
-        if ($script:logStream -eq $null)
+        if ($global:logStream -eq $null)
         {
-            $script:logStream = new-object System.IO.StreamWriter ($logFile, $true)
-            $script:logTimer.Interval = 5000 #5 seconds
+            $global:logStream = new-object System.IO.StreamWriter ($logFile, $true)
+            $global:logTimer.Interval = 5000 #5 seconds
 
-            Register-ObjectEvent -InputObject $script:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
+            Register-ObjectEvent -InputObject $global:logTimer -EventName elapsed -SourceIdentifier logTimer -Action `
             { 
                 Unregister-Event -SourceIdentifier logTimer
-                $script:logStream.Close() 
-                $script:logStream = $null
+                $global:logStream.Close() 
+                $global:logStream = $null
             }
 
-            $script:logTimer.start() 
+            $global:logTimer.start() 
         }
 
         # reset timer
-        $script:logTimer.Interval = 5000 #5 seconds
-        $script:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
+        $global:logTimer.Interval = 5000 #5 seconds
+        $global:logStream.WriteLine("$([DateTime]::Now.ToString())::$([Diagnostics.Process]::GetCurrentProcess().ID)::$($data)")
     }
     catch 
     {
@@ -1727,11 +1727,11 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
             -eventStartTime $eventStartTime `
             -eventStopTime $eventStopTime)
     {
-        log-info "jobs count:$($script:jobs.Count)"
+        log-info "jobs count:$($global:jobs.Count)"
         $count = 0
 
         # Wait for all jobs to complete
-        if ($script:jobs -ne @())
+        if ($global:jobs -ne @())
         {
             while (get-job)
             {
@@ -1769,13 +1769,13 @@ function receive-backgroundJobs($showStatus = $false)
             }
 
             Remove-Job -Job $job -Force
-            $script:jobs.Remove($job)
+            $global:jobs.Remove($job)
         }
     }
 
     if ($showStatus)
     {
-        foreach ($job in $script:jobs)
+        foreach ($job in $global:jobs)
         {
             log-info ("$([DateTime]::Now) job name: $($job.Name) job id:$($job.Id) job state:$($job.State)") 
 
