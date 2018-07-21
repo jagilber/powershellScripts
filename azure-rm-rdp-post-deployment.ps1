@@ -20,11 +20,11 @@
 .NOTES  
    NOTE: to remove certs from all stores Get-ChildItem -Recurse -Path cert:\ -DnsName *<%subject%>* | Remove-Item
    File Name  : azure-rm-rdp-post-deployment.ps1
-   Version    : 170908 updated commands to remove public ip
+   Version    : 180721 fix issue where nsg attached to nic didnt have all necessary properties populated
    History    : 
+                170908 updated commands to remove public ip
                 170809 checking vm for 3389 and 443 for nsg
                 170807 fix for $ipAddress.IPAddress
-                170803 add check for existing security rule. changed destination to *
                 
 .EXAMPLE  
     .\azure-rm-rdp-post-deployment.ps1
@@ -431,7 +431,17 @@ function add-publicIp()
         $rgLocation = (get-azurermresourcegroup -Name $resourceGroupName).Location
         write-host "using location: $($rgLocation)"
         
+        $newNsgName = $nsgName = "$($modifiedVmName)-nsg"
         $nsg = $vmNic.NetworkSecurityGroup
+        
+        if($nsg)
+        {
+            # may not be populated but needs to be
+            if(!$nsg.ResourceGroupName) {$nsg.ResourceGroupName = $resourceGroupName}
+            if(!$nsg.Location) {$nsg.Location = $rgLocation}
+            if(!$nsg.Name) {$nsg.Name = $newNsgName}
+        }
+
         $nsgs = @(Get-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName)
 
         if(!$nsg)
@@ -466,7 +476,6 @@ function add-publicIp()
                 write-host ($nsgNames | out-string)
             }
 
-            $newNsgName = "$($modifiedVmName)-nsg"
             $nsgName = read-host "enter name of existing nsg to use, new nsg name to create new nsg, or press {enter} to use new name '$($newNsgName)'"
 
             if(!$nsgName)

@@ -46,11 +46,26 @@
     https://gallery.technet.microsoft.com/Windows-Event-Log-ad958986
 #>
 
-
+# proxy test
+$proxyString = "http://127.0.0.1:5555"
+$proxyUri = new-object System.Uri($proxyString)
+[Net.WebRequest]::DefaultWebProxy = new-object System.Net.WebProxy ($proxyUri, $true)
+$proxy = [System.Net.CredentialCache]::DefaultCredentials
+[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
+# end proxy test
 
 # ----------------------------------------------------------------------------------------------------------------
-function authenticate-azureRm()
+function authenticate-azureRm($context)
 {
+    if ($context)
+    {
+        $ctx = $null
+        $ctx = Import-AzureRmContext -Path $context
+        # bug to be fixed 8/2017
+        # From <https://github.com/Azure/azure-powershell/issues/3954> 
+        [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
+        return $true
+    }
     # make sure at least wmf 5.0 installed
 
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
@@ -144,6 +159,7 @@ function authenticate-azureRm()
         }
     }
 
+    #$profileContext = "$($env:TEMP)\ProfileContext.ctx"
     #Save-AzureRmContext -Path $profileContext -Force
     #main finally
     #finally
