@@ -1733,7 +1733,7 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
         # Wait for all jobs to complete
         if ($global:jobs -ne @())
         {
-            while (get-job)
+            while ((get-job | Where-Object { $_.Name -ine 'logTimer' }))
             {
                 $showStatus = $false
                 $count++
@@ -1895,7 +1895,7 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
     While (@(Get-Job | Where-Object { $_.State -eq 'Running' }).Count -gt $jobThrottle)
     {
         receive-backgroundJobs
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds 500
     }
 
     $job = Start-Job -Name "$($machine):$($eventLogName)" -ScriptBlock {
