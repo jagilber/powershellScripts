@@ -18,10 +18,11 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 180413 fix export of events. $item.tag | convertto-json failing with duplicate key so no longer using format-record
+   Version    : 180729 fix for localized event format changes. export still needs properties expanded
    History    : 
+                180413 fix export of events. $item.tag | convertto-json failing with duplicate key so no longer using format-record
                 170802 add resourcegroup name to all deployment events
-                170714 v2
+                
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
     query azure rm for all resource manager and deployment logs
@@ -386,16 +387,16 @@ function add-eventItem($lbitem, $color)
 
     $statusCode = [string]::Empty
 
-    if ([regex]::IsMatch($lbitem.Properties, "statusCode.\W+:\W+(.+)"), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ([regex]::IsMatch($lbitem.Properties.ToString(), "statusCode.\W+:\W+(.+)"), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
     {
-        $statusCode = [string](([regex]::Match($lbitem.Properties, "statusCode.\W+:\W+(.+)", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
+        $statusCode = [string](([regex]::Match($lbitem.Properties.ToString(), "statusCode.\W+:\W+(.+)", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
     }
 
     $statusMessage = [string]::Empty
 
-    if ([regex]::IsMatch($lbitem.Properties, "statusMessage.\W+:\W+`"(.+)`""), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ([regex]::IsMatch($lbitem.Properties.ToString(), "statusMessage.\W+:\W+`"(.+)`""), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
     {
-        $statusMessage = [string](([regex]::Match($lbitem.Properties, "statusMessage.\W+:\W+`"(.+)`"", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
+        $statusMessage = [string](([regex]::Match($lbitem.Properties.ToString(), "statusMessage.\W+:\W+`"(.+)`"", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
     }
 
     if ($lbitem.Properties.Content.statusMessage -ne $null) 
@@ -1259,6 +1260,47 @@ function reset-list()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function convert-localizableStrings($items)
+{
+    # Microsoft.Azure.Management.Monitor.Models.LocalizableString
+    # PSEventData Microsoft.Azure.Management.Monitor.Models.EventData       
+    $newItems = new-object Collections.ArrayList # @{}
+    
+    foreach($item in $items)
+    {
+        $newItem = @{}
+        $newItem.Authorization = $item.Authorization
+        $newItem.Claims = $item.Claims
+        $newItem.Caller = $item.Caller
+        $newItem.Description = $item.Description
+        $newItem.Id = $item.Id
+        $newItem.EventDataId = $item.EventDataId
+        $newItem.CorrelationId = $item.CorrelationId
+        $newItem.EventName = $item.EventName.LocalizedValue
+        $newItem.Category = $item.Category.LocalizedValue
+        $newItem.HttpRequest = $item.HttpRequest
+        $newItem.Level = $item.Level
+        $newItem.ResourceGroupName = $item.ResourceGroupName
+        $newItem.ResourceProviderName = $item.ResourceProviderName.LocalizedValue
+        $newItem.ResourceId = $item.ResourceId
+        $newItem.ResourceType = $item.ResourceType
+        $newItem.OperationId = $item.OperationId
+        $newItem.OperationName = $item.OperationName.LocalizedValue
+        $newItem.Properties = $item.Properties
+        $newItem.Status = $item.Status.LocalizedValue
+        $newItem.SubStatus = $item.SubStatus.LocalizedValue
+        $newItem.EventTimestamp = $item.EventTimeStamp
+        $newItem.SubmissionTimestamp = $item.Timestamp
+        $newItem.SubscriptionId = $item.SubscriptionId
+        $newItem.TenantId = $item.TenantId
+        
+        [void]$newItems.Add($newItem)
+    }
+
+    return $newItems
+
+}
+# ----------------------------------------------------------------------------------------------------------------
 function run-command($group, $items, [DateTime]$timeStamp = $null)
 {
     # runs on background and foreground thread
@@ -1268,6 +1310,9 @@ function run-command($group, $items, [DateTime]$timeStamp = $null)
         {
             return $null
         }
+
+        # to convert localizable string
+        $items = convert-localizableStrings -items $items
 
         if ($detail)
         {
