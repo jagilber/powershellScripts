@@ -18,10 +18,10 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 180413 fix export of events. $item.tag | convertto-json failing with duplicate key so no longer using format-record
+   Version    : 180729 fix for localized event format changes
    History    : 
                 170802 add resourcegroup name to all deployment events
-                170714 v2
+                
 .EXAMPLE  
     .\azure-rm-log-reader.ps1
     query azure rm for all resource manager and deployment logs
@@ -386,16 +386,16 @@ function add-eventItem($lbitem, $color)
 
     $statusCode = [string]::Empty
 
-    if ([regex]::IsMatch($lbitem.Properties, "statusCode.\W+:\W+(.+)"), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ([regex]::IsMatch($lbitem.Properties.ToString(), "statusCode.\W+:\W+(.+)"), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
     {
-        $statusCode = [string](([regex]::Match($lbitem.Properties, "statusCode.\W+:\W+(.+)", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
+        $statusCode = [string](([regex]::Match($lbitem.Properties.ToString(), "statusCode.\W+:\W+(.+)", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
     }
 
     $statusMessage = [string]::Empty
 
-    if ([regex]::IsMatch($lbitem.Properties, "statusMessage.\W+:\W+`"(.+)`""), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ([regex]::IsMatch($lbitem.Properties.ToString(), "statusMessage.\W+:\W+`"(.+)`""), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
     {
-        $statusMessage = [string](([regex]::Match($lbitem.Properties, "statusMessage.\W+:\W+`"(.+)`"", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
+        $statusMessage = [string](([regex]::Match($lbitem.Properties.ToString(), "statusMessage.\W+:\W+`"(.+)`"", [Text.RegularExpressions.RegexOptions]::IgnoreCase)).Groups[1].Value).Trim()
     }
 
     if ($lbitem.Properties.Content.statusMessage -ne $null) 
@@ -605,6 +605,48 @@ function clear-list()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function convert-localizableStrings($items)
+{
+    # Microsoft.Azure.Management.Monitor.Models.LocalizableString
+    # PSEventData Microsoft.Azure.Management.Monitor.Models.EventData       
+    $localizedItems = new-object Collections.ArrayList
+    
+    foreach($item in $items)
+    {
+        $localizedItem = @{}
+        $localizedItem.Authorization = $item.Authorization
+        $localizedItem.Claims = $item.Claims
+        $localizedItem.Caller = $item.Caller
+        $localizedItem.Description = $item.Description
+        $localizedItem.Id = $item.Id
+        $localizedItem.EventDataId = $item.EventDataId
+        $localizedItem.CorrelationId = $item.CorrelationId
+        $localizedItem.EventName = $item.EventName.LocalizedValue
+        $localizedItem.Category = $item.Category.LocalizedValue
+        $localizedItem.HttpRequest = $item.HttpRequest
+        $localizedItem.Level = $item.Level
+        $localizedItem.ResourceGroupName = $item.ResourceGroupName
+        $localizedItem.ResourceProviderName = $item.ResourceProviderName.LocalizedValue
+        $localizedItem.ResourceId = $item.ResourceId
+        $localizedItem.ResourceType = $item.ResourceType
+        $localizedItem.OperationId = $item.OperationId
+        $localizedItem.OperationName = $item.OperationName.LocalizedValue
+        $localizedItem.Properties = $item.Properties
+        $localizedItem.Status = $item.Status.LocalizedValue
+        $localizedItem.SubStatus = $item.SubStatus.LocalizedValue
+        $localizedItem.EventTimestamp = $item.EventTimeStamp
+        $localizedItem.SubmissionTimestamp = $item.Timestamp
+        $localizedItem.SubscriptionId = $item.SubscriptionId
+        $localizedItem.TenantId = $item.TenantId
+        
+        [void]$localizedItems.Add($localizedItem)
+    }
+
+    return $localizedItems
+
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function do-backgroundJob($jobInfo)
 {
     # runs on background thread
@@ -767,9 +809,7 @@ function export-list()
 
         $sb.AppendLine("//----------------------------------------------------------------------------------------")
         $sb.AppendLine("//$($item.Content.ToString().Trim())")
-        # 180413 output has changed breaking script in multiple places
-        $sb.AppendLine("$(format-record -inputString ($item.Tag | out-string)),")
-        #$sb.AppendLine("$(format-record -inputString ($item.Tag | ConvertTo-Json -Depth 100)),")
+        $sb.AppendLine("$(format-record -inputString ($item.Tag | ConvertTo-Json -Depth 100)),")
     }
     
     out-file -Append -InputObject "$($sb.ToString().Trim(","))}" -FilePath $fileName
@@ -1268,6 +1308,9 @@ function run-command($group, $items, [DateTime]$timeStamp = $null)
         {
             return $null
         }
+
+        # to convert localizable string
+        $items = convert-localizableStrings -items $items
 
         if ($detail)
         {
