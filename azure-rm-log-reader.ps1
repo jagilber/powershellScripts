@@ -18,9 +18,8 @@
 .NOTES  
    Author : jagilber
    File Name  : azure-rm-log-reader.ps1
-   Version    : 180729 fix for localized event format changes. export still needs properties expanded
+   Version    : 180729 fix for localized event format changes
    History    : 
-                180413 fix export of events. $item.tag | convertto-json failing with duplicate key so no longer using format-record
                 170802 add resourcegroup name to all deployment events
                 
 .EXAMPLE  
@@ -606,6 +605,48 @@ function clear-list()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
+function convert-localizableStrings($items)
+{
+    # Microsoft.Azure.Management.Monitor.Models.LocalizableString
+    # PSEventData Microsoft.Azure.Management.Monitor.Models.EventData       
+    $localizedItems = new-object Collections.ArrayList
+    
+    foreach($item in $items)
+    {
+        $localizedItem = @{}
+        $localizedItem.Authorization = $item.Authorization
+        $localizedItem.Claims = $item.Claims
+        $localizedItem.Caller = $item.Caller
+        $localizedItem.Description = $item.Description
+        $localizedItem.Id = $item.Id
+        $localizedItem.EventDataId = $item.EventDataId
+        $localizedItem.CorrelationId = $item.CorrelationId
+        $localizedItem.EventName = $item.EventName.LocalizedValue
+        $localizedItem.Category = $item.Category.LocalizedValue
+        $localizedItem.HttpRequest = $item.HttpRequest
+        $localizedItem.Level = $item.Level
+        $localizedItem.ResourceGroupName = $item.ResourceGroupName
+        $localizedItem.ResourceProviderName = $item.ResourceProviderName.LocalizedValue
+        $localizedItem.ResourceId = $item.ResourceId
+        $localizedItem.ResourceType = $item.ResourceType
+        $localizedItem.OperationId = $item.OperationId
+        $localizedItem.OperationName = $item.OperationName.LocalizedValue
+        $localizedItem.Properties = $item.Properties
+        $localizedItem.Status = $item.Status.LocalizedValue
+        $localizedItem.SubStatus = $item.SubStatus.LocalizedValue
+        $localizedItem.EventTimestamp = $item.EventTimeStamp
+        $localizedItem.SubmissionTimestamp = $item.Timestamp
+        $localizedItem.SubscriptionId = $item.SubscriptionId
+        $localizedItem.TenantId = $item.TenantId
+        
+        [void]$localizedItems.Add($localizedItem)
+    }
+
+    return $localizedItems
+
+}
+
+# ----------------------------------------------------------------------------------------------------------------
 function do-backgroundJob($jobInfo)
 {
     # runs on background thread
@@ -768,9 +809,7 @@ function export-list()
 
         $sb.AppendLine("//----------------------------------------------------------------------------------------")
         $sb.AppendLine("//$($item.Content.ToString().Trim())")
-        # 180413 output has changed breaking script in multiple places
-        $sb.AppendLine("$(format-record -inputString ($item.Tag | out-string)),")
-        #$sb.AppendLine("$(format-record -inputString ($item.Tag | ConvertTo-Json -Depth 100)),")
+        $sb.AppendLine("$(format-record -inputString ($item.Tag | ConvertTo-Json -Depth 100)),")
     }
     
     out-file -Append -InputObject "$($sb.ToString().Trim(","))}" -FilePath $fileName
@@ -1259,47 +1298,6 @@ function reset-list()
     $global:window.Title = "$($MyInvocation.ScriptName)"
 }
 
-# ----------------------------------------------------------------------------------------------------------------
-function convert-localizableStrings($items)
-{
-    # Microsoft.Azure.Management.Monitor.Models.LocalizableString
-    # PSEventData Microsoft.Azure.Management.Monitor.Models.EventData       
-    $newItems = new-object Collections.ArrayList # @{}
-    
-    foreach($item in $items)
-    {
-        $newItem = @{}
-        $newItem.Authorization = $item.Authorization
-        $newItem.Claims = $item.Claims
-        $newItem.Caller = $item.Caller
-        $newItem.Description = $item.Description
-        $newItem.Id = $item.Id
-        $newItem.EventDataId = $item.EventDataId
-        $newItem.CorrelationId = $item.CorrelationId
-        $newItem.EventName = $item.EventName.LocalizedValue
-        $newItem.Category = $item.Category.LocalizedValue
-        $newItem.HttpRequest = $item.HttpRequest
-        $newItem.Level = $item.Level
-        $newItem.ResourceGroupName = $item.ResourceGroupName
-        $newItem.ResourceProviderName = $item.ResourceProviderName.LocalizedValue
-        $newItem.ResourceId = $item.ResourceId
-        $newItem.ResourceType = $item.ResourceType
-        $newItem.OperationId = $item.OperationId
-        $newItem.OperationName = $item.OperationName.LocalizedValue
-        $newItem.Properties = $item.Properties
-        $newItem.Status = $item.Status.LocalizedValue
-        $newItem.SubStatus = $item.SubStatus.LocalizedValue
-        $newItem.EventTimestamp = $item.EventTimeStamp
-        $newItem.SubmissionTimestamp = $item.Timestamp
-        $newItem.SubscriptionId = $item.SubscriptionId
-        $newItem.TenantId = $item.TenantId
-        
-        [void]$newItems.Add($newItem)
-    }
-
-    return $newItems
-
-}
 # ----------------------------------------------------------------------------------------------------------------
 function run-command($group, $items, [DateTime]$timeStamp = $null)
 {
