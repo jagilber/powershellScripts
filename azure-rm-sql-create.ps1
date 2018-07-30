@@ -41,11 +41,9 @@
 .NOTES  
    File Name  : azure-rm-sql-create.ps1
    Author     : jagilber
-   Version    : 170808 made $sqlVersion a variable defaulting to 12.0. authenticate-azurerm
-   History    : 
+   History    : 180730 add all editions as validation set
+                170808 made $sqlVersion a variable defaulting to 12.0. authenticate-azurerm
                 170522 adding to wiki
-                170516 added -generateUniqueName
-                170514 added description
 .EXAMPLE  
     .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
     create a new sql database on an existing or new sql server
@@ -63,8 +61,8 @@
     list existing databases on sql-server-01 in resource group existingResourceGroup
 
 .EXAMPLE  
-    .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -serviceTier S0 -databaseName TestDB
-    create a new sql database TestDB on sql-server-01 using service tier S0
+    .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -serviceTier Basic -databaseName TestDB
+    create a new sql database TestDB on sql-server-01 using service tier Basic
 
 .PARAMETER resourceGroupName
     required paramater for the resource group name for new database and sql server
@@ -135,7 +133,8 @@ param(
     [switch]$maskPassword,
     [switch]$listAvailable,
     [switch]$nolog,
-    [string]$serviceTier = "Basic", #cheapest
+    [ValidateSet('Basic','None','Standard','Premium','DataWarehouse','Free','Stretch','GeneralPurpose','BusinessCritical')]
+    [string]$serviceTier = "Basic",
     [string]$sqlServerVersion = "12.0"
 )
 
