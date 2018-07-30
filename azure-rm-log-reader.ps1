@@ -1309,9 +1309,6 @@ function run-command($group, $items, [DateTime]$timeStamp = $null)
             return $null
         }
 
-        # to convert localizable string
-        $items = convert-localizableStrings -items $items
-
         if ($detail)
         {
             write-host "$([DateTime]::Now) run-command  group: $($group.Key) items: $($items.Count)"
@@ -1389,6 +1386,9 @@ function run-command($group, $items, [DateTime]$timeStamp = $null)
         }
         else
         {
+            # to convert localizable string
+            $items = convert-localizableStrings -items $items
+
             if ($timeStamp)
             {
                 return ($items.GetEnumerator() | where-object EventTimeStamp -ge $timeStamp)
