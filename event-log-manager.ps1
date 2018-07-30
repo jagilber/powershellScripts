@@ -47,10 +47,10 @@
 .NOTES
     File Name  : event-log-manager.ps1
     Author     : jagilber
-    Version    : 180319 add latest ver of logmerge. updated description for winrm info
+    Version    : 180730 fix intermittent hang when running multiple instances with get-job filter
     History    : 
+                180319 add latest ver of logmerge. updated description for winrm info            
                 170825 fix for debug log count. showing error now on saving changes.
-                170707 get-update add carriage return. move merge-files to finally. modify set-uploaddir
     
 .EXAMPLE
     .\event-log-manager.ps1 -rds -minutes 10
@@ -1743,7 +1743,7 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
                     $count = 0
                     $showStatus = $true
                 }
-                
+
                 receive-backgroundJobs -showStatus $showStatus
                 Start-Sleep -Milliseconds 1000
             }
@@ -1754,7 +1754,7 @@ function process-machines( $machines, $eventStartTime, $eventStopTime)
 # ----------------------------------------------------------------------------------------------------------------
 function receive-backgroundJobs($showStatus = $false)
 {
-    foreach ($job in get-job)
+    foreach ($job in (get-job | Where-Object { $_.Name -ine 'logTimer' }))
     {
         $results = Receive-Job -Job $job
         log-info $results
