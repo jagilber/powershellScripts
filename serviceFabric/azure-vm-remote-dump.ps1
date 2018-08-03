@@ -241,7 +241,8 @@ function download-files()
 
 function check-regLocal()
 {
-    
+    $ret = $true
+
     if ($localhost)
     {
         write-host "checking local registry"
@@ -253,15 +254,17 @@ function check-regLocal()
         {
             $error.Clear()
             $ret = Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\$($crashControlRegKey)" -name $crashDumpEnabled -Value $newDumpType
-            restart-machine
+            $ret
+            $ret = restart-machine
         }
-        return $true
     }
     else
     {
         write-host "checking local registry: $($localhost) not local machine"
-        return $false
+        $ret = $false
     }
+
+    return $ret
 }
 # -------------------------------------------------------------------------------------------------
 function check-regSmb()
@@ -271,7 +274,8 @@ function check-regSmb()
     # CrashDumpEnabled    REG_DWORD    0x7
     $pattern = "0x(.)"
     $dumpString = (reg query "\\$($remotemachine)\HKLM\$($crashcontrolregkey.Replace("\\","\"))" /v $crashDumpEnabled)
-    
+    $ret = $true
+
     if([regex]::IsMatch($dumpString, $pattern))
     {
         $dumpType = [regex]::Match($dumpString, $pattern).Groups[1].Value
@@ -282,22 +286,23 @@ function check-regSmb()
         {
             $error.Clear()
             $ret = Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\$($crashControlRegKey)" -name $crashDumpEnabled -Value $newDumpType
-            restart-machine
+            $ret
+            $ret = restart-machine
         }
-
-        return $true
     }
     else
     {
         write-error "checking remote registry with smb failed $($dumpstring)"
-        return $false
+        $ret = $false
     }
+
+    return $ret
 }
 # -------------------------------------------------------------------------------------------------
 function check-regWinRM()
 {
     write-host "checking winrm crash dump settings. settings should typically be 1 = complete, 2 = kernel, or 7 = automatic kernel" -ForegroundColor Cyan
-
+    $ret = $true
     $Reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $remotemachine)
     $RegKey = $Reg.OpenSubKey($crashControlRegKey, [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree)
     
@@ -317,7 +322,6 @@ function check-regWinRM()
     }
 
     $dumpType = $RegKey.GetValue($crashDumpEnabled)
-
     write-host "current CrashControl value: $($dumpType)"
 
     if (!$readOnly)
@@ -328,11 +332,12 @@ function check-regWinRM()
         {
             $error.Clear()
             $ret = $RegKey.SetValue($crashDumpEnabled, $newDumpType, [Microsoft.Win32.RegistryValueKind]::DWord)
-            restart-machine
+            $ret
+            $ret = restart-machine
         }
     }
 
-    if($readOnly)
+    if(!$ret -or $readOnly)
     {
         return $false
     }
@@ -352,7 +357,18 @@ function restart-machine()
 
         if ($reboot -icontains "y")
         {
+            write-host "restarting $($remotemachine). please wait..."
             Restart-Computer -ComputerName $remotemachine -Wait
+            
+            if ($error)
+            {
+                write-error "error restarting machine: $($error | out-string)"
+                return $false
+            }
+            else
+            {
+                return $true
+            }
         }
     }
     else
@@ -365,7 +381,7 @@ function restart-machine()
 # -------------------------------------------------------------------------------------------------
 function set-dumpType($dumpType)
 {
-    write-host "do you want to enable / change dump type on $($remotemachine)?"
+    write-host "do you want to enable / change dump type on $($remotemachine)?" -ForegroundColor Yellow
     $newDumpType = read-host "if so, enter number for type (1 = complete 2 = kernel 7 = automatic kernel) or select {enter} to continue with no change:"
 
     if ($newDumpType -and ($newDumpType -ine $dumpType))
