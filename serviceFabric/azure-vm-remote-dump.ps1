@@ -69,7 +69,9 @@ param(
     $remotemachine = ".", #"10.1.0.4",
     $workingDir = "c:\temp", #$env:TEMP,
     [switch]$downloadFilesOnly,
-    [switch]$setupOnly
+    [switch]$setupOnly,
+    [string][ValidateSet('Complete', 'Kernel', 'Automatic','None')] $setDumpType,
+    [swith]$noRdp
 )
 
 $ErrorActionPreference = "Continue" #"SilentlyContinue"
@@ -134,7 +136,7 @@ function main()
         #return
     }
 
-    if ($rdp -and !$setupOnly)
+    if ($rdp -and !$setupOnly -and !$noRdp)
     {
         if ((read-host "rdp port is open and should be used if possible. do you want to connect to remote machine using rdp? [y|n]") -icontains "y")
         {
@@ -159,6 +161,12 @@ function main()
     }
 
     clean-up
+    
+    if(!$ret)
+    {
+        write-warning "unable to check / set dump type on $($remotemachine)"
+    }
+
     write-host "finished"
 }
 
@@ -381,17 +389,36 @@ function restart-machine()
 # -------------------------------------------------------------------------------------------------
 function set-dumpType($dumpType)
 {
-    write-host "do you want to enable / change dump type on $($remotemachine)?" -ForegroundColor Yellow
-    $newDumpType = read-host "if so, enter number for type (1 = complete 2 = kernel 7 = automatic kernel) or select {enter} to continue with no change:"
+    $newDumpType = $Null
+    
+    if($setDumpType)
+    {
+        
+        switch($setDumpType.tolower())
+        {
+            'complete' { $newDumpType = 1 }
+            'kernel' { $newDumpType = 2 }
+            'Automatic' { $newDumpType = 7 }
+            'None' { $newDumpType = 0 }
+            default: { Write-Error "unknown option $($setDumpType)" }
+        }
+    }
+    else
+    {
+        write-host "do you want to enable / change dump type on $($remotemachine)?" -ForegroundColor Yellow
+        $newDumpType = read-host "if so, enter number for type (1 = complete 2 = kernel 7 = automatic kernel) or select {enter} to continue with no change:"
+    }    
 
     if ($newDumpType -and ($newDumpType -ine $dumpType))
     {
+        write-host "setting dump type to $($newDumptype)" -foreground yellow
         return $newDumpType
     }
     else
     {
         return $null
-    }    
+    }
+
 }
 # -------------------------------------------------------------------------------------------------
 
