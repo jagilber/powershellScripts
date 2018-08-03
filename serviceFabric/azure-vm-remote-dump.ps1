@@ -142,11 +142,13 @@ function main()
             return
         }
     }
-    elseif ($winrm)
+
+    if ($winrm)
     {
         $ret = check-regWinRM
     }
-    elseif ($smb)
+    
+    if (!$ret -and $smb)
     {
         $ret = check-regSmb        
     }
@@ -245,9 +247,9 @@ function check-regLocal()
         write-host "checking local registry"
         $dumpType = (Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\$($crashControlRegKey)" -name $crashDumpEnabled).CrashDumpEnabled
         write-host "current CrashControl value: $($dumpType)"
-        $newDumpType = read-host "do you want to enable / change dump type on $($remotemachine)? if so, enter number for type (1 = complete 2 = kernel 7 = automatic kernel) or select {enter} to continue with no change:"
+        $newDumpType = set-dumpType -dumpType $dumpType
 
-        if ($newDumpType -and ($newDumpType -ine $dumpType))
+        if ($newDumpType)
         {
             $error.Clear()
             $ret = Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\$($crashControlRegKey)" -name $crashDumpEnabled -Value $newDumpType
@@ -274,7 +276,7 @@ function check-regSmb()
     {
         $dumpType = [regex]::Match($dumpString, $pattern).Groups[1].Value
         write-host "current CrashControl value: $($dumpType)"
-        $newDumpType = set-dumpType
+        $newDumpType = set-dumpType -dumpType $dumpType
 
         if ($newDumpType)
         {
@@ -330,7 +332,14 @@ function check-regWinRM()
         }
     }
 
-    return $true
+    if($readOnly)
+    {
+        return $false
+    }
+    else
+    {
+        return $true
+    }
 }
 # -------------------------------------------------------------------------------------------------
 
@@ -356,8 +365,8 @@ function restart-machine()
 # -------------------------------------------------------------------------------------------------
 function set-dumpType($dumpType)
 {
-    $newDumpType = read-host "do you want to enable / change dump type on $($remotemachine)? `r`n" `
-    + "if so, enter number for type (1 = complete 2 = kernel 7 = automatic kernel) or select {enter} to continue with no change:"
+    write-host "do you want to enable / change dump type on $($remotemachine)?"
+    $newDumpType = read-host "if so, enter number for type (1 = complete 2 = kernel 7 = automatic kernel) or select {enter} to continue with no change:"
 
     if ($newDumpType -and ($newDumpType -ine $dumpType))
     {
