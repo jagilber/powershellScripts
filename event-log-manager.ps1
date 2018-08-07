@@ -736,8 +736,18 @@ function enable-logs($eventLogNames, $machine)
     {
         foreach ($eventLogName in $eventLogNames)
         {
-            $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
-            $eventLog = New-Object Diagnostics.Eventing.Reader.EventLogConfiguration ($eventLogName, $session)
+            $error.clear()
+
+            try
+            {
+                $session = New-Object Diagnostics.Eventing.Reader.EventLogSession ($machine)
+                $eventLog = New-Object Diagnostics.Eventing.Reader.EventLogConfiguration ($eventLogName, $session)
+            }
+            catch
+            {
+                log-info "warning:unable to open eventlog $($eventLogName) $($error)"
+                $error.clear()
+            }
 
             if ($clearEventLogs)
             {
