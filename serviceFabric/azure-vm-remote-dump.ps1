@@ -70,7 +70,7 @@ param(
     $workingDir = "c:\temp", #$env:TEMP,
     [switch]$downloadFilesOnly,
     [switch]$setupOnly,
-    [string][ValidateSet('Complete', 'Kernel', 'Automatic','None')] $setDumpType,
+    [string][ValidateSet('complete', 'kernel', 'automatic','none')] $setDumpType,
     [swith]$noRdp
 )
 
@@ -161,7 +161,7 @@ function main()
     }
 
     clean-up
-    
+
     if(!$ret)
     {
         write-warning "unable to check / set dump type on $($remotemachine)"
@@ -398,8 +398,8 @@ function set-dumpType($dumpType)
         {
             'complete' { $newDumpType = 1 }
             'kernel' { $newDumpType = 2 }
-            'Automatic' { $newDumpType = 7 }
-            'None' { $newDumpType = 0 }
+            'automatic' { $newDumpType = 7 }
+            'none' { $newDumpType = 0 }
             default: { Write-Error "unknown option $($setDumpType)" }
         }
     }
