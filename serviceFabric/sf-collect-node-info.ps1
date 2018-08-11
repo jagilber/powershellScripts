@@ -4,8 +4,8 @@
 
 param(
     $workdir = "c:\temp",
-    $startTime = "7/10/2018",
-    $endTime = "7/25/2018",
+    $startTime = (get-date).AddDays(-5).ToShortDateString(),
+    $endTime = (get-date).ToShortDateString(),
     $eventLogNames = "*"
 )
 
@@ -22,7 +22,8 @@ new-item $workdir -ItemType Directory
 Set-Location $parentworkdir
 
 (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
-"$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern $($eventlognames) -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir)"
+$args = "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern $($eventlognames) -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir)"
+start-process -filepath "powershell.exe" -ArgumentList $args
 Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.log"
 get-hotfix | out-file "$($workdir)\hotfixes.log"
 wmic os get version | out-file "$($workdir)\os.log"
