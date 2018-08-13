@@ -10,9 +10,16 @@ param(
     [switch]$eventLogs
 )
 
-
+$currentWorkDir = get-location
+$osVersion = [version]([string]((wmic os get Version) -match "\d"))
 $parentWorkDir = $workdir
 $workdir = "$($workdir)\gather"
+$win10 = $false
+
+if($osVersion.major -ge 10)
+{
+    $win10 = $true
+}
 
 if ((test-path $workdir))
 {
@@ -29,18 +36,38 @@ if ($eventLogs)
     start-process -filepath "powershell.exe" -ArgumentList $args
 }
 
-Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.log"
+if($win10)
+{
+    Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.log"
+}
+else
+{
+    copy-item "$env:systemroot\windowsupdate.log" "$($workdir)\windowsupdate.log"
+}
+
 get-hotfix | out-file "$($workdir)\hotfixes.log"
-wmic os get version | out-file "$($workdir)\os.log"
+$osVersion.tostring() | out-file "$($workdir)\os.log"
 Get-psdrive | out-file "$($workdir)\drives.log"
 Get-process | out-file "$($workdir)\pids.log"
+start-process "powershell.exe" -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules $($workDir)\firewallrules.reg"
+start-process "powershell.exe" -ArgumentList "netstat -bna > $($workdir)\netstat.log"
+start-process "powershell.exe" -ArgumentList "netsh http show sslcert > $($workdir)\netshssl.log"
+start-process "powershell.exe" -ArgumentList "ipconfig /all > $($workdir)\ipconfig.log"
 
 if ((test-path "$($workdir).zip"))
 {
     remove-item "$($workdir).zip" 
 }
 
-Compress-archive -path $workdir -destinationPath $workdir
-set-location $parentworkdir
-write-host "upload $($workdir).zip to workspace" -ForegroundColor Cyan
+if($win10)
+{
+    Compress-archive -path $workdir -destinationPath $workdir
+    write-host "upload $($workdir).zip to workspace" -ForegroundColor Cyan
+}
+else
+{
+    write-host "zip and upload $($workdir) to workspace" -ForegroundColor Cyan
+}
+
 start-process $parentWorkDir
+set-location $currentWorkDir
