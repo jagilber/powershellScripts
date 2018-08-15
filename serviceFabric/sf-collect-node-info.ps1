@@ -55,7 +55,7 @@ function main()
         $jobs.Add((Start-Job -ScriptBlock {
                     param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5])
                     (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
-                    $argList = "-NoExit -File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir)"
+                    $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir)"
                     start-process -filepath $ps -ArgumentList $argList -Wait
                 } -ArgumentList $workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps))
     }
@@ -184,4 +184,4 @@ function main()
 }
  
 main
-#https://jagilbermsstorage.blob.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-08-14T22:26:23Z&st=2018-08-14T14:26:23Z&spr=https&sig=%2Bnb87%2BNEO11rfGAh97VTl7z1O5sbPfgpohmzAaZDsf0%3D
+
