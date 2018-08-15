@@ -89,6 +89,9 @@ function main()
         remove-item $workdir -Recurse 
     }
 
+    new-item $workdir -ItemType Directory
+    Set-Location $parentworkdir
+
     Start-Transcript -Path $logFile -Force
     write-host "starting $(get-date)"
 
@@ -105,11 +108,8 @@ function main()
 
     write-host "remove old jobs"
     get-job | remove-job -Force
-
-    new-item $workdir -ItemType Directory
-    Set-Location $parentworkdir
-
     write-host "windows update"
+
     if ($win10)
     {
         $jobs.Add((Start-Job -ScriptBlock {
