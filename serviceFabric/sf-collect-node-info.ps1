@@ -1,6 +1,62 @@
-# Run the following from each sfnode in admin powershell:
-# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
-# c:\sf-collect-node-info.ps1
+<#
+.SYNOPSIS
+    powershell script to collect service fabric node diagnostic data
+    Run the following from each sfnode in admin powershell:
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
+
+.DESCRIPTION
+    To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
+    script will collect event logs, hotfixes, services, processes, drive, firewall, and other OS information
+
+    Requirements:
+        - administrator powershell prompt
+        - administrative access to machine
+        - remote network ports:
+            - smb 445
+            - rpc endpoint mapper 135
+            - rpc ephemeral ports
+            - to test access from source machine to remote machine: dir \\%remote machine%\admin$
+        - winrm
+            - depending on configuration / security, it may be necessary to modify trustedhosts on 
+            source machine for management of remote machines
+            - to query: winrm get winrm/config
+            - to enable sending credentials to remote machines: winrm set winrm/config/client '@{TrustedHosts="*"}'
+            - to disable sending credentials to remote machines: winrm set winrm/config/client '@{TrustedHosts=""}'
+        - firewall
+            - if firewall is preventing connectivity the following can be run to disable
+            - Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+            
+    Copyright 2018 Microsoft Corporation
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+    
+.NOTES
+    File Name  : sf-collect-node-info.ps1
+    Author     : jagilber
+    Version    : 180815 original
+    History    : 
+    
+.EXAMPLE
+    .\sf-collect-node-info.ps1 -eventlogs
+    Example command to query all diagnostic information and event logs
+
+.PARAMETER workDir
+    output directory where all files will be created.
+    default is $env:temp
+
+.LINK
+    https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1
+#>
 
 param(
     $workdir = $env:temp,
@@ -10,7 +66,7 @@ param(
     [int[]]$ports = @(1025,1026,1027,19000,19080,135,445,3389),
     [switch]$eventLogs,
     $storageSASKey,
-    $remoteMachine = "127.0.0.1",
+    $remoteMachine = $env:computername,
     $externalUrl = "bing.com"
 )
 
@@ -84,7 +140,10 @@ function main()
     [net.httpWebResponse](Invoke-WebRequest $externalUrl).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
 
     # nslookup
-    start-process $ps -ArgumentList "nslookup $($externalUrl) > $($workdir)\nslookup.txt"
+    write-host "querying nslookup for $($externalUrl)" | out-file -Append "$($workdir)\nslookup.txt"
+    start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
+    write-host "querying nslookup for $($remoteMachine)" | out-file -Append "$($workdir)\nslookup.txt"
+    start-process $ps -ArgumentList "nslookup $($remoteMachine) | out-file -Append $($workdir)\nslookup.txt"
 
     # winrm settings
     start-process "cmd.exe" -ArgumentList "/c winrm get winrm/config/client > $($workdir)\winrm-config.txt"
@@ -127,9 +186,10 @@ function main()
 
     write-host "waiting for $($jobs.Count) jobs to complete"
 
-    while ((get-job | Where-Object State -ne "Completed"))
+    while (($uncompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
     {
-        start-sleep -seconds 1
+        write-host "waiting on $($uncompletedCount) jobs..."
+        start-sleep -seconds 10
     }
 
     # zip
