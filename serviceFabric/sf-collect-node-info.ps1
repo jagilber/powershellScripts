@@ -48,7 +48,7 @@
     History    : 
     
 .EXAMPLE
-    .\sf-collect-node-info.ps1 -eventlogs
+    .\sf-collect-node-info.ps1
     Example command to query all diagnostic information and event logs
 
 .PARAMETER workDir
@@ -69,7 +69,7 @@ param(
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com",
     [switch]$noAdmin,
-    [switch]$noEventLogs,
+    [switch]$noEventLogs
 )
 
 $ErrorActionPreference = "Continue"
@@ -120,9 +120,9 @@ function main()
         copy-item "$env:systemroot\windowsupdate.log" "$($workdir)\windowsupdate.log.txt"
     }
 
-    write-host "event logs"
     if (!$noEventLogs)
     {
+        write-host "event logs"
         $jobs.Add((Start-Job -ScriptBlock {
                     param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
                     (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
