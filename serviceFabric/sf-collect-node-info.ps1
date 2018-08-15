@@ -3,6 +3,7 @@
     powershell script to collect service fabric node diagnostic data
     Run the following from each sfnode in admin powershell:
     (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
+    "c:\sf-collect-node-info.ps1"
 
 .DESCRIPTION
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
@@ -137,12 +138,12 @@ function main()
             } -ArgumentList $workdir, $remoteMachine, $ports))
 
     write-host "check external connection"
-    [net.httpWebResponse](Invoke-WebRequest $externalUrl).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
+    [net.httpWebResponse](Invoke-WebRequest $externalUrl -UseBasicParsing).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
 
     write-host "nslookup"
-    write-host "querying nslookup for $($externalUrl)" | out-file -Append "$($workdir)\nslookup.txt"
+    out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
     start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
-    write-host "querying nslookup for $($remoteMachine)" | out-file -Append "$($workdir)\nslookup.txt"
+    out-file -InputObject "querying nslookup for $($remoteMachine)" -Append "$($workdir)\nslookup.txt"
     start-process $ps -ArgumentList "nslookup $($remoteMachine) | out-file -Append $($workdir)\nslookup.txt"
 
     write-host "winrm settings"
@@ -206,9 +207,9 @@ function main()
     {
         Compress-archive -path $workdir -destinationPath $workdir
 
-        write-host "upload to storage"
         if ($storageSASKey)
         {
+            write-host "upload to storage"
             # todo install azure
             Start-AzureStorageBlobCopy -SrcFile $zipFile -AbsoluteUri $storageSASKey
             write-host "$($zipFile) uploaded to storage $($storageSASKey)"
@@ -220,9 +221,9 @@ function main()
     }
     else
     {
-        write-host "upload to storage"
         if ($storageSASKey)
         {
+            write-host "upload to storage"
             # todo install azure
             $storageAccount = ([regex]::Matches($storageSASKey, "//(.+?)\.")).Groups[1].Value
             $storageContext = New-AzureStorageContext -StorageAccountName $storageAccount -SasToken $storageSASKey
