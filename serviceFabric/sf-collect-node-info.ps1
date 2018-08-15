@@ -192,19 +192,20 @@ function main()
         write-host "waiting on $($uncompletedCount) jobs..."
         start-sleep -seconds 10
     }
+
     write-host "remove jobs"
     get-job | remove-job -Force
     
-    write-host "zip"
-    $zipFile = "$($workdir).zip"
-
-    if ((test-path $zipFile ))
-    {
-        remove-item $zipFile 
-    }
-
     if ($win10)
     {
+        write-host "zip"
+        $zipFile = "$($workdir).zip"
+
+        if ((test-path $zipFile ))
+        {
+            remove-item $zipFile 
+        }
+
         Compress-archive -path $workdir -destinationPath $workdir
 
         if ($storageSASKey)
