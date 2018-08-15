@@ -111,22 +111,22 @@ function main()
     if ($eventLogs)
     {
         $jobs.Add((Start-Job -ScriptBlock {
-                    param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5])
+                    param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
                     (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
-                    $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir)"
+                    $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir) -machines $($remoteMachine)"
                     start-process -filepath $ps -ArgumentList $argList -Wait
-                } -ArgumentList $workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps))
+                } -ArgumentList $workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine))
     }
 
     write-host "check for dump files"
     $jobs.Add((Start-Job -ScriptBlock {
-                param($workdir = $args[0])
-                start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait
-            } -ArgumentList $workdir))
+                param($workdir = $args[0], $remoteMachine = $args[1])
+                start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\c$\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait
+            } -ArgumentList $workdir, $remoteMachine))
     $jobs.Add((Start-Job -ScriptBlock {
-                param($workdir = $args[0])
-                start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait  
-            } -ArgumentList $workdir))
+                param($workdir = $args[0], $remoteMachine = $args[1])
+                start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\d$\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait  
+            } -ArgumentList $workdir, $remoteMachine))
 
     write-host "network port tests"
     $jobs.Add((Start-Job -ScriptBlock {
@@ -153,10 +153,10 @@ function main()
     [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
 
     write-host "http log files"
-    copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
+    copy-item -path "\\$($remoteMachine)\C$\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
 
     write-host "hotfixes"
-    get-hotfix | out-file "$($workdir)\hotfixes.txt"
+    get-hotfix -ComputerName $remoteMachine | out-file "$($workdir)\hotfixes.txt"
 
     write-host "os"
     (get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 -ComputerName $remoteMachine) | format-list * | out-file "$($workdir)\osinfo.txt"
@@ -165,22 +165,22 @@ function main()
     Get-psdrive | out-file "$($workdir)\drives.txt"
 
     write-host "processes"
-    Get-process | out-file "$($workdir)\pids.txt"
+    Get-process -ComputerName $remoteMachine | out-file "$($workdir)\pids.txt"
 
     write-host "services"
-    Get-Service | out-file "$($workdir)\services.txt"
+    Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
     write-host ".net"
-    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework $($workDir)\policies.reg"
+    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework $($workDir)\policies.reg"
 
     write-host "policies"
-    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SOFTWARE\Policies $($workDir)\policies.reg"
+    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies $($workDir)\policies.reg"
 
     write-host "schannel"
-    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL $($workDir)\schannel.reg"
+    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL $($workDir)\schannel.reg"
 
     write-host "firewall rules"
-    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules $($workDir)\firewallrules.reg"
+    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules $($workDir)\firewallrules.reg"
 
     write-host "firewall settings"
     Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
