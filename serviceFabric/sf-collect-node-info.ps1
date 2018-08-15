@@ -83,6 +83,13 @@ $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
 {
+    $error.Clear()
+    if ((test-path $workdir))
+    {
+        remove-item $workdir -Recurse 
+    }
+
+    Start-Transcript -Path $logFile -Force
     write-host "starting $(get-date)"
 
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
@@ -98,11 +105,6 @@ function main()
 
     write-host "remove old jobs"
     get-job | remove-job -Force
-
-    if ((test-path $workdir))
-    {
-        remove-item $workdir -Recurse 
-    }
 
     new-item $workdir -ItemType Directory
     Set-Location $parentworkdir
@@ -285,8 +287,6 @@ function main()
 
 try
 {
-    $error.Clear()
-    Start-Transcript -Path $logFile -Force
     main
 }
 finally
