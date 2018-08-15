@@ -58,21 +58,21 @@
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1
 #>
-
+[CmdletBinding()]
 param(
     $workdir = $env:temp,
-    [switch]$eventLogs,
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
     $startTime = (get-date).AddDays(-5).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
     [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389),
     $storageSASKey,
     $remoteMachine = $env:computername,
-    $externalUrl = "bing.com"
+    $externalUrl = "bing.com",
+    [switch]$noAdmin,
+    [switch]$noEventLogs,
 )
 
 $ErrorActionPreference = "Continue"
-$error.Clear()
 $currentWorkDir = get-location
 $osVersion = [version]([string]((wmic os get Version) -match "\d"))
 $win10 = ($osVersion.major -ge 10)
@@ -83,9 +83,19 @@ $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
 {
-    
-    Start-Transcript -Path $logFile -Force
     write-host "starting $(get-date)"
+
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+    {   
+        Write-Warning "please restart script in administrator powershell session"
+        Write-Warning "if unable to run as admin, restart and use -noadmin switch. This will collect less data that may be needed. exiting..."
+        
+        if (!$noadmin)
+        {
+            return $false
+        }
+    }
+
     write-host "remove old jobs"
     get-job | remove-job -Force
 
@@ -111,7 +121,7 @@ function main()
     }
 
     write-host "event logs"
-    if ($eventLogs)
+    if (!$noEventLogs)
     {
         $jobs.Add((Start-Job -ScriptBlock {
                     param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
@@ -177,7 +187,7 @@ function main()
     Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
     write-host "installed applications"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
+    start-process "reg.exe" -ArgumentList "query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
 
     write-host "features"
     Get-WindowsFeature | Where-Object "InstallState" -eq "Installed" | out-file "$($workdir)\windows-features.txt"
@@ -189,13 +199,13 @@ function main()
             } -ArgumentList $workdir, $remoteMachine))
 
     write-host "policies"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
+    start-process "reg.exe" -ArgumentList "query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
 
     write-host "schannel"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
+    start-process "reg.exe" -ArgumentList "query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
 
     write-host "firewall rules"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
+    start-process "reg.exe" -ArgumentList "query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
 
     write-host "firewall settings"
     Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
@@ -264,15 +274,25 @@ function main()
         }
     }
 
-    if((test-path "$($env:systemroot)\explorer.exe"))
+    if ((test-path "$($env:systemroot)\explorer.exe"))
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
 
     set-location $currentWorkDir
     write-host "finished $(get-date)"
+}
+
+try
+{
+    $error.Clear()
+    Start-Transcript -Path $logFile -Force
+    main
+}
+finally
+{
+    write-debug "errors during script: $($error | out-string)"
+    $error.clear()
     Stop-Transcript 
 }
- 
-main
 
