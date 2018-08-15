@@ -237,7 +237,7 @@ function main()
         }
     }
 
-    start-process $parentWorkDir
+    start-process "explorer.exe" -ArgumentList $parentWorkDir
     set-location $currentWorkDir
 }
  
