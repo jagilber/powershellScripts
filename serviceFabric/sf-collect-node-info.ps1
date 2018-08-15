@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     powershell script to collect service fabric node diagnostic data
-    Run the following from each sfnode in admin powershell:
+    To download and execute, use the following commands on each sf node in admin powershell:
     (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
     "c:\sf-collect-node-info.ps1"
 
