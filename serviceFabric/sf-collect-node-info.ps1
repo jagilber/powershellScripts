@@ -7,6 +7,7 @@ param(
     $startTime = (get-date).AddDays(-5).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
     $eventLogNames = "System|Application|Fabric|http|Firewall|Azure",
+    [int[]]$ports = @(1025,1026,1027,19000,19080,135,445,3389),
     [switch]$eventLogs,
     $storageSASKey,
     $remoteMachine = "127.0.0.1",
@@ -46,7 +47,7 @@ function main()
     }
     else
     {
-        copy-item "$env:systemroot\windowsupdate.txt" "$($workdir)\windowsupdate.txt"
+        copy-item "$env:systemroot\windowsupdate.log" "$($workdir)\windowsupdate.txt"
     }
 
     # event logs
@@ -72,15 +73,12 @@ function main()
 
     # network port tests
     $jobs.Add((Start-Job -ScriptBlock {
-                param($remoteMachine = $args[0], $workdir = $args[1])
-                test-netconnection -port 1025 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                test-netconnection -port 19000 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                test-netconnection -port 19080 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                test-netconnection -port 20001 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                test-netconnection -port 3389 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                test-netconnection -port 445 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                test-netconnection -port 135 -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-            } -ArgumentList $remoteMachine, $workdir))
+                param($workdir = $args[0], $remoteMachine = $args[1], $ports = $args[2])
+                foreach($port in $ports)
+                {
+                    test-netconnection -port $port -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
+                }
+            } -ArgumentList $workdir, $remoteMachine, $ports))
 
     # check external connection
     [net.httpWebResponse](Invoke-WebRequest $externalUrl).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
