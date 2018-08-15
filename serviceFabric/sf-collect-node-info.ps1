@@ -177,7 +177,10 @@ function main()
     Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
     write-host ".net"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
+    $jobs.Add((Start-Job -ScriptBlock {
+                param($workdir = $args[0], $remoteMachine = $args[1])
+                start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
+            } -ArgumentList $workdir, $remoteMachine))
 
     write-host "policies"
     start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
@@ -255,7 +258,11 @@ function main()
         }
     }
 
-    start-process "explorer.exe" -ArgumentList $parentWorkDir
+    if((test-path "$($env:systemroot)\explorer.exe"))
+    {
+        start-process "explorer.exe" -ArgumentList $parentWorkDir
+    }
+    
     set-location $currentWorkDir
     write-host "finished $(get-date)"
     Stop-Transcript 
