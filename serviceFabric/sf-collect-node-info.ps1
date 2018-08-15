@@ -176,6 +176,12 @@ function main()
     write-host "services"
     Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
+    write-host "installed applications"
+    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
+
+    write-host "features"
+    Get-WindowsFeature | Where-Object "InstallState" -eq "Installed" | out-file "$($workdir)\windows-features.txt"
+
     write-host ".net"
     $jobs.Add((Start-Job -ScriptBlock {
                 param($workdir = $args[0], $remoteMachine = $args[1])
@@ -262,7 +268,7 @@ function main()
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
-    
+
     set-location $currentWorkDir
     write-host "finished $(get-date)"
     Stop-Transcript 
