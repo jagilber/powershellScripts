@@ -142,14 +142,14 @@ function main()
 
     write-host "nslookup"
     out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
-    start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
+    start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt" -Wait
     out-file -InputObject "querying nslookup for $($remoteMachine)" -Append "$($workdir)\nslookup.txt"
     start-process $ps -ArgumentList "nslookup $($remoteMachine) | out-file -Append $($workdir)\nslookup.txt"
 
     write-host "winrm settings"
     start-process "cmd.exe" -ArgumentList "/c winrm get winrm/config/client > $($workdir)\winrm-config.txt"
 
-    write-host "cert scrubbed"
+    write-host "certs (output scrubbed)"
     [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
 
     write-host "http log files"
@@ -169,6 +169,15 @@ function main()
 
     write-host "services"
     Get-Service | out-file "$($workdir)\services.txt"
+
+    write-host ".net"
+    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework $($workDir)\policies.reg"
+
+    write-host "policies"
+    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SOFTWARE\Policies $($workDir)\policies.reg"
+
+    write-host "schannel"
+    start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL $($workDir)\schannel.reg"
 
     write-host "firewall rules"
     start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules $($workDir)\firewallrules.reg"
