@@ -60,11 +60,11 @@
 
 param(
     $workdir = $env:temp,
+    [switch]$eventLogs,
+    $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
     $startTime = (get-date).AddDays(-5).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
-    $eventLogNames = "System|Application|Fabric|http|Firewall|Azure",
-    [int[]]$ports = @(1025,1026,1027,19000,19080,135,445,3389),
-    [switch]$eventLogs,
+    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389),
     $storageSASKey,
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com"
@@ -82,7 +82,7 @@ $jobs = new-object collections.arraylist
 
 function main()
 {
-    # remove old jobs
+    write-host "remove old jobs"
     get-job | remove-job -Force
 
     if ((test-path $workdir))
@@ -93,7 +93,7 @@ function main()
     new-item $workdir -ItemType Directory
     Set-Location $parentworkdir
 
-    # windows update
+    write-host "windows update"
     if ($win10)
     {
         $jobs.Add((Start-Job -ScriptBlock {
@@ -106,7 +106,7 @@ function main()
         copy-item "$env:systemroot\windowsupdate.log" "$($workdir)\windowsupdate.txt"
     }
 
-    # event logs
+    write-host "event logs"
     if ($eventLogs)
     {
         $jobs.Add((Start-Job -ScriptBlock {
@@ -117,7 +117,7 @@ function main()
                 } -ArgumentList $workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps))
     }
 
-    # check for dump files
+    write-host "check for dump files"
     $jobs.Add((Start-Job -ScriptBlock {
                 param($workdir = $args[0])
                 start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait
@@ -127,61 +127,61 @@ function main()
                 start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait  
             } -ArgumentList $workdir))
 
-    # network port tests
+    write-host "network port tests"
     $jobs.Add((Start-Job -ScriptBlock {
                 param($workdir = $args[0], $remoteMachine = $args[1], $ports = $args[2])
-                foreach($port in $ports)
+                foreach ($port in $ports)
                 {
                     test-netconnection -port $port -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
                 }
             } -ArgumentList $workdir, $remoteMachine, $ports))
 
-    # check external connection
+    write-host "check external connection"
     [net.httpWebResponse](Invoke-WebRequest $externalUrl).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
 
-    # nslookup
+    write-host "nslookup"
     write-host "querying nslookup for $($externalUrl)" | out-file -Append "$($workdir)\nslookup.txt"
     start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
     write-host "querying nslookup for $($remoteMachine)" | out-file -Append "$($workdir)\nslookup.txt"
     start-process $ps -ArgumentList "nslookup $($remoteMachine) | out-file -Append $($workdir)\nslookup.txt"
 
-    # winrm settings
+    write-host "winrm settings"
     start-process "cmd.exe" -ArgumentList "/c winrm get winrm/config/client > $($workdir)\winrm-config.txt"
 
-    # cert scrubbed
+    write-host "cert scrubbed"
     [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
 
-    # http log files
+    write-host "http log files"
     copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
 
-    # hotfixes
+    write-host "hotfixes"
     get-hotfix | out-file "$($workdir)\hotfixes.txt"
 
-    # os
+    write-host "os"
     (get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 -ComputerName $remoteMachine) | format-list * | out-file "$($workdir)\osinfo.txt"
 
-    # drives
+    write-host "drives"
     Get-psdrive | out-file "$($workdir)\drives.txt"
 
-    # processes
+    write-host "processes"
     Get-process | out-file "$($workdir)\pids.txt"
 
-    # services
+    write-host "services"
     Get-Service | out-file "$($workdir)\services.txt"
 
-    # firewall rules
+    write-host "firewall rules"
     start-process $ps -ArgumentList "reg.exe export HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules $($workDir)\firewallrules.reg"
 
-    # firewall settings
+    write-host "firewall settings"
     Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
 
-    # netstat ports
+    write-host "netstat ports"
     start-process $ps -ArgumentList "netstat -bna > $($workdir)\netstat.txt"
 
-    # netsh ssl
+    write-host "netsh ssl"
     start-process $ps -ArgumentList "netsh http show sslcert > $($workdir)\netshssl.txt"
 
-    # ip info
+    write-host "ip info"
     start-process $ps -ArgumentList "ipconfig /all > $($workdir)\ipconfig.txt"
 
     write-host "waiting for $($jobs.Count) jobs to complete"
@@ -191,8 +191,10 @@ function main()
         write-host "waiting on $($uncompletedCount) jobs..."
         start-sleep -seconds 10
     }
-
-    # zip
+    write-host "remove jobs"
+    get-job | remove-job -Force
+    
+    write-host "zip"
     $zipFile = "$($workdir).zip"
 
     if ((test-path $zipFile ))
@@ -204,7 +206,7 @@ function main()
     {
         Compress-archive -path $workdir -destinationPath $workdir
 
-        # upload to storage
+        write-host "upload to storage"
         if ($storageSASKey)
         {
             # todo install azure
@@ -218,7 +220,7 @@ function main()
     }
     else
     {
-        # upload to storage
+        write-host "upload to storage"
         if ($storageSASKey)
         {
             # todo install azure
@@ -233,9 +235,6 @@ function main()
             write-host "zip and upload $($workdir) to workspace" -ForegroundColor Cyan
         }
     }
-
-    # remove jobs
-    get-job | remove-job -Force
 
     start-process $parentWorkDir
     set-location $currentWorkDir
