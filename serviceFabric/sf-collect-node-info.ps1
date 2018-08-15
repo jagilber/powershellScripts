@@ -80,9 +80,12 @@ $parentWorkDir = $workdir
 $workdir = "$($workdir)\sfgather-$($env:COMPUTERNAME)"
 $ps = "powershell.exe"
 $jobs = new-object collections.arraylist
-
+$logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
 {
+    
+    Start-Transcript -Path $logFile -Force
+    write-host "starting $(get-date)"
     write-host "remove old jobs"
     get-job | remove-job -Force
 
@@ -99,12 +102,12 @@ function main()
     {
         $jobs.Add((Start-Job -ScriptBlock {
                     param($workdir = $args[0]) 
-                    Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.txt"
+                    Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.log.txt"
                 } -ArgumentList $workdir))
     }
     else
     {
-        copy-item "$env:systemroot\windowsupdate.log" "$($workdir)\windowsupdate.txt"
+        copy-item "$env:systemroot\windowsupdate.log" "$($workdir)\windowsupdate.log.txt"
     }
 
     write-host "event logs"
@@ -121,11 +124,14 @@ function main()
     write-host "check for dump files"
     $jobs.Add((Start-Job -ScriptBlock {
                 param($workdir = $args[0], $remoteMachine = $args[1])
-                start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\c$\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait
+                # slow
+                #start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\c$\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait
+                start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait
             } -ArgumentList $workdir, $remoteMachine))
     $jobs.Add((Start-Job -ScriptBlock {
                 param($workdir = $args[0], $remoteMachine = $args[1])
-                start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\d$\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait  
+                #start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\d$\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait  
+                start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait  
             } -ArgumentList $workdir, $remoteMachine))
 
     write-host "network port tests"
@@ -171,16 +177,16 @@ function main()
     Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
     write-host ".net"
-    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework $($workDir)\policies.reg"
+    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
 
     write-host "policies"
-    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies $($workDir)\policies.reg"
+    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
 
     write-host "schannel"
-    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL $($workDir)\schannel.reg"
+    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
 
     write-host "firewall rules"
-    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules $($workDir)\firewallrules.reg"
+    start-process $ps -ArgumentList "reg.exe export \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
 
     write-host "firewall settings"
     Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
@@ -214,7 +220,8 @@ function main()
         {
             remove-item $zipFile 
         }
-
+        
+        Stop-Transcript 
         Compress-archive -path $workdir -destinationPath $workdir
 
         if ($storageSASKey)
@@ -249,6 +256,8 @@ function main()
 
     start-process "explorer.exe" -ArgumentList $parentWorkDir
     set-location $currentWorkDir
+    write-host "finished $(get-date)"
+    Stop-Transcript 
 }
  
 main
