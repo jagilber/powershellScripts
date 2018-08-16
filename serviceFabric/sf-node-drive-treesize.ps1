@@ -1,4 +1,9 @@
-# script to query drive size for large files
+<# script to query drive size for large files
+powershell script to collect service fabric node diagnostic data
+To download and execute, run the following commands on each sf node in admin powershell:
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-node-drive-treesize.ps1","c:\sf-node-drive-treesize.ps1")
+c:\sf-node-drive-treesize.ps1
+#>
 
 param(
     $directory = "d:\",
@@ -13,7 +18,7 @@ $sizeObjs = @{}
 $directories = new-object collections.arraylist
 $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName|Sort-Object))
 $directories.Insert(0, $directory.ToLower())
-$min = 1
+$min = .1
 $max = 0
 $previousDir = $null
 
@@ -35,7 +40,7 @@ foreach ($sortedDir in $directories)
     $foreground = "Gray"
     $size = $sizeobjs.item($sortedDir)
 
-    if ($size -gt 1)
+    if ($size -gt .1)
     {
         switch ($size)
         {
