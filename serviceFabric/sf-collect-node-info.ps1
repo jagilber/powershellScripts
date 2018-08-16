@@ -65,7 +65,7 @@ param(
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
     $startTime = (get-date).AddDays(-7).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
-    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389),
+    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985, 5986),
     $storageSASKey,
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com",
@@ -161,9 +161,11 @@ function main()
     write-host "check external connection"
     [net.httpWebResponse](Invoke-WebRequest $externalUrl -UseBasicParsing).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
 
+    write-host "resolve-dnsname" # doesnt require admin like nslookup
+    Resolve-DnsName -Name $remoteMachine | out-file -Append "$($workdir)\resolve-dnsname.txt"
+    Resolve-DnsName -Name $externalUrl | out-file -Append "$($workdir)\resolve-dnsname.txt"
+    
     write-host "nslookup"
-    #Resolve-DnsName -Name $remoteMachine
-    #Resolve-DnsName -Name $externalUrl
     out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
     start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt" -Wait -WindowStyle Hidden
     out-file -InputObject "querying nslookup for $($remoteMachine)" -Append "$($workdir)\nslookup.txt"
@@ -217,9 +219,11 @@ function main()
     write-host "firewall settings"
     Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
 
+    write-host "get-nettcpconnetion" # doesnt require admin like netstat
+    Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
+
     write-host "netstat ports"
     start-process $ps -ArgumentList "netstat -bna > $($workdir)\netstat.txt" -WindowStyle Hidden
-    Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
 
     write-host "netsh ssl"
     start-process $ps -ArgumentList "netsh http show sslcert > $($workdir)\netshssl.txt" -WindowStyle Hidden
@@ -235,9 +239,6 @@ function main()
         start-sleep -seconds 10
     }
 
-    write-host "remove jobs"
-    get-job | remove-job -Force
-    
     if ($win10)
     {
         write-host "zip"
@@ -286,9 +287,6 @@ function main()
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir -WindowStyle Hidden
     }
-
-    set-location $currentWorkDir
-    write-host "finished $(get-date)"
 }
 
 try
@@ -297,8 +295,11 @@ try
 }
 finally
 {
-    write-debug "errors during script: $($error | out-string)"
-    $error.clear()
+    set-location $currentWorkDir
+    write-host "remove jobs"
+    get-job | remove-job -Force
     Stop-Transcript 
+    write-host "finished $(get-date)"
+    write-debug "errors during script: $($error | out-string)"
 }
 
