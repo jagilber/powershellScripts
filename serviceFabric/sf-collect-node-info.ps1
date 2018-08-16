@@ -83,10 +83,11 @@ $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
 {
+    $error.Clear()
     write-warning "to troubleshoot this issue, this script may collect sensitive information similar to other microsoft diagnostic tools."
     write-warning "information may contain information such as ip addresses, process information, user names, or similar."
-    write-warning "all information is in plain text and can be reviewed before uploading to workspace."
-    $error.Clear()
+    write-warning "all information is in plain text that can be reviewed before uploading data to workspace."
+
     if ((test-path $workdir))
     {
         remove-item $workdir -Recurse 
