@@ -66,7 +66,6 @@ param(
     $startTime = (get-date).AddDays(-7).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
     [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985, 5986),
-    $storageSASKey,
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com",
     [switch]$noAdmin,
@@ -84,8 +83,9 @@ $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
 {
-    write-warning "this script may collect sensitive information similar to other microsoft diagnostic tools. information may contain information such as ip addresses, process information, or user names"
-
+    write-warning "to troubleshoot this issue, this script may collect sensitive information similar to other microsoft diagnostic tools."
+    write-warning "information may contain information such as ip addresses, process information, user names, or similar."
+    write-warning "all information is in plain text and can be reviewed before uploading to workspace."
     $error.Clear()
     if ((test-path $workdir))
     {
@@ -255,34 +255,11 @@ function main()
         Compress-archive -path $workdir -destinationPath $workdir
         Start-Transcript -Path $logFile -Force -Append
 
-        if ($storageSASKey)
-        {
-            write-host "upload to storage"
-            # todo install azure
-            Start-AzureStorageBlobCopy -SrcFile $zipFile -AbsoluteUri $storageSASKey
-            write-host "$($zipFile) uploaded to storage $($storageSASKey)"
-        }
-        else
-        {
-            write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
-        }
+        write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
     }
     else
     {
-        if ($storageSASKey)
-        {
-            write-host "upload to storage"
-            # todo install azure
-            $storageAccount = ([regex]::Matches($storageSASKey, "//(.+?)\.")).Groups[1].Value
-            $storageContext = New-AzureStorageContext -StorageAccountName $storageAccount -SasToken $storageSASKey
-            #Set-AzureStorageBlobContent -File $file -Container $containerName -Context $StorageContext -Blob $blob -Force
-            Start-AzureStorageBlobCopy -SrcDir $workdir -AbsoluteUri $storageSASKey
-            write-host "$($workDir) uploaded to storage $($storageSASKey)"
-        }
-        else
-        {
-            write-host "zip and upload $($workdir) to workspace" -ForegroundColor Cyan
-        }
+        write-host "zip and upload $($workdir) to workspace" -ForegroundColor Cyan
     }
 
     if ((test-path "$($env:systemroot)\explorer.exe"))
