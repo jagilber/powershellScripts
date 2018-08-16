@@ -8,7 +8,8 @@ c:\sf-node-drive-treesize.ps1
 param(
     $directory = "d:\",
     $depth = 5,
-    [switch]$detail
+    [switch]$detail,
+    $minSizeGB = .1
 )
 
 Clear-Host
@@ -18,7 +19,7 @@ $sizeObjs = @{}
 $directories = new-object collections.arraylist
 $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName|Sort-Object))
 $directories.Insert(0, $directory.ToLower())
-$min = .1
+$min = $minSizeGB
 $max = 0
 $previousDir = $null
 
@@ -40,7 +41,7 @@ foreach ($sortedDir in $directories)
     $foreground = "Gray"
     $size = $sizeobjs.item($sortedDir)
 
-    if ($size -gt .1)
+    if ($size -gt $minSizeGB)
     {
         switch ($size)
         {
