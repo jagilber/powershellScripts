@@ -293,13 +293,17 @@ try
 {
     main
 }
+catch
+{
+    write-error "main exception: $($error | out-string)"
+}
 finally
 {
     set-location $currentWorkDir
     write-host "remove jobs"
     get-job | remove-job -Force
-    Stop-Transcript 
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
+    Stop-Transcript 
 }
 
