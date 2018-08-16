@@ -84,6 +84,8 @@ $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
 {
+    write-warning "this script may collect sensitive information similar to other microsoft diagnostic tools. information may contain information such as ip addresses, process information, or user names"
+
     $error.Clear()
     if ((test-path $workdir))
     {
@@ -99,10 +101,10 @@ function main()
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
     {   
         Write-Warning "please restart script in administrator powershell session"
-        Write-Warning "if unable to run as admin, restart and use -noadmin switch. This will collect less data that may be needed. exiting..."
-        
+
         if (!$noadmin)
         {
+            Write-Warning "if unable to run as admin, restart and use -noadmin switch. This will collect less data that may be needed. exiting..."
             return $false
         }
     }
