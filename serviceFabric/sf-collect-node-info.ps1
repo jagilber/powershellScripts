@@ -193,6 +193,7 @@ function main()
     Get-psdrive | out-file "$($workdir)\drives.txt"
 
     write-host "processes"
+    Get-process -ComputerName $remoteMachine | out-file "$($workdir)\process-summary.txt"
     Get-process -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\processes.txt"
 
     write-host "services"

@@ -22,18 +22,29 @@ $directories.Insert(0, $directory.ToLower())
 $min = $minSizeGB
 $max = 0
 $previousDir = $null
+$root = $true
 
 foreach ($subdir in $directories)
 {
-    $sum = (Get-ChildItem $subdir -Recurse | Measure-Object -Property Length -Sum)
+    if ($root)
+    {
+        $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
+        $root = $false
+    }
+    else
+    {
+        $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
+    }
+
     $size = [float]($sum.Sum / 1GB).ToString("F2")
     #[void]$sizeObjs.Add($subdir.ToLower(), "files: $($sum.Count) size: $([float]($size).ToString(`"F2`")))")
     [void]$sizeObjs.Add($subdir.ToLower(), $size)
-    $min = [math]::Min($min,$size)
-    $max = [math]::Max($max,$size)
+    $min = [math]::Min($min, $size)
+    $max = [math]::Max($max, $size)
 }
 
-$categorySize = [int]($max - $min) / 3
+$categorySize = [int]($max - $min) / 4
+
 
 foreach ($sortedDir in $directories)
 {
@@ -45,23 +56,25 @@ foreach ($sortedDir in $directories)
     {
         switch ($size)
         {
-            {$_ -gt $categorySize * 2}
+            {$_ -gt $categorySize * 3}
             {
                 $foreground = "Red"; 
                 break;
             }
-            {$_ -gt $categorySize * 1}
+            {$_ -gt $categorySize * 2}
             {
                 $foreground = "Yellow"; 
                 break;
             }
-            {$_ -gt $categorySize * 0}
+            {$_ -gt $categorySize}
             {
                 $foreground = "Green"; 
                 break;
             }
+
             default:
             {
+                $foreground = "DarkGreen"; 
             }
         }
     }
@@ -85,7 +98,8 @@ foreach ($sortedDir in $directories)
     }
     else
     {
-        write-host "$($sortedDir)`t$($size) GB" -ForegroundColor $foreground
+        # root
+        write-host "$($sortedDir)`t$($size) GB" -ForegroundColor Cyan
     }
 
     $previousDir = $sortedDir
