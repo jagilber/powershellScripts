@@ -59,10 +59,11 @@ foreach ($sortedDir in $directories)
   
     Write-Debug "checking $($sortedDir)"
     $sortedDir = $sortedDir.ToLower()
-    $size = 0
+    $size = [float]$sizeobjs.item($sortedDir)
 
     if ($rollupSize -or !$previousDir)
     {
+        $size = 0
         # search collection for subdirs and add to total
         foreach ($subdir in ($nonZeroSizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch [regex]::Escape($sortedDir)}))
         {
