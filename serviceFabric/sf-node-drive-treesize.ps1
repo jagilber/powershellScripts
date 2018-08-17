@@ -6,7 +6,7 @@ c:\sf-node-drive-treesize.ps1
 #>
 
 param(
-    $directory = "d:\",
+    $directory = "$($env:SystemRoot)\system32",
     $depth = 99,
     [switch]$detail,
     [float]$minSizeGB = .01,
@@ -33,6 +33,7 @@ $totalFiles = 0
 
 foreach ($subdir in $directories)
 {
+    Write-Debug "enumerating $($subDir)"
     $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
     $size = [float]($sum.Sum / 1GB).ToString("F3")
     [void]$sizeObjs.Add($subdir.ToLower(), $size)
@@ -56,9 +57,9 @@ $darkgreenmin = $sortedBySize[($categorySize) - 1]
 foreach ($sortedDir in $directories)
 {
   
-    #Write-Debug "checking $($sortedDir)"
+    Write-Debug "checking $($sortedDir)"
     $sortedDir = $sortedDir.ToLower()
-    $size = [float]$sizeobjs.item($sortedDir)
+    $size = 0
 
     if ($rollupSize -or !$previousDir)
     {
@@ -66,7 +67,7 @@ foreach ($sortedDir in $directories)
         foreach ($subdir in ($nonZeroSizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch [regex]::Escape($sortedDir)}))
         {
             $subDirSize = [float]$subdir.value
-            #Write-Debug "adding subdir size $($subDirSize)"
+            Write-Debug "adding subdir size $($subDirSize) to size $($size)"
             $size = $size + $subDirSize
         }
     }
