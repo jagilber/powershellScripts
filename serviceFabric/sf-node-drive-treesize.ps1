@@ -37,11 +37,11 @@ foreach ($subdir in $directories)
     $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
     $size = [float]($sum.Sum / 1GB).ToString("F3")
     
-    #if($size -gt 0)
-    #{
+    if($size -gt 0)
+    {
         [void]$sizeObjs.Add($subdir.ToLower(), $size)
         $totalFiles = $totalFiles + $sum.Count
-    #}
+    }
 }
 
 write-host "directory: $($directory) total files: $($totalFiles) total directories: $($sizeObjs.Count)"
