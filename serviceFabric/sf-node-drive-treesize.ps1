@@ -12,18 +12,17 @@ param(
     [float]$minSizeGB = .01,
     [switch]$rollupSize,
     [switch]$notree
-
 )
 
 $timer = get-date
-Clear-Host
 $error.Clear()
 $ErrorActionPreference = "silentlycontinue"
 $sizeObjs = @{}
-
 $drive = Get-PSDrive -Name $directory[0]
+
 write-host "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
-write-host "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating directories, please wait..." -ForegroundColor Yellow
+write-host "NOTE: by default, this script performs a quick scan which is not as accurate as running script with '-rollupSize' switch, but is much faster." -ForegroundColor Cyan
+write-host "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
 $directories = new-object collections.arraylist
 $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName|Sort-Object))
@@ -38,11 +37,11 @@ foreach ($subdir in $directories)
     $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
     $size = [float]($sum.Sum / 1GB).ToString("F3")
     
-    if($size -gt 0)
-    {
+    #if($size -gt 0)
+    #{
         [void]$sizeObjs.Add($subdir.ToLower(), $size)
         $totalFiles = $totalFiles + $sum.Count
-    }
+    #}
 }
 
 write-host "directory: $($directory) total files: $($totalFiles) total directories: $($sizeObjs.Count)"
