@@ -21,9 +21,10 @@ $error.Clear()
 $ErrorActionPreference = "silentlycontinue"
 $sizeObjs = @{}
 
-write-host "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating directories, please wait..." -ForegroundColor Yellow
 $drive = Get-PSDrive -Name $directory[0]
 write-host "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
+write-host "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating directories, please wait..." -ForegroundColor Yellow
+
 $directories = new-object collections.arraylist
 $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName|Sort-Object))
 $directories.Insert(0, $directory.ToLower())
@@ -36,16 +37,17 @@ foreach ($subdir in $directories)
     Write-Debug "enumerating $($subDir)"
     $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
     $size = [float]($sum.Sum / 1GB).ToString("F3")
-    [void]$sizeObjs.Add($subdir.ToLower(), $size)
-    $totalFiles = $totalFiles + $sum.Count
+    
+    if($size -gt 0)
+    {
+        [void]$sizeObjs.Add($subdir.ToLower(), $size)
+        $totalFiles = $totalFiles + $sum.Count
+    }
 }
 
 write-host "directory: $($directory) total files: $($totalFiles) total directories: $($sizeObjs.Count)"
 
-$categorySize = [float](($max - $min) / 4)
-$nonZeroSizeObjs = ($sizeObjs.GetEnumerator() | Where-Object {[float]$_.Value -gt 0})
-
-$sortedBySize = ($nonZeroSizeObjs.GetEnumerator() | Where-Object Value -ge $minSizeGB | Sort-Object -Property Value).Value
+$sortedBySize = ($sizeObjs.GetEnumerator() | Where-Object Value -ge $minSizeGB | Sort-Object -Property Value).Value
 $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
 $redmin = $sortedBySize[($categorySize * 6) - 1]
 $darkredmin = $sortedBySize[($categorySize * 5) - 1]
@@ -59,18 +61,15 @@ foreach ($sortedDir in $directories)
   
     Write-Debug "checking $($sortedDir)"
     $sortedDir = $sortedDir.ToLower()
-    $size = [float]$sizeobjs.item($sortedDir)
+    $size = 0
 
     if ($rollupSize -or !$previousDir)
     {
-        $size = 0
-        # search collection for subdirs and add to total
-        foreach ($subdir in ($nonZeroSizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch [regex]::Escape($sortedDir)}))
-        {
-            $subDirSize = [float]$subdir.value
-            Write-Debug "adding subdir size $($subDirSize) to size $($size)"
-            $size = $size + $subDirSize
-        }
+        $size = (($SizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch [regex]::Escape($sortedDir)}).value | Measure-Object -Sum).Sum
+    }
+    else
+    {
+        $size = [float]$sizeobjs.item($sortedDir)
     }
 
   
