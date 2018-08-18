@@ -69,7 +69,8 @@ param(
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com",
     [switch]$noAdmin,
-    [switch]$noEventLogs
+    [switch]$noEventLogs,
+    [switch]$certInfo
 )
 
 $ErrorActionPreference = "Continue"
@@ -177,9 +178,12 @@ function main()
     write-host "winrm settings"
     start-process $ps -ArgumentList "winrm get winrm/config/client > $($workdir)\winrm-config.txt" -WindowStyle Hidden
 
+    if($certInfo)
+    {
     write-host "certs (output scrubbed)"
     [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
-
+    }
+    
     write-host "http log files"
     copy-item -path "\\$($remoteMachine)\C$\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
 
