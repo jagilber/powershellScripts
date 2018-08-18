@@ -462,7 +462,7 @@ function main()
             if ($merge -or $displayMergedResults)
             {
                 merge-files
-                start $global:uploadDir
+                #start $global:uploadDir
             }
 
             log-info "files are located here: $($global:uploadDir)"
@@ -1604,6 +1604,7 @@ function merge-files()
             if ($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-$($machine)-all.csv"))
             {
                 & "$($uDir)\events-$($machine)-all.csv"
+                start $global:uploadDir
             }
         }
         elseif (@($machines).count -eq 1 -and $machine -eq $env:COMPUTERNAME -and [IO.Directory]::Exists($uDir))
@@ -1614,6 +1615,7 @@ function merge-files()
             if ($displayMergedResults -and [IO.File]::Exists("$($uDir)\events-all.csv"))
             {
                 & "$($uDir)\events-all.csv"
+                start $global:uploadDir
             }
         }
     }
