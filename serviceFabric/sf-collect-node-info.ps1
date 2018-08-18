@@ -178,10 +178,10 @@ function main()
     write-host "winrm settings"
     start-process $ps -ArgumentList "winrm get winrm/config/client > $($workdir)\winrm-config.txt" -WindowStyle Hidden
 
-    if($certInfo)
+    if ($certInfo)
     {
-    write-host "certs (output scrubbed)"
-    [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
+        write-host "certs (output scrubbed)"
+        [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
     }
     
     write-host "http log files"
@@ -268,12 +268,12 @@ function main()
         [System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
     }
 
-    Start-Transcript -Path $logFile -Force -Append
+    Start-Transcript -Path $logFile -Force -Append | Out-Null
     write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
 
     if ((test-path "$($env:systemroot)\explorer.exe"))
     {
-        start-process "explorer.exe" -ArgumentList $parentWorkDir -WindowStyle Hidden
+        start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
 }
 
@@ -292,6 +292,6 @@ finally
     get-job | remove-job -Force
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
-    Stop-Transcript 
+    Stop-Transcript | Out-Null
 }
 
