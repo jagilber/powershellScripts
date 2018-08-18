@@ -243,26 +243,29 @@ function main()
         start-sleep -seconds 10
     }
 
+    write-host "zip"
+    $zipFile = "$($workdir).zip"
+
+    if ((test-path $zipFile ))
+    {
+        remove-item $zipFile 
+    }
+
+    Stop-Transcript 
+
     if ($win10)
     {
-        write-host "zip"
-        $zipFile = "$($workdir).zip"
-
-        if ((test-path $zipFile ))
-        {
-            remove-item $zipFile 
-        }
-        
-        Stop-Transcript 
         Compress-archive -path $workdir -destinationPath $workdir
-        Start-Transcript -Path $logFile -Force -Append
-
-        write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
     }
     else
     {
-        write-host "zip and upload $($workdir) to workspace" -ForegroundColor Cyan
+        Add-Type -Assembly System.IO.Compression.FileSystem
+        $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
     }
+
+    Start-Transcript -Path $logFile -Force -Append
+    write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
 
     if ((test-path "$($env:systemroot)\explorer.exe"))
     {
