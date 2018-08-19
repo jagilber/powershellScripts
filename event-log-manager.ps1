@@ -520,7 +520,7 @@ function configure-startTime( $eventStartTime, $eventStopTime, $months, $hours, 
     [DateTime] $time = new-object DateTime
     [void][DateTime]::TryParse($eventStartTime, [ref] $time)
 
-    if ($time -eq [DateTime]::MinValue -and ![string]::IsNullOrEmpty($eventLogPath))
+    if ($time -eq [DateTime]::MinValue -and ![string]::IsNullOrEmpty($eventLogPath) -and ($months + $hours + $days + $minutes -eq 0))
     {
         # parsing existing evtx files so do not override $eventStartTime if it was not provided
         [DateTime] $eventStartTime = $time
