@@ -86,8 +86,8 @@ function main()
 {
     $error.Clear()
     write-warning "to troubleshoot this issue, this script may collect sensitive information similar to other microsoft diagnostic tools."
-    write-warning "information may contain information such as ip addresses, process information, user names, or similar."
-    write-warning "all information is in plain text that can be reviewed before uploading data to workspace."
+    write-warning "information may contain items such as ip addresses, process information, user names, or similar."
+    write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
     if ((test-path $workdir))
     {
@@ -288,7 +288,6 @@ catch
 finally
 {
     set-location $currentWorkDir
-    write-host "remove jobs"
     get-job | remove-job -Force
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"

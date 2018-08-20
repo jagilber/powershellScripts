@@ -47,8 +47,9 @@
 .NOTES
     File Name  : event-log-manager.ps1
     Author     : jagilber
-    Version    : 180730 fix intermittent hang when running multiple instances with get-job filter
+    Version    : 180820 fix eventStartTime when parsing evt 
     History    : 
+                180730 fix intermittent hang when running multiple instances with get-job filter
                 180319 add latest ver of logmerge. updated description for winrm info            
                 170825 fix for debug log count. showing error now on saving changes.
     
@@ -469,7 +470,7 @@ function main()
             #tree /a /f $($global:uploadDir)
         }
    
-        log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds)"
+        log-info "finished total seconds:$([DateTime]::Now.Subtract($startTimer).TotalSeconds.ToString("F2"))"
 
         if ($global:logStream -ne $null)
         {
@@ -2047,7 +2048,7 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
                     if ([DateTime]::Now.Subtract($timer).TotalSeconds -gt 30)
                     {
                         $totalcount = $totalCount + $count
-                        write-host "$($machine):$($eventLogName):$([decimal]($count / [DateTime]::Now.Subtract($timer).TotalSeconds)) records per second. total: $($totalCount)" -ForegroundColor Magenta
+                        write-host "$($machine):$($eventLogName):$([decimal]($count / [DateTime]::Now.Subtract($timer).TotalSeconds).ToString("F2")) records per second. total: $($totalCount)" -ForegroundColor Magenta
                         $timer = [DateTime]::Now
                         $count = 0
                     }
