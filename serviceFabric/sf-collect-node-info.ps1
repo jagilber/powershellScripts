@@ -246,7 +246,7 @@ function main()
     {
         foreach($job in ((get-job | Where-Object State -ne "Completed").Count) -gt 0)
         {
-            write-host (Receive-Job $job)
+            write-host ("$($job.Id) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
         }
 
         write-host "waiting on $($uncompletedCount) jobs..."
