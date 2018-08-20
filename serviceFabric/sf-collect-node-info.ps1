@@ -250,8 +250,7 @@ function main()
         Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
     } -arguments @($workdir, $remoteMachine)
 
-    write-host "get-nettcpconnetion" # doesnt require admin like netstat
-    add-job -jobName ".net reg" -scriptBlock {
+    add-job -jobName "get-nettcpconnetion" -scriptBlock {
         param($workdir = $args[0])
         Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
     } -arguments @($workdir)
@@ -277,7 +276,7 @@ function main()
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
     write-host "fabric root:$($fabricRoot)"
     Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
-        
+
     write-host "waiting for $($jobs.Count) jobs to complete"
 
     while (($incompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
