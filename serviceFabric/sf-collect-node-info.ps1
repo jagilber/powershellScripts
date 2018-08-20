@@ -7,7 +7,7 @@ iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/service
 
 To download and execute with arguments:
 (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
-c:\sf-collect-node-info.ps1 -certInfo
+c:\sf-collect-node-info.ps1 -certInfo -days 30
 
 upload to workspace sfgather* dir or zip
 
@@ -133,10 +133,15 @@ function main()
 
     if (!$noEventLogs)
     {
-        add-job -jobName "event logs" -scriptBlock {
+        add-job -jobName "event logs 1 day" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
             (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
             Invoke-Expression "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine)
+
+        add-job -jobName "event logs" -scriptBlock {
+            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
+            (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
             Invoke-Expression "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [datetime]$endTime).Days)-days-event-logs`" -nodynamicpath -machines $($remoteMachine)"
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine)
     }
@@ -201,8 +206,10 @@ function main()
     write-host "os"
     get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\os-info.txt"
 
-    write-host "drives"
-    Get-psdrive | out-file "$($workdir)\drives.txt"
+    add-job -jobName "drives" -scriptBlock {
+        param($workdir = $args[0])
+        Get-psdrive | out-file "$($workdir)\drives.txt"
+    } -arguments @($workdir)
 
     write-host "processes"
     Get-process -ComputerName $remoteMachine | out-file "$($workdir)\process-summary.txt"
@@ -218,11 +225,10 @@ function main()
     write-host "features"
     Get-WindowsFeature | Where-Object "InstallState" -eq "Installed" | out-file "$($workdir)\windows-features.txt"
 
-    write-host ".net"
-    $jobs.Add((Start-Job -ScriptBlock {
-                param($workdir = $args[0], $remoteMachine = $args[1])
-                Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
-            } -ArgumentList $workdir, $remoteMachine))
+    add-job -jobName ".net reg" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1])
+        Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
+    } -arguments @($workdir, $remoteMachine)
 
     write-host "policies"
     Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
@@ -230,15 +236,17 @@ function main()
     write-host "schannel"
     Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
 
-    write-host "firewall rules"
-    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
-
-    write-host "firewall settings"
-    Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
+    add-job -jobName "firewall" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1])
+        Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
+        Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
+    } -arguments @($workdir, $remoteMachine)
 
     write-host "get-nettcpconnetion" # doesnt require admin like netstat
-    Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
-
+    add-job -jobName ".net reg" -scriptBlock {
+        param($workdir = $args[0])
+        Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
+    } -arguments @($workdir)
     write-host "netstat ports"
     Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
 
@@ -250,10 +258,17 @@ function main()
 
     write-host "service fabric reg"
     #HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric
-    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric /s > $($workDir)\serviceFabric.reg.txt"
+    Invoke-Expression "reg.exe query `"\\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric`" /s > $($workDir)\serviceFabric.reg.txt"
     Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServiceFabricNodeBootStrapAgent /s > $($workDir)\serviceFabricNodeBootStrapAgent.reg.txt"
 
-    
+    $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
+    write-host "fabric data root:$($fabricDataRoot)"
+    Invoke-Expression "dir $($fabricDataRoot) > $($workDir)\dir-fabricdataroot.txt"
+    Copy-Item -Path "$($fabricDataRoot)\*" -Filter "*.*" -Destination $workdir
+
+    $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
+    write-host "fabric root:$($fabricRoot)"
+    Invoke-Expression "dir $($fabricRoot) > $($workDir)\dir-fabricroot.txt"
     
     write-host "waiting for $($jobs.Count) jobs to complete"
 
@@ -263,11 +278,11 @@ function main()
         {
             if ($job -and $job.Name)
             {
-                write-host ("$($job.Name) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
+                write-host ("$($job.Name) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)") -ForegroundColor Cyan
             }
         }
 
-        write-host "waiting on $($incompletedCount) jobs..."
+        write-host "waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
         start-sleep -seconds 10
     }
 
@@ -304,7 +319,7 @@ function main()
 function add-job($jobName, $scriptBlock, $arguments)
 {
     write-host "adding job $($jobName)"
-    $jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
+    [void]$jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
 }
 
 try
