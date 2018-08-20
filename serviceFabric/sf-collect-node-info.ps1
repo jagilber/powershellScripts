@@ -244,7 +244,7 @@ function main()
 
     while (($uncompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
     {
-        foreach($job in ((get-job | Where-Object State -ne "Completed").Count) -gt 0)
+        foreach($job in (get-job | Where-Object State -ne "Completed"))
         {
             write-host ("$($job.Id) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
         }
