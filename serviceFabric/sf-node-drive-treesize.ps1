@@ -11,7 +11,8 @@ param(
     [switch]$detail,
     [float]$minSizeGB = .01,
     [switch]$rollupSize,
-    [switch]$notree
+    [switch]$notree,
+    [switch]$showFiles
 )
 
 $timer = get-date
@@ -25,7 +26,7 @@ write-host "NOTE: by default, this script performs a quick scan which is not as 
 write-host "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
 $directories = new-object collections.arraylist
-$directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName|Sort-Object))
+$directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName | Sort-Object))
 $directories.Insert(0, $directory.ToLower())
 $previousDir = $null
 $totalFiles = 0
@@ -34,9 +35,19 @@ $totalFiles = 0
 foreach ($subdir in $directories)
 {
     Write-Debug "enumerating $($subDir)"
-    $sum = (Get-ChildItem $subdir | Measure-Object -Property Length -Sum)
+    $files = Get-ChildItem $subdir
+    $sum = ($files | Measure-Object -Property Length -Sum)
     $size = [float]($sum.Sum / 1GB).ToString("F3")
     
+    if($showFiles)
+    {
+        write-host "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)"
+        foreach($file in $files)
+        {
+            write-host "`t$($file)"
+        }
+    }
+
     if($size -gt 0)
     {
         [void]$sizeObjs.Add($subdir.ToLower(), $size)
