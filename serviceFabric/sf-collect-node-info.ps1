@@ -2,8 +2,8 @@
 .SYNOPSIS
 powershell script to collect service fabric node diagnostic data
 To download and execute, run the following commands on each sf node in admin powershell:
-(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
-c:\sf-collect-node-info.ps1
+iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1')|iex
+
 upload to workspace sfgather* dir or zip
 
 .DESCRIPTION
@@ -201,6 +201,7 @@ function main()
     Get-process -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\processes.txt"
 
     write-host "services"
+    Get-service -ComputerName $remoteMachine | out-file "$($workdir)\service-summary.txt"
     Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
     write-host "installed applications"
@@ -243,6 +244,11 @@ function main()
 
     while (($uncompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
     {
+        foreach($job in ((get-job | Where-Object State -ne "Completed").Count) -gt 0)
+        {
+            write-host (Receive-Job $job)
+        }
+
         write-host "waiting on $($uncompletedCount) jobs..."
         start-sleep -seconds 10
     }
