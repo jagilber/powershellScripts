@@ -246,7 +246,10 @@ function main()
     {
         foreach($job in (get-job | Where-Object State -ne "Completed"))
         {
-            write-host ("$($job.Id) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
+            if($job -and $job.id)
+            {
+                write-host ("$($job.Id) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
+            }
         }
 
         write-host "waiting on $($uncompletedCount) jobs..."
