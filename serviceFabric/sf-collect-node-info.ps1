@@ -263,12 +263,12 @@ function main()
 
     $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
-    Invoke-Expression "dir $($fabricDataRoot) > $($workDir)\dir-fabricdataroot.txt"
-    Copy-Item -Path "$($fabricDataRoot)\*" -Filter "*.*" -Destination $workdir
+    Invoke-Expression "dir `"$($fabricDataRoot)`" /s > $($workDir)\dir-fabricdataroot.txt"
+    Copy-Item -Path "$($fabricDataRoot)\*" -Filter "*.xml" -Destination $workdir
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
     write-host "fabric root:$($fabricRoot)"
-    Invoke-Expression "dir $($fabricRoot) > $($workDir)\dir-fabricroot.txt"
+    Invoke-Expression "dir `"$($fabricRoot)`" /s > $($workDir)\dir-fabricroot.txt"
     
     write-host "waiting for $($jobs.Count) jobs to complete"
 
