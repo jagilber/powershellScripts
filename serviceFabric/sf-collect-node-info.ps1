@@ -135,14 +135,22 @@ function main()
     {
         add-job -jobName "event logs 1 day" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
-            (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
-            Invoke-Expression "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+            $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
+            if(!(test-path $scriptFile))
+            {
+                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
+            }
+            Invoke-Expression "$($scriptFile) -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine)
 
         add-job -jobName "event logs" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
-            (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
-            Invoke-Expression "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [datetime]$endTime).Days)-days-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+            $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
+            if(!(test-path $scriptFile))
+            {
+                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
+            }
+            Invoke-Expression "$($scriptFile)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [datetime]$endTime).Days)-days-event-logs`" -nodynamicpath -machines $($remoteMachine)"
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine)
     }
 
@@ -263,13 +271,13 @@ function main()
 
     $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
-    Invoke-Expression "dir `"$($fabricDataRoot)`" /s > $($workDir)\dir-fabricdataroot.txt"
+    Get-ChildItem $($fabricDataRoot) -Recurse | out-file "$($workDir)\dir-fabricdataroot.txt"
     Copy-Item -Path "$($fabricDataRoot)\*" -Filter "*.xml" -Destination $workdir
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
     write-host "fabric root:$($fabricRoot)"
-    Invoke-Expression "dir `"$($fabricRoot)`" /s > $($workDir)\dir-fabricroot.txt"
-    
+    Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
+        
     write-host "waiting for $($jobs.Count) jobs to complete"
 
     while (($incompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
