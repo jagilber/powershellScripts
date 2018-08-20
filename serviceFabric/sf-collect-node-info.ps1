@@ -1,8 +1,13 @@
 <#
 .SYNOPSIS
 powershell script to collect service fabric node diagnostic data
+
 To download and execute, run the following commands on each sf node in admin powershell:
 iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1')|iex
+
+To download and execute with arguments:
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
+c:\sf-collect-node-info.ps1 -certInfo
 
 upload to workspace sfgather* dir or zip
 
@@ -49,8 +54,8 @@ upload to workspace sfgather* dir or zip
     History    : 
     
 .EXAMPLE
-    .\sf-collect-node-info.ps1
-    Example command to query all diagnostic information and event logs
+    .\sf-collect-node-info.ps1 -certInfo
+    Example command to query all diagnostic information, event logs, and certificate store information
 
 .PARAMETER workDir
     output directory where all files will be created.
@@ -65,7 +70,7 @@ param(
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
     $startTime = (get-date).AddDays(-7).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
-    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985, 5986),
+    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985, 80, 443),
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com",
     [switch]$noAdmin,
@@ -113,14 +118,13 @@ function main()
 
     write-host "remove old jobs"
     get-job | remove-job -Force
-    write-host "windows update"
 
     if ($win10)
     {
-        $jobs.Add((Start-Job -ScriptBlock {
-                    param($workdir = $args[0]) 
-                    Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.log.txt"
-                } -ArgumentList $workdir))
+        add-job -jobName "windows update" -scriptBlock {
+            param($workdir = $args[0]) 
+            Get-WindowsUpdateLog -LogPath "$($workdir)\windowsupdate.log.txt"
+        } -arguments $workdir
     }
     else
     {
@@ -129,54 +133,58 @@ function main()
 
     if (!$noEventLogs)
     {
-        write-host "event logs"
-        $jobs.Add((Start-Job -ScriptBlock {
-                    param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
-                    (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
-                    $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir $($workdir) -machines $($remoteMachine)"
-                    start-process -filepath $ps -ArgumentList $argList -Wait -WindowStyle Hidden
-                } -ArgumentList $workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine))
+        add-job -jobName "event logs" -scriptBlock {
+            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
+            (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", "$($parentWorkdir)\event-log-manager.ps1")
+            Invoke-Expression "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+            Invoke-Expression "$($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [datetime]$endTime).Days)-days-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine)
     }
 
-    write-host "check for dump files"
-    $jobs.Add((Start-Job -ScriptBlock {
-                param($workdir = $args[0], $remoteMachine = $args[1])
-                # slow
-                # Invoke-Command -ComputerName $remoteMachine -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > "$env:temp\dumplist-c.txt" -Wait -WindowStyle Hidden }
-                # start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\c$\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait -WindowStyle Hidden
-                start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt" -Wait -WindowStyle Hidden
-            } -ArgumentList $workdir, $remoteMachine))
-    $jobs.Add((Start-Job -ScriptBlock {
-                param($workdir = $args[0], $remoteMachine = $args[1])
-                # Invoke-Command -ComputerName $remoteMachine -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > "$env:temp\dumplist-d.txt" -Wait -WindowStyle Hidden }
-                # start-process "cmd.exe" -ArgumentList "/c dir \\$($remoteMachine)\d$\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait -WindowStyle Hidden
-                start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt" -Wait -WindowStyle Hidden
-            } -ArgumentList $workdir, $remoteMachine))
+    add-job -jobName "check for dump file c" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1])
+        # slow
+        # Invoke-Command -ComputerName $remoteMachine -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > "$env:temp\dumplist-c.txt" -Wait -WindowStyle Hidden }
+        Invoke-Expression "cmd.exe /c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt"
+    } -arguments @($workdir, $remoteMachine)
 
-    write-host "network port tests"
-    $jobs.Add((Start-Job -ScriptBlock {
-                param($workdir = $args[0], $remoteMachine = $args[1], $ports = $args[2])
-                foreach ($port in $ports)
-                {
-                    test-netconnection -port $port -ComputerName $remoteMachine | out-file -Append "$($workdir)\network-port-test.txt"
-                }
-            } -ArgumentList $workdir, $remoteMachine, $ports))
+    add-job -jobName "check for dump file d" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1])
+        # Invoke-Command -ComputerName $remoteMachine -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > "$env:temp\dumplist-d.txt" -Wait -WindowStyle Hidden }
+        Invoke-Expression "cmd.exe /c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt"
+    } -arguments @($workdir, $remoteMachine)
 
-    write-host "check external connection"
-    [net.httpWebResponse](Invoke-WebRequest $externalUrl -UseBasicParsing).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
+    add-job -jobName "network port tests" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1], $ports = $args[2])
+        foreach ($port in $ports)
+        {
+            test-netconnection -port $port -ComputerName $remoteMachine -InformationLevel Detailed | out-file -Append "$($workdir)\network-port-test.txt"
+        }
+    } -arguments @($workdir, $remoteMachine, $ports)
 
-    write-host "resolve-dnsname" # doesnt require admin like nslookup
-    Resolve-DnsName -Name $remoteMachine | out-file -Append "$($workdir)\resolve-dnsname.txt"
-    Resolve-DnsName -Name $externalUrl | out-file -Append "$($workdir)\resolve-dnsname.txt"
-    
-    write-host "nslookup"
-    out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
-    start-process $ps -ArgumentList "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt" -Wait -WindowStyle Hidden
-    out-file -InputObject "querying nslookup for $($remoteMachine)" -Append "$($workdir)\nslookup.txt"
-    start-process $ps -ArgumentList "nslookup $($remoteMachine) | out-file -Append $($workdir)\nslookup.txt" -WindowStyle Hidden
+    add-job -jobName "check external connection" -scriptBlock {
+        param($workdir = $args[0], $externalUrl = $args[1])
+        [net.httpWebResponse](Invoke-WebRequest $externalUrl -UseBasicParsing).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
+    } -arguments @($workdir, $externalUrl)
+
+    add-job -jobName "resolve-dnsname" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1], $externalUrl = $args[2])
+        Resolve-DnsName -Name $remoteMachine | out-file -Append "$($workdir)\resolve-dnsname.txt"
+        Resolve-DnsName -Name $externalUrl | out-file -Append "$($workdir)\resolve-dnsname.txt"
+    } -arguments @($workdir, $remoteMachine, $externalUrl)
+
+    add-job -jobName "nslookup" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1], $externalUrl = $args[2])
+        write-host "nslookup"
+        out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
+        Invoke-Expression "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
+        out-file -InputObject "querying nslookup for $($remoteMachine)" -Append "$($workdir)\nslookup.txt"
+        Invoke-Expression "nslookup $($remoteMachine) | out-file -Append $($workdir)\nslookup.txt"
+    } -arguments @($workdir, $remoteMachine, $externalUrl)
+
 
     write-host "winrm settings"
-    start-process $ps -ArgumentList "winrm get winrm/config/client > $($workdir)\winrm-config.txt" -WindowStyle Hidden
+    Invoke-Expression "winrm get winrm/config/client > $($workdir)\winrm-config.txt" 
 
     if ($certInfo)
     {
@@ -205,7 +213,7 @@ function main()
     Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
 
     write-host "installed applications"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt" -WindowStyle Hidden
+    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
 
     write-host "features"
     Get-WindowsFeature | Where-Object "InstallState" -eq "Installed" | out-file "$($workdir)\windows-features.txt"
@@ -213,17 +221,17 @@ function main()
     write-host ".net"
     $jobs.Add((Start-Job -ScriptBlock {
                 param($workdir = $args[0], $remoteMachine = $args[1])
-                start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt" -WindowStyle Hidden
+                Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
             } -ArgumentList $workdir, $remoteMachine))
 
     write-host "policies"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt" -WindowStyle Hidden
+    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
 
     write-host "schannel"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt" -WindowStyle Hidden
+    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
 
     write-host "firewall rules"
-    start-process $ps -ArgumentList "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt" -WindowStyle Hidden
+    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
 
     write-host "firewall settings"
     Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
@@ -232,27 +240,34 @@ function main()
     Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
 
     write-host "netstat ports"
-    start-process $ps -ArgumentList "netstat -bna > $($workdir)\netstat.txt" -WindowStyle Hidden
+    Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
 
     write-host "netsh ssl"
-    start-process $ps -ArgumentList "netsh http show sslcert > $($workdir)\netshssl.txt" -WindowStyle Hidden
+    Invoke-Expression "netsh http show sslcert > $($workdir)\netshssl.txt"
 
     write-host "ip info"
-    start-process $ps -ArgumentList "ipconfig /all > $($workdir)\ipconfig.txt" -WindowStyle Hidden
+    Invoke-Expression "ipconfig /all > $($workdir)\ipconfig.txt"
 
+    write-host "service fabric reg"
+    #HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric
+    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric /s > $($workDir)\serviceFabric.reg.txt"
+    Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServiceFabricNodeBootStrapAgent /s > $($workDir)\serviceFabricNodeBootStrapAgent.reg.txt"
+
+    
+    
     write-host "waiting for $($jobs.Count) jobs to complete"
 
-    while (($uncompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
+    while (($incompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
     {
-        foreach($job in (get-job | Where-Object State -ne "Completed"))
+        foreach ($job in (get-job | Where-Object State -ne "Completed"))
         {
-            if($job -and $job.id)
+            if ($job -and $job.Name)
             {
-                write-host ("$($job.Id) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
+                write-host ("$($job.Name) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)")
             }
         }
 
-        write-host "waiting on $($uncompletedCount) jobs..."
+        write-host "waiting on $($incompletedCount) jobs..."
         start-sleep -seconds 10
     }
 
@@ -284,6 +299,12 @@ function main()
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
+}
+
+function add-job($jobName, $scriptBlock, $arguments)
+{
+    write-host "adding job $($jobName)"
+    $jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
 }
 
 try
