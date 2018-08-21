@@ -96,7 +96,11 @@ function main()
     write-warning "information may contain items such as ip addresses, process information, user names, or similar."
     write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
-    if(!$workDir)
+    if(!$workDir -and $remoteMachines)
+    {
+        $workdir = "$($env:temp)\sfgather-$((get-date).ToString("yy-MM-dd-HH-ss"))"
+    }
+    elseif(!$workDir)
     {
         $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
     }
@@ -166,14 +170,14 @@ function main()
             }
 
             $sourcePath = "$($adminPath)\sfgather-$($machine)"
-            $destPath = "$($parentWorkDir)\sfgather-$($machine)"
+            $destPath = "$($workDir)\sfgather-$($machine)"
 
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
 
             if((test-path $sourcePathZip))
             {
-                # compress not working on remote machines not sure why
+                write-host "copying file $($sourcePathZip) to $($destPathZip)" -ForegroundColor Magenta
                 Copy-Item $sourcePathZip $destPathZip -Force
                 remove-item $sourcePathZip -Force
                 $foundZip = $true
@@ -183,6 +187,7 @@ function main()
             {
                 if(!$foundZip)
                 {
+                    write-host "copying folder $($sourcePath) to $($destPath)" -ForegroundColor Magenta
                     Copy-Item $sourcePath $destPath -Force -Recurse
                     compress-file $destPath
                 }
@@ -194,10 +199,17 @@ function main()
                 write-host "warning: unable to find diagnostic files in $($sourcePath)"
             }
         }
+
+        compress-file $workDir
     }
     else
     {
         process-machine
+    }
+
+    if (($host.Name -ine "ServerRemoteHost") -and (test-path "$($env:systemroot)\explorer.exe"))
+    {
+        start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
 }
 function process-machine()
@@ -421,13 +433,7 @@ function process-machine()
         read-xml -xmlFile $file.FullName -format
     }
 
-    
     compress-file $workDir
-
-    if (($host.Name -ine "ServerRemoteHost") -and (test-path "$($env:systemroot)\explorer.exe"))
-    {
-        start-process "explorer.exe" -ArgumentList $parentWorkDir
-    }
 }
 
 function add-job($jobName, $scriptBlock, $arguments)
