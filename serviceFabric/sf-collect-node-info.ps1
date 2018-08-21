@@ -84,7 +84,7 @@ $scriptUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/maste
 $currentWorkDir = get-location
 $osVersion = [version]([string]((wmic os get Version) -match "\d"))
 $win10 = ($osVersion.major -ge 10)
-$parentWorkDir = $workdir
+$parentWorkDir = $null
 $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 $zipFile = $null
@@ -101,6 +101,8 @@ function main()
         $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
     }
 
+    $parentWorkDir = [io.path]::GetDirectoryName($workDir)
+
     if($remoteMachines)
     {
         foreach ($machine in @($remoteMachines))
@@ -115,7 +117,7 @@ function main()
 
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -AsJob -ComputerName $machine -scriptblock {
-                param($scriptUrl = $args[0],$machine = $args[1], $networkTestAddress = $args[2])
+                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2])
                 $parentDir = "$($env:systemroot)\temp"
                 $workDir = "$($parentDir)\sfgather-$($machine)"
                 $scriptPath = "$($parentDir)\$($scriptUrl -replace `".*/`",`"`")"
