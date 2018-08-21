@@ -379,21 +379,29 @@ function add-job($jobName, $scriptBlock, $arguments)
 
 function read-xml($xmlFile, [switch]$format)
 {
-    write-host "reading xml file $($xmlFile)"
-    [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
-    [void]$xdoc.Load($xmlFile)
-
-    if ($format)
+    try
     {
-        [IO.StringWriter] $sw = new-object IO.StringWriter
-        [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
-        $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
-        $xdoc.PreserveWhitespace = $true
-        [void]$xdoc.WriteTo($xmlTextWriter)
-        #write-host ($sw.ToString())
-        out-file -FilePath $xmlFile -InputObject $sw.ToString()
+        write-host "reading xml file $($xmlFile)"
+        [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
+        [void]$xdoc.Load($xmlFile)
+
+        if ($format)
+        {
+            [IO.StringWriter] $sw = new-object IO.StringWriter
+            [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
+            $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
+            $xdoc.PreserveWhitespace = $true
+            [void]$xdoc.WriteTo($xmlTextWriter)
+            #write-host ($sw.ToString())
+            out-file -FilePath $xmlFile -InputObject $sw.ToString()
+        }
+
+        return $xdoc
     }
-    return $xdoc
+    catch
+    {
+            return $Null
+    }
 }
 
 try
