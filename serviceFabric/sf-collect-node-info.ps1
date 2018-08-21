@@ -140,11 +140,13 @@ function main()
                 (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
             }
             #Invoke-Expression "$($scriptFile) -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
-            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
-            start-process -filepath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden
+            $tempLocation = "$($workdir)\1-day-event-logs"
+            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath -machines $($remoteMachine)"
+            start-process -filepath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -WorkingDirectory $tempLocation
             
-            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
-            start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden
+            $tempLocation = "$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs"
+            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath -machines $($remoteMachine)"
+            start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $remoteMachine)
     }
 
