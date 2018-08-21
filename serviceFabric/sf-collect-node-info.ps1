@@ -166,7 +166,7 @@ function main()
             }
 
             $sourcePath = "$($adminPath)\sfgather-$($machine)"
-            $destPath = "$($parentWorkDir)"
+            $destPath = "$($parentWorkDir)\sfgather-$($machine)"
 
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
@@ -424,7 +424,7 @@ function process-machine()
     
     compress-file $workDir
 
-    if ((test-path "$($env:systemroot)\explorer.exe"))
+    if (($host.Name -ine "ServerRemoteHost") -and (test-path "$($env:systemroot)\explorer.exe"))
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
