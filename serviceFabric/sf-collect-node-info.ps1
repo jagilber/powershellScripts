@@ -96,6 +96,13 @@ function main()
     write-warning "information may contain items such as ip addresses, process information, user names, or similar."
     write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
+    if(!$workDir)
+    {
+        $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
+    }
+
+    $parentWorkDir = [io.path]::GetDirectoryName($workDir)
+
     if ((test-path $workdir))
     {
         remove-item $workdir -Recurse -Force
@@ -120,13 +127,6 @@ function main()
 
     write-host "remove old jobs"
     get-job | remove-job -Force
-
-    if(!$workDir)
-    {
-        $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
-    }
-
-    $parentWorkDir = [io.path]::GetDirectoryName($workDir)
 
     if($remoteMachines)
     {
