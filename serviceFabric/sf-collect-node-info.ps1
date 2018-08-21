@@ -70,7 +70,7 @@ param(
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
     $startTime = (get-date).AddDays(-7).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
-    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985, 80, 443),
+    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985),
     $remoteMachine = $env:computername,
     $externalUrl = "bing.com",
     [switch]$noAdmin,
@@ -136,7 +136,7 @@ function main()
         add-job -jobName "event logs 1 day" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
             $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
-            if(!(test-path $scriptFile))
+            if (!(test-path $scriptFile))
             {
                 (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
             }
@@ -146,7 +146,7 @@ function main()
         add-job -jobName "event logs" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
             $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
-            if(!(test-path $scriptFile))
+            if (!(test-path $scriptFile))
             {
                 (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
             }
@@ -268,10 +268,40 @@ function main()
     Invoke-Expression "reg.exe query `"\\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric`" /s > $($workDir)\serviceFabric.reg.txt"
     Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServiceFabricNodeBootStrapAgent /s > $($workDir)\serviceFabricNodeBootStrapAgent.reg.txt"
 
+    #
+    # service fabric information
+    #
     $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
-    Get-ChildItem $($fabricDataRoot) -Recurse | out-file "$($workDir)\dir-fabricdataroot.txt"
-    Copy-Item -Path "$($fabricDataRoot)\*" -Filter "*.xml" -Destination $workdir
+
+    add-job -jobName "fabric config files" -scriptBlock {
+        param($workdir = $args[0], $fabricDataRoot = $args[1])
+        Get-ChildItem $($fabricDataRoot) -Recurse | out-file "$($workDir)\dir-fabricdataroot.txt"
+        Copy-Item -Path $fabricDataRoot -Filter "*.xml" -Destination $workdir -Recurse
+    } -arguments @($workdir, $fabricDataRoot)
+
+
+    $clusterManifestFile = "$($fabricDataRoot)\clustermanifest.xml"
+    if ((test-path $clusterManifestFile))
+    {
+        write-host "reading $($clusterManifestFile)"    
+        $xml = read-xml -xmlFile $clusterManifestFile
+        $xml.clustermanifest
+        $seedNodes = $xml.ClusterManifest.Infrastructure.PaaS.Votes.Vote
+        write-host "seed nodes: $($seedNodes | format-list * | out-string)"
+        $nodeCount = $xml.ClusterManifest.Infrastructure.PaaS.Roles.Role.RoleNodeCount
+        write-host "node count:$($nodeCount)"
+        $clusterId = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "Paas").FirstChild.value
+        write-host "cluster id:$($nodeCount)"
+        $upgradeServiceParams = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "UpgradeService").parameter
+        $sfrpUrl = ($upgradeServiceParams | Where-Object Name -eq "BaseUrl").Value
+        $sfrpUrl = "$($sfrpUrl)$($clusterId)"
+        write-host "sfrp url:$($sfrpUrl)"
+        $ucert = ($upgradeServiceParams | Where-Object Name -eq "X509FindValue").Value
+        
+        $sfrpResponse = Invoke-WebRequest $sfrpUrl -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
+        write-host "sfrp response: $($sfrpresponse)"
+    }
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
     write-host "fabric root:$($fabricRoot)"
@@ -279,18 +309,28 @@ function main()
 
     write-host "waiting for $($jobs.Count) jobs to complete"
 
-    while (($incompletedCount = (get-job | Where-Object State -ne "Completed").Count) -gt 0)
+    while (get-job)
     {
-        foreach ($job in (get-job | Where-Object State -ne "Completed"))
+        foreach ($job in get-job)
         {
-            if ($job -and $job.Name)
+            write-host ("$($job.Name): state:$($job.State) output:$(Receive-Job $job -)") -ForegroundColor Cyan
+
+            if ($job.State -imatch "Failed|Completed")
             {
-                write-host ("$($job.Name) : $(Receive-Job $job.Name -ErrorAction SilentlyContinue)") -ForegroundColor Cyan
+                remove-job $job -Force
             }
         }
 
+        $incompletedCount = (get-job | Where-Object State -eq "Running").Count
         write-host "waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
         start-sleep -seconds 10
+    }
+
+    write-host "formatting xml files"
+    foreach ($file in (get-childitem -filter *.xml -Path "$($workdir)" -Recurse))
+    {
+        # format xml in output
+        read-xml -xmlFile $file.FullName -format
     }
 
     write-host "zip"
@@ -327,6 +367,25 @@ function add-job($jobName, $scriptBlock, $arguments)
 {
     write-host "adding job $($jobName)"
     [void]$jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
+}
+
+function read-xml($xmlFile, [switch]$format)
+{
+    write-host "reading xml file $($xmlFile)"
+    [Xml.XmlDocument] $xdoc = New-Object System.Xml.XmlDocument
+    [void]$xdoc.Load($xmlFile)
+
+    if ($format)
+    {
+        [IO.StringWriter] $sw = new-object IO.StringWriter
+        [Xml.XmlTextWriter] $xmlTextWriter = new-object Xml.XmlTextWriter ($sw)
+        $xmlTextWriter.Formatting = [Xml.Formatting]::Indented
+        $xdoc.PreserveWhitespace = $true
+        [void]$xdoc.WriteTo($xmlTextWriter)
+        #write-host ($sw.ToString())
+        out-file -FilePath $xmlFile -InputObject $sw.ToString()
+    }
+    return $xdoc
 }
 
 try
