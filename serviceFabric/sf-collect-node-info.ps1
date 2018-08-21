@@ -122,6 +122,7 @@ function main()
 
         foreach ($machine in @($remoteMachines))
         {
+            $foundZip = $false
             if(!(Test-NetConnection $machine))
             {
                 Write-Warning "unable to connect to $($machine) to copy zip. skipping!"
@@ -138,11 +139,19 @@ function main()
             {
                 # compress not working on remote machines not sure why
                 Copy-Item $sourcePathZip $destPathZip -Force
+                remove-item $sourcePathZip -Force
+                $foundZip = $true
             }
-            elseif((test-path $sourcePath))
+            
+            if((test-path $sourcePath))
             {
-                Copy-Item $sourcePath $destPath -Force -Recurse
-                compress-file $destPath
+                if(!$foundZip)
+                {
+                    Copy-Item $sourcePath $destPath -Force -Recurse
+                    compress-file $destPath
+                }
+
+                remove-item $sourcePath -Recurse -Force
             }
             else
             {
