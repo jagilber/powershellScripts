@@ -128,13 +128,25 @@ function main()
                 continue
             }
 
-            $sourcePath = "\\$($machine)\admin$\temp\sfgather-$($machine).zip"
-            $destPath = "$($workdir)\sfgather-$($machine).zip"
+            $sourcePath = "\\$($machine)\admin$\temp\sfgather-$($machine)"
+            $destPath = "$($workdir)\sfgather-$($machine)"
 
-            if((test-path $sourcePath))
+            $sourcePathZip = "$($sourcePath).zip"
+            $destPathZip = "$($destPath).zip"
+
+            if((test-path $sourcePathZip))
             {
-                Copy-Item $sourcePath $destPath -Force
-                $zipFile += $destPath
+                # compress not working on remote machines not sure why
+                Copy-Item $sourcePathZip $destPathZip -Force
+            }
+            elseif((test-path $sourcePath))
+            {
+                Copy-Item $sourcePath $destPath -Force -Recurse
+                compress-file $destPath
+            }
+            else
+            {
+                write-host "warning: unable to find diagnostic files in $($sourcePath)"
             }
         }
     }
@@ -381,7 +393,23 @@ function process-machine()
     }
 
     
-    $zipFile = "$($workdir).zip"
+    compress-file $workDir
+
+    if ((test-path "$($env:systemroot)\explorer.exe"))
+    {
+        start-process "explorer.exe" -ArgumentList $parentWorkDir
+    }
+}
+
+function add-job($jobName, $scriptBlock, $arguments)
+{
+    write-host "adding job $($jobName)"
+    [void]$jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
+}
+
+function compress-file($dir)
+{
+    $zipFile = "$($dir).zip"
     write-host "creating zip $($zipFile)"
 
     if ((test-path $zipFile ))
@@ -406,19 +434,7 @@ function process-machine()
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
     write-host $error
-
-    if ((test-path "$($env:systemroot)\explorer.exe"))
-    {
-        start-process "explorer.exe" -ArgumentList $parentWorkDir
-    }
 }
-
-function add-job($jobName, $scriptBlock, $arguments)
-{
-    write-host "adding job $($jobName)"
-    [void]$jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
-}
-
 function monitor-jobs()
 {
     while (get-job)
