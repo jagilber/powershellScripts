@@ -141,7 +141,7 @@ function main()
             }
 
             $sourcePath = "$($adminPath)\sfgather-$($machine)"
-            $destPath = "$($workdir)\sfgather-$($machine)"
+            $destPath = "$($parentDir)"
 
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
