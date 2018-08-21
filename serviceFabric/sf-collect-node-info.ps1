@@ -101,7 +101,7 @@ function main()
     {
         for($i=0; $i -lt $remoteMachines.count; $i++)
         {
-            $machineName = [System.Net.Dns]::GetHostEntry($remoteMachines[$i]).Hostname
+            $machineName = [System.Net.Dns]::GetHostEntry($remoteMachines[$i]).Hostname.Split(".")[0]
             write-host "switching $($remoteMachines[$i]) to $($machineName)"
             $remoteMachines[$i] = $machineName
         }
