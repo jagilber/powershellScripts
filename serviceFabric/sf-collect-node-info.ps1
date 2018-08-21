@@ -433,7 +433,7 @@ function process-machine()
         read-xml -xmlFile $file.FullName -format
     }
 
-    compress-file $workDir
+    $zipFile = compress-file $workDir
 }
 
 function add-job($jobName, $scriptBlock, $arguments)
@@ -468,7 +468,7 @@ function compress-file($dir)
     }
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
-    write-host $error
+    return $zipFile
 }
 function monitor-jobs()
 {
