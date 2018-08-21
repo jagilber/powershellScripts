@@ -393,7 +393,7 @@ function process-machine()
     {
         write-host "win10 compress-archive"
         Stop-Transcript         
-        Compress-archive -path $workdir -destinationPath $workdir
+        Compress-archive -path $workdir -destinationPath $zipFile -Force
     }
     else
     {
@@ -406,7 +406,7 @@ function process-machine()
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
     write-host $error
-    
+
     if ((test-path "$($env:systemroot)\explorer.exe"))
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir
@@ -435,7 +435,7 @@ function monitor-jobs()
 
         $incompletedCount = (get-job | Where-Object State -eq "Running").Count
         write-host "waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
-        start-sleep -seconds 1
+        start-sleep -seconds 10
     }
 }
 function read-xml($xmlFile, [switch]$format)
