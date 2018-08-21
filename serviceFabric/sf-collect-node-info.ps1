@@ -116,10 +116,11 @@ function main()
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -AsJob -ComputerName $machine -scriptblock {
                 param($scriptUrl = $args[0],$machine = $args[1], $networkTestAddress = $args[2])
-                $workDir = "$($env:systemroot)\temp\sfgather-$($machine)"
-                $destPath = "$($workDir)\$($scriptUrl -replace `".*/`",`"`")"
-                (new-object net.webclient).downloadfile($scriptUrl,$destPath)
-                start-process -filepath "powershell.exe" -ArgumentList "-File $($destpath) -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
+                $parentDir = "$($env:systemroot)\temp"
+                $workDir = "$($parentDir)\sfgather-$($machine)"
+                $scriptPath = "$($parentDir)\$($scriptUrl -replace `".*/`",`"`")"
+                (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
+                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
             } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
         }
