@@ -96,6 +96,31 @@ function main()
     write-warning "information may contain items such as ip addresses, process information, user names, or similar."
     write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
+    if ((test-path $workdir))
+    {
+        remove-item $workdir -Recurse -Force
+    }
+
+    new-item $workdir -ItemType Directory
+    Set-Location $parentworkdir
+
+    Start-Transcript -Path $logFile -Force
+    write-host "starting $(get-date)"
+
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+    {   
+        Write-Warning "please restart script in administrator powershell session"
+
+        if (!$noadmin)
+        {
+            Write-Warning "if unable to run as admin, restart and use -noadmin switch. This will collect less data that may be needed. exiting..."
+            return $false
+        }
+    }
+
+    write-host "remove old jobs"
+    get-job | remove-job -Force
+
     if(!$workDir)
     {
         $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
@@ -118,11 +143,11 @@ function main()
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -AsJob -ComputerName $machine -scriptblock {
                 param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2])
-                $parentDir = "$($env:systemroot)\temp"
-                $workDir = "$($parentDir)\sfgather-$($machine)"
-                $scriptPath = "$($parentDir)\$($scriptUrl -replace `".*/`",`"`")"
+                $parentWorkDir = "$($env:systemroot)\temp"
+                $workDir = "$($parentWorkDir)\sfgather-$($machine)"
+                $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
                 (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
-                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
+                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
             } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
         }
@@ -141,7 +166,7 @@ function main()
             }
 
             $sourcePath = "$($adminPath)\sfgather-$($machine)"
-            $destPath = "$($parentDir)"
+            $destPath = "$($parentWorkDir)"
 
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
@@ -179,31 +204,6 @@ function process-machine()
 {
     write-host "processing machine"
     
-    if ((test-path $workdir))
-    {
-        remove-item $workdir -Recurse 
-    }
-
-    new-item $workdir -ItemType Directory
-    Set-Location $parentworkdir
-
-    Start-Transcript -Path $logFile -Force
-    write-host "starting $(get-date)"
-
-    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
-    {   
-        Write-Warning "please restart script in administrator powershell session"
-
-        if (!$noadmin)
-        {
-            Write-Warning "if unable to run as admin, restart and use -noadmin switch. This will collect less data that may be needed. exiting..."
-            return $false
-        }
-    }
-
-    write-host "remove old jobs"
-    get-job | remove-job -Force
-
     if ($win10)
     {
         add-job -jobName "windows update" -scriptBlock {
@@ -470,8 +470,12 @@ function monitor-jobs()
         }
 
         $incompletedCount = (get-job | Where-Object State -eq "Running").Count
-        write-host "waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
-        start-sleep -seconds 10
+        
+        if($incompletedCount -gt 0)
+        {
+            write-host "$((get-date).ToShortTimeString()) waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
+            start-sleep -seconds 10
+        }
     }
 }
 function read-xml($xmlFile, [switch]$format)
