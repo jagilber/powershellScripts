@@ -76,7 +76,8 @@ param(
     $externalUrl = "bing.com",
     [switch]$noAdmin,
     [switch]$noEventLogs,
-    [switch]$certInfo
+    [switch]$certInfo,
+    [switch]$quiet
 )
 
 $ErrorActionPreference = "Continue"
@@ -151,7 +152,7 @@ function main()
                 $workDir = "$($parentWorkDir)\sfgather-$($machine)"
                 $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
                 (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
-                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
+                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
             } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
         }
@@ -207,7 +208,7 @@ function main()
         process-machine
     }
 
-    if (($host.Name -ine "ServerRemoteHost") -and (test-path "$($env:systemroot)\explorer.exe"))
+    if (!($quiet) -and (test-path "$($env:systemroot)\explorer.exe"))
     {
         start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
