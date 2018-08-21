@@ -71,7 +71,7 @@ param(
     $startTime = (get-date).AddDays(-7).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
     [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985),
-    $remoteMachines,
+    [string[]]$remoteMachines,
     $networkTestAddress = @($env:computername),
     $externalUrl = "bing.com",
     [switch]$noAdmin,
@@ -99,9 +99,16 @@ function main()
 
     if($remoteMachines)
     {
+        for($i=0; $i -lt $remoteMachines.count; $i++)
+        {
+            $machineName = [System.Net.Dns]::GetHostEntry($remoteMachines[$i]).Hostname
+            write-host "switching $($remoteMachines[$i]) to $($machineName)"
+            $remoteMachines[$i] = $machineName
+        }
+
         foreach ($machine in @($remoteMachines))
         {
-            if(!(Test-NetConnection $machine))
+            if(!(Test-NetConnection $machine).PingSucceeded)
             {
                 Write-Warning "unable to connect to $($machine). skipping!"
                 continue
@@ -123,7 +130,7 @@ function main()
         foreach ($machine in @($remoteMachines))
         {
             $foundZip = $false
-            if(!(Test-NetConnection $machine))
+            if(!(Test-NetConnection $machine).PingSucceeded)
             {
                 Write-Warning "unable to connect to $($machine) to copy zip. skipping!"
                 continue
