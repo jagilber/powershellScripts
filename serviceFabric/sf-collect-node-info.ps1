@@ -86,6 +86,7 @@ $parentWorkDir = $workdir
 $workdir = "$($workdir)\sfgather-$($env:COMPUTERNAME)"
 $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
+$zipFile = $null
 function main()
 {
     $error.Clear()
@@ -363,7 +364,6 @@ function main()
     }
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
-    write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
 
     if ((test-path "$($env:systemroot)\explorer.exe"))
     {
@@ -419,5 +419,6 @@ finally
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
     Stop-Transcript | Out-Null
+    write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
 }
 
