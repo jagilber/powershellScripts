@@ -419,6 +419,6 @@ finally
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
     Stop-Transcript | Out-Null
-    write-host "upload $($zipFile) to workspace" -ForegroundColor Cyan
+    write-host "upload zip to workspace:$($zipFile)" -ForegroundColor Cyan
 }
 
