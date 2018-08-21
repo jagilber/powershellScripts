@@ -84,7 +84,6 @@ $osVersion = [version]([string]((wmic os get Version) -match "\d"))
 $win10 = ($osVersion.major -ge 10)
 $parentWorkDir = $workdir
 $workdir = "$($workdir)\sfgather-$($env:COMPUTERNAME)"
-$ps = "powershell.exe"
 $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 function main()
@@ -134,19 +133,19 @@ function main()
     if (!$noEventLogs)
     {
         add-job -jobName "event logs" -scriptBlock {
-            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $ps = $args[5], $remoteMachine = $args[6])
+            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $remoteMachine = $args[5])
             $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
             if (!(test-path $scriptFile))
             {
                 (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
             }
             #Invoke-Expression "$($scriptFile) -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
-            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -machines $($remoteMachine)"
-            start-process -filepath $ps -ArgumentList $argList -WindowStyle Hidden
+            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+            start-process -filepath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden
             
-            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs`" -machines $($remoteMachine)"
-            start-process -filepath $ps -ArgumentList $argList -Wait -WindowStyle Hidden
-        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $ps, $remoteMachine)
+            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
+            start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden
+        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $remoteMachine)
     }
 
     add-job -jobName "check for dump file c" -scriptBlock {
