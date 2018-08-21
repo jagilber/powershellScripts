@@ -218,7 +218,7 @@ function process-machine()
 
     if (!$noEventLogs)
     {
-        add-job -jobName "event logs" -scriptBlock {
+        add-job -jobName "event logs 1 day" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4])
             $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
             if (!(test-path $scriptFile))
@@ -234,8 +234,17 @@ function process-machine()
 
             $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath"
             write-host "event logs: starting command powershell.exe $($argList)"
-            start-process -filepath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -WorkingDirectory $tempLocation
-            
+            start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
+        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime)
+
+        add-job -jobName "event logs" -scriptBlock {
+            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4])
+            $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
+            if (!(test-path $scriptFile))
+            {
+                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
+            }
+
             $tempLocation = "$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs"
             if(!(test-path $tempLocation))
             {
@@ -473,7 +482,7 @@ function monitor-jobs()
         
         if($incompletedCount -gt 0)
         {
-            write-host "$((get-date).ToShortTimeString()) waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
+            write-host "$((get-date).ToString("hh:mm:ss")) waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
             start-sleep -seconds 10
         }
     }
