@@ -3,7 +3,7 @@
 powershell script to collect service fabric node diagnostic data
 
 To download and execute, run the following commands on each sf node in admin powershell:
-iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1')|iex
+iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1') -UseBasicParsing|iex
 
 To download and execute with arguments:
 (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
@@ -208,24 +208,21 @@ function main()
     write-host "http log files"
     copy-item -path "\\$($remoteMachine)\C$\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
 
-    write-host "hotfixes"
-    get-hotfix -ComputerName $remoteMachine | out-file "$($workdir)\hotfixes.txt"
-
-    write-host "os"
-    get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\os-info.txt"
-
     add-job -jobName "drives" -scriptBlock {
         param($workdir = $args[0])
         Get-psdrive | out-file "$($workdir)\drives.txt"
     } -arguments @($workdir)
 
-    write-host "processes"
-    Get-process -ComputerName $remoteMachine | out-file "$($workdir)\process-summary.txt"
-    Get-process -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\processes.txt"
-
-    write-host "services"
-    Get-service -ComputerName $remoteMachine | out-file "$($workdir)\service-summary.txt"
-    Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
+    add-job -jobName "os info" -scriptBlock {
+        param($workdir = $args[0], $remoteMachine = $args[1])
+        get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\os-info.txt"
+        get-hotfix -ComputerName $remoteMachine | out-file "$($workdir)\hotfixes.txt"
+        Get-process -ComputerName $remoteMachine | out-file "$($workdir)\process-summary.txt"
+        Get-process -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\processes.txt"
+        get-process -ComputerName $remoteMachine | Where-Object ProcessName -imatch "fabric" | out-file "$($workdir)\processes-fabric.txt"
+        Get-service -ComputerName $remoteMachine | out-file "$($workdir)\service-summary.txt"
+        Get-Service -ComputerName $remoteMachine | format-list * | out-file "$($workdir)\services.txt"
+    } -arguments @($workdir, $remoteMachine)
 
     write-host "installed applications"
     Invoke-Expression "reg.exe query \\$($remoteMachine)\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
@@ -253,7 +250,9 @@ function main()
     add-job -jobName "get-nettcpconnetion" -scriptBlock {
         param($workdir = $args[0])
         Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
+        Get-NetTCPConnection | Where-Object RemotePort -eq 1026 | out-file "$($workdir)\connected-nodes.txt"
     } -arguments @($workdir)
+
     write-host "netstat ports"
     Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
 
@@ -299,8 +298,9 @@ function main()
         write-host "sfrp url:$($sfrpUrl)"
         $ucert = ($upgradeServiceParams | Where-Object Name -eq "X509FindValue").Value
         
-        $sfrpResponse = Invoke-WebRequest $sfrpUrl -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
+        $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
         write-host "sfrp response: $($sfrpresponse)"
+        out-file -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
     }
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
