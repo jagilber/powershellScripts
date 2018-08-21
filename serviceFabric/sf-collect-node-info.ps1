@@ -141,11 +141,23 @@ function main()
             }
             #Invoke-Expression "$($scriptFile) -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath -machines $($remoteMachine)"
             $tempLocation = "$($workdir)\1-day-event-logs"
+            if(!(test-path $tempLocation))
+            {
+                New-Item -ItemType Directory -Path $tempLocation    
+            }
+
             $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath -machines $($remoteMachine)"
+            write-host "event logs: starting command powershell.exe $($argList)"
             start-process -filepath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -WorkingDirectory $tempLocation
             
             $tempLocation = "$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs"
+            if(!(test-path $tempLocation))
+            {
+                New-Item -ItemType Directory -Path $tempLocation    
+            }
+
             $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath -machines $($remoteMachine)"
+            write-host "event logs: starting command powershell.exe $($argList)"
             start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $remoteMachine)
     }
