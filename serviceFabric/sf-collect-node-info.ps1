@@ -66,7 +66,7 @@ upload to workspace sfgather* dir or zip
 #>
 [CmdletBinding()]
 param(
-    $workdir = $env:temp,
+    $workdir,
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
     $startTime = (get-date).AddDays(-7).ToShortDateString(),
     $endTime = (get-date).ToShortDateString(),
@@ -85,7 +85,6 @@ $currentWorkDir = get-location
 $osVersion = [version]([string]((wmic os get Version) -match "\d"))
 $win10 = ($osVersion.major -ge 10)
 $parentWorkDir = $workdir
-$workdir = "$($workdir)\sfgather-$($env:COMPUTERNAME)"
 $jobs = new-object collections.arraylist
 $logFile = "$($workdir)\sf-collect-node-info.log"
 $zipFile = $null
@@ -97,46 +96,48 @@ function main()
     write-warning "information may contain items such as ip addresses, process information, user names, or similar."
     write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
+    if(!$workDir)
+    {
+        $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
+    }
+
     if($remoteMachines)
     {
-        for($i=0; $i -lt $remoteMachines.count; $i++)
-        {
-            $machineName = [System.Net.Dns]::GetHostEntry($remoteMachines[$i]).Hostname.Split(".")[0]
-            write-host "switching $($remoteMachines[$i]) to $($machineName)"
-            $remoteMachines[$i] = $machineName
-        }
-
         foreach ($machine in @($remoteMachines))
         {
-            if(!(Test-NetConnection $machine).PingSucceeded)
+            $adminPath = "\\$($machine)\admin$\temp"
+
+            if(!(Test-path $adminPath))
             {
-                Write-Warning "unable to connect to $($machine). skipping!"
+                Write-Warning "unable to connect to $($machine) to start diagnostics. skipping!"
                 continue
             }
 
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -AsJob -ComputerName $machine -scriptblock {
-                param($scriptUrl = $args[0],$networkTestAddress = $args[1])
-                $workDir = "$($env:systemroot)\temp"
+                param($scriptUrl = $args[0],$machine = $args[1], $networkTestAddress = $args[2])
+                $workDir = "$($env:systemroot)\temp\sfgather-$($machine)"
                 $destPath = "$($workDir)\$($scriptUrl -replace `".*/`",`"`")"
                 (new-object net.webclient).downloadfile($scriptUrl,$destPath)
                 start-process -filepath "powershell.exe" -ArgumentList "-File $($destpath) -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
-            } -ArgumentList @($scriptUrl,$networkTestAddress)))
+            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
         }
 
         monitor-jobs
 
         foreach ($machine in @($remoteMachines))
         {
+            $adminPath = "\\$($machine)\admin$\temp"
             $foundZip = $false
-            if(!(Test-NetConnection $machine).PingSucceeded)
+
+            if(!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to copy zip. skipping!"
                 continue
             }
 
-            $sourcePath = "\\$($machine)\admin$\temp\sfgather-$($machine)"
+            $sourcePath = "$($adminPath)\sfgather-$($machine)"
             $destPath = "$($workdir)\sfgather-$($machine)"
 
             $sourcePathZip = "$($sourcePath).zip"
