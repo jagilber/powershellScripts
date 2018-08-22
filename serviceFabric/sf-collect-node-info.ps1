@@ -68,11 +68,11 @@ upload to workspace sfgather* dir or zip
 param(
     $workdir,
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
-    $startTime = (get-date).AddDays(-7).ToShortDateString(),
-    $endTime = (get-date).ToShortDateString(),
+    $startTime = (get-date).AddDays(-7),
+    $endTime = (get-date),
     [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985),
     [string[]]$remoteMachines,
-    $networkTestAddress = @($env:computername),
+    $networkTestAddress = $env:computername,
     $externalUrl = "bing.com",
     [switch]$noAdmin,
     [switch]$noEventLogs,
@@ -87,7 +87,7 @@ $osVersion = [version]([string]((wmic os get Version) -match "\d"))
 $win10 = ($osVersion.major -ge 10)
 $parentWorkDir = $null
 $jobs = new-object collections.arraylist
-$logFile = "$($workdir)\sf-collect-node-info.log"
+$logFile = $Null
 $zipFile = $null
 
 function main()
@@ -115,7 +115,7 @@ function main()
 
     new-item $workdir -ItemType Directory
     Set-Location $parentworkdir
-
+    $logFile = "$($workdir)\sf-collect-node-info.log"
     Start-Transcript -Path $logFile -Force
     write-host "starting $(get-date)"
 
@@ -145,13 +145,20 @@ function main()
                 continue
             }
 
+            copy-item -path ($MyInvocation.ScriptName) -Destination $adminPath
+
             write-host "adding job for $($machine)"
-            [void]$jobs.Add((Invoke-Command -AsJob -ComputerName $machine -scriptblock {
+            [void]$jobs.Add((Invoke-Command -JobName $machine -AsJob -ComputerName $machine -scriptblock {
                 param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2])
                 $parentWorkDir = "$($env:systemroot)\temp"
                 $workDir = "$($parentWorkDir)\sfgather-$($machine)"
                 $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
-                (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
+
+                if (!(test-path $scriptPath))
+                {
+                    (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
+                }
+             
                 start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
             } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
@@ -201,7 +208,7 @@ function main()
             }
         }
 
-        compress-file $workDir
+        $zipFile = compress-file $workDir
     }
     else
     {
@@ -231,25 +238,6 @@ function process-machine()
 
     if (!$noEventLogs)
     {
-        add-job -jobName "event logs 1 day" -scriptBlock {
-            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4])
-            $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
-            if (!(test-path $scriptFile))
-            {
-                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
-            }
-            #Invoke-Expression "$($scriptFile) -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($workdir)\1-day-event-logs`" -nodynamicpath"
-            $tempLocation = "$($workdir)\1-day-event-logs"
-            if(!(test-path $tempLocation))
-            {
-                New-Item -ItemType Directory -Path $tempLocation    
-            }
-
-            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath"
-            write-host "event logs: starting command powershell.exe $($argList)"
-            start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
-        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime)
-
         add-job -jobName "event logs" -scriptBlock {
             param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4])
             $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
@@ -258,13 +246,13 @@ function process-machine()
                 (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
             }
 
-            $tempLocation = "$($workdir)\$(([datetime]$startTime - [dateTime]$endTime).Days)-day-event-logs"
+            $tempLocation = "$($workdir)\event-logs"
             if(!(test-path $tempLocation))
             {
                 New-Item -ItemType Directory -Path $tempLocation    
             }
 
-            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime $($startTime) -eventStopTime $($endTime) -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath"
+            $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime `"$($startTime)`" -eventStopTime `"$($endTime)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath"
             write-host "event logs: starting command powershell.exe $($argList)"
             start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime)
@@ -274,13 +262,15 @@ function process-machine()
         param($workdir = $args[0])
         # slow
         # Invoke-Command -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > "$env:temp\dumplist-c.txt" -Wait -WindowStyle Hidden }
-        Invoke-Expression "cmd.exe /c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt"
+        #Invoke-Expression "cmd.exe /c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt"
+        get-childitem -Recurse -Path "c:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-c.txt"
     } -arguments @($workdir)
 
     add-job -jobName "check for dump file d" -scriptBlock {
         param($workdir = $args[0])
         # Invoke-Command -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > "$env:temp\dumplist-d.txt" -Wait -WindowStyle Hidden }
-        Invoke-Expression "cmd.exe /c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt"
+        #Invoke-Expression "cmd.exe /c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt"
+        get-childitem -Recurse -Path "d:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-d.txt"
     } -arguments @($workdir)
 
     add-job -jobName "network port tests" -scriptBlock {
@@ -407,16 +397,17 @@ function process-machine()
         $nodeCount = $xml.ClusterManifest.Infrastructure.PaaS.Roles.Role.RoleNodeCount
         write-host "node count:$($nodeCount)"
         $clusterId = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "Paas").FirstChild.value
-        write-host "cluster id:$($nodeCount)"
+        write-host "cluster id:$($clusterId)"
         $upgradeServiceParams = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "UpgradeService").parameter
         $sfrpUrl = ($upgradeServiceParams | Where-Object Name -eq "BaseUrl").Value
         $sfrpUrl = "$($sfrpUrl)$($clusterId)"
         write-host "sfrp url:$($sfrpUrl)"
+        out-file -InputObject $sfrpUrl "$($workdir)\sfrp-response.txt"
         $ucert = ($upgradeServiceParams | Where-Object Name -eq "X509FindValue").Value
         
         $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
         write-host "sfrp response: $($sfrpresponse)"
-        out-file -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
+        out-file -Append -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
     }
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
@@ -450,34 +441,35 @@ function compress-file($dir)
 
     if ((test-path $zipFile ))
     {
-        remove-item $zipFile 
+        remove-item $zipFile -Force
     }
+
+    Stop-Transcript | out-null
 
     if ($win10)
     {
-        write-host "win10 compress-archive"
-        Stop-Transcript         
         Compress-archive -path $workdir -destinationPath $zipFile -Force
     }
     else
     {
-        write-host "2k12 compress-archive"
-        Stop-Transcript
         Add-Type -Assembly System.IO.Compression.FileSystem
         $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
-        [System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
+        [void][System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
     }
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
     return $zipFile
 }
+
 function monitor-jobs()
 {
+    $incompletedCount = 0
+
     while (get-job)
     {
         foreach ($job in get-job)
         {
-            write-host ("$($job.Name): state:$($job.State) output:$(Receive-Job $job -)") -ForegroundColor Cyan
+            write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | fl * | out-string))") -ForegroundColor Cyan
 
             if ($job.State -imatch "Failed|Completed")
             {
@@ -485,13 +477,16 @@ function monitor-jobs()
             }
         }
 
-        $incompletedCount = (get-job | Where-Object State -eq "Running").Count
+        $incompleteCount = (get-job | Where-Object State -eq "Running").Count
         
-        if($incompletedCount -gt 0)
+        if($incompletedCount -ne $incompleteCount)
         {
-            write-host "$((get-date).ToString("hh:mm:ss")) waiting on $($incompletedCount) jobs..." -ForegroundColor Yellow
-            start-sleep -seconds 10
+            write-host "$((get-date).ToString("hh:mm:ss")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
+            $incompletedCount = $incompleteCount
+            continue
         }
+
+        start-sleep -seconds 1
     }
 }
 function read-xml($xmlFile, [switch]$format)
@@ -535,7 +530,7 @@ finally
     get-job | remove-job -Force
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
-    Stop-Transcript | Out-Null
+    Stop-Transcript
     write-host "upload zip to workspace:$($zipFile)" -ForegroundColor Cyan
 }
 
