@@ -28,7 +28,7 @@ To download and execute, run the following commands on each sf node in admin pow
 iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1') -UseBasicParsing|iex
 
 To download and execute with arguments:
-(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1");
 c:\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
 
 upload to workspace sfgather* dir or zip
@@ -362,7 +362,6 @@ function process-machine()
         Invoke-Expression "nslookup $($networkTestAddress) | out-file -Append $($workdir)\nslookup.txt"
     } -arguments @($workdir, $networkTestAddress, $externalUrl)
 
-
     write-host "winrm settings"
     Invoke-Expression "winrm get winrm/config/client > $($workdir)\winrm-config.txt" 
 
@@ -383,6 +382,7 @@ function process-machine()
     add-job -jobName "os info" -scriptBlock {
         param($workdir = $args[0])
         get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 | format-list * | out-file "$($workdir)\os-info.txt"
+        Invoke-Expression "cmd.exe /c sc query type= driver > $($workdir)\drivers.txt"
         get-hotfix | out-file "$($workdir)\hotfixes.txt"
         Get-process | out-file "$($workdir)\process-summary.txt"
         Get-process | format-list * | out-file "$($workdir)\processes.txt"
