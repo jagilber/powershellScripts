@@ -112,7 +112,7 @@ $jobs = new-object collections.arraylist
 $logFile = $Null
 $zipFile = $null
 $trustedHosts = $Null
-
+$winrmClientInfo = $Null
 function main()
 {
     $error.Clear()
@@ -159,7 +159,14 @@ function main()
     if($remoteMachines)
     {
         # setup local (source) machine for best chance of success
-        $trustedHosts = ([regex]::matches((winrm get winrm/config/client) , "TrustedHosts = (.*)")).groups[1].value
+        $winrmClientInfo = (winrm get winrm/config/client)
+        $trustedHostsPattern = "TrustedHosts = (.*)"
+        
+        if([regex]::IsMatch($winrmClientInfo, $trustedHostsPattern))
+        {
+            $trustedHosts = ([regex]::matches($winrmClientInfo , $trustedHostsPattern)).groups[1].value
+        }
+
         winrm set winrm/config/client '@{TrustedHosts="*"}'
         #Enable-PSRemoting
 
@@ -554,7 +561,7 @@ catch
 }
 finally
 {
-    if ($trustedHosts)
+    if ($winrmClientInfo)
     {
         # set local machine back
         winrm set winrm/config/client "@{TrustedHosts="$($trustedHosts)"}"
