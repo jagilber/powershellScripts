@@ -532,7 +532,7 @@ function monitor-jobs()
         
         if($incompleteCount -eq 0 -or $incompletedCount -ne $incompleteCount)
         {
-            write-host "$((get-date).ToString("hh:mm:ss")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
+            write-host "$((get-date).ToString("HH:mm:sszz")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
             $incompletedCount = $incompleteCount
             
             foreach ($job in get-job)
@@ -549,6 +549,7 @@ function monitor-jobs()
         }
 
         start-sleep -seconds 1
+        write-host "." -NoNewline
     }
 }
 function read-xml($xmlFile, [switch]$format)
