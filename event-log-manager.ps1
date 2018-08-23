@@ -242,6 +242,7 @@ Param(
     [string] $eventTracePattern = "",
     [switch] $getUpdate,
     [int] $hours = 0,
+    [int] $jobThrottle = 10,
     [switch] $listen,
     [switch] $listEventLogs,
     [string[]] $machines = @(),
@@ -266,7 +267,6 @@ $global:eventLogNameSearchPattern = $eventLogNamePattern
 $global:jobs = New-Object Collections.ArrayList
 $global:machineRecords = @{}
 $global:uploadDir = $uploadDir
-$jobThrottle = 10
 $listenEventReadCount = 1000
 $listenSleepMs = 100
 $logFile = "event-log-manager-output.txt"

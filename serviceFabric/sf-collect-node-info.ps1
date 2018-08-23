@@ -113,6 +113,8 @@ $logFile = $Null
 $zipFile = $null
 $trustedHosts = $Null
 $winrmClientInfo = $Null
+$eventScriptFile = $Null
+
 function main()
 {
     $error.Clear()
@@ -130,6 +132,7 @@ function main()
     }
 
     $parentWorkDir = [io.path]::GetDirectoryName($workDir)
+    $eventScriptFile = "$($parentWorkdir)\event-log-manager.ps1"
 
     if ((test-path $workdir))
     {
@@ -156,6 +159,15 @@ function main()
     write-host "remove old jobs"
     get-job | remove-job -Force
 
+    # stage event-log-manager script
+    if(!$noEventLogs)
+    {
+        if (!(test-path $eventScriptFile))
+        {
+            (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
+        }
+    }
+
     if($remoteMachines)
     {
         # setup local (source) machine for best chance of success
@@ -180,23 +192,37 @@ function main()
                 continue
             }
 
-            copy-item -path ($MyInvocation.ScriptName) -Destination $adminPath
+            if(!$noEventLogs)
+            {
+                copy-item -path $eventScriptFile -Destination $adminPath -force
+            }
+
+            copy-item -path ($MyInvocation.ScriptName) -Destination $adminPath -force
 
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -JobName $machine -AsJob -ComputerName $machine -scriptblock {
-                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2])
+                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3])
                 $parentWorkDir = "$($env:systemroot)\temp"
                 $workDir = "$($parentWorkDir)\sfgather-$($machine)"
                 $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
+                
+                if($certInfo)
+                {
+                    $certInfo = "-certInfo "
+                }
+                else
+                {
+                    $certInfo = ""
+                }
 
                 if (!(test-path $scriptPath))
                 {
                     (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
                 }
              
-                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
+                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) $($certInfo)-quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
-            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
+            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress, $certInfo)))
         }
 
         monitor-jobs
@@ -274,11 +300,11 @@ function process-machine()
     if (!$noEventLogs)
     {
         add-job -jobName "event logs" -scriptBlock {
-            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4])
-            $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
-            if (!(test-path $scriptFile))
+            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $eventScriptFile = $args[5])
+            $eventScriptFile = "$($parentWorkdir)\event-log-manager.ps1"
+            if (!(test-path $eventScriptFile))
             {
-                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
+                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
             }
 
             $tempLocation = "$($workdir)\event-logs"
@@ -290,7 +316,7 @@ function process-machine()
             $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime `"$($startTime)`" -eventStopTime `"$($endTime)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath"
             write-host "event logs: starting command powershell.exe $($argList)"
             start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
-        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime)
+        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $eventScriptFile)
     }
 
     add-job -jobName "check for dump file c" -scriptBlock {
