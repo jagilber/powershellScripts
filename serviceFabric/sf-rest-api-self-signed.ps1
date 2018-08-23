@@ -4,7 +4,7 @@
 Clear-Host
 $ErrorActionPreference = "continue"
 $result = $Null
-$gatewayCertThumb = "CC6DBA5F0BE761AD6ED7F27485CBDC74355E5F0D"
+$gatewayCertThumb = "xxxx"
 $cert = Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
 $startTime = ([datetime]"8/14/2018").ToString("yyyy-MM-ddTHH:mm:ssZ")
 $endTime = ([datetime]"8/22/2018").ToString("yyyy-MM-ddTHH:mm:ssZ")
