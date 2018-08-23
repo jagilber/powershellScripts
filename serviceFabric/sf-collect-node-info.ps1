@@ -110,7 +110,7 @@ $win10 = ($osVersion.major -ge 10)
 $parentWorkDir = $null
 $jobs = new-object collections.arraylist
 $logFile = $Null
-$zipFile = $null
+$global:zipFile = $null
 $trustedHosts = $Null
 $winrmClientInfo = $Null
 $eventScriptFile = $Null
@@ -269,7 +269,7 @@ function main()
             }
         }
 
-        $zipFile = compress-file $workDir
+        $global:zipFile = compress-file $workDir
     }
     else
     {
@@ -486,7 +486,7 @@ function process-machine()
         read-xml -xmlFile $file.FullName -format
     }
 
-    $zipFile = compress-file $workDir
+    $global:zipFile = compress-file $workDir
 }
 
 function add-job($jobName, $scriptBlock, $arguments)
@@ -600,6 +600,6 @@ finally
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
     Stop-Transcript
-    write-host "upload zip to workspace:$($zipFile)" -ForegroundColor Cyan
+    write-host "upload zip to workspace:$($global:zipFile)" -ForegroundColor Cyan
 }
 
