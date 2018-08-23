@@ -526,24 +526,25 @@ function monitor-jobs()
 {
     $incompletedCount = 0
 
-    while (get-job)
+    while ((get-job).Count -gt 0)
     {
-        foreach ($job in get-job)
-        {
-            write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | fl * | out-string))") -ForegroundColor Cyan
-
-            if ($job.State -imatch "Failed|Completed")
-            {
-                remove-job $job -Force
-            }
-        }
-
         $incompleteCount = (get-job | Where-Object State -eq "Running").Count
         
-        if($incompletedCount -ne $incompleteCount)
+        if($incompleteCount -eq 0 -or $incompletedCount -ne $incompleteCount)
         {
             write-host "$((get-date).ToString("hh:mm:ss")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
             $incompletedCount = $incompleteCount
+            
+            foreach ($job in get-job)
+            {
+                write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | fl * | out-string))") -ForegroundColor Cyan
+    
+                if ($job.State -imatch "Failed|Completed")
+                {
+                    remove-job $job -Force
+                }
+            }
+
             continue
         }
 
