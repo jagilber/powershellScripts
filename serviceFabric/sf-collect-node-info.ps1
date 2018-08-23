@@ -1,5 +1,27 @@
 <#
 .SYNOPSIS
+$certThumb = ""
+$cert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $certThumb)
+$url = "https://localhost:19080/Nodes?api-version=6.0"
+
+# to bypass self-signed cert 
+add-type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+
+    public class IDontCarePolicy : ICertificatePolicy {
+            public IDontCarePolicy() {}
+            public bool CheckValidationResult(
+            ServicePoint sPoint, X509Certificate cert,
+            WebRequest wRequest, int certProb) {
+            return true;
+        }
+    }
+"@
+
+[System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
+Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
+
 powershell script to collect service fabric node diagnostic data
 
 To download and execute, run the following commands on each sf node in admin powershell:
@@ -7,7 +29,7 @@ iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/service
 
 To download and execute with arguments:
 (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
-c:\sf-collect-node-info.ps1 -certInfo -days 30
+c:\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
 
 upload to workspace sfgather* dir or zip
 
@@ -89,6 +111,7 @@ $parentWorkDir = $null
 $jobs = new-object collections.arraylist
 $logFile = $Null
 $zipFile = $null
+$trustedHosts = $Null
 
 function main()
 {
@@ -135,6 +158,11 @@ function main()
 
     if($remoteMachines)
     {
+        # setup local (source) machine for best chance of success
+        $trustedHosts = ([regex]::matches((winrm get winrm/config/client) , "TrustedHosts = (.*)")).groups[1].value
+        winrm set winrm/config/client '@{TrustedHosts="*"}'
+        #Enable-PSRemoting
+
         foreach ($machine in @($remoteMachines))
         {
             $adminPath = "\\$($machine)\admin$\temp"
@@ -526,6 +554,12 @@ catch
 }
 finally
 {
+    if ($trustedHosts)
+    {
+        # set local machine back
+        winrm set winrm/config/client "@{TrustedHosts="$($trustedHosts)"}"
+    }
+
     set-location $currentWorkDir
     get-job | remove-job -Force
     write-host "finished $(get-date)"
