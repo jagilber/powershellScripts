@@ -37,7 +37,7 @@ foreach ($subdir in $directories)
     Write-Debug "enumerating $($subDir)"
     $files = Get-ChildItem $subdir
     $sum = ($files | Measure-Object -Property Length -Sum)
-    $size = [float]($sum.Sum / 1GB).ToString("F3")
+    $size = [float]($sum.Sum / 1GB).ToString("F5")
     
     if($showFiles)
     {

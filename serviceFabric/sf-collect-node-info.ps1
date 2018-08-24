@@ -160,12 +160,9 @@ function main()
     get-job | remove-job -Force
 
     # stage event-log-manager script
-    if(!$noEventLogs)
+    if(!$noEventLogs -and !(test-path $eventScriptFile))
     {
-        if (!(test-path $eventScriptFile))
-        {
-            (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
-        }
+        (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
     }
 
     if($remoteMachines)
@@ -420,6 +417,19 @@ function process-machine()
         Get-NetTCPConnection | Where-Object RemotePort -eq 1026 | out-file "$($workdir)\connected-nodes.txt"
     } -arguments @($workdir)
 
+    add-job -jobName "azure config files" -scriptBlock {
+        param($workdir = $args[0])
+        function copy-files($sourceDir)
+        {
+            if((test-path $sourceDir))
+            {
+                Copy-Item -Path $sourceDir -include "*.json,*.txt,*.settings,*.config,*.xml,*.log" -Destination $workdir -Recurse
+            }
+        }
+        copy-files "c:\packages"
+        copy-files "c:\windowsAzure"
+    } -arguments @($workdir)
+
     write-host "netstat ports"
     Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
 
@@ -439,13 +449,16 @@ function process-machine()
     #
     $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
+    if(!$fabricDataRoot)
+    {
+        $fabricDataRoot = "d:\"
+    }
 
     add-job -jobName "fabric config files" -scriptBlock {
         param($workdir = $args[0], $fabricDataRoot = $args[1])
         Get-ChildItem $($fabricDataRoot) -Recurse | out-file "$($workDir)\dir-fabricdataroot.txt"
         Copy-Item -Path $fabricDataRoot -Filter "*.xml" -Destination $workdir -Recurse
     } -arguments @($workdir, $fabricDataRoot)
-
 
     $clusterManifestFile = "$($fabricDataRoot)\clustermanifest.xml"
     if ((test-path $clusterManifestFile))
