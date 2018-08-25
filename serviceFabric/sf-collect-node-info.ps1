@@ -202,7 +202,7 @@ function main()
 
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -JobName $machine -AsJob -ComputerName $machine -scriptblock {
-                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3])
+                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3], $sfCollectInfoDir = $args[4])
                 $parentWorkDir = "$($env:systemroot)\temp"
                 $workDir = "$($parentWorkDir)\$($sfCollectInfoDir)$($machine)"
                 $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
@@ -223,7 +223,7 @@ function main()
              
                 start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) $($certInfo)-quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
                 write-host ($error | out-string)
-            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress, $certInfo)))
+            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress, $certInfo, $sfCollectInfoDir)))
         }
 
         monitor-jobs
@@ -429,12 +429,12 @@ function process-machine()
             {
                 return
             }
-            copy-item -path $sourceDir -Filter "*.json" -Recurse
-            copy-item -path $sourceDir -Filter "*.txt" -Recurse
-            copy-item -path $sourceDir -Filter "*.settings" -Recurse
-            copy-item -path $sourceDir -Filter "*.config" -Recurse
-            copy-item -path $sourceDir -Filter "*.xml" -Recurse
-            copy-item -path $sourceDir -Filter "*.log" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.json" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.txt" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.settings" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.config" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.xml" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.log" -Recurse
         }
         copy-files "c:\packages"
         copy-files "c:\windowsAzure"
