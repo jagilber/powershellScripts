@@ -124,7 +124,7 @@ function main()
 
     if(!$workDir -and $remoteMachines)
     {
-        $workdir = "$($env:temp)\sfgather-$((get-date).ToString("yy-MM-dd-HH-ss"))"
+        $workdir = "$($env:temp)\sfgather-$((get-date).ToString("yy-MM-dd-HH-mm"))"
     }
     elseif(!$workDir)
     {
@@ -421,9 +421,13 @@ function process-machine()
         param($workdir = $args[0])
         function copy-files($sourceDir)
         {
-            if((test-path $sourceDir))
+            if(!(test-path $sourceDir))
             {
-                Copy-Item -Path $sourceDir -include "*.json,*.txt,*.settings,*.config,*.xml,*.log" -Destination $workdir -Recurse
+                return
+            }
+            foreach($file in (Get-ChildItem $sourceDir -Recurse | Where-Object Extension -imatch ".json|.txt|.settings|.config|.xml|.log"))
+            {
+                Copy-Item -Path $file.FullName -Destination $workdir
             }
         }
         copy-files "c:\packages"
