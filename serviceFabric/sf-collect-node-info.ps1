@@ -114,6 +114,7 @@ $global:zipFile = $null
 $trustedHosts = $Null
 $winrmClientInfo = $Null
 $eventScriptFile = $Null
+$sfCollectInfoDir = "sfColInfo-"
 
 function main()
 {
@@ -124,11 +125,11 @@ function main()
 
     if(!$workDir -and $remoteMachines)
     {
-        $workdir = "$($env:temp)\sfgather-$((get-date).ToString("yy-MM-dd-HH-mm"))"
+        $workdir = "$($env:temp)\$($sfCollectInfoDir)$((get-date).ToString("yy-MM-dd-HH-mm"))"
     }
     elseif(!$workDir)
     {
-        $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
+        $workdir = "$($env:temp)\$($sfCollectInfoDir)$($env:COMPUTERNAME)"
     }
 
     $parentWorkDir = [io.path]::GetDirectoryName($workDir)
@@ -179,13 +180,16 @@ function main()
         winrm set winrm/config/client '@{TrustedHosts="*"}'
         #Enable-PSRemoting
 
-        foreach ($machine in @($remoteMachines))
+        #foreach ($machine in @($remoteMachines))
+        for($i = 0;$i -lt $remoteMachines.count;$i++)
         {
+            $machine = $remoteMachines[$i]
             $adminPath = "\\$($machine)\admin$\temp"
 
             if(!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to start diagnostics. skipping!"
+                $remoteMachines.Remove($i,1)
                 continue
             }
 
@@ -200,7 +204,7 @@ function main()
             [void]$jobs.Add((Invoke-Command -JobName $machine -AsJob -ComputerName $machine -scriptblock {
                 param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3])
                 $parentWorkDir = "$($env:systemroot)\temp"
-                $workDir = "$($parentWorkDir)\sfgather-$($machine)"
+                $workDir = "$($parentWorkDir)\$($sfCollectInfoDir)$($machine)"
                 $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
                 
                 if($certInfo)
@@ -235,8 +239,8 @@ function main()
                 continue
             }
 
-            $sourcePath = "$($adminPath)\sfgather-$($machine)"
-            $destPath = "$($workDir)\sfgather-$($machine)"
+            $sourcePath = "$($adminPath)\$($sfCollectInfoDir)$($machine)"
+            $destPath = "$($workDir)\$($sfCollectInfoDir)$($machine)"
 
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
@@ -425,10 +429,12 @@ function process-machine()
             {
                 return
             }
-            foreach($file in (Get-ChildItem $sourceDir -Recurse | Where-Object Extension -imatch ".json|.txt|.settings|.config|.xml|.log"))
-            {
-                Copy-Item -Path $file.FullName -Destination $workdir
-            }
+            copy-item -path $sourceDir -Filter "*.json" -Recurse
+            copy-item -path $sourceDir -Filter "*.txt" -Recurse
+            copy-item -path $sourceDir -Filter "*.settings" -Recurse
+            copy-item -path $sourceDir -Filter "*.config" -Recurse
+            copy-item -path $sourceDir -Filter "*.xml" -Recurse
+            copy-item -path $sourceDir -Filter "*.log" -Recurse
         }
         copy-files "c:\packages"
         copy-files "c:\windowsAzure"
