@@ -576,7 +576,7 @@ function monitor-jobs()
         start-sleep -seconds 1
         write-host "." -NoNewline
 
-        if(((get-date) - $timer).TotalMinutes -lt $timeoutMinutes)
+        if(((get-date) - $timer).TotalMinutes -ge $timeoutMinutes)
         {
             write-error "script timed out waiting for jobs to complete totalMinutes: $($totalMinutes) minutes"
             get-job | receive-job
