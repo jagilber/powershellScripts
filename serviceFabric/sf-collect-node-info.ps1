@@ -429,12 +429,12 @@ function process-machine()
             {
                 return
             }
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.json" -Recurse
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.txt" -Recurse
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.settings" -Recurse
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.config" -Recurse
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.xml" -Recurse
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.log" -Recurse
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.json" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.txt" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.settings" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.config" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.xml" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
         }
         copy-files "c:\packages"
         copy-files "c:\windowsAzure"
