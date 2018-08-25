@@ -578,7 +578,7 @@ function monitor-jobs()
 
         if(((get-date) - $timer).TotalMinutes -ge $timeoutMinutes)
         {
-            write-error "script timed out waiting for jobs to complete totalMinutes: $($totalMinutes) minutes"
+            write-error "script timed out waiting for jobs to complete totalMinutes: $($timeoutMinutes) minutes"
             get-job | receive-job
             get-job | remove-job -force
             return
