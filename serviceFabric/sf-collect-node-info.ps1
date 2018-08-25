@@ -28,8 +28,8 @@ To download and execute, run the following commands on each sf node in admin pow
 iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1') -UseBasicParsing|iex
 
 To download and execute with arguments:
-(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1");
-c:\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1");
+    c:\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
 
 upload to workspace sfgather* dir or zip
 
@@ -90,12 +90,13 @@ upload to workspace sfgather* dir or zip
 param(
     $workdir,
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
+    $externalUrl = "bing.com",
     $startTime = (get-date).AddDays(-7),
     $endTime = (get-date),
-    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985),
-    [string[]]$remoteMachines,
     $networkTestAddress = $env:computername,
-    $externalUrl = "bing.com",
+    $timeoutMinutes = 15,
+    [int[]]$ports = @(1025, 1026, 19000, 19080, 135, 445, 3389, 5985),
+    [string[]]$remoteMachines,
     [switch]$noAdmin,
     [switch]$noEventLogs,
     [switch]$certInfo,
@@ -103,6 +104,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
+$timer = get-date
 $scriptUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1'
 $currentWorkDir = get-location
 $osVersion = [version]([string]((wmic os get Version) -match "\d"))
@@ -560,7 +562,7 @@ function monitor-jobs()
             
             foreach ($job in get-job)
             {
-                write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | fl * | out-string))") -ForegroundColor Cyan
+                write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | format-list * | out-string))") -ForegroundColor Cyan
     
                 if ($job.State -imatch "Failed|Completed")
                 {
@@ -573,6 +575,14 @@ function monitor-jobs()
 
         start-sleep -seconds 1
         write-host "." -NoNewline
+
+        if(((get-date) - $timer).TotalMinutes -lt $timeoutMinutes)
+        {
+            write-error "script timed out waiting for jobs to complete totalMinutes: $($totalMinutes) minutes"
+            get-job | receive-job
+            get-job | remove-job -force
+            return
+        }
     }
 }
 function read-xml($xmlFile, [switch]$format)
