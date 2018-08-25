@@ -191,7 +191,7 @@ function main()
             if(!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to start diagnostics. skipping!"
-                $remoteMachines.Remove($i,1)
+                $remoteMachines.RemoveAt($i,1)
                 continue
             }
 
