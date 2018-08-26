@@ -317,6 +317,13 @@ function process-machine()
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $eventScriptFile)
     }
 
+    add-job -jobName "check machinekeys" -scriptBlock {
+        param($workdir = $args[0])
+        $machineKeys = "C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys"
+        Get-ChildItem $machineKeys -Recurse | out-file "$($workDir)\dir-machinekeys.txt"
+        Invoke-Expression "icacls $($machineKeys) /C /T | out-file -Append $($workdir)\dir-machinekeys.txt"
+    } -arguments @($workdir)
+
     add-job -jobName "check for dump file c" -scriptBlock {
         param($workdir = $args[0])
         get-childitem -Recurse -Path "c:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-c.txt"
