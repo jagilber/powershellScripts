@@ -1,35 +1,13 @@
 <#
 .SYNOPSIS
-$certThumb = ""
-$cert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $certThumb)
-$url = "https://localhost:19080/Nodes?api-version=6.0"
-
-# to bypass self-signed cert 
-add-type @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-
-    public class IDontCarePolicy : ICertificatePolicy {
-            public IDontCarePolicy() {}
-            public bool CheckValidationResult(
-            ServicePoint sPoint, X509Certificate cert,
-            WebRequest wRequest, int certProb) {
-            return true;
-        }
-    }
-"@
-
-[System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
-Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-
 powershell script to collect service fabric node diagnostic data
 
 To download and execute, run the following commands on each sf node in admin powershell:
 iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1') -UseBasicParsing|iex
 
 To download and execute with arguments:
-    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1");
-    c:\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1",".\sf-collect-node-info.ps1");
+.\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
 
 upload to workspace sfgather* dir or zip
 
@@ -118,6 +96,23 @@ $winrmClientInfo = $Null
 $eventScriptFile = $Null
 $sfCollectInfoDir = "sfColInfo-"
 
+# to bypass self-signed cert validation check
+add-type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+
+public class IDontCarePolicy : ICertificatePolicy {
+        public IDontCarePolicy() {}
+        public bool CheckValidationResult(
+        ServicePoint sPoint, X509Certificate cert,
+        WebRequest wRequest, int certProb) {
+        return true;
+    }
+}
+"@
+
+[System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
+
 function main()
 {
     $error.Clear()
@@ -125,11 +120,11 @@ function main()
     write-warning "information may contain items such as ip addresses, process information, user names, or similar."
     write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
-    if(!$workDir -and $remoteMachines)
+    if (!$workDir -and $remoteMachines)
     {
         $workdir = "$($env:temp)\$($sfCollectInfoDir)$((get-date).ToString("yy-MM-dd-HH-mm"))"
     }
-    elseif(!$workDir)
+    elseif (!$workDir)
     {
         $workdir = "$($env:temp)\$($sfCollectInfoDir)$($env:COMPUTERNAME)"
     }
@@ -163,39 +158,39 @@ function main()
     get-job | remove-job -Force
 
     # stage event-log-manager script
-    if(!$noEventLogs -and !(test-path $eventScriptFile))
+    if (!$noEventLogs -and !(test-path $eventScriptFile))
     {
         (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
     }
 
-    if($remoteMachines)
+    if ($remoteMachines)
     {
         # setup local (source) machine for best chance of success
         $winrmClientInfo = (winrm get winrm/config/client)
         $trustedHostsPattern = "TrustedHosts = (.*)"
         
-        if([regex]::IsMatch($winrmClientInfo, $trustedHostsPattern))
+        if ([regex]::IsMatch($winrmClientInfo, $trustedHostsPattern))
         {
             $trustedHosts = ([regex]::matches($winrmClientInfo , $trustedHostsPattern)).groups[1].value
         }
 
         winrm set winrm/config/client '@{TrustedHosts="*"}'
-        #Enable-PSRemoting
 
-        #foreach ($machine in @($remoteMachines))
-        for($i = 0;$i -lt $remoteMachines.count;$i++)
+        # switch to arraylist
+        $remoteMachines = (new-object collections.arraylist(,$remoteMachines))
+
+        foreach ($machine in (new-object collections.arraylist(,$remoteMachines)))
         {
-            $machine = $remoteMachines[$i]
             $adminPath = "\\$($machine)\admin$\temp"
 
-            if(!(Test-path $adminPath))
+            if (!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to start diagnostics. skipping!"
-                $remoteMachines.RemoveAt($i)
+                $remoteMachines.Remove($machine)
                 continue
             }
 
-            if(!$noEventLogs)
+            if (!$noEventLogs)
             {
                 copy-item -path $eventScriptFile -Destination $adminPath -force
             }
@@ -204,38 +199,38 @@ function main()
 
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -JobName $machine -AsJob -ComputerName $machine -scriptblock {
-                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3], $sfCollectInfoDir = $args[4])
-                $parentWorkDir = "$($env:systemroot)\temp"
-                $workDir = "$($parentWorkDir)\$($sfCollectInfoDir)$($machine)"
-                $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
+                        param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3], $sfCollectInfoDir = $args[4])
+                        $parentWorkDir = "$($env:systemroot)\temp"
+                        $workDir = "$($parentWorkDir)\$($sfCollectInfoDir)$($machine)"
+                        $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
                 
-                if($certInfo)
-                {
-                    $certInfo = "-certInfo "
-                }
-                else
-                {
-                    $certInfo = ""
-                }
+                        if ($certInfo)
+                        {
+                            $certInfo = "-certInfo "
+                        }
+                        else
+                        {
+                            $certInfo = ""
+                        }
 
-                if (!(test-path $scriptPath))
-                {
-                    (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
-                }
+                        if (!(test-path $scriptPath))
+                        {
+                            (new-object net.webclient).downloadfile($scriptUrl, $scriptPath)
+                        }
              
-                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) $($certInfo)-quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
-                write-host ($error | out-string)
-            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress, $certInfo, $sfCollectInfoDir)))
+                        start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) $($certInfo)-quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
+                        write-host ($error | out-string)
+                    } -ArgumentList @($scriptUrl, $machine, $networkTestAddress, $certInfo, $sfCollectInfoDir)))
         }
 
         monitor-jobs
 
-        foreach ($machine in @($remoteMachines))
+        foreach ($machine in $remoteMachines)
         {
             $adminPath = "\\$($machine)\admin$\temp"
             $foundZip = $false
 
-            if(!(Test-path $adminPath))
+            if (!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to copy zip. skipping!"
                 continue
@@ -247,7 +242,7 @@ function main()
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
 
-            if((test-path $sourcePathZip))
+            if ((test-path $sourcePathZip))
             {
                 write-host "copying file $($sourcePathZip) to $($destPathZip)" -ForegroundColor Magenta
                 Copy-Item $sourcePathZip $destPathZip -Force
@@ -255,9 +250,9 @@ function main()
                 $foundZip = $true
             }
             
-            if((test-path $sourcePath))
+            if ((test-path $sourcePath))
             {
-                if(!$foundZip)
+                if (!$foundZip)
                 {
                     write-host "copying folder $($sourcePath) to $($destPath)" -ForegroundColor Magenta
                     Copy-Item $sourcePath $destPath -Force -Recurse
@@ -311,7 +306,7 @@ function process-machine()
             }
 
             $tempLocation = "$($workdir)\event-logs"
-            if(!(test-path $tempLocation))
+            if (!(test-path $tempLocation))
             {
                 New-Item -ItemType Directory -Path $tempLocation    
             }
@@ -324,16 +319,11 @@ function process-machine()
 
     add-job -jobName "check for dump file c" -scriptBlock {
         param($workdir = $args[0])
-        # slow
-        # Invoke-Command -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > "$env:temp\dumplist-c.txt" -Wait -WindowStyle Hidden }
-        #Invoke-Expression "cmd.exe /c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt"
         get-childitem -Recurse -Path "c:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-c.txt"
     } -arguments @($workdir)
 
     add-job -jobName "check for dump file d" -scriptBlock {
         param($workdir = $args[0])
-        # Invoke-Command -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > "$env:temp\dumplist-d.txt" -Wait -WindowStyle Hidden }
-        #Invoke-Expression "cmd.exe /c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt"
         get-childitem -Recurse -Path "d:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-d.txt"
     } -arguments @($workdir)
 
@@ -427,7 +417,7 @@ function process-machine()
         param($workdir = $args[0])
         function copy-files($sourceDir)
         {
-            if(!(test-path $sourceDir))
+            if (!(test-path $sourceDir))
             {
                 return
             }
@@ -452,16 +442,17 @@ function process-machine()
     Invoke-Expression "ipconfig /all > $($workdir)\ipconfig.txt"
 
     write-host "service fabric reg"
-    #HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric
     Invoke-Expression "reg.exe query `"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric`" /s > $($workDir)\serviceFabric.reg.txt"
     Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServiceFabricNodeBootStrapAgent /s > $($workDir)\serviceFabricNodeBootStrapAgent.reg.txt"
 
     #
     # service fabric information
     #
+
+    # todo get from exe path?
     $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
-    if(!$fabricDataRoot)
+    if (!$fabricDataRoot)
     {
         $fabricDataRoot = "d:\"
     }
@@ -494,6 +485,12 @@ function process-machine()
         $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
         write-host "sfrp response: $($sfrpresponse)"
         out-file -Append -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
+
+        #$certThumb = ""
+        #$cert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $certThumb)
+        #$url = "https://localhost:19080/Nodes?api-version=6.0"
+        #Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
+
     }
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
@@ -555,7 +552,7 @@ function monitor-jobs()
     {
         $incompleteCount = (get-job | Where-Object State -eq "Running").Count
         
-        if($incompleteCount -eq 0 -or $incompletedCount -ne $incompleteCount)
+        if ($incompleteCount -eq 0 -or $incompletedCount -ne $incompleteCount)
         {
             write-host "`n$((get-date).ToString("HH:mm:sszz")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
             $incompletedCount = $incompleteCount
@@ -576,7 +573,7 @@ function monitor-jobs()
         start-sleep -seconds 1
         write-host "." -NoNewline
 
-        if(((get-date) - $timer).TotalMinutes -ge $timeoutMinutes)
+        if (((get-date) - $timer).TotalMinutes -ge $timeoutMinutes)
         {
             write-error "script timed out waiting for jobs to complete totalMinutes: $($timeoutMinutes) minutes"
             get-job | receive-job
