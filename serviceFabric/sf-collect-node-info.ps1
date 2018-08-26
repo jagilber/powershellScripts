@@ -73,6 +73,7 @@ param(
     $endTime = (get-date),
     $networkTestAddress = $env:computername,
     $timeoutMinutes = 15,
+    $apiversion = "6.2-preview", #"api-version=6.0"
     [int[]]$ports = @(1025, 1026, 19000, 19080, 135, 445, 3389, 5985),
     [string[]]$remoteMachines,
     [switch]$noAdmin,
@@ -457,7 +458,7 @@ function process-machine()
     #
 
     # todo get from exe path?
-    $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
+    $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
     if (!$fabricDataRoot)
     {
@@ -480,7 +481,7 @@ function process-machine()
         write-host "seed nodes: $($seedNodes | format-list * | out-string)"
         $nodeCount = $xml.ClusterManifest.Infrastructure.PaaS.Roles.Role.RoleNodeCount
         write-host "node count:$($nodeCount)"
-        $clusterId = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "Paas").FirstChild.value
+        $clusterId = (($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "Paas").childnodes | where-object Name -eq "ClusterId").value
         write-host "cluster id:$($clusterId)"
         $upgradeServiceParams = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "UpgradeService").parameter
         $sfrpUrl = ($upgradeServiceParams | Where-Object Name -eq "BaseUrl").Value
@@ -488,19 +489,39 @@ function process-machine()
         write-host "sfrp url:$($sfrpUrl)"
         out-file -InputObject $sfrpUrl "$($workdir)\sfrp-response.txt"
         $ucert = ($upgradeServiceParams | Where-Object Name -eq "X509FindValue").Value
-        
         $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
         write-host "sfrp response: $($sfrpresponse)"
         out-file -Append -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
 
-        #$certThumb = ""
-        #$cert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $certThumb)
-        #$url = "https://localhost:19080/Nodes?api-version=6.0"
-        #Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
 
+        $httpGatewayEndpoint = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
+        $clusterCertThumb = $xml.ClusterManifest.NodeTypes.FirstChild.Certificates.ClientCertificate.X509FindValue
+        $clusterCert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $clusterCertThumb)
+        $urlArgs = "api-version=$($apiversion)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
+        # todo handle continuationtoken
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/Nodes?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-nodes.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/ImageStore?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFiles | out-file "$($workdir)\rest-imageStore.txt"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFolders | out-file -Append "$($workdir)\rest-imageStore.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/$/GetClusterHealth?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-getClusterHealth.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Cluster/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsCluster.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Nodes/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsNodes.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Applications/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsApplications.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Services/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsServices.txt"
+        
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Partitions/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsPartition.txt"
+        
+        
     }
 
-    $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
+    $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricroot
     write-host "fabric root:$($fabricRoot)"
     Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
 

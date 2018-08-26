@@ -1,17 +1,19 @@
 # example script to query service fabric api on localhost using self signed cert
 # docs.microsoft.com/en-us/rest/api/servicefabric/sfclient-index
 
+param(
+    $gatewayCertThumb = "xxxxx",
+    $startTime = (get-date).AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ssZ"),
+    $endTime = (get-date).ToString("yyyy-MM-ddTHH:mm:ssZ"),
+    $timeoutSec = 100,
+    $apiVer = "6.2-preview",
+    $gatewayHost = "https://localhost:19080"
+)
+
 Clear-Host
 $ErrorActionPreference = "continue"
 $result = $Null
-$gatewayCertThumb = "xxxx"
 $cert = Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
-$startTime = ([datetime]"8/14/2018").ToString("yyyy-MM-ddTHH:mm:ssZ")
-$endTime = ([datetime]"8/22/2018").ToString("yyyy-MM-ddTHH:mm:ssZ")
-
-$timeoutSec = 100
-$apiVer = "6.2-preview"
-$host = "https://localhost:19080"
 
 # to bypass self-signed cert 
 add-type @"
@@ -32,39 +34,54 @@ add-type @"
 
 $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime)&EndTimeUtc=$($endTime)"
 
-$url = "$($host)/EventsStore/Cluster/Events?$($eventArgs)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
+$url = "$($gatewayHost)/EventsStore/Cluster/Events?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
+$result = $Null
 
-$url = "$($host)/EventsStore/Nodes/Events?$($eventArgs)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
 
-$url = "$($host)/EventsStore/Applications/Events?$($eventArgs)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
+$url = "$($gatewayHost)/EventsStore/Nodes/Events?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
+$result = $Null
 
-$url = "$($host)/EventsStore/Services/Events?$($eventArgs)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
 
-$url = "$($host)/EventsStore/Partitions/Events?$($eventArgs)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
+$url = "$($gatewayHost)/EventsStore/Applications/Events?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
+$result = $Null
 
-$url = "$($host)/ImageStore?api-version=$($apiVer)&timeout=$($timeoutSec)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
+
+$url = "$($gatewayHost)/EventsStore/Services/Events?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
+$result = $Null
+
+
+$url = "$($gatewayHost)/EventsStore/Partitions/Events?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
+$result = $Null
+
+$eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)"
+$url = "$($gatewayHost)/ImageStore?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
 $result.StoreFiles
 $result.StoreFolders
+$result = $Null
 
-
-$url = "$($host)/$/GetClusterManifest?api-version=$($apiVer)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-#$result
+$url = "$($gatewayHost)/$/GetClusterManifest?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+#$result |fl *
 $result.manifest
 $result = $Null
 
-$url = "$($host)/$/GetClusterHealth?api-version=$($apiVer)"
-$result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url
-$result
+$url = "$($gatewayHost)/$/GetClusterHealth?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result |fl *
+$result = $Null
+
+$url = "$($gatewayHost)/Nodes?$($eventArgs)"
+$result = Invoke-RestMethod  -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -Uri $url
+$result.items | fl *
