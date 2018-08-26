@@ -96,6 +96,7 @@ $trustedHosts = $Null
 $winrmClientInfo = $Null
 $eventScriptFile = $Null
 $sfCollectInfoDir = "sfColInfo-"
+$restTimeoutSec = 15
 
 # to bypass self-signed cert validation check
 add-type @"
@@ -497,7 +498,7 @@ function process-machine()
         $httpGatewayEndpoint = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
         $clusterCertThumb = $xml.ClusterManifest.NodeTypes.FirstChild.Certificates.ClientCertificate.X509FindValue
         $clusterCert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $clusterCertThumb)
-        $urlArgs = "api-version=$($apiversion)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
+        $urlArgs = "api-version=$($apiversion)&timeout=$($restTimeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
         # todo handle continuationtoken
         $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/Nodes?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-nodes.txt"
