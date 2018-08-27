@@ -230,7 +230,7 @@ function main()
         winrm set winrm/config/client '@{TrustedHosts="*"}'
 
         # switch to arraylist
-        $remoteMachines = (new-object collections.arraylist(,$remoteMachines))
+        $remoteMachines = new-object collections.arraylist(,$remoteMachines)
 
         foreach ($machine in (new-object collections.arraylist(,$remoteMachines)))
         {
