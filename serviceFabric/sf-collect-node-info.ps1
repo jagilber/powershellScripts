@@ -52,10 +52,19 @@ upload to workspace sfgather* dir or zip
     Author     : microsoft service fabric support
     Version    : 180815 original
     History    : 
-    
+
+.EXAMPLE
+    .\sf-collect-node-info.ps1
+    default command to collect event logs, process, service, os information for last 7 days.
+
 .EXAMPLE
     .\sf-collect-node-info.ps1 -certInfo
-    Example command to query all diagnostic information, event logs, and certificate store information
+    Example command to query all diagnostic information, event logs, and certificate store information.
+
+.EXAMPLE
+    .\sf-collect-node-info.ps1 -remoteMachines 10.0.0.4,10.0.0.5
+    Example command to query diagnostic information remotely from two machines.
+    files will be copied back to machine where script is being executed.
 
 .PARAMETER workDir
     output directory where all files will be created.
@@ -124,7 +133,7 @@ param(
     $endTime = (get-date),
     $networkTestAddress = $env:computername,
     $timeoutMinutes = 15,
-    $apiversion = "6.2-preview", #"api-version=6.0"
+    $apiversion = "6.2-preview", #"6.0"
     [int[]]$ports = @(1025, 1026, 19000, 19080, 135, 445, 3389, 5985),
     [string[]]$remoteMachines,
     [switch]$noAdmin,
@@ -133,6 +142,7 @@ param(
     [switch]$quiet
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Continue"
 $timer = get-date
 $scriptUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1'
@@ -230,9 +240,9 @@ function main()
         winrm set winrm/config/client '@{TrustedHosts="*"}'
 
         # switch to arraylist
-        $remoteMachines = new-object collections.arraylist(,$remoteMachines)
+        $remoteMachines = new-object collections.arraylist(, $remoteMachines)
 
-        foreach ($machine in (new-object collections.arraylist(,$remoteMachines)))
+        foreach ($machine in (new-object collections.arraylist(, $remoteMachines)))
         {
             $adminPath = "\\$($machine)\admin$\temp"
 
@@ -392,6 +402,7 @@ function process-machine()
         foreach ($port in $ports)
         {
             test-netconnection -port $port -ComputerName $networkTestAddress -InformationLevel Detailed | out-file -Append "$($workdir)\network-port-test.txt"
+            Write-Progress -Completed
         }
     } -arguments @($workdir, $networkTestAddress, $ports)
 
