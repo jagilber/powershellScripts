@@ -401,8 +401,8 @@ function process-machine()
         param($workdir = $args[0], $networkTestAddress = $args[1], $ports = $args[2])
         foreach ($port in $ports)
         {
+            $ProgressPreference = "silentlycontinue"
             test-netconnection -port $port -ComputerName $networkTestAddress -InformationLevel Detailed | out-file -Append "$($workdir)\network-port-test.txt"
-            Write-Progress -Completed
         }
     } -arguments @($workdir, $networkTestAddress, $ports)
 
