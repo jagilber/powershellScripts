@@ -5,6 +5,7 @@ To download and execute, run the following commands on each sf node in admin pow
 c:\sf-node-drive-treesize.ps1
 #>
 
+[cmdletbinding()]
 param(
     $directory = "$($env:SystemRoot)\system32",
     $depth = 99,
@@ -26,7 +27,7 @@ write-host "NOTE: by default, this script performs a quick scan which is not as 
 write-host "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
 $directories = new-object collections.arraylist
-$directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth).FullName | Sort-Object))
+$directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force).FullName | Sort-Object))
 $directories.Insert(0, $directory.ToLower())
 $previousDir = $null
 $totalFiles = 0
@@ -35,16 +36,22 @@ $totalFiles = 0
 foreach ($subdir in $directories)
 {
     Write-Debug "enumerating $($subDir)"
-    $files = Get-ChildItem $subdir
+    $files = Get-ChildItem $subdir -Force
     $sum = ($files | Measure-Object -Property Length -Sum)
-    $size = [float]($sum.Sum / 1GB).ToString("F3")
+    $size = [float]($sum.Sum / 1GB).ToString("F7")
     
-    if($showFiles)
+    if($showFiles -or $DebugPreference -ine "silentlycontinue")
     {
         write-host "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)"
         foreach($file in $files)
         {
-            write-host "`t$($file)"
+            $filePath = $file.name
+            if($notree)
+            {
+                $filePath = $file.fullname    
+            }
+
+            write-host "`t$($file.length.tostring().padleft(16)) $($filePath)"
         }
     }
 
@@ -52,6 +59,7 @@ foreach ($subdir in $directories)
     {
         [void]$sizeObjs.Add($subdir.ToLower(), $size)
         $totalFiles = $totalFiles + $sum.Count
+        Write-Debug "adding $($subDir) $($size)"
     }
 }
 
@@ -69,7 +77,7 @@ $darkgreenmin = $sortedBySize[($categorySize) - 1]
 foreach ($sortedDir in $directories)
 {
   
-    Write-Debug "checking $($sortedDir)"
+    Write-Debug "checking dir $($sortedDir)"
     $sortedDir = $sortedDir.ToLower()
     $size = 0
 
@@ -85,6 +93,7 @@ foreach ($sortedDir in $directories)
   
     if ([float]$size -eq 0) 
     {
+        Write-Debug "skipping empty dir $($sortedDir)"
         continue
     }
 
@@ -128,6 +137,7 @@ foreach ($sortedDir in $directories)
 
     if ((!$detail -and $previousDir -and ($size -lt $minSizeGB)))
     {
+        Write-Debug "skipping below size dir $($sortedDir)"
         continue 
     }
 
