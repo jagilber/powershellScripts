@@ -6,8 +6,8 @@ To download and execute, run the following commands on each sf node in admin pow
 iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1') -UseBasicParsing|iex
 
 To download and execute with arguments:
-(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1","c:\sf-collect-node-info.ps1")
-c:\sf-collect-node-info.ps1 -certInfo -days 30
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1",".\sf-collect-node-info.ps1");
+.\sf-collect-node-info.ps1 -certInfo -remoteMachines 10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8
 
 upload to workspace sfgather* dir or zip
 
@@ -68,12 +68,14 @@ upload to workspace sfgather* dir or zip
 param(
     $workdir,
     $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
+    $externalUrl = "bing.com",
     $startTime = (get-date).AddDays(-7),
     $endTime = (get-date),
-    [int[]]$ports = @(1025, 1026, 1027, 19000, 19080, 135, 445, 3389, 5985),
-    [string[]]$remoteMachines,
     $networkTestAddress = $env:computername,
-    $externalUrl = "bing.com",
+    $timeoutMinutes = 15,
+    $apiversion = "6.2-preview", #"api-version=6.0"
+    [int[]]$ports = @(1025, 1026, 19000, 19080, 135, 445, 3389, 5985),
+    [string[]]$remoteMachines,
     [switch]$noAdmin,
     [switch]$noEventLogs,
     [switch]$certInfo,
@@ -81,6 +83,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
+$timer = get-date
 $scriptUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1'
 $currentWorkDir = get-location
 $osVersion = [version]([string]((wmic os get Version) -match "\d"))
@@ -88,7 +91,29 @@ $win10 = ($osVersion.major -ge 10)
 $parentWorkDir = $null
 $jobs = new-object collections.arraylist
 $logFile = $Null
-$zipFile = $null
+$global:zipFile = $null
+$trustedHosts = $Null
+$winrmClientInfo = $Null
+$eventScriptFile = $Null
+$sfCollectInfoDir = "sfColInfo-"
+$restTimeoutSec = 15
+
+# to bypass self-signed cert validation check
+add-type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+
+public class IDontCarePolicy : ICertificatePolicy {
+        public IDontCarePolicy() {}
+        public bool CheckValidationResult(
+        ServicePoint sPoint, X509Certificate cert,
+        WebRequest wRequest, int certProb) {
+        return true;
+    }
+}
+"@
+
+[System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
 
 function main()
 {
@@ -97,16 +122,17 @@ function main()
     write-warning "information may contain items such as ip addresses, process information, user names, or similar."
     write-warning "information in directory / zip can be reviewed before uploading to workspace."
 
-    if(!$workDir -and $remoteMachines)
+    if (!$workDir -and $remoteMachines)
     {
-        $workdir = "$($env:temp)\sfgather-$((get-date).ToString("yy-MM-dd-HH-ss"))"
+        $workdir = "$($env:temp)\$($sfCollectInfoDir)$((get-date).ToString("yy-MM-dd-HH-mm"))"
     }
-    elseif(!$workDir)
+    elseif (!$workDir)
     {
-        $workdir = "$($env:temp)\sfgather-$($env:COMPUTERNAME)"
+        $workdir = "$($env:temp)\$($sfCollectInfoDir)$($env:COMPUTERNAME)"
     }
 
     $parentWorkDir = [io.path]::GetDirectoryName($workDir)
+    $eventScriptFile = "$($parentWorkdir)\event-log-manager.ps1"
 
     if ((test-path $workdir))
     {
@@ -133,57 +159,92 @@ function main()
     write-host "remove old jobs"
     get-job | remove-job -Force
 
-    if($remoteMachines)
+    # stage event-log-manager script
+    if (!$noEventLogs -and !(test-path $eventScriptFile))
     {
-        foreach ($machine in @($remoteMachines))
+        (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
+    }
+
+    if ($remoteMachines)
+    {
+        # setup local (source) machine for best chance of success
+        $winrmClientInfo = (winrm get winrm/config/client)
+        $trustedHostsPattern = "TrustedHosts = (.*)"
+        
+        if ([regex]::IsMatch($winrmClientInfo, $trustedHostsPattern))
+        {
+            $trustedHosts = ([regex]::matches($winrmClientInfo , $trustedHostsPattern)).groups[1].value
+        }
+
+        winrm set winrm/config/client '@{TrustedHosts="*"}'
+
+        # switch to arraylist
+        $remoteMachines = (new-object collections.arraylist(,$remoteMachines))
+
+        foreach ($machine in (new-object collections.arraylist(,$remoteMachines)))
         {
             $adminPath = "\\$($machine)\admin$\temp"
 
-            if(!(Test-path $adminPath))
+            if (!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to start diagnostics. skipping!"
+                $remoteMachines.Remove($machine)
                 continue
             }
 
-            copy-item -path ($MyInvocation.ScriptName) -Destination $adminPath
+            if (!$noEventLogs)
+            {
+                copy-item -path $eventScriptFile -Destination $adminPath -force
+            }
+
+            copy-item -path ($MyInvocation.ScriptName) -Destination $adminPath -force
 
             write-host "adding job for $($machine)"
             [void]$jobs.Add((Invoke-Command -JobName $machine -AsJob -ComputerName $machine -scriptblock {
-                param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2])
-                $parentWorkDir = "$($env:systemroot)\temp"
-                $workDir = "$($parentWorkDir)\sfgather-$($machine)"
-                $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
+                        param($scriptUrl = $args[0], $machine = $args[1], $networkTestAddress = $args[2], $certInfo = $args[3], $sfCollectInfoDir = $args[4])
+                        $parentWorkDir = "$($env:systemroot)\temp"
+                        $workDir = "$($parentWorkDir)\$($sfCollectInfoDir)$($machine)"
+                        $scriptPath = "$($parentWorkDir)\$($scriptUrl -replace `".*/`",`"`")"
+                
+                        if ($certInfo)
+                        {
+                            $certInfo = "-certInfo "
+                        }
+                        else
+                        {
+                            $certInfo = ""
+                        }
 
-                if (!(test-path $scriptPath))
-                {
-                    (new-object net.webclient).downloadfile($scriptUrl,$scriptPath)
-                }
+                        if (!(test-path $scriptPath))
+                        {
+                            (new-object net.webclient).downloadfile($scriptUrl, $scriptPath)
+                        }
              
-                start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) -quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
-                write-host ($error | out-string)
-            } -ArgumentList @($scriptUrl, $machine, $networkTestAddress)))
+                        start-process -filepath "powershell.exe" -ArgumentList "-File $($scriptPath) $($certInfo)-quiet -noadmin -networkTestAddress $($networkTestAddress) -workDir $($workDir)" -Wait -NoNewWindow
+                        write-host ($error | out-string)
+                    } -ArgumentList @($scriptUrl, $machine, $networkTestAddress, $certInfo, $sfCollectInfoDir)))
         }
 
         monitor-jobs
 
-        foreach ($machine in @($remoteMachines))
+        foreach ($machine in $remoteMachines)
         {
             $adminPath = "\\$($machine)\admin$\temp"
             $foundZip = $false
 
-            if(!(Test-path $adminPath))
+            if (!(Test-path $adminPath))
             {
                 Write-Warning "unable to connect to $($machine) to copy zip. skipping!"
                 continue
             }
 
-            $sourcePath = "$($adminPath)\sfgather-$($machine)"
-            $destPath = "$($workDir)\sfgather-$($machine)"
+            $sourcePath = "$($adminPath)\$($sfCollectInfoDir)$($machine)"
+            $destPath = "$($workDir)\$($sfCollectInfoDir)$($machine)"
 
             $sourcePathZip = "$($sourcePath).zip"
             $destPathZip = "$($destPath).zip"
 
-            if((test-path $sourcePathZip))
+            if ((test-path $sourcePathZip))
             {
                 write-host "copying file $($sourcePathZip) to $($destPathZip)" -ForegroundColor Magenta
                 Copy-Item $sourcePathZip $destPathZip -Force
@@ -191,9 +252,9 @@ function main()
                 $foundZip = $true
             }
             
-            if((test-path $sourcePath))
+            if ((test-path $sourcePath))
             {
-                if(!$foundZip)
+                if (!$foundZip)
                 {
                     write-host "copying folder $($sourcePath) to $($destPath)" -ForegroundColor Magenta
                     Copy-Item $sourcePath $destPath -Force -Recurse
@@ -208,7 +269,7 @@ function main()
             }
         }
 
-        $zipFile = compress-file $workDir
+        $global:zipFile = compress-file $workDir
     }
     else
     {
@@ -239,15 +300,15 @@ function process-machine()
     if (!$noEventLogs)
     {
         add-job -jobName "event logs" -scriptBlock {
-            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4])
-            $scriptFile = "$($parentWorkdir)\event-log-manager.ps1"
-            if (!(test-path $scriptFile))
+            param($workdir = $args[0], $parentWorkdir = $args[1], $eventLogNames = $args[2], $startTime = $args[3], $endTime = $args[4], $eventScriptFile = $args[5])
+            $eventScriptFile = "$($parentWorkdir)\event-log-manager.ps1"
+            if (!(test-path $eventScriptFile))
             {
-                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $scriptFile)
+                (new-object net.webclient).downloadfile("http://aka.ms/event-log-manager.ps1", $eventScriptFile)
             }
 
             $tempLocation = "$($workdir)\event-logs"
-            if(!(test-path $tempLocation))
+            if (!(test-path $tempLocation))
             {
                 New-Item -ItemType Directory -Path $tempLocation    
             }
@@ -255,21 +316,23 @@ function process-machine()
             $argList = "-File $($parentWorkdir)\event-log-manager.ps1 -eventLogNamePattern `"$($eventlognames)`" -eventStartTime `"$($startTime)`" -eventStopTime `"$($endTime)`" -eventDetails -merge -uploadDir `"$($tempLocation)`" -nodynamicpath"
             write-host "event logs: starting command powershell.exe $($argList)"
             start-process -filepath "powershell.exe" -ArgumentList $argList -Wait -WindowStyle Hidden -WorkingDirectory $tempLocation
-        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime)
+        } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $eventScriptFile)
     }
+
+    add-job -jobName "check machinekeys" -scriptBlock {
+        param($workdir = $args[0])
+        $machineKeys = "C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys"
+        Get-ChildItem $machineKeys -Recurse | out-file "$($workDir)\dir-machinekeys.txt"
+        Invoke-Expression "icacls $($machineKeys) /C /T | out-file -Append $($workdir)\dir-machinekeys.txt"
+    } -arguments @($workdir)
 
     add-job -jobName "check for dump file c" -scriptBlock {
         param($workdir = $args[0])
-        # slow
-        # Invoke-Command -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir c:\*.*dmp /s > "$env:temp\dumplist-c.txt" -Wait -WindowStyle Hidden }
-        #Invoke-Expression "cmd.exe /c dir c:\*.*dmp /s > $($workdir)\dumplist-c.txt"
         get-childitem -Recurse -Path "c:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-c.txt"
     } -arguments @($workdir)
 
     add-job -jobName "check for dump file d" -scriptBlock {
         param($workdir = $args[0])
-        # Invoke-Command -ScriptBlock { start-process "cmd.exe" -ArgumentList "/c dir d:\*.*dmp /s > "$env:temp\dumplist-d.txt" -Wait -WindowStyle Hidden }
-        #Invoke-Expression "cmd.exe /c dir d:\*.*dmp /s > $($workdir)\dumplist-d.txt"
         get-childitem -Recurse -Path "d:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-d.txt"
     } -arguments @($workdir)
 
@@ -301,7 +364,6 @@ function process-machine()
         Invoke-Expression "nslookup $($networkTestAddress) | out-file -Append $($workdir)\nslookup.txt"
     } -arguments @($workdir, $networkTestAddress, $externalUrl)
 
-
     write-host "winrm settings"
     Invoke-Expression "winrm get winrm/config/client > $($workdir)\winrm-config.txt" 
 
@@ -322,6 +384,7 @@ function process-machine()
     add-job -jobName "os info" -scriptBlock {
         param($workdir = $args[0])
         get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 | format-list * | out-file "$($workdir)\os-info.txt"
+        Invoke-Expression "cmd.exe /c sc query type= driver > $($workdir)\drivers.txt"
         get-hotfix | out-file "$($workdir)\hotfixes.txt"
         Get-process | out-file "$($workdir)\process-summary.txt"
         Get-process | format-list * | out-file "$($workdir)\processes.txt"
@@ -359,6 +422,25 @@ function process-machine()
         Get-NetTCPConnection | Where-Object RemotePort -eq 1026 | out-file "$($workdir)\connected-nodes.txt"
     } -arguments @($workdir)
 
+    add-job -jobName "azure config files" -scriptBlock {
+        param($workdir = $args[0])
+        function copy-files($sourceDir)
+        {
+            if (!(test-path $sourceDir))
+            {
+                return
+            }
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.json" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.txt" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.settings" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.config" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.xml" -Recurse -ErrorAction SilentlyContinue
+            copy-item -path $sourceDir -Destination $workDir -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
+        }
+        copy-files "c:\packages"
+        copy-files "c:\windowsAzure"
+    } -arguments @($workdir)
+
     write-host "netstat ports"
     Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
 
@@ -369,22 +451,26 @@ function process-machine()
     Invoke-Expression "ipconfig /all > $($workdir)\ipconfig.txt"
 
     write-host "service fabric reg"
-    #HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric
     Invoke-Expression "reg.exe query `"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric`" /s > $($workDir)\serviceFabric.reg.txt"
     Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServiceFabricNodeBootStrapAgent /s > $($workDir)\serviceFabricNodeBootStrapAgent.reg.txt"
 
     #
     # service fabric information
     #
-    $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricdataroot").fabricdataroot
+
+    # todo get from exe path?
+    $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
+    if (!$fabricDataRoot)
+    {
+        $fabricDataRoot = "d:\"
+    }
 
     add-job -jobName "fabric config files" -scriptBlock {
         param($workdir = $args[0], $fabricDataRoot = $args[1])
         Get-ChildItem $($fabricDataRoot) -Recurse | out-file "$($workDir)\dir-fabricdataroot.txt"
         Copy-Item -Path $fabricDataRoot -Filter "*.xml" -Destination $workdir -Recurse
     } -arguments @($workdir, $fabricDataRoot)
-
 
     $clusterManifestFile = "$($fabricDataRoot)\clustermanifest.xml"
     if ((test-path $clusterManifestFile))
@@ -396,7 +482,7 @@ function process-machine()
         write-host "seed nodes: $($seedNodes | format-list * | out-string)"
         $nodeCount = $xml.ClusterManifest.Infrastructure.PaaS.Roles.Role.RoleNodeCount
         write-host "node count:$($nodeCount)"
-        $clusterId = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "Paas").FirstChild.value
+        $clusterId = (($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "Paas").childnodes | where-object Name -eq "ClusterId").value
         write-host "cluster id:$($clusterId)"
         $upgradeServiceParams = ($xml.ClusterManifest.FabricSettings.Section | Where-Object Name -eq "UpgradeService").parameter
         $sfrpUrl = ($upgradeServiceParams | Where-Object Name -eq "BaseUrl").Value
@@ -404,13 +490,39 @@ function process-machine()
         write-host "sfrp url:$($sfrpUrl)"
         out-file -InputObject $sfrpUrl "$($workdir)\sfrp-response.txt"
         $ucert = ($upgradeServiceParams | Where-Object Name -eq "X509FindValue").Value
-        
         $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
         write-host "sfrp response: $($sfrpresponse)"
         out-file -Append -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
+
+
+        $httpGatewayEndpoint = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
+        $clusterCertThumb = $xml.ClusterManifest.NodeTypes.FirstChild.Certificates.ClientCertificate.X509FindValue
+        $clusterCert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $clusterCertThumb)
+        $urlArgs = "api-version=$($apiversion)&timeout=$($restTimeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
+        # todo handle continuationtoken
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/Nodes?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-nodes.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/ImageStore?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFiles | out-file "$($workdir)\rest-imageStore.txt"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFolders | out-file -Append "$($workdir)\rest-imageStore.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/$/GetClusterHealth?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-getClusterHealth.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Cluster/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsCluster.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Nodes/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsNodes.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Applications/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsApplications.txt"
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Services/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsServices.txt"
+        
+        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Partitions/Events?$($urlArgs)"
+        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsPartition.txt"
+        
+        
     }
 
-    $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric" -Name "fabricroot").fabricroot
+    $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricroot
     write-host "fabric root:$($fabricRoot)"
     Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
 
@@ -425,7 +537,7 @@ function process-machine()
         read-xml -xmlFile $file.FullName -format
     }
 
-    $zipFile = compress-file $workDir
+    $global:zipFile = compress-file $workDir
 }
 
 function add-job($jobName, $scriptBlock, $arguments)
@@ -465,28 +577,38 @@ function monitor-jobs()
 {
     $incompletedCount = 0
 
-    while (get-job)
+    while ((get-job).Count -gt 0)
     {
-        foreach ($job in get-job)
-        {
-            write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | fl * | out-string))") -ForegroundColor Cyan
-
-            if ($job.State -imatch "Failed|Completed")
-            {
-                remove-job $job -Force
-            }
-        }
-
         $incompleteCount = (get-job | Where-Object State -eq "Running").Count
         
-        if($incompletedCount -ne $incompleteCount)
+        if ($incompleteCount -eq 0 -or $incompletedCount -ne $incompleteCount)
         {
-            write-host "$((get-date).ToString("hh:mm:ss")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
+            write-host "`n$((get-date).ToString("HH:mm:sszz")) waiting on $($incompleteCount) jobs..." -ForegroundColor Yellow
             $incompletedCount = $incompleteCount
+            
+            foreach ($job in get-job)
+            {
+                write-host ("name:$($job.Name) state:$($job.State) output:$((Receive-Job -job $job | format-list * | out-string))") -ForegroundColor Cyan
+    
+                if ($job.State -imatch "Failed|Completed")
+                {
+                    remove-job $job -Force
+                }
+            }
+
             continue
         }
 
         start-sleep -seconds 1
+        write-host "." -NoNewline
+
+        if (((get-date) - $timer).TotalMinutes -ge $timeoutMinutes)
+        {
+            write-error "script timed out waiting for jobs to complete totalMinutes: $($timeoutMinutes) minutes"
+            get-job | receive-job
+            get-job | remove-job -force
+            return
+        }
     }
 }
 function read-xml($xmlFile, [switch]$format)
@@ -526,11 +648,17 @@ catch
 }
 finally
 {
+    if ($winrmClientInfo)
+    {
+        # set local machine back
+        winrm set winrm/config/client "@{TrustedHosts="$($trustedHosts)"}"
+    }
+
     set-location $currentWorkDir
     get-job | remove-job -Force
     write-host "finished $(get-date)"
     write-debug "errors during script: $($error | out-string)"
     Stop-Transcript
-    write-host "upload zip to workspace:$($zipFile)" -ForegroundColor Cyan
+    write-host "upload zip to workspace:$($global:zipFile)" -ForegroundColor Cyan
 }
 
