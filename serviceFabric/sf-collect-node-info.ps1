@@ -552,34 +552,28 @@ function process-machine()
         write-host "sfrp url:$($sfrpUrl)"
         out-file -InputObject $sfrpUrl "$($workdir)\sfrp-response.txt"
         $ucert = ($upgradeServiceParams | Where-Object Name -eq "X509FindValue").Value
-        $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $ucert)
+        $sfrpResponse = Invoke-WebRequest $sfrpUrl -UseBasicParsing -Certificate (Get-ChildItem -Path Cert:\LocalMachine\My -Recurse | Where-Object Thumbprint -eq $ucert)
         write-host "sfrp response: $($sfrpresponse)"
         out-file -Append -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
 
 
-        $gwEpt = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
+        $httpGwEpt = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
         $clusterCertThumb = $xml.ClusterManifest.NodeTypes.FirstChild.Certificates.ClientCertificate.X509FindValue
-        $clusterCert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $clusterCertThumb)
-        $urlArgs = "api-version=$($apiversion)&timeout=$($restTimeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
-        # todo handle continuationtoken
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/Nodes?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-nodes.txt"
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/ImageStore?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFiles | out-file "$($workdir)\rest-imageStore.txt"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFolders | out-file -Append "$($workdir)\rest-imageStore.txt"
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/$/GetClusterHealth?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-getClusterHealth.txt"
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Cluster/Events?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsCluster.txt"
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Nodes/Events?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsNodes.txt"
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Applications/Events?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsApplications.txt"
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Services/Events?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsServices.txt"
+        $clusterCert = (Get-ChildItem -Path Cert:\LocalMachine\My -Recurse | Where-Object Thumbprint -eq $clusterCertThumb)
+        write-host "cluster cert: $($clusterCert | format-list *)"
         
-        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Partitions/Events?$($urlArgs)"
-        (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsPartition.txt"
+        # todo handle continuationtoken
+        $gwEpt = "$($httpGwEpt.Protocol)://localhost:$($httpGwEpt.Port)"
+        $urlArgs = "api-version=$($apiversion)&timeout=$($restTimeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
+
+        rest-query -url "$($gwEpt)/ImageStore?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-imageStore.txt" 
+        rest-query -url "$($gwEpt)/Nodes?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-nodes.txt"
+        rest-query -url "$($gwEpt)/$/GetClusterHealth?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-getClusterHealth.txt"
+        rest-query -url "$($gwEpt)/EventsStore/Cluster/Events?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-eventsCluster.txt"
+        rest-query -url "$($gwEpt)/EventsStore/Nodes/Events?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-eventsNodes.txt"
+        rest-query -url "$($gwEpt)/EventsStore/Applications/Events?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-eventsApplications.txt"
+        rest-query -url "$($gwEpt)/EventsStore/Services/Events?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-eventsServices.txt"
+        rest-query -url "$($gwEpt)/EventsStore/Partitions/Events?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-eventsPartition.txt"
     }
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricroot
@@ -698,6 +692,22 @@ function read-xml($xmlFile, [switch]$format)
     }
 }
 
+function rest-query($cert, $url)
+{
+    try
+    {
+        $result = $null
+        write-host "rest query: $($url)" -foregroundcolor cyan
+        $result = Invoke-RestMethod -Method Get -Certificate $cert -Uri $url -UseBasicParsing | format-list * | Out-String
+        write-host "rest result: `n$($result)"
+        return $result
+    }
+    catch
+    {
+        return $Null
+    }
+}
+
 try
 {
     main
@@ -716,7 +726,7 @@ finally
 
     set-location $currentWorkDir
     get-job | remove-job -Force
-    write-host "finished $(get-date)"
+    write-host "finished. total minutes: $((get-date - $timer).TotalMinutes)"
     write-debug "errors during script: $($error | out-string)"
     Stop-Transcript
     write-host "upload zip to workspace:$($global:zipFile)" -ForegroundColor Cyan
