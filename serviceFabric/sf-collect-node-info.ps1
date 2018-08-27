@@ -49,7 +49,7 @@ upload to workspace sfgather* dir or zip
     
 .NOTES
     File Name  : sf-collect-node-info.ps1
-    Author     : jagilber
+    Author     : microsoft service fabric support
     Version    : 180815 original
     History    : 
     
@@ -60,6 +60,57 @@ upload to workspace sfgather* dir or zip
 .PARAMETER workDir
     output directory where all files will be created.
     default is $env:temp
+
+.PARAMETER eventLogNames
+    regex list of eventlog names to export into csv formatl
+    default list should be sufficient for most scenarios.
+
+.PARAMETER externalUrl
+    url to use for network connectivity tests.
+
+.PARAMETER startTime
+    start time in normal dateTime formatting.
+    example "8/26/2018 22:00"
+    default -7 days.
+
+.PARAMETER endTime
+    end time in normal dateTime formatting.
+    example "8/26/2018 22:00"
+    default today.
+
+.PARAMETER networkTestAddress
+    remote machine for service fabric tcp port test.
+
+.PARAMETER timeoutMinutes
+    script timeout in minutes.
+    script will cancel any running jobs and collect what is available if timeout is hit.
+
+.PARAMETER apiVersion
+    api version for testing fabricgateway endpoint with service fabric rest api calls.
+
+.PARAMETER ports
+    comma separated list of tcp ports to test.
+    default ports include basic connectivity, rdp, and service fabric.
+
+.PARAMETER remoteMachines
+    comma separated list of machine names and / or ip addresses to run diagnostic script on remotely.
+    this will only work if proper connectivity, authentication, and OS health exists.
+    if there are errors connecting, run script instead individually on each node.
+    to resolve remote connectivity issues, verify tcp port connectivity for ports, review, winrm, firewall, and nsg configurations.
+
+.PARAMETER noAdmin
+    switch to bypass admin powershell session check.
+    most jobs will work with non-admin session but not all for example some of the network tests.
+
+.PARAMETER noEventLogs
+    switch to prevent download of event-log-manager.ps1 script and collection of windows event log events.
+
+.PARAMETER certInfo
+    switch to enable collection of certificate store export to troubleshoot certificate issues.
+    thumbprints and serial numbers during export will be partially masked.
+
+.PARAMETER quiet
+    disable display of folder / zip in shell at end of script.
 
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1
@@ -495,31 +546,29 @@ function process-machine()
         out-file -Append -InputObject $sfrpResponse "$($workdir)\sfrp-response.txt"
 
 
-        $httpGatewayEndpoint = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
+        $gwEpt = $xml.ClusterManifest.NodeTypes.FirstChild.Endpoints.HttpGatewayEndpoint
         $clusterCertThumb = $xml.ClusterManifest.NodeTypes.FirstChild.Certificates.ClientCertificate.X509FindValue
         $clusterCert = (Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $clusterCertThumb)
         $urlArgs = "api-version=$($apiversion)&timeout=$($restTimeoutSec)&StartTimeUtc=$($startTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))&EndTimeUtc=$($endTime.ToString(`"yyyy-MM-ddTHH:mm:ssZ`"))"
         # todo handle continuationtoken
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/Nodes?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/Nodes?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-nodes.txt"
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/ImageStore?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/ImageStore?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFiles | out-file "$($workdir)\rest-imageStore.txt"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).StoreFolders | out-file -Append "$($workdir)\rest-imageStore.txt"
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/$/GetClusterHealth?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/$/GetClusterHealth?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing).items | out-file "$($workdir)\rest-getClusterHealth.txt"
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Cluster/Events?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Cluster/Events?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsCluster.txt"
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Nodes/Events?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Nodes/Events?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsNodes.txt"
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Applications/Events?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Applications/Events?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsApplications.txt"
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Services/Events?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Services/Events?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsServices.txt"
         
-        $url = "$($httpGatewayEndpoint.Protocol)://localhost:$($httpGatewayEndpoint.Port)/EventsStore/Partitions/Events?$($urlArgs)"
+        $url = "$($gwEpt.Protocol)://localhost:$($gwEpt.Port)/EventsStore/Partitions/Events?$($urlArgs)"
         (Invoke-RestMethod -Method Get -Certificate $clusterCert -Uri $url -UseBasicParsing) | out-file "$($workdir)\rest-eventsPartition.txt"
-        
-        
     }
 
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricroot
