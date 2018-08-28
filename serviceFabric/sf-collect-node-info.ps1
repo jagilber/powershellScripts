@@ -165,6 +165,7 @@ $sfCollectInfoDir = "sfColInfo-"
 $restTimeoutSec = 15
 $warnonZoneCrossingReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 $disableWarnOnZoneCrossing = $false
+$firewallsDisabled =  $false
 
 # to bypass self-signed cert validation check
 add-type @"
@@ -262,6 +263,13 @@ function main()
 
             if (!(Test-path $adminPath))
             {
+                write-warning "unable to connect to remote machine $($machine). disabling remote firewall..."
+                Invoke-Command -ComputerName $machine -ScriptBlock { Set-NetFirewallProfile -Profile Public -Enabled False } 
+                $firewallsDisabled = $true
+            }
+
+            if (!(Test-path $adminPath))
+            {
                 Write-Warning "unable to connect to $($machine) to start diagnostics. skipping!"
                 $remoteMachines.Remove($machine)
                 continue
@@ -334,6 +342,7 @@ function main()
                     write-host "copying folder $($sourcePath) to $($destPath)" -ForegroundColor Magenta
                     Copy-Item $sourcePath $destPath -Force -Recurse
                     compress-file $destPath
+                    remove-item $destPath -Recurse -Force
                 }
 
                 remove-item $sourcePath -Recurse -Force
@@ -341,6 +350,12 @@ function main()
             else
             {
                 write-host "warning: unable to find diagnostic files in $($sourcePath)"
+            }
+
+            if($firewallsDisabled)
+            {
+                write-host "re-enabling firewall on $($machine)"
+                Invoke-Command -ComputerName $machine -ScriptBlock { Set-NetFirewallProfile -Profile Public -Enabled True } 
             }
         }
 
@@ -534,7 +549,67 @@ function process-machine()
     # service fabric information
     #
 
-    # todo get from exe path?
+    if((test-path "hklm:\software\microsoft\service fabric"))
+    {
+        enumerate-serviceFabric
+    }
+    else
+    {
+        write-warning "service fabric is *not* installed on this machine!"
+    }
+
+    write-host "waiting for $($jobs.Count) jobs to complete"
+
+    monitor-jobs
+
+    write-host "formatting xml files"
+    foreach ($file in (get-childitem -filter *.xml -Path "$($workdir)" -Recurse))
+    {
+        # format xml in output
+        read-xml -xmlFile $file.FullName -format
+    }
+
+    $global:zipFile = compress-file $workDir
+}
+
+function add-job($jobName, $scriptBlock, $arguments)
+{
+    write-host "adding job $($jobName)"
+    [void]$jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
+}
+
+function compress-file($dir)
+{
+    $zipFile = "$($dir).zip"
+    write-host "creating zip $($zipFile)"
+    write-debug "zip dir before: $(tree /a /f $dir | out-string)"
+
+    if ((test-path $zipFile ))
+    {
+        remove-item $zipFile -Force
+    }
+
+    Stop-Transcript | out-null
+
+    if ($win10)
+    {
+        Compress-archive -path $workdir -destinationPath $zipFile -Force
+    }
+    else
+    {
+        Add-Type -Assembly System.IO.Compression.FileSystem
+        $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
+        [void][System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
+    }
+
+    Start-Transcript -Path $logFile -Force -Append | Out-Null
+    $global:zipFile = $zipFile
+    write-debug "zip dir after: $(tree /a /f $dir | out-string)"
+    return $zipFile
+}
+
+function enumerate-serviceFabric()
+{
     $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
     if (!$fabricDataRoot)
@@ -593,57 +668,7 @@ function process-machine()
     $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricroot
     write-host "fabric root:$($fabricRoot)"
     Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
-
-    write-host "waiting for $($jobs.Count) jobs to complete"
-
-    monitor-jobs
-
-    write-host "formatting xml files"
-    foreach ($file in (get-childitem -filter *.xml -Path "$($workdir)" -Recurse))
-    {
-        # format xml in output
-        read-xml -xmlFile $file.FullName -format
-    }
-
-    $global:zipFile = compress-file $workDir
 }
-
-function add-job($jobName, $scriptBlock, $arguments)
-{
-    write-host "adding job $($jobName)"
-    [void]$jobs.Add((Start-Job -Name $jobName -ScriptBlock $scriptBlock -ArgumentList $arguments))
-}
-
-function compress-file($dir)
-{
-    $zipFile = "$($dir).zip"
-    write-host "creating zip $($zipFile)"
-    write-debug "zip dir before: $(tree /a /f $dir | out-string)"
-
-    if ((test-path $zipFile ))
-    {
-        remove-item $zipFile -Force
-    }
-
-    Stop-Transcript | out-null
-
-    if ($win10)
-    {
-        Compress-archive -path $workdir -destinationPath $zipFile -Force
-    }
-    else
-    {
-        Add-Type -Assembly System.IO.Compression.FileSystem
-        $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
-        [void][System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
-    }
-
-    Start-Transcript -Path $logFile -Force -Append | Out-Null
-    $global:zipFile = $zipFile
-    write-debug "zip dir after: $(tree /a /f $dir | out-string)"
-    return $zipFile
-}
-
 function monitor-jobs()
 {
     $incompletedCount = 0
