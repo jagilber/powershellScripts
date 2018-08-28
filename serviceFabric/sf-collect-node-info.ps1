@@ -226,7 +226,7 @@ function main()
     $disableSecuritySetting = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -name "WarnonZoneCrossing"
     if(!$disableSecuritySetting -or $disableSecuritySetting -eq 1)
     {
-        New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "WarnonZoneCrossing" -Value 1 -PropertyType DWORD -Force | Out-Null
+        New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
         $disableWarnOnZoneCrossing = $true
     }
 
