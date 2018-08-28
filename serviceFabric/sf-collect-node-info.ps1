@@ -618,6 +618,7 @@ function compress-file($dir)
 {
     $zipFile = "$($dir).zip"
     write-host "creating zip $($zipFile)"
+    write-debug "zip dir before: $(tree /a /f $dir | out-string)"
 
     if ((test-path $zipFile ))
     {
@@ -639,6 +640,7 @@ function compress-file($dir)
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
     $global:zipFile = $zipFile
+    write-debug "zip dir after: $(tree /a /f $dir | out-string)"
     return $zipFile
 }
 
