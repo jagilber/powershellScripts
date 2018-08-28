@@ -163,6 +163,7 @@ $winrmClientInfo = $Null
 $eventScriptFile = $Null
 $sfCollectInfoDir = "sfColInfo-"
 $restTimeoutSec = 15
+$warnonZoneCrossingReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 $disableWarnOnZoneCrossing = $false
 
 # to bypass self-signed cert validation check
@@ -223,10 +224,10 @@ function main()
         }
     }
 
-    $disableSecuritySetting = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -name "WarnonZoneCrossing"
+    $disableSecuritySetting = (Get-ItemProperty -Path $warnonZoneCrossingReg).WarnonZoneCrossing
     if(!$disableSecuritySetting -or $disableSecuritySetting -eq 1)
     {
-        New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
+        New-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
         $disableWarnOnZoneCrossing = $true
     }
 
@@ -740,7 +741,7 @@ finally
 
     if($disableWarnOnZoneCrossing)
     {
-        New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
+        New-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
     }
 
     set-location $currentWorkDir
