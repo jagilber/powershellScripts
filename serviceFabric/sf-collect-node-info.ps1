@@ -153,7 +153,7 @@ $timer = get-date
 $scriptUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1'
 $currentWorkDir = get-location
 $osVersion = [version]([string]((wmic os get Version) -match "\d"))
-$win10 = ($osVersion.major -ge 10)
+$legacy = ($osVersion.major -lt 10)
 $parentWorkDir = $null
 $jobs = new-object collections.arraylist
 $logFile = $Null
@@ -163,6 +163,7 @@ $winrmClientInfo = $Null
 $eventScriptFile = $Null
 $sfCollectInfoDir = "sfColInfo-"
 $restTimeoutSec = 15
+$serviceFabricInstallReg = "HKLM:\software\microsoft\service fabric"
 $warnonZoneCrossingReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 $disableWarnOnZoneCrossing = $false
 $firewallsDisabled =  $false
@@ -225,8 +226,9 @@ function main()
         }
     }
 
-    $disableSecuritySetting = (Get-ItemProperty -Path $warnonZoneCrossingReg).WarnonZoneCrossing
-    if(!$disableSecuritySetting -or $disableSecuritySetting -eq 1)
+    
+    $disableSecuritySetting = (Get-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing")
+    if(!$disableSecuritySetting -or $disableSecuritySetting.WarnonZoneCrossing -eq 1)
     {
         New-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
         $disableWarnOnZoneCrossing = $true
@@ -263,7 +265,7 @@ function main()
 
             if (!(Test-path $adminPath))
             {
-                write-warning "unable to connect to remote machine $($machine). disabling remote firewall..."
+                write-warning "unable to connect to remote machine $($machine). attempting to disable firewall remotely..."
                 Invoke-Command -ComputerName $machine -ScriptBlock { Set-NetFirewallProfile -Profile Public -Enabled False } 
                 $firewallsDisabled = $true
             }
@@ -375,7 +377,7 @@ function process-machine()
 {
     write-host "processing machine"
     
-    if ($win10)
+    if (!$legacy)
     {
         add-job -jobName "windows update" -scriptBlock {
             param($workdir = $args[0]) 
@@ -464,8 +466,11 @@ function process-machine()
         [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
     }
     
-    write-host "http log files"
-    copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
+    if((test-path "C:\Windows\System32\LogFiles\HTTPERR"))
+    {
+        write-host "http log files"
+        copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
+    }
 
     add-job -jobName "drives" -scriptBlock {
         param($workdir = $args[0])
@@ -549,7 +554,7 @@ function process-machine()
     # service fabric information
     #
 
-    if((test-path "hklm:\software\microsoft\service fabric"))
+    if((test-path $serviceFabricInstallReg))
     {
         enumerate-serviceFabric
     }
@@ -591,15 +596,15 @@ function compress-file($dir)
 
     Stop-Transcript | out-null
 
-    if ($win10)
+    if (!$legacy)
     {
-        Compress-archive -path $workdir -destinationPath $zipFile -Force
+        Compress-archive -path $dir -destinationPath $zipFile -Force
     }
     else
     {
         Add-Type -Assembly System.IO.Compression.FileSystem
         $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
-        [void][System.IO.Compression.ZipFile]::CreateFromDirectory($workdir, $zipFile, $compressionLevel, $false)
+        [void][System.IO.Compression.ZipFile]::CreateFromDirectory($dir, $zipFile, $compressionLevel, $false)
     }
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
@@ -610,7 +615,7 @@ function compress-file($dir)
 
 function enumerate-serviceFabric()
 {
-    $fabricDataRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricdataroot
+    $fabricDataRoot = (get-itemproperty -path $serviceFabricInstallReg).fabricdataroot
     write-host "fabric data root:$($fabricDataRoot)"
     if (!$fabricDataRoot)
     {
@@ -665,7 +670,7 @@ function enumerate-serviceFabric()
         rest-query -url "$($gwEpt)/EventsStore/Partitions/Events?$($urlArgs)" -cert $clusterCert | out-file "$($workdir)\rest-eventsPartition.txt"
     }
 
-    $fabricRoot = (get-itemproperty -path "hklm:\software\microsoft\service fabric").fabricroot
+    $fabricRoot = (get-itemproperty -path $serviceFabricInstallReg).fabricroot
     write-host "fabric root:$($fabricRoot)"
     Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
 }
