@@ -59,11 +59,16 @@ upload to workspace sfgather* dir or zip
 
 .EXAMPLE
     .\sf-collect-node-info.ps1 -certInfo
-    Example command to query all diagnostic information, event logs, and certificate store information.
+    example command to query all diagnostic information, event logs, and certificate store information.
+
+.EXAMPLE
+    .\sf-collect-node-info.ps1 -startTime 8/16/2018
+    example command to query all diagnostic information using start date of 08/16/2018.
+    dates are used for event log and rest queries
 
 .EXAMPLE
     .\sf-collect-node-info.ps1 -remoteMachines 10.0.0.4,10.0.0.5
-    Example command to query diagnostic information remotely from two machines.
+    example command to query diagnostic information remotely from two machines.
     files will be copied back to machine where script is being executed.
 
 .PARAMETER workDir
@@ -126,14 +131,14 @@ upload to workspace sfgather* dir or zip
 #>
 [CmdletBinding()]
 param(
-    $workdir,
-    $eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
-    $externalUrl = "bing.com",
-    $startTime = (get-date).AddDays(-7),
-    $endTime = (get-date),
-    $networkTestAddress = $env:computername,
-    $timeoutMinutes = 15,
-    $apiversion = "6.2-preview", #"6.0"
+    [string]$workdir,
+    [string]$eventLogNames = "System$|Application$|wininet|dns|Fabric|http|Firewall|Azure",
+    [string]$externalUrl = "bing.com",
+    [dateTime]$startTime = (get-date).AddDays(-7),
+    [dateTime]$endTime = (get-date),
+    [string]$networkTestAddress = $env:computername,
+    [int]$timeoutMinutes = 15,
+    [string]$apiversion = "6.2-preview", #"6.0"
     [int[]]$ports = @(1025, 1026, 19000, 19080, 135, 445, 3389, 5985),
     [string[]]$remoteMachines,
     [switch]$noAdmin,
@@ -158,6 +163,7 @@ $winrmClientInfo = $Null
 $eventScriptFile = $Null
 $sfCollectInfoDir = "sfColInfo-"
 $restTimeoutSec = 15
+$disableWarnOnZoneCrossing = $false
 
 # to bypass self-signed cert validation check
 add-type @"
@@ -215,6 +221,13 @@ function main()
             Write-Warning "if unable to run as admin, restart and use -noadmin switch. This will collect less data that may be needed. exiting..."
             return $false
         }
+    }
+
+    $disableSecuritySetting = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -name "WarnonZoneCrossing"
+    if(!$disableSecuritySetting -or $disableSecuritySetting -eq 1)
+    {
+        New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "WarnonZoneCrossing" -Value 1 -PropertyType DWORD -Force | Out-Null
+        $disableWarnOnZoneCrossing = $true
     }
 
     write-host "remove old jobs"
@@ -624,6 +637,7 @@ function compress-file($dir)
     }
 
     Start-Transcript -Path $logFile -Force -Append | Out-Null
+    $global:zipFile = $zipFile
     return $zipFile
 }
 
@@ -631,9 +645,9 @@ function monitor-jobs()
 {
     $incompletedCount = 0
 
-    while ((get-job).Count -gt 0)
+    while (@(get-job).Count -gt 0)
     {
-        $incompleteCount = (get-job | Where-Object State -eq "Running").Count
+        $incompleteCount = @(get-job | Where-Object State -eq "Running").Count
         
         if ($incompleteCount -eq 0 -or $incompletedCount -ne $incompleteCount)
         {
@@ -724,9 +738,14 @@ finally
         winrm set winrm/config/client "@{TrustedHosts="$($trustedHosts)"}"
     }
 
+    if($disableWarnOnZoneCrossing)
+    {
+        New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
+    }
+
     set-location $currentWorkDir
     get-job | remove-job -Force
-    write-host "finished. total minutes: $((get-date - $timer).TotalMinutes)"
+    write-host "finished. total minutes: $(((get-date) - $timer).TotalMinutes.tostring("F2"))"
     write-debug "errors during script: $($error | out-string)"
     Stop-Transcript
     write-host "upload zip to workspace:$($global:zipFile)" -ForegroundColor Cyan
