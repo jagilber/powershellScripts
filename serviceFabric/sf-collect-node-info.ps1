@@ -144,7 +144,8 @@ param(
     [switch]$noAdmin,
     [switch]$noEventLogs,
     [switch]$certInfo,
-    [switch]$quiet
+    [switch]$quiet,
+    [switch]$modifyFirewall
 )
 
 Set-StrictMode -Version Latest
@@ -263,7 +264,7 @@ function main()
         {
             $adminPath = "\\$($machine)\admin$\temp"
 
-            if (!(Test-path $adminPath))
+            if (!(Test-path $adminPath) -and $modifyFirewall)
             {
                 write-warning "unable to connect to remote machine $($machine). attempting to disable firewall remotely..."
                 Invoke-Command -ComputerName $machine -ScriptBlock { Set-NetFirewallProfile -Profile Public -Enabled False } 
