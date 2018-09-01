@@ -40,7 +40,7 @@ function main()
     foreach ($subdir in $directories)
     {
         log-info -debug -data "enumerating $($subDir)"
-        $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue
+        $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue | Sort-Object -Descending -Property Length
         $sum = ($files | Measure-Object -Property Length -Sum)
         $size = [float]($sum.Sum / 1GB).ToString("F7")
     
