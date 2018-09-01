@@ -9,12 +9,12 @@ c:\sf-node-drive-treesize.ps1
 param(
     $directory = "$($env:SystemRoot)\system32",
     $depth = 99,
-    [switch]$detail,
-    [float]$minSizeGB = .0001,
+    [float]$minSizeGB = .001,
     [switch]$rollupSize,
     [switch]$notree,
     [switch]$showFiles,
-    [string]$logFile
+    [string]$logFile,
+    [switch]$quiet
 )
 
 $timer = get-date
@@ -22,6 +22,8 @@ $error.Clear()
 $ErrorActionPreference = "silentlycontinue"
 $sizeObjs = @{}
 $drive = Get-PSDrive -Name $directory[0]
+$writeDebug = $DebugPreference -ine "silentlycontinue"
+$global:logStream = $null
 
 function main()
 {
@@ -30,19 +32,19 @@ function main()
     log-info "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
     $directories = new-object collections.arraylist
-    $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force).FullName | Sort-Object))
-    $directories.Insert(0, $directory.ToLower())
+    $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName | Sort-Object))
+    $directories.Insert(0, $directory.ToLower().trimend("\"))
     $previousDir = $null
     $totalFiles = 0
 
     foreach ($subdir in $directories)
     {
-        Write-Debug "enumerating $($subDir)"
-        $files = Get-ChildItem $subdir -Force -File
+        log-info -debug -data "enumerating $($subDir)"
+        $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue
         $sum = ($files | Measure-Object -Property Length -Sum)
         $size = [float]($sum.Sum / 1GB).ToString("F7")
     
-        if ($showFiles -or $DebugPreference -ine "silentlycontinue")
+        if ($showFiles -or $writeDebug)
         {
             log-info "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)" -foregroundColor Cyan
             foreach ($file in $files)
@@ -54,7 +56,7 @@ function main()
                     $filePath = $file.fullname    
                 }
 
-                if($notree)
+                if ($notree)
                 {
                     log-info "$($filePath),$($file.length)"
                 }
@@ -66,12 +68,19 @@ function main()
             }
         }
 
-        if ($size -gt 0)
+        #if ($size -gt 0)
+        #{
+        try
         {
-            [void]$sizeObjs.Add($subdir.ToLower(), $size)
+            [void]$sizeObjs.Add($subdir.ToLower(), [float]$size)
             $totalFiles = $totalFiles + $sum.Count
-            Write-Debug "adding $($subDir) $($size)"
+            log-info -debug -data "adding $($subDir) $($size)"
         }
+        catch
+        {
+            Write-Warning "error adding $($subdir)"                
+        }
+        #}
     }
 
     log-info "directory: $($directory) total files: $($totalFiles) total directories: $($sizeObjs.Count)"
@@ -88,13 +97,28 @@ function main()
     foreach ($sortedDir in $directories)
     {
   
-        Write-Debug "checking dir $($sortedDir)"
+        log-info -debug -data "checking dir $($sortedDir)"
         $sortedDir = $sortedDir.ToLower()
-        $size = 0
+        [float]$size = 0
 
         if ($rollupSize -or !$previousDir)
         {
-            $size = (($SizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch "$([regex]::Escape($sortedDir))(\\|$)"}).value | Measure-Object -Sum).Sum
+            $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
+            #$size = (($SizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch "$([regex]::Escape($sortedDir))(\\|$)").value | Measure-Object -Sum).Sum
+            foreach ($sizeObj in $sizeObjs.GetEnumerator())
+            {
+                if ([regex]::IsMatch($sizeObj.Key, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
+                {
+                    $size += [float]$sizeObj.value
+                    log-info -debug -data "match: pattern:$($pattern) $($sizeObj.Key),$([float]$sizeObj.Value)"
+                }
+                else
+                {
+                    log-info -debug -data "no match: $($sizeObj.Key) and $($pattern)"
+                }
+            }
+
+            log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
         }
         else
         {
@@ -102,11 +126,11 @@ function main()
         }
 
   
-        if ([float]$size -eq 0) 
-        {
-            Write-Debug "skipping empty dir $($sortedDir)"
-            continue
-        }
+        #if ([float]$size -eq 0) 
+        #{
+        #    log-info -debug -data "skipping empty dir $($sortedDir)"
+        #    continue
+        #}
 
         switch ([float]$size)
         {
@@ -146,9 +170,9 @@ function main()
             }
         }
 
-        if ((!$detail -and $previousDir -and ($size -lt $minSizeGB)))
+        if ($previousDir -and ([float]$size -lt [float]$minSizeGB))
         {
-            Write-Debug "skipping below size dir $($sortedDir)"
+            log-info -debug -data "skipping below size dir $($sortedDir)"
             continue 
         }
 
@@ -159,6 +183,7 @@ function main()
                 while (!$sortedDir.Contains("$($previousDir)\"))
                 {
                     $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
+                    log-info -debug -data "checking previous dir: $($previousDir)"
                 }
 
                 $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
@@ -182,14 +207,49 @@ function main()
     log-info "total time $((get-date) - $timer)"
 }
 
-function log-info($data, $foregroundColor = "White")
+function log-info($data, [switch]$debug, $foregroundColor = "White")
 {
-    write-host $data -ForegroundColor $foregroundColor
-
-    if($logFile)
+    if ($debug -and !$writeDebug)
     {
-        out-file -Append -InputObject $data -FilePath $logFile
+        return
+    }
+
+    if ($debug)
+    {
+        $foregroundColor = "Yellow"
+    }
+
+    if (!$quiet)
+    {
+        write-host $data -ForegroundColor $foregroundColor
+    }
+
+    if ($logFile)
+    {
+        if ($global:logStream -eq $null)
+        {
+            $global:logStream = new-object System.IO.StreamWriter ($logFile, $true)
+        }
+
+        $global:logStream.WriteLine($data)
     }
 }
 
-main
+try
+{
+    main
+}
+catch
+{
+    write-host "main exception: $($error | out-string)"   
+    $error.Clear()
+}
+finally
+{
+    if ($global:logStream)
+    {
+        $global:logStream.Close() 
+        $global:logStream = $null
+    }
+
+}
