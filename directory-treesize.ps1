@@ -1,16 +1,79 @@
-<# script to query drive size for large files
-powershell script to enumerate folder tree and size
-To download and execute, run the following commands on each sf node in admin powershell:
-(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1",".\directory-treesize.ps1")
-.\directory-treesize.ps1
+<#
+.SYNOPSIS
+powershell script to to enumerate directory summarizing in tree view directories over a given size
+
+.DESCRIPTION
+    To download and execute, run the following commands on each sf node in admin powershell:
+    iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1') -UseBasicParsing|iex
+
+    To download and execute with arguments:
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1",".\directory-treesize.ps1");
+    .\directory-treesize.ps1 c:\windows\system32
+
+    To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
+    script will collect event logs, hotfixes, services, processes, drive, firewall, and other OS information
+
+    Requirements:
+        - administrator powershell prompt
+        - administrative access to machine
+        - remote network ports:
+            - smb 445
+            - rpc endpoint mapper 135
+            - rpc ephemeral ports
+            - to test access from source machine to remote machine: dir \\%remote machine%\admin$
+            
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+    
+.NOTES
+    File Name  : directory-treesize.ps1
+    Author     : jagilber
+    Version    : 180901 original
+    History    : 
+
+.EXAMPLE
+    .\directory-treesize.ps1
+    enumerate current working directory
+
+.PARAMETER directory
+    directory to enumerate
+
+.PARAMETER depth
+    subdirectory levels to query
+
+.PARAMETER minSizeGB
+    minimum size of directory / file to display in GB
+
+.PARAMETER noTree
+    output complete directory and file paths
+
+.PARAMETER showFiles
+    output file information
+
+.PARAMETER logFile
+    log output to log file
+
+.PARAMETER quiet
+    do not display output
+
+.LINK
+    https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1
 #>
 
 [cmdletbinding()]
 param(
-    $directory = "$($env:SystemRoot)\system32",
+    $directory = (get-location),
     $depth = 99,
-    [float]$minSizeGB = .001,
-    [switch]$rollupSize,
+    [float]$minSizeGB = .01,
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
@@ -24,12 +87,12 @@ $sizeObjs = @{}
 $drive = Get-PSDrive -Name $directory[0]
 $writeDebug = $DebugPreference -ine "silentlycontinue"
 $global:logStream = $null
+$global:iterator = $null
 
 function main()
 {
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
-    log-info "NOTE: by default, this script performs a quick scan which is not as accurate as running script with '-rollupSize' switch, but is much faster." -ForegroundColor Cyan
-    log-info "all sizes in GB are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
+    log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
     $directories = new-object collections.arraylist
     $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName | Sort-Object))
@@ -64,12 +127,9 @@ function main()
                 {
                     log-info "`t$($file.length.tostring().padleft(16)) $($filePath)"    
                 }
-                
             }
         }
 
-        #if ($size -gt 0)
-        #{
         try
         {
             [void]$sizeObjs.Add($subdir.ToLower(), [float]$size)
@@ -80,11 +140,11 @@ function main()
         {
             Write-Warning "error adding $($subdir)"                
         }
-        #}
     }
 
     log-info "directory: $($directory) total files: $($totalFiles) total directories: $($sizeObjs.Count)"
-
+    
+    $sortedsizeObjs = $sizeObjs.GetEnumerator() | Sort-Object -Property Key
     $sortedBySize = ($sizeObjs.GetEnumerator() | Where-Object Value -ge $minSizeGB | Sort-Object -Property Value).Value
     $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
     $redmin = $sortedBySize[($categorySize * 6) - 1]
@@ -94,28 +154,53 @@ function main()
     $greenmin = $sortedBySize[($categorySize * 2) - 1]
     $darkgreenmin = $sortedBySize[($categorySize) - 1]
 
+    [int]$i = 0
+
     foreach ($sortedDir in $directories)
     {
-  
         log-info -debug -data "checking dir $($sortedDir)"
         $sortedDir = $sortedDir.ToLower()
         [float]$size = 0
 
-        if ($rollupSize -or !$previousDir)
+        if (!$previousDir)
         {
             $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
-            #$size = (($SizeObjs.GetEnumerator() | Where-Object {$_.Key -imatch "$([regex]::Escape($sortedDir))(\\|$)").value | Measure-Object -Sum).Sum
-            foreach ($sizeObj in $sizeObjs.GetEnumerator())
+            $continueCheck = $true
+
+            if ($i -ge $sortedsizeObjs.count)
             {
+                # should only happen on root
+                $i = 0
+            }
+
+            $i = $foundtree
+            $firstmatch = $false
+
+            while ($continueCheck -and $i -lt $sortedSizeObjs.Count)
+            {
+                $sizeObj = $sortedsizeObjs.get($i)
+                
                 if ([regex]::IsMatch($sizeObj.Key, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
                 {
                     $size += [float]$sizeObj.value
                     log-info -debug -data "match: pattern:$($pattern) $($sizeObj.Key),$([float]$sizeObj.Value)"
+
+                    if (!$firstmatch)
+                    {
+                        $firstmatch = $true
+                        $foundtree = $i
+                    }
+                }
+                elseif ($firstmatch)
+                {
+                    $continueCheck = $false;
                 }
                 else
                 {
                     log-info -debug -data "no match: $($sizeObj.Key) and $($pattern)"
                 }
+
+                $i++
             }
 
             log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
@@ -124,13 +209,6 @@ function main()
         {
             $size = [float]$sizeobjs.item($sortedDir)
         }
-
-  
-        #if ([float]$size -eq 0) 
-        #{
-        #    log-info -debug -data "skipping empty dir $($sortedDir)"
-        #    continue
-        #}
 
         switch ([float]$size)
         {
