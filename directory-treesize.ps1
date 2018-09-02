@@ -270,36 +270,28 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
         }
     }
 
-    if ($previousDir -and ([float]$size -lt [float]$minSizeGB))
+    if ([float]$size -lt [float]$minSizeGB)
     {
         log-info -debug -data "skipping below size dir $($sortedDir)"
         continue 
     }
 
-    if ($previousDir)
+    if (!$notree)
     {
-        if (!$notree)
+        while (!$sortedDir.Contains("$($previousDir)\"))
         {
-            while (!$sortedDir.Contains("$($previousDir)\"))
-            {
-                $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
-                log-info -debug -data "checking previous dir: $($previousDir)"
-            }
-
-            $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
-        }
-        else
-        {
-            $output = $sortedDir
+            $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
+            log-info -debug -data "checking previous dir: $($previousDir)"
         }
 
-        log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
+        $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
     }
     else
     {
-        # root
-        log-info "$($sortedDir)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
+        $output = $sortedDir
     }
+
+    log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
 
     return $sortedDir
 }
