@@ -102,7 +102,7 @@ function main()
     {
         if ($displayProgress)
         {
-            display-progress -Activity "enumerating directory files" -PercentComplete (($directoriesIndex / $script:directories.Length) * 100)
+            display-progress -Activity "enumerating directory files" -status "directories processed: $($directoriesIndex)      totalfiles: $($totalFiles)" -PercentComplete (($directoriesIndex / $script:directories.Length) * 100)
         }
 
         $totalFiles = $totalFiles + (enumerate-directory -directoryIndex $directoriesIndex)
@@ -128,7 +128,7 @@ function main()
     {
         if ($displayProgress)
         {
-            display-progress -Activity "totalling directory file sizes" -PercentComplete (($directorySizesIndex / $script:directorySizes.Length) * 100)
+            display-progress -Activity "totalling directory file sizes" -status "directories processed: $($directorySizesIndex)" -PercentComplete (($directorySizesIndex / $script:directorySizes.Length) * 100)
         }
 
         $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
@@ -137,11 +137,11 @@ function main()
     log-info "$(get-date) finished. total time $((get-date) - $timer)"
 }
 
-function display-progress($activity, $percentComplete)
+function display-progress($activity, $status, $percentComplete)
 {
     if (((get-date) - $script:progressTimer).TotalMilliSeconds -gt 250)
     {       
-        Write-Progress -Activity $activity -Status "in progress" -PercentComplete $percentComplete
+        Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
         $script:progressTimer = get-date
     }
 
