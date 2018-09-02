@@ -77,7 +77,6 @@ $sizeObjs = @{}
 $drive = Get-PSDrive -Name $directory[0]
 $writeDebug = $DebugPreference -ine "silentlycontinue"
 $global:logStream = $null
-$global:iterator = $null
 
 function main()
 {
@@ -320,5 +319,4 @@ finally
         $global:logStream.Close() 
         $global:logStream = $null
     }
-
 }
