@@ -37,6 +37,9 @@
 .PARAMETER directory
     directory to enumerate
 
+.PARAMETER displayProgress
+    display progress banner
+
 .PARAMETER depth
     subdirectory levels to query
 
@@ -67,7 +70,8 @@ param(
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
-    [switch]$quiet
+    [switch]$quiet,
+    [switch]$displayProgress
 )
 
 $timer = get-date
@@ -79,6 +83,7 @@ $script:logStream = $null
 $script:directories = @()
 $script:directorySizes = @()
 $script:foundtreeIndex = 0
+$script:progressTimer = get-date
 
 function main()
 {
@@ -94,6 +99,11 @@ function main()
 
     for ($directoriesIndex = 0; $directoriesIndex -lt $script:directories.length; $directoriesIndex++)
     {
+        if ($displayProgress)
+        {
+            display-progress -Activity "enumerating directory files" -PercentComplete (($directoriesIndex / $script:directories.Length) * 100)
+        }
+
         $totalFiles = $totalFiles + (enumerate-directory -directoryIndex $directoriesIndex)
     }
 
@@ -115,10 +125,29 @@ function main()
 
     for ($directorySizesIndex = 0; $directorySizesIndex -lt $script:directorySizes.Length; $directorySizesIndex++)
     {
+        if ($displayProgress)
+        {
+            display-progress -Activity "totalling directory file sizes" -PercentComplete (($directorySizesIndex / $script:directorySizes.Length) * 100)
+        }
+
         $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
     }
 
     log-info "total time $((get-date) - $timer)"
+}
+
+function display-progress($activity, $percentComplete)
+{
+    if (((get-date) - $script:progressTimer).TotalMilliSeconds -gt 250)
+    {       
+        Write-Progress -Activity $activity -Status "in progress" -PercentComplete $percentComplete
+        $script:progressTimer = get-date
+    }
+
+    if ($percentComplete -eq 100)
+    {
+        Write-Progress -Activity $activity -Completed
+    }
 }
 
 function enumerate-directory($directoryIndex)
