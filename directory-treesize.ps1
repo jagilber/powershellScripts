@@ -87,12 +87,13 @@ $script:progressTimer = get-date
 
 function main()
 {
+    log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
     $script:directories = @((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName)
     $totalFiles = 0
-
+    log-info "$(get-date) sorting"
     # fix sorting with spaces 
     $script:directories = ($script:directories.replace(" ", [char]28) | Sort-Object).replace([char]28, " ").ToLower()
     $script:directorySizes = @(0) * $script:directories.length
@@ -133,7 +134,7 @@ function main()
         $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
     }
 
-    log-info "total time $((get-date) - $timer)"
+    log-info "$(get-date) finished. total time $((get-date) - $timer)"
 }
 
 function display-progress($activity, $percentComplete)
