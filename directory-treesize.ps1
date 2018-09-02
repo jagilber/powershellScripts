@@ -11,8 +11,7 @@ powershell script to to enumerate directory summarizing in tree view directories
     .\directory-treesize.ps1 c:\windows\system32
 
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
-    script will collect event logs, hotfixes, services, processes, drive, firewall, and other OS information
-
+    
     Requirements:
         - administrator powershell prompt
         - administrative access to machine
