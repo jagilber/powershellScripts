@@ -137,7 +137,8 @@ param(
     [dateTime]$startTime = (get-date).AddDays(-7),
     [dateTime]$endTime = (get-date),
     [string]$networkTestAddress = $env:computername,
-    [int]$timeoutMinutes = 15,
+    [int]$perfmonMin,
+    [int]$timeoutMinutes = $perfmonMin + 15,
     [string]$apiversion = "6.2-preview", #"6.0"
     [int[]]$ports = @(1025, 1026, 19000, 19080, 135, 445, 3389, 5985),
     [string[]]$remoteMachines,
@@ -167,7 +168,7 @@ $restTimeoutSec = 15
 $serviceFabricInstallReg = "HKLM:\software\microsoft\service fabric"
 $warnonZoneCrossingReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 $disableWarnOnZoneCrossing = $false
-$firewallsDisabled =  $false
+$firewallsDisabled = $false
 
 # to bypass self-signed cert validation check
 add-type @"
@@ -229,7 +230,7 @@ function main()
 
     
     $disableSecuritySetting = (Get-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing")
-    if(!$disableSecuritySetting -or $disableSecuritySetting.WarnonZoneCrossing -eq 1)
+    if (!$disableSecuritySetting -or $disableSecuritySetting.WarnonZoneCrossing -eq 1)
     {
         New-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
         $disableWarnOnZoneCrossing = $true
@@ -355,7 +356,7 @@ function main()
                 write-host "warning: unable to find diagnostic files in $($sourcePath)"
             }
 
-            if($firewallsDisabled)
+            if ($firewallsDisabled)
             {
                 write-host "re-enabling firewall on $($machine)"
                 Invoke-Command -ComputerName $machine -ScriptBlock { Set-NetFirewallProfile -Profile Public -Enabled True } 
@@ -467,7 +468,7 @@ function process-machine()
         [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
     }
     
-    if((test-path "C:\Windows\System32\LogFiles\HTTPERR"))
+    if ((test-path "C:\Windows\System32\LogFiles\HTTPERR"))
     {
         write-host "http log files"
         copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
@@ -555,7 +556,7 @@ function process-machine()
     # service fabric information
     #
 
-    if((test-path $serviceFabricInstallReg))
+    if ((test-path $serviceFabricInstallReg))
     {
         enumerate-serviceFabric
     }
@@ -567,6 +568,31 @@ function process-machine()
     write-host "waiting for $($jobs.Count) jobs to complete"
 
     monitor-jobs
+
+    if ($perfmonMin)
+    {
+        $Counters = @(
+            "\\$($env:computername)\processor(_total)\*",
+            "\\$($env:computername)\memory\available mbytes",
+            "\\$($env:computername)\memory\pool paged bytes",
+            "\\$($env:computername)\memory\pool nonpaged bytes",
+            "\\$($env:computername)\network adapter(*)\packets/sec",
+            "\\$($env:computername)\network adapter(*)\current bandwidth",
+            "\\$($env:computername)\physicaldisk(*)\% idle time",
+            "\\$($env:computername)\physicaldisk(*)\current disk queue length",
+            "\\$($env:computername)\process(*)\% processor time"
+        )
+        
+        out-file -InputObject "timestamp,path,value" -FilePath "$($workDir)\PerfMonCounters.csv"
+
+        foreach ($counter in (Get-Counter -Counter $Counters -MaxSamples ($perfmonMin / 60)).CounterSamples)
+        {
+            foreach($sample in $counter.CounterSamples)
+            {           
+                out-file -InputObject "$($sample.TimeStamp),$($sample.Path),$($sample.CookedValue)" -FilePath "$($workDir)\PerfMonCounters.csv"
+            }
+        } 
+    }
 
     write-host "formatting xml files"
     foreach ($file in (get-childitem -filter *.xml -Path "$($workdir)" -Recurse))
@@ -772,7 +798,7 @@ finally
         winrm set winrm/config/client "@{TrustedHosts="$($trustedHosts)"}"
     }
 
-    if($disableWarnOnZoneCrossing)
+    if ($disableWarnOnZoneCrossing)
     {
         New-ItemProperty -Path $warnonZoneCrossingReg -Name "WarnonZoneCrossing" -Value 0 -PropertyType DWORD -Force | Out-Null
     }
