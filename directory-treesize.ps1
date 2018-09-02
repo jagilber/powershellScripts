@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-powershell script to to enumerate directory summarizing in tree view directories over a given size
+    powershell script to to enumerate directory summarizing in tree view directories over a given size
 
 .DESCRIPTION
-    To download and execute, run the following commands on each sf node in admin powershell:
+    To download and execute, run the following command in powershell:
     iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1') -UseBasicParsing|iex
 
     To download and execute with arguments:
@@ -12,15 +12,6 @@ powershell script to to enumerate directory summarizing in tree view directories
 
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
     
-    Requirements:
-        - administrator powershell prompt
-        - administrative access to machine
-        - remote network ports:
-            - smb 445
-            - rpc endpoint mapper 135
-            - rpc ephemeral ports
-            - to test access from source machine to remote machine: dir \\%remote machine%\admin$
-            
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
@@ -109,6 +100,7 @@ function main()
         if ($showFiles -or $writeDebug)
         {
             log-info "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)" -foregroundColor Cyan
+
             foreach ($file in $files)
             {
                 $filePath = $file.name
