@@ -61,7 +61,7 @@
 
 [cmdletbinding()]
 param(
-    $directory = (get-location),
+    $directory = (get-location).path,
     $depth = 99,
     [float]$minSizeGB = .01,
     [switch]$notree,
@@ -84,13 +84,19 @@ function main()
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
     $directories = new-object collections.arraylist
-    $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName | Sort-Object))
+    $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName | Sort-Object).tolower())
     $directories.Insert(0, $directory.ToLower().trimend("\"))
     $previousDir = $null
     $totalFiles = 0
 
-    foreach ($subdir in $directories)
+    # fix sorting with spaces 
+    $directories = ($directories.replace(" ", [char]28) | Sort-Object).replace([char]28, " ")
+    $directorySizes = @(0) * $directories.length
+
+    for ($directoriesIndex = 0; $directoriesIndex -lt $directories.length; $directoriesIndex++)
     {
+        $subDir = $directories[$directoriesIndex]
+
         log-info -debug -data "enumerating $($subDir)"
         $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue | Sort-Object -Descending -Property Length
         $sum = ($files | Measure-Object -Property Length -Sum)
@@ -120,22 +126,14 @@ function main()
             }
         }
 
-        try
-        {
-            [void]$sizeObjs.Add($subdir.ToLower(), [float]$size)
-            $totalFiles = $totalFiles + $sum.Count
-            log-info -debug -data "adding $($subDir) $($size)"
-        }
-        catch
-        {
-            Write-Warning "error adding $($subdir)"                
-        }
+        $directorySizes[$directoriesIndex] = $size
+
+        $totalFiles = $totalFiles + $sum.Count
+        log-info -debug -data "adding $($subDir) $($size)"
     }
 
-    log-info "directory: $($directory) total files: $($totalFiles) total directories: $($sizeObjs.Count)"
-    
-    $sortedsizeObjs = $sizeObjs.GetEnumerator() | Sort-Object -Property Key
-    $sortedBySize = ($sizeObjs.GetEnumerator() | Where-Object Value -ge $minSizeGB | Sort-Object -Property Value).Value
+    log-info "directory: $($directory) total files: $($totalFiles) total directories: $($directories.Count)"
+    $sortedBySize = $directorySizes -ge $minSizeGB | Sort-Object
     $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
     $redmin = $sortedBySize[($categorySize * 6) - 1]
     $darkredmin = $sortedBySize[($categorySize * 5) - 1]
@@ -146,59 +144,52 @@ function main()
 
     [int]$i = 0
 
-    foreach ($sortedDir in $directories)
+    for ($directorySizesIndex = 0; $directorySizesIndex -lt $directorySizes.Length; $directorySizesIndex++)
     {
         log-info -debug -data "checking dir $($sortedDir)"
-        $sortedDir = $sortedDir.ToLower()
+        $sortedDir = $directories[$directorySizesIndex]
         [float]$size = 0
 
-        if (!$previousDir)
+        $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
+        $continueCheck = $true
+        $firstmatch = $false
+        $i = $foundtree
+
+        if ($i -ge $directorySizes.Length)
         {
-            $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
-            $continueCheck = $true
+            # should only happen on root
+            $i = 0
+        }
 
-            if ($i -ge $sortedsizeObjs.count)
-            {
-                # should only happen on root
-                $i = 0
-            }
-
-            $i = $foundtree
-            $firstmatch = $false
-
-            while ($continueCheck -and $i -lt $sortedSizeObjs.Count)
-            {
-                $sizeObj = $sortedsizeObjs.get($i)
+        while ($continueCheck -and $i -lt $directorySizes.Length)
+        {
+            $dirName = $directories[$i]
+            $dirSize = $directorySizes[$i]
                 
-                if ([regex]::IsMatch($sizeObj.Key, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
-                {
-                    $size += [float]$sizeObj.value
-                    log-info -debug -data "match: pattern:$($pattern) $($sizeObj.Key),$([float]$sizeObj.Value)"
+            if ([regex]::IsMatch($dirName, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
+            {
+                $size += [float]$dirSize
+                log-info -debug -data "match: pattern:$($pattern) $($dirName),$([float]$dirSize)"
 
-                    if (!$firstmatch)
-                    {
-                        $firstmatch = $true
-                        $foundtree = $i
-                    }
-                }
-                elseif ($firstmatch)
+                if (!$firstmatch)
                 {
-                    $continueCheck = $false;
+                    $firstmatch = $true
+                    $foundtree = $i
                 }
-                else
-                {
-                    log-info -debug -data "no match: $($sizeObj.Key) and $($pattern)"
-                }
-
-                $i++
+            }
+            elseif ($firstmatch)
+            {
+                $continueCheck = $false;
+            }
+            else
+            {
+                log-info -debug -data "no match: $($dirName) and $($pattern)"
             }
 
-            log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
+            $i++
         }
-        else
-        {
-            $size = [float]$sizeobjs.item($sortedDir)
-        }
+
+        log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
 
         switch ([float]$size)
         {
