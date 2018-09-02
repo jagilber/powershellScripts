@@ -73,67 +73,35 @@ param(
 $timer = get-date
 $error.Clear()
 $ErrorActionPreference = "silentlycontinue"
-$sizeObjs = @{}
 $drive = Get-PSDrive -Name $directory[0]
 $writeDebug = $DebugPreference -ine "silentlycontinue"
-$global:logStream = $null
+$script:logStream = $null
+$script:directories = @()
+$script:directorySizes = @()
+$script:foundtreeIndex = 0
 
 function main()
 {
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    $directories = new-object collections.arraylist
-    $directories.AddRange(@((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName | Sort-Object).tolower())
-    $directories.Insert(0, $directory.ToLower().trimend("\"))
-    $previousDir = $null
+    $script:directories = @((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName)
     $totalFiles = 0
 
     # fix sorting with spaces 
-    $directories = ($directories.replace(" ", [char]28) | Sort-Object).replace([char]28, " ")
-    $directorySizes = @(0) * $directories.length
+    $script:directories = ($script:directories.replace(" ", [char]28) | Sort-Object).replace([char]28, " ").ToLower()
+    $script:directorySizes = @(0) * $script:directories.length
 
-    for ($directoriesIndex = 0; $directoriesIndex -lt $directories.length; $directoriesIndex++)
+    for ($directoriesIndex = 0; $directoriesIndex -lt $script:directories.length; $directoriesIndex++)
     {
-        $subDir = $directories[$directoriesIndex]
-
-        log-info -debug -data "enumerating $($subDir)"
-        $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue | Sort-Object -Descending -Property Length
-        $sum = ($files | Measure-Object -Property Length -Sum)
-        $size = [float]($sum.Sum / 1GB).ToString("F7")
-    
-        if ($showFiles -or $writeDebug)
-        {
-            log-info "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)" -foregroundColor Cyan
-
-            foreach ($file in $files)
-            {
-                $filePath = $file.name
-                
-                if ($notree)
-                {
-                    $filePath = $file.fullname    
-                }
-
-                if ($notree)
-                {
-                    log-info "$($filePath),$($file.length)"
-                }
-                else
-                {
-                    log-info "`t$($file.length.tostring().padleft(16)) $($filePath)"    
-                }
-            }
-        }
-
-        $directorySizes[$directoriesIndex] = $size
-
-        $totalFiles = $totalFiles + $sum.Count
-        log-info -debug -data "adding $($subDir) $($size)"
+        $totalFiles = $totalFiles + (enumerate-directory -directoryIndex $directoriesIndex)
     }
 
-    log-info "directory: $($directory) total files: $($totalFiles) total directories: $($directories.Count)"
-    $sortedBySize = $directorySizes -ge $minSizeGB | Sort-Object
+    log-info "directory: $($directory) total files: $($totalFiles) total directories: $($script:directories.Count)"
+    $rootSize = ($script:directorySizes | Measure-Object -Sum).Sum + ((Get-ChildItem -File -Path $directory | Measure-Object -Property Length -Sum).Sum / 1GB)
+    log-info -data "$($directory)`t$($rootSize.ToString("F3")) GB" -foregroundColor Cyan
+
+    $sortedBySize = $script:directorySizes -ge $minSizeGB | Sort-Object
     $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
     $redmin = $sortedBySize[($categorySize * 6) - 1]
     $darkredmin = $sortedBySize[($categorySize * 5) - 1]
@@ -141,129 +109,169 @@ function main()
     $darkyellowmin = $sortedBySize[($categorySize * 3) - 1]
     $greenmin = $sortedBySize[($categorySize * 2) - 1]
     $darkgreenmin = $sortedBySize[($categorySize) - 1]
+    $previousDir = $directory.ToLower()
 
     [int]$i = 0
 
-    for ($directorySizesIndex = 0; $directorySizesIndex -lt $directorySizes.Length; $directorySizesIndex++)
+    for ($directorySizesIndex = 0; $directorySizesIndex -lt $script:directorySizes.Length; $directorySizesIndex++)
     {
-        log-info -debug -data "checking dir $($sortedDir)"
-        $sortedDir = $directories[$directorySizesIndex]
-        [float]$size = 0
-
-        $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
-        $continueCheck = $true
-        $firstmatch = $false
-        $i = $foundtree
-
-        if ($i -ge $directorySizes.Length)
-        {
-            # should only happen on root
-            $i = 0
-        }
-
-        while ($continueCheck -and $i -lt $directorySizes.Length)
-        {
-            $dirName = $directories[$i]
-            $dirSize = $directorySizes[$i]
-                
-            if ([regex]::IsMatch($dirName, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
-            {
-                $size += [float]$dirSize
-                log-info -debug -data "match: pattern:$($pattern) $($dirName),$([float]$dirSize)"
-
-                if (!$firstmatch)
-                {
-                    $firstmatch = $true
-                    $foundtree = $i
-                }
-            }
-            elseif ($firstmatch)
-            {
-                $continueCheck = $false;
-            }
-            else
-            {
-                log-info -debug -data "no match: $($dirName) and $($pattern)"
-            }
-
-            $i++
-        }
-
-        log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
-
-        switch ([float]$size)
-        {
-            {$_ -ge $redmin}
-            {
-                $foreground = "Red"; 
-                break;
-            }
-            {$_ -gt $darkredmin}
-            {
-                $foreground = "DarkRed"; 
-                break;
-            }
-            {$_ -gt $yellowmin}
-            {
-                $foreground = "Yellow"; 
-                break;
-            }
-            {$_ -gt $darkyellowmin}
-            {
-                $foreground = "DarkYellow"; 
-                break;
-            }
-            {$_ -gt $greenmin}
-            {
-                $foreground = "Green"; 
-                break;
-            }
-            {$_ -gt $darkgreenmin}
-            {
-                $foreground = "DarkGreen"; 
-            }
-
-            default
-            {
-                $foreground = "Gray"; 
-            }
-        }
-
-        if ($previousDir -and ([float]$size -lt [float]$minSizeGB))
-        {
-            log-info -debug -data "skipping below size dir $($sortedDir)"
-            continue 
-        }
-
-        if ($previousDir)
-        {
-            if (!$notree)
-            {
-                while (!$sortedDir.Contains("$($previousDir)\"))
-                {
-                    $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
-                    log-info -debug -data "checking previous dir: $($previousDir)"
-                }
-
-                $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
-            }
-            else
-            {
-                $output = $sortedDir
-            }
-
-            log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
-        }
-        else
-        {
-            # root
-            log-info "$($sortedDir)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
-        }
-
-        $previousDir = "$($sortedDir)"
+        $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
     }
 
     log-info "total time $((get-date) - $timer)"
+}
+
+function enumerate-directory($directoryIndex)
+{
+    $subDir = $script:directories[$directoryIndex]
+
+    log-info -debug -data "enumerating $($subDir)"
+    $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue | Sort-Object -Descending -Property Length
+    $sum = ($files | Measure-Object -Property Length -Sum)
+    $size = [float]($sum.Sum / 1GB).ToString("F7")
+
+    if ($showFiles -or $writeDebug)
+    {
+        log-info "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)" -foregroundColor Cyan
+
+        foreach ($file in $files)
+        {
+            $filePath = $file.name
+            
+            if ($notree)
+            {
+                $filePath = $file.fullname    
+            }
+
+            if ($notree)
+            {
+                log-info "$($filePath),$($file.length)"
+            }
+            else
+            {
+                log-info "`t$($file.length.tostring().padleft(16)) $($filePath)"    
+            }
+        }
+    }
+
+    $script:directorySizes[$directoryIndex] = $size
+
+    log-info -debug -data "adding $($subDir) $($size)"
+    return $sum.Count
+}
+
+function enumerate-directorySizes($directorySizesIndex, $previousDir)
+{
+    $sortedDir = $script:directories[$directorySizesIndex]
+    log-info -debug -data "checking dir $($sortedDir) previous dir $($previousDir) tree index $($script:foundtreeindex)"
+
+    [float]$size = 0
+
+    $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
+    $continueCheck = $true
+    $firstmatch = $false
+    $i = $script:foundtreeIndex
+
+    while ($continueCheck -and $i -lt $script:directorySizes.Length)
+    {
+        $dirName = $script:directories[$i]
+        $dirSize = $script:directorySizes[$i]
+                
+        if ([regex]::IsMatch($dirName, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
+        {
+            $size += [float]$dirSize
+            log-info -debug -data "match: pattern:$($pattern) $($dirName),$([float]$dirSize)"
+
+            if (!$firstmatch)
+            {
+                $firstmatch = $true
+                $script:foundtreeIndex = $i
+            }
+        }
+        elseif ($firstmatch)
+        {
+            $continueCheck = $false;
+        }
+        else
+        {
+            log-info -debug -data "no match: $($dirName) and $($pattern)"
+        }
+
+        $i++
+    }
+
+    log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
+
+    switch ([float]$size)
+    {
+        {$_ -ge $redmin}
+        {
+            $foreground = "Red"; 
+            break;
+        }
+        {$_ -gt $darkredmin}
+        {
+            $foreground = "DarkRed"; 
+            break;
+        }
+        {$_ -gt $yellowmin}
+        {
+            $foreground = "Yellow"; 
+            break;
+        }
+        {$_ -gt $darkyellowmin}
+        {
+            $foreground = "DarkYellow"; 
+            break;
+        }
+        {$_ -gt $greenmin}
+        {
+            $foreground = "Green"; 
+            break;
+        }
+        {$_ -gt $darkgreenmin}
+        {
+            $foreground = "DarkGreen"; 
+        }
+
+        default
+        {
+            $foreground = "Gray"; 
+        }
+    }
+
+    if ($previousDir -and ([float]$size -lt [float]$minSizeGB))
+    {
+        log-info -debug -data "skipping below size dir $($sortedDir)"
+        continue 
+    }
+
+    if ($previousDir)
+    {
+        if (!$notree)
+        {
+            while (!$sortedDir.Contains("$($previousDir)\"))
+            {
+                $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
+                log-info -debug -data "checking previous dir: $($previousDir)"
+            }
+
+            $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
+        }
+        else
+        {
+            $output = $sortedDir
+        }
+
+        log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
+    }
+    else
+    {
+        # root
+        log-info "$($sortedDir)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
+    }
+
+    return $sortedDir
 }
 
 function log-info($data, [switch]$debug, $foregroundColor = "White")
@@ -285,12 +293,12 @@ function log-info($data, [switch]$debug, $foregroundColor = "White")
 
     if ($logFile)
     {
-        if ($global:logStream -eq $null)
+        if ($script:logStream -eq $null)
         {
-            $global:logStream = new-object System.IO.StreamWriter ($logFile, $true)
+            $script:logStream = new-object System.IO.StreamWriter ($logFile, $true)
         }
 
-        $global:logStream.WriteLine($data)
+        $script:logStream.WriteLine($data)
     }
 }
 
@@ -305,9 +313,9 @@ catch
 }
 finally
 {
-    if ($global:logStream)
+    if ($script:logStream)
     {
-        $global:logStream.Close() 
-        $global:logStream = $null
+        $script:logStream.Close() 
+        $script:logStream = $null
     }
 }
