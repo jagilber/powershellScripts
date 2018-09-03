@@ -80,7 +80,7 @@ $ErrorActionPreference = "silentlycontinue"
 $drive = Get-PSDrive -Name $directory[0]
 $writeDebug = $DebugPreference -ine "silentlycontinue"
 $script:logStream = $null
-$script:directories = @()
+$script:directories = new-object collections.arraylist #@()
 $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
@@ -91,11 +91,20 @@ function main()
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    $script:directories = @((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName)
+    foreach($dir in (Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue))        
+    {
+        if ($displayProgress)
+        {
+            display-progress -Activity "building directory list" -status "directories processed: $($script:directories.count) processing: $($dir.FullName)" -PercentComplete ([int]((get-date) - $timer).totalminutes)
+        }
+
+        [void]$script:directories.Add($dir.FullName)
+    }
+
     $totalFiles = 0
     log-info "$(get-date) sorting"
     # fix sorting with spaces 
-    $script:directories = ($script:directories.replace(" ", [char]28) | Sort-Object).replace([char]28, " ").ToLower()
+    $script:directories = (($script:directories).replace(" ", [char]28) | Sort-Object).replace([char]28, " ").ToLower()
     $script:directorySizes = @(0) * $script:directories.length
 
     for ($directoriesIndex = 0; $directoriesIndex -lt $script:directories.length; $directoriesIndex++)
