@@ -71,9 +71,17 @@ upload to workspace sfgather* dir or zip
     example command to query diagnostic information remotely from two machines.
     files will be copied back to machine where script is being executed.
 
-.PARAMETER workDir
-    output directory where all files will be created.
-    default is $env:temp
+.PARAMETER apiVersion
+    api version for testing fabricgateway endpoint with service fabric rest api calls.
+
+.PARAMETER certInfo
+    switch to enable collection of certificate store export to troubleshoot certificate issues.
+    thumbprints and serial numbers during export will be partially masked.
+
+.PARAMETER endTime
+    end time in normal dateTime formatting.
+    example "8/26/2018 22:00"
+    default today.
 
 .PARAMETER eventLogNames
     regex list of eventlog names to export into csv formatl
@@ -82,35 +90,8 @@ upload to workspace sfgather* dir or zip
 .PARAMETER externalUrl
     url to use for network connectivity tests.
 
-.PARAMETER startTime
-    start time in normal dateTime formatting.
-    example "8/26/2018 22:00"
-    default -7 days.
-
-.PARAMETER endTime
-    end time in normal dateTime formatting.
-    example "8/26/2018 22:00"
-    default today.
-
 .PARAMETER networkTestAddress
     remote machine for service fabric tcp port test.
-
-.PARAMETER timeoutMinutes
-    script timeout in minutes.
-    script will cancel any running jobs and collect what is available if timeout is hit.
-
-.PARAMETER apiVersion
-    api version for testing fabricgateway endpoint with service fabric rest api calls.
-
-.PARAMETER ports
-    comma separated list of tcp ports to test.
-    default ports include basic connectivity, rdp, and service fabric.
-
-.PARAMETER remoteMachines
-    comma separated list of machine names and / or ip addresses to run diagnostic script on remotely.
-    this will only work if proper connectivity, authentication, and OS health exists.
-    if there are errors connecting, run script instead individually on each node.
-    to resolve remote connectivity issues, verify tcp port connectivity for ports, review, winrm, firewall, and nsg configurations.
 
 .PARAMETER noAdmin
     switch to bypass admin powershell session check.
@@ -119,12 +100,41 @@ upload to workspace sfgather* dir or zip
 .PARAMETER noEventLogs
     switch to prevent download of event-log-manager.ps1 script and collection of windows event log events.
 
-.PARAMETER certInfo
-    switch to enable collection of certificate store export to troubleshoot certificate issues.
-    thumbprints and serial numbers during export will be partially masked.
+.PARAMETER noNet
+    bypass network tests.
+
+.PARAMETER noOs
+    bypass OS information collection.
+
+.PARAMETER perfmonMin
+    minutes to run basic perfmon at end of collection after all jobs run.
+    cpu, memory, disk, network.
+
+.PARAMETER ports
+    comma separated list of tcp ports to test.
+    default ports include basic connectivity, rdp, and service fabric.
 
 .PARAMETER quiet
     disable display of folder / zip in shell at end of script.
+
+.PARAMETER remoteMachines
+    comma separated list of machine names and / or ip addresses to run diagnostic script on remotely.
+    this will only work if proper connectivity, authentication, and OS health exists.
+    if there are errors connecting, run script instead individually on each node.
+    to resolve remote connectivity issues, verify tcp port connectivity for ports, review, winrm, firewall, and nsg configurations.
+
+.PARAMETER startTime
+    start time in normal dateTime formatting.
+    example "8/26/2018 22:00"
+    default -7 days.
+
+.PARAMETER timeoutMinutes
+    script timeout in minutes.
+    script will cancel any running jobs and collect what is available if timeout is hit.
+
+.PARAMETER workDir
+    output directory where all files will be created.
+    default is $env:temp
 
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-collect-node-info.ps1
