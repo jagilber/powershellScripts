@@ -144,6 +144,8 @@ param(
     [string[]]$remoteMachines,
     [switch]$noAdmin,
     [switch]$noEventLogs,
+    [switch]$noOs,
+    [switch]$noNet,
     [switch]$certInfo,
     [switch]$quiet,
     [switch]$modifyFirewall
@@ -375,6 +377,7 @@ function main()
         start-process "explorer.exe" -ArgumentList $parentWorkDir
     }
 }
+
 function process-machine()
 {
     write-host "processing machine"
@@ -413,54 +416,139 @@ function process-machine()
         } -arguments @($workdir, $parentWorkdir, $eventLogNames, $startTime, $endTime, $eventScriptFile)
     }
 
-    add-job -jobName "check machinekeys" -scriptBlock {
-        param($workdir = $args[0])
-        $machineKeys = "C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys"
-        Get-ChildItem $machineKeys -Recurse | out-file "$($workDir)\dir-machinekeys.txt"
-        Invoke-Expression "icacls $($machineKeys) /C /T | out-file -Append $($workdir)\dir-machinekeys.txt"
-    } -arguments @($workdir)
+    if(!$noOs)
+    {
+        add-job -jobName "check machinekeys" -scriptBlock {
+            param($workdir = $args[0])
+            $machineKeys = "C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys"
+            Get-ChildItem $machineKeys -Recurse | out-file "$($workDir)\dir-machinekeys.txt"
+            Invoke-Expression "icacls $($machineKeys) /C /T | out-file -Append $($workdir)\dir-machinekeys.txt"
+        } -arguments @($workdir)
 
-    add-job -jobName "check for dump file c" -scriptBlock {
-        param($workdir = $args[0])
-        get-childitem -Recurse -Path "c:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-c.txt"
-    } -arguments @($workdir)
+        add-job -jobName "check for dump file c" -scriptBlock {
+            param($workdir = $args[0])
+            get-childitem -Recurse -Path "c:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-c.txt"
+        } -arguments @($workdir)
 
-    add-job -jobName "check for dump file d" -scriptBlock {
-        param($workdir = $args[0])
-        get-childitem -Recurse -Path "d:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-d.txt"
-    } -arguments @($workdir)
+        add-job -jobName "check for dump file d" -scriptBlock {
+            param($workdir = $args[0])
+            get-childitem -Recurse -Path "d:\" -Filter "*.*dmp" | out-file "$($workdir)\dumplist-d.txt"
+        } -arguments @($workdir)
 
-    add-job -jobName "network port tests" -scriptBlock {
-        param($workdir = $args[0], $networkTestAddress = $args[1], $ports = $args[2])
-        foreach ($port in $ports)
+        add-job -jobName "drives" -scriptBlock {
+            param($workdir = $args[0])
+            Get-psdrive | out-file "$($workdir)\drives.txt"
+        } -arguments @($workdir)
+    
+        add-job -jobName "os info" -scriptBlock {
+            param($workdir = $args[0])
+            get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 | format-list * | out-file "$($workdir)\os-info.txt"
+            Invoke-Expression "cmd.exe /c sc query type= driver > $($workdir)\drivers.txt"
+            get-hotfix | out-file "$($workdir)\hotfixes.txt"
+            Get-process | out-file "$($workdir)\process-summary.txt"
+            Get-process | format-list * | out-file "$($workdir)\processes.txt"
+            get-process | Where-Object ProcessName -imatch "fabric" | out-file "$($workdir)\processes-fabric.txt"
+            Get-service | out-file "$($workdir)\service-summary.txt"
+            Get-Service | format-list * | out-file "$($workdir)\services.txt"
+        } -arguments @($workdir)
+    
+        write-host "installed applications"
+        Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
+    
+        write-host "features"
+        Get-WindowsFeature | Where-Object "InstallState" -eq "Installed" | out-file "$($workdir)\windows-features.txt"
+    
+        add-job -jobName ".net reg" -scriptBlock {
+            param($workdir = $args[0])
+            Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
+        } -arguments @($workdir)
+    
+        write-host "policies"
+        Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
+    
+        write-host "schannel"
+        Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
+        
+        add-job -jobName "azure config files" -scriptBlock {
+            param($workdir = $args[0])
+            function copy-files($sourceDir)
+            {
+                if (!(test-path $sourceDir))
+                {
+                    return
+                }
+                copy-item -path $sourceDir -Destination $workDir -Filter "*.json" -Recurse -ErrorAction SilentlyContinue
+                copy-item -path $sourceDir -Destination $workDir -Filter "*.txt" -Recurse -ErrorAction SilentlyContinue
+                copy-item -path $sourceDir -Destination $workDir -Filter "*.settings" -Recurse -ErrorAction SilentlyContinue
+                copy-item -path $sourceDir -Destination $workDir -Filter "*.config" -Recurse -ErrorAction SilentlyContinue
+                copy-item -path $sourceDir -Destination $workDir -Filter "*.xml" -Recurse -ErrorAction SilentlyContinue
+                copy-item -path $sourceDir -Destination $workDir -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
+            }
+            copy-files "c:\packages"
+            copy-files "c:\windowsAzure"
+        } -arguments @($workdir)
+    }
+
+    if(!$noNet)
+    {
+        add-job -jobName "network port tests" -scriptBlock {
+            param($workdir = $args[0], $networkTestAddress = $args[1], $ports = $args[2])
+            foreach ($port in $ports)
+            {
+                $ProgressPreference = "silentlycontinue"
+                test-netconnection -port $port -ComputerName $networkTestAddress -InformationLevel Detailed | out-file -Append "$($workdir)\network-port-test.txt"
+            }
+        } -arguments @($workdir, $networkTestAddress, $ports)
+
+        add-job -jobName "check external connection" -scriptBlock {
+            param($workdir = $args[0], $externalUrl = $args[1])
+            [net.httpWebResponse](Invoke-WebRequest $externalUrl -UseBasicParsing).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
+        } -arguments @($workdir, $externalUrl)
+
+        add-job -jobName "resolve-dnsname" -scriptBlock {
+            param($workdir = $args[0], $networkTestAddress = $args[1], $externalUrl = $args[2])
+            Resolve-DnsName -Name $networkTestAddress | out-file -Append "$($workdir)\resolve-dnsname.txt"
+            Resolve-DnsName -Name $externalUrl | out-file -Append "$($workdir)\resolve-dnsname.txt"
+        } -arguments @($workdir, $networkTestAddress, $externalUrl)
+
+        add-job -jobName "nslookup" -scriptBlock {
+            param($workdir = $args[0], $networkTestAddress = $args[1], $externalUrl = $args[2])
+            write-host "nslookup"
+            out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
+            Invoke-Expression "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
+            out-file -InputObject "querying nslookup for $($networkTestAddress)" -Append "$($workdir)\nslookup.txt"
+            Invoke-Expression "nslookup $($networkTestAddress) | out-file -Append $($workdir)\nslookup.txt"
+        } -arguments @($workdir, $networkTestAddress, $externalUrl)
+
+        if ((test-path "C:\Windows\System32\LogFiles\HTTPERR"))
         {
-            $ProgressPreference = "silentlycontinue"
-            test-netconnection -port $port -ComputerName $networkTestAddress -InformationLevel Detailed | out-file -Append "$($workdir)\network-port-test.txt"
+            write-host "http log files"
+            copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
         }
-    } -arguments @($workdir, $networkTestAddress, $ports)
 
-    add-job -jobName "check external connection" -scriptBlock {
-        param($workdir = $args[0], $externalUrl = $args[1])
-        [net.httpWebResponse](Invoke-WebRequest $externalUrl -UseBasicParsing).BaseResponse | out-file "$($workdir)\network-external-test.txt" 
-    } -arguments @($workdir, $externalUrl)
+        add-job -jobName "firewall" -scriptBlock {
+            param($workdir = $args[0])
+            Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
+            Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
+        } -arguments @($workdir)
+    
+        add-job -jobName "get-nettcpconnetion" -scriptBlock {
+            param($workdir = $args[0])
+            Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
+            Get-NetTCPConnection | Where-Object RemotePort -eq 1026 | out-file "$($workdir)\connected-nodes.txt"
+        } -arguments @($workdir)
 
-    add-job -jobName "resolve-dnsname" -scriptBlock {
-        param($workdir = $args[0], $networkTestAddress = $args[1], $externalUrl = $args[2])
-        Resolve-DnsName -Name $networkTestAddress | out-file -Append "$($workdir)\resolve-dnsname.txt"
-        Resolve-DnsName -Name $externalUrl | out-file -Append "$($workdir)\resolve-dnsname.txt"
-    } -arguments @($workdir, $networkTestAddress, $externalUrl)
+        write-host "netstat ports"
+        Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
 
-    add-job -jobName "nslookup" -scriptBlock {
-        param($workdir = $args[0], $networkTestAddress = $args[1], $externalUrl = $args[2])
-        write-host "nslookup"
-        out-file -InputObject "querying nslookup for $($externalUrl)" -Append "$($workdir)\nslookup.txt"
-        Invoke-Expression "nslookup $($externalUrl) | out-file -Append $($workdir)\nslookup.txt"
-        out-file -InputObject "querying nslookup for $($networkTestAddress)" -Append "$($workdir)\nslookup.txt"
-        Invoke-Expression "nslookup $($networkTestAddress) | out-file -Append $($workdir)\nslookup.txt"
-    } -arguments @($workdir, $networkTestAddress, $externalUrl)
+        write-host "netsh ssl"
+        Invoke-Expression "netsh http show sslcert > $($workdir)\netshssl.txt"
 
-    write-host "winrm settings"
-    Invoke-Expression "winrm get winrm/config/client > $($workdir)\winrm-config.txt" 
+        write-host "ip info"
+        Invoke-Expression "ipconfig /all > $($workdir)\ipconfig.txt"
+        write-host "winrm settings"
+        Invoke-Expression "winrm get winrm/config/client > $($workdir)\winrm-config.txt" 
+    }
 
     if ($certInfo)
     {
@@ -468,93 +556,13 @@ function process-machine()
         [regex]::Replace((Get-ChildItem -Path cert: -Recurse | format-list * | out-string), "[0-9a-fA-F]{20}`r`n", "xxxxxxxxxxxxxxxxxxxx`r`n") | out-file "$($workdir)\certs.txt"
     }
     
-    if ((test-path "C:\Windows\System32\LogFiles\HTTPERR"))
-    {
-        write-host "http log files"
-        copy-item -path "C:\Windows\System32\LogFiles\HTTPERR\*" -Destination $workdir -Force -Filter "*.log"
-    }
-
-    add-job -jobName "drives" -scriptBlock {
-        param($workdir = $args[0])
-        Get-psdrive | out-file "$($workdir)\drives.txt"
-    } -arguments @($workdir)
-
-    add-job -jobName "os info" -scriptBlock {
-        param($workdir = $args[0])
-        get-wmiobject -Class Win32_OperatingSystem -Namespace root\cimv2 | format-list * | out-file "$($workdir)\os-info.txt"
-        Invoke-Expression "cmd.exe /c sc query type= driver > $($workdir)\drivers.txt"
-        get-hotfix | out-file "$($workdir)\hotfixes.txt"
-        Get-process | out-file "$($workdir)\process-summary.txt"
-        Get-process | format-list * | out-file "$($workdir)\processes.txt"
-        get-process | Where-Object ProcessName -imatch "fabric" | out-file "$($workdir)\processes-fabric.txt"
-        Get-service | out-file "$($workdir)\service-summary.txt"
-        Get-Service | format-list * | out-file "$($workdir)\services.txt"
-    } -arguments @($workdir)
-
-    write-host "installed applications"
-    Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /v DisplayName > $($workDir)\installed-apps.reg.txt"
-
-    write-host "features"
-    Get-WindowsFeature | Where-Object "InstallState" -eq "Installed" | out-file "$($workdir)\windows-features.txt"
-
-    add-job -jobName ".net reg" -scriptBlock {
-        param($workdir = $args[0])
-        Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework /s > $($workDir)\dotnet.reg.txt"
-    } -arguments @($workdir)
-
-    write-host "policies"
-    Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Policies /s > $($workDir)\policies.reg.txt"
-
-    write-host "schannel"
-    Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL /s > $($workDir)\schannel.reg.txt"
-
-    add-job -jobName "firewall" -scriptBlock {
-        param($workdir = $args[0])
-        Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules /s > $($workDir)\firewallrules.reg.txt"
-        Get-NetFirewallRule | out-file "$($workdir)\firewall-config.txt"
-    } -arguments @($workdir)
-
-    add-job -jobName "get-nettcpconnetion" -scriptBlock {
-        param($workdir = $args[0])
-        Get-NetTCPConnection | format-list * | out-file "$($workdir)\netTcpConnection.txt"
-        Get-NetTCPConnection | Where-Object RemotePort -eq 1026 | out-file "$($workdir)\connected-nodes.txt"
-    } -arguments @($workdir)
-
-    add-job -jobName "azure config files" -scriptBlock {
-        param($workdir = $args[0])
-        function copy-files($sourceDir)
-        {
-            if (!(test-path $sourceDir))
-            {
-                return
-            }
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.json" -Recurse -ErrorAction SilentlyContinue
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.txt" -Recurse -ErrorAction SilentlyContinue
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.settings" -Recurse -ErrorAction SilentlyContinue
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.config" -Recurse -ErrorAction SilentlyContinue
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.xml" -Recurse -ErrorAction SilentlyContinue
-            copy-item -path $sourceDir -Destination $workDir -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
-        }
-        copy-files "c:\packages"
-        copy-files "c:\windowsAzure"
-    } -arguments @($workdir)
-
-    write-host "netstat ports"
-    Invoke-Expression "netstat -bna > $($workdir)\netstat.txt"
-
-    write-host "netsh ssl"
-    Invoke-Expression "netsh http show sslcert > $($workdir)\netshssl.txt"
-
-    write-host "ip info"
-    Invoke-Expression "ipconfig /all > $($workdir)\ipconfig.txt"
+    #
+    # service fabric information
+    #
 
     write-host "service fabric reg"
     Invoke-Expression "reg.exe query `"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Service Fabric`" /s > $($workDir)\serviceFabric.reg.txt"
     Invoke-Expression "reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServiceFabricNodeBootStrapAgent /s > $($workDir)\serviceFabricNodeBootStrapAgent.reg.txt"
-
-    #
-    # service fabric information
-    #
 
     if ((test-path $serviceFabricInstallReg))
     {
@@ -701,6 +709,7 @@ function enumerate-serviceFabric()
     write-host "fabric root:$($fabricRoot)"
     Get-ChildItem $($fabricRoot) -Recurse | out-file "$($workDir)\dir-fabricroot.txt"
 }
+
 function monitor-jobs()
 {
     $incompletedCount = 0
@@ -739,6 +748,7 @@ function monitor-jobs()
         }
     }
 }
+
 function read-xml($xmlFile, [switch]$format)
 {
     try
