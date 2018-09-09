@@ -6,107 +6,123 @@ param(
 
 $code = @'
 using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Drawing;
-using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
 
-public class Example
+public class dotNet
 {
-    public static class directoryInfo
+    public class directoryInfo
     {
         public string directory;
         public Int32 size;
         public Int32 totalSize;
     }
 
-    public static List<directoryInfo> directories = new List<directoryInfo>();
+    //public static ConcurrentBag<directoryInfo> directories = new ConcurrentBag<directoryInfo>();
+    public static ConcurrentBag<directoryInfo> directories = new ConcurrentBag<directoryInfo>();
+
+    public static void Main(string[] args)
+    {
+        if (args.Length > 0)
+        {
+            Start(args[0]);
+        }
+        else
+        {
+            Start(Directory.GetCurrentDirectory());
+        }
+
+        Console.ReadLine();
+    }
 
     public static void Start(string path)
     {
         ParallelJob(path);
-        Console.WriteLine("Processing complete.");
+        foreach (directoryInfo d in directories)
+        {
+            Debug.WriteLine(string.Format("{0}\t{1}\t{2}", d.directory, d.size, d.totalSize));
+        }
+
+        Console.WriteLine(string.Format("Processing complete.{0}", directories.Count));
         return;
     }
 
     private static void ParallelJob(string path)
     {
-        // A simple source for demonstration purposes. Modify this path as necessary.
-        //String[] directories = System.IO.Directory.GetDirectories(path, "*.*", SearchOption.AllDirectories);
 
+        directories.Add(new directoryInfo() { directory = path });
+        Console.WriteLine("getting directories");
         AddDirectories(path, directories);
-        foreach(string directory in directories)
+
+        foreach (directoryInfo directory in directories)
         {
-            Console.WriteLine(directory);
+            Debug.WriteLine(directory.directory);
         }
+        Console.WriteLine("adding files");
+        Parallel.ForEach(directories, (currentDirectory) =>
+        {
+            Debug.WriteLine("Processing {0} on thread {1}", currentDirectory.directory, Thread.CurrentThread.ManagedThreadId);
+            // Make a reference to a directory.
+            //DirectoryInfo di = new DirectoryInfo(currentDirectory);
+            // Get a reference to each file in that directory.
+            //FileInfo[] fiArr = di.GetFiles();
+            // Display the names and sizes of the files.
+            //Console.WriteLine("The directory {0} contains the following files:", di.Name);
+            //foreach (FileInfo f in fiArr)
+            //{
+            //    Console.WriteLine("The size of {0} is {1} bytes.", f.Name, f.Length);
+            //}
 
-        Parallel.ForEach(directories, (currentDirectory) => 
-                                {
-                                    Console.WriteLine("Processing {0} on thread {1}", currentDirectory, Thread.CurrentThread.ManagedThreadId);
-                                    // Make a reference to a directory.
-                                    //DirectoryInfo di = new DirectoryInfo(currentDirectory);
-                                    // Get a reference to each file in that directory.
-                                    //FileInfo[] fiArr = di.GetFiles();
-                                    // Display the names and sizes of the files.
-                                    //Console.WriteLine("The directory {0} contains the following files:", di.Name);
-                                    //foreach (FileInfo f in fiArr)
-                                    //{
-                                    //    Console.WriteLine("The size of {0} is {1} bytes.", f.Name, f.Length);
-                                    //}
-                                    
-                                    AddFiles
-                                });
-
-        // Keep the console window open in debug mode.
+            AddFiles(currentDirectory.directory, directories);
+        });
 
     }
 
-    private static void AddFiles(string path, List<string> files)
+    private static void AddFiles(string path, ConcurrentBag<directoryInfo> files)
     {
         Debug.WriteLine("checking " + path);
 
         try
         {
-            Directory.GetFiles(path)
-                .ToList()
-                .Sum(s => files.Add(s.Length));
-
-            //Directory.GetDirectories(path)
-            //    .ToList()
-            //    .ForEach(s => {files.Add(s); AddFiles(s, files);});
+            //List<string> list = Directory.GetFiles(path).ToList();
+            List<FileSystemInfo> list = new DirectoryInfo(path).GetFileSystemInfos().Where(x => x.Attributes != FileAttributes.Directory).ToList();
+            Int32 sum = list.Sum(x => ((int)((FileInfo)x).Length));
+            //Int32 sum = 0;
+            files.First(x => x.directory == path).size = sum;
         }
         catch (Exception ex)
         {
-            // ok, so we are not allowed to dig into that directory. Move on.
             Debug.WriteLine("exception: " + ex.ToString());
         }
     }
 
-    private static void AddDirectories(string path, List<string> files)
+    private static void AddDirectories(string path, ConcurrentBag<directoryInfo> files)
     {
         Debug.WriteLine("checking " + path);
 
         try
         {
-            //Directory.GetFiles(path)
-            //    .ToList()
-            //    .ForEach(s => files.Add(s));
-
-            Directory.GetDirectories(path)
-                .ToList()
-                .ForEach(s => {files.Add(s); AddDirectories(s, files);});
+            List<string> directories = Directory.GetDirectories(path).ToList();
+            foreach (string dir in directories)
+            {
+                directoryInfo dInfo = new directoryInfo() { directory = dir };
+                files.Add(dInfo);
+                AddDirectories(dir, files);
+            }
         }
         catch (Exception ex)
         {
-            // ok, so we are not allowed to dig into that directory. Move on.
             Debug.WriteLine("exception: " + ex.ToString());
         }
     }
 }
+
 '@
 
 Add-Type $code
-[Example]::Start($path)
+[dotNet]::Start($path)
