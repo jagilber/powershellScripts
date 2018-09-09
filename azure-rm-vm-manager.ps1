@@ -74,7 +74,7 @@
     string array list of vm's to include for command
 
 .PARAMETER novmss
-    do not manage virtual machine scale sets
+    switch to exclude virtual machine scale set vm's
 #>  
 
 [CmdletBinding()]
