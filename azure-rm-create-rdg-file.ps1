@@ -76,7 +76,7 @@ function main()
         [XML.XMLElement]$nameElement = $propertiesElement.appendChild($doc.CreateElement("name"))
         $nameElement.InnerText = "Azure RM $((Get-AzurermSubscription).Id)"
 
-        $allVms = @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
+        $allVms = @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines)
 
         if(!$resourceGroupNames)
         {
