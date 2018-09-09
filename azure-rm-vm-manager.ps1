@@ -23,12 +23,11 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : WARNING: Find-AzureRmResource: This cmdlet will be deprecated in an upcoming breaking change release. The functionality of this cmdlet will be moved into Get-AzureRmResource.
-                
+   Version    : 180909 fix WARNING: Get-AzureRmResource: This cmdlet will be deprecated in an upcoming breaking change release.                 
    History    : 
                 170909 add support for virtual machine scale sets -vmss
                 170902 added 'deallocate' action
-                170723 fix for $vms filter. fix for jobs count v2
+                
 
 .EXAMPLE  
     .\azure-rm-vm-manager.ps1 -action stop
@@ -74,8 +73,8 @@
 .PARAMETER vms
     string array list of vm's to include for command
 
-.PARAMETER vmss
-    manage virtual machine scale 
+.PARAMETER novmss
+    do not manage virtual machine scale sets
 #>  
 
 [CmdletBinding()]
@@ -84,7 +83,7 @@ param(
     [string]$action = 'list',
     [string[]]$resourceGroupNames = @(),
     [string[]]$vms = @(),
-    [switch]$vmss,
+    [switch]$novmss,
     [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
     [switch]$getUpdate,
@@ -130,16 +129,16 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
-        $global:allVms = New-Object Collections.ArrayList (, @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
+        $global:allVms = New-Object Collections.ArrayList (, @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
 
-        if ($vmss)
+        if (!$novmss)
         {
             log-info "checking virtual machine scale sets"
             #$vmssvms = Get-AzureRmVmss -ResourceGroupName 
-            $global:allVmssSets = New-Object Collections.ArrayList (, @(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+            $global:allVmssSets = New-Object Collections.ArrayList (, @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
             foreach ($vmssSet in $global:allVmssSets)
             {
-                # $global:allVmss = New-Object Collections.ArrayList (,(Find-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+                # $global:allVmss = New-Object Collections.ArrayList (,(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
                 $global:allVmss = Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
            
                 if ($global:allVmss.Count -gt 1)
