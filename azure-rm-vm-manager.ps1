@@ -133,12 +133,10 @@ function main()
 
         if (!$novmss)
         {
-            log-info "checking virtual machine scale sets"
-            #$vmssvms = Get-AzureRmVmss -ResourceGroupName 
+            #log-info "checking virtual machine scale sets"
             $global:allVmssSets = New-Object Collections.ArrayList (, @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
             foreach ($vmssSet in $global:allVmssSets)
             {
-                # $global:allVmss = New-Object Collections.ArrayList (,(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
                 $global:allVmss = Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
            
                 if ($global:allVmss.Count -gt 1)
