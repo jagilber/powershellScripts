@@ -68,7 +68,7 @@ param(
     [string]$templateFile,
     [Parameter(Mandatory=$true)]
     [string]$templateParameterFile,
-    [hashtable]$additionalParameters
+    [hashtable]$additionalParameters = @{}
 )
 
 # shouldnt need modification
