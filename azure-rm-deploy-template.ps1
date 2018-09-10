@@ -67,7 +67,8 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$templateFile,
     [Parameter(Mandatory=$true)]
-    [string]$templateParameterFile
+    [string]$templateParameterFile,
+    [hashtable]$additionalParameters
 )
 
 # shouldnt need modification
@@ -152,7 +153,6 @@ else
 $adminUsername = $global:credential.UserName
 $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($global:credential.Password)) 
 
-
 $count = 0
 # uppercase check
 if($adminPassword -match "[A-Z]") { $count++ }
@@ -223,14 +223,16 @@ if($global:credential.Password.Length)
         -Mode Complete `
         -adminUsername $global:credential.UserName `
         -adminPassword $global:credential.Password `
-        -TemplateParameterFile $templateParameterFile
+        -TemplateParameterFile $templateParameterFile `
+        @additionalParameters
 }
 else
 {
     $ret = Test-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup `
         -TemplateFile $templateFile `
         -Mode Complete `
-        -TemplateParameterFile $templateParameterFile
+        -TemplateParameterFile $templateParameterFile `
+        @additionalParameters
 }
 
 if(![string]::IsNullOrEmpty($ret))
@@ -269,7 +271,8 @@ if(!$test)
           -adminUsername $global:credential.UserName `
           -adminPassword $global:credential.Password `
           -TemplateParameterFile $templateParameterFile `
-          -Verbose
+          -Verbose `
+          @additionalParameters
     }
     else
     {
@@ -278,7 +281,8 @@ if(!$test)
           -DeploymentDebugLogLevel All `
           -TemplateFile $templateFile `
           -TemplateParameterFile $templateParameterFile `
-          -Verbose
+          -Verbose `
+          @additionalParameters
          
     }
 }
