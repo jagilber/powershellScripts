@@ -61,12 +61,12 @@ param(
     [string]$location,
     [switch]$monitor,
     [switch]$postConnect,
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$resourceGroup,
     [switch]$test,
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$templateFile,
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$templateParameterFile,
     [hashtable]$additionalParameters = @{}
 )
@@ -75,18 +75,18 @@ param(
 $error.Clear()
 $ErrorActionPreference = "Continue"
 
-if([string]::IsNullOrEmpty($deploymentName))
+if (!$deploymentName)
 {
     $deploymentName = $resourceGroup
 }
 
-if(!(test-path $templateFile))
+if (!(test-path $templateFile))
 {
     write-host "unable to find json file $($templateFile)"
     return
 }
 
-if(!(test-path $templateParameterFile))
+if (!(test-path $templateParameterFile))
 {
     write-host "unable to find json file $($templateParameterFile)"
     return
@@ -116,7 +116,7 @@ catch
 
 write-host "checking resource group"
 
-if([string]::IsNullOrEmpty($resourceGroup))
+if (!$resourceGroup)
 {
     write-warning "resourcegroup is a mandatory argument. supply -resourceGroup argument and restart script."
     exit 1
@@ -124,48 +124,77 @@ if([string]::IsNullOrEmpty($resourceGroup))
 
 write-host "checking location"
 
-if(!(Get-AzureRmLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location))
+if (!(Get-AzureRmLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location))
 {
     (Get-AzureRmLocation).Location
     write-warning "location: $($location) not found. supply -location using one of the above locations and restart script."
     exit 1
 }
 
-write-host "checking password"
+write-host "reading parameter file $($templateparameterFile)"
+$ujson = ConvertFrom-Json (get-content -Raw -Path $templateparameterFile)
 
-if(!$credentials)
+$ujson | ConvertTo-Json
+
+if ($ujson.parameters.adminUserName -and $ujson.parameters.adminPassword)
 {
-    if([string]::IsNullOrEmpty($adminPassword))
+    write-host "checking password"
+
+    if (!$credentials)
     {
-        $global:credential = Get-Credential
+        if(!$adminPassword)
+        {
+            $adminPassword = $ujson.parameters.adminPassword.value
+        }
+
+        if(!$adminUsername)
+        {
+            $adminUsername = $ujson.parameters.adminUserName.value
+        }
+
+        if (!$adminPassword)
+        {
+            $global:credential = Get-Credential
+        }
+        else
+        {
+            $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
+            $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
+        }
     }
     else
     {
-        $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-        $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
+        $global:credential = $credentials
     }
-}
-else
-{
-    $global:credential = $credentials
-}
 
-$adminUsername = $global:credential.UserName
-$adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($global:credential.Password)) 
+    $adminUsername = $global:credential.UserName
+    $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($global:credential.Password)) 
 
-$count = 0
-# uppercase check
-if($adminPassword -match "[A-Z]") { $count++ }
-# lowercase check
-if($adminPassword -match "[a-z]") { $count++ }
-# numeric check
-if($adminPassword -match "\d") { $count++ }
-# specialKey check
-if($adminPassword -match "\W") { $count++ } 
+    $count = 0
+    # uppercase check
+    if ($adminPassword -match "[A-Z]")
+    {
+        $count++ 
+    }
+    # lowercase check
+    if ($adminPassword -match "[a-z]")
+    {
+        $count++ 
+    }
+    # numeric check
+    if ($adminPassword -match "\d")
+    {
+        $count++ 
+    }
+    # specialKey check
+    if ($adminPassword -match "\W")
+    {
+        $count++ 
+    } 
 
-if($adminPassword.Length -lt 8 -or $adminPassword.Length -gt 123 -or $count -lt 3)
-{
-    Write-warning @"
+    if ($adminPassword.Length -lt 8 -or $adminPassword.Length -gt 123 -or $count -lt 3)
+    {
+        Write-warning @"
         azure password requirements at time of writing (3/2017):
         The supplied password must be between 8-123 characters long and must satisfy at least 3 of password complexity requirements from the following: 
             1) Contains an uppercase character
@@ -175,19 +204,15 @@ if($adminPassword.Length -lt 8 -or $adminPassword.Length -gt 123 -or $count -lt 
     
         correct password and restart script. 
 "@
-    exit 1
+        exit 1
+    }
 }
-
-write-host "reading parameter file $($templateparameterFile)"
-$ujson = ConvertFrom-Json (get-content -Raw -Path $templateparameterFile)
-
-$ujson | ConvertTo-Json
 
 write-host "checking for existing deployment"
 
-if((Get-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName -ErrorAction SilentlyContinue))
+if ((Get-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName -ErrorAction SilentlyContinue))
 {
-    if((read-host "resource group deployment exists! Do you want to delete?[y|n]") -ilike 'y')
+    if ((read-host "resource group deployment exists! Do you want to delete?[y|n]") -ilike 'y')
     {
         Remove-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName
     }
@@ -195,16 +220,16 @@ if((Get-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $
 
 write-host "checking for existing resource group"
 
-if((Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
+if ((Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
 {
-    if((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y')
+    if ((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y')
     {
         Remove-AzureRmResourceGroup -Name $resourceGroup -force
     }
 }
 
 # create resource group if it does not exist
-if(!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
+if (!(Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
 {
     Write-Host "creating resource group $($resourceGroup) in location $($location)"   
     New-AzureRmResourceGroup -Name $resourceGroup -Location $location
@@ -216,7 +241,7 @@ $ret = $null
 $VerbosePreference = "continue"
 $DebugPreference = "continue"
 
-if($global:credential.Password.Length)
+if ($global:credential.Password.Length)
 {
     $ret = Test-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup `
         -TemplateFile $templateFile `
@@ -235,7 +260,7 @@ else
         @additionalParameters
 }
 
-if(![string]::IsNullOrEmpty($ret))
+if ($ret)
 {
     Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)"
     $VerbosePreference = "silentlycontinue"
@@ -243,46 +268,46 @@ if(![string]::IsNullOrEmpty($ret))
     exit 1
 }
 
-if($monitor)
+if ($monitor)
 {
     write-host "$([DateTime]::Now) starting monitor"
     $monitorScript = "$(get-location)\azure-rm-log-reader.ps1"
     
-    if(![IO.File]::Exists($monitorScript))
+    if (![IO.File]::Exists($monitorScript))
     {
         [IO.File]::WriteAllText($monitorScript, 
-            (Invoke-WebRequest -UseBasicParsing -Uri "https://aka.ms/azure-rm-log-reader.ps1").ToString().Replace("???",""))
+            (Invoke-WebRequest -UseBasicParsing -Uri "https://aka.ms/azure-rm-log-reader.ps1").ToString().Replace("???", ""))
     }
 
     Start-Process -FilePath "powershell.exe" -ArgumentList "-WindowStyle Minimized -ExecutionPolicy Bypass $($monitorScript)"
 }
 
-if(!$test)
+if (!$test)
 {
     write-host "$([DateTime]::Now) creating deployment"
     $error.Clear() 
    
-    if($global:credential.Password.Length)
+    if ($global:credential.Password.Length)
     {
         New-AzureRmResourceGroupDeployment -Name $deploymentName `
-          -ResourceGroupName $resourceGroup `
-          -DeploymentDebugLogLevel All `
-          -TemplateFile $templateFile `
-          -adminUsername $global:credential.UserName `
-          -adminPassword $global:credential.Password `
-          -TemplateParameterFile $templateParameterFile `
-          -Verbose `
-          @additionalParameters
+            -ResourceGroupName $resourceGroup `
+            -DeploymentDebugLogLevel All `
+            -TemplateFile $templateFile `
+            -adminUsername $global:credential.UserName `
+            -adminPassword $global:credential.Password `
+            -TemplateParameterFile $templateParameterFile `
+            -Verbose `
+            @additionalParameters
     }
     else
     {
         New-AzureRmResourceGroupDeployment -Name $deploymentName `
-          -ResourceGroupName $resourceGroup `
-          -DeploymentDebugLogLevel All `
-          -TemplateFile $templateFile `
-          -TemplateParameterFile $templateParameterFile `
-          -Verbose `
-          @additionalParameters
+            -ResourceGroupName $resourceGroup `
+            -DeploymentDebugLogLevel All `
+            -TemplateFile $templateFile `
+            -TemplateParameterFile $templateParameterFile `
+            -Verbose `
+            @additionalParameters
          
     }
 }
