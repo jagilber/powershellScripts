@@ -150,7 +150,8 @@ function main()
             #$bytes = $enc.GetBytes($cert.Thumbprint)
             #$ClientSecret = [System.Convert]::ToBase64String($bytes)
             $ClientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $ClientSecret -EndDate $cert.NotAfter
+            $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate $cert.NotAfter
         }
         elseif ($logontype -ieq 'key')
         {
@@ -159,10 +160,10 @@ function main()
             $rand.GetBytes($bytes)
 
             $ClientSecret = [System.Convert]::ToBase64String($bytes)
-
+            $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
             $endDate = [System.DateTime]::Now.AddYears(2)
 
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $ClientSecret -EndDate $endDate
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $pwd -EndDate $endDate
             write-host "client secret: $($ClientSecret)" -ForegroundColor Yellow
 
         }
