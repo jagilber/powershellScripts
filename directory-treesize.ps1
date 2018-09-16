@@ -196,7 +196,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
             $percentSize = $size / $totalFilesSize
         }
 
-        $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(12))]"
+        $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(10))]"
         $output = $percent + $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
     }
     else
