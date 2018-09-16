@@ -84,7 +84,7 @@ function main()
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
     [dotNet]::Start($directory, [bool]$showFiles)
-    $script:directories= [dotnet]::_directories
+    $script:directories = [dotnet]::_directories
     $script:directorySizes = @(([dotnet]::_directories).totalsizeGB)
     $totalFiles = (($script:directories).filesCount | Measure-Object -Sum).Sum
 
@@ -93,7 +93,7 @@ function main()
     $sortedBySize = $script:directorySizes -ge $minSizeGB | Sort-Object
     $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
     
-    if($categorySize -lt 1)
+    if ($categorySize -lt 1)
     {
         log-info "no directories found! exiting" -foregroundColor Yellow
         exit
@@ -111,7 +111,7 @@ function main()
     for ($directorySizesIndex = 0; $directorySizesIndex -lt $script:directorySizes.Length; $directorySizesIndex++)
     {
 
-         $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
+        $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
     }
 
     log-info "$(get-date) finished. total time $((get-date) - $timer)"
@@ -185,9 +185,9 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
 
     log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
 
-    if($showFiles)
+    if ($showFiles)
     {
-        foreach($file in ($script:directories[$directorySizesIndex].files).getenumerator())
+        foreach ($file in ($script:directories[$directorySizesIndex].files).getenumerator())
         {
             log-info ("$(' '*($output.length))`t`t`t$([int]::Parse($file.value).tostring("N0").padleft(12))`t$($file.key)") -foregroundColor cyan
         }
@@ -463,6 +463,7 @@ finally
 {
     [dotnet]::_directories.clear()
     $script.directories = $Null
+    
     if ($script:logStream)
     {
         $script:logStream.Close() 
