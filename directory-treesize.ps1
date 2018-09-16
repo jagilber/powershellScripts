@@ -40,20 +40,23 @@
 .PARAMETER directory
     directory to enumerate
 
+.PARAMETER logFile
+    log output to log file
+
 .PARAMETER minSizeGB
     minimum size of directory / file to display in GB
 
 .PARAMETER noTree
     output complete directory and file paths
 
+.PARAMETER quiet
+    do not display output
+
 .PARAMETER showFiles
     output file information
 
-.PARAMETER logFile
-    log output to log file
-
-.PARAMETER quiet
-    do not display output
+.PARAMETER showPercent
+    show percent graph
 
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1
@@ -67,7 +70,8 @@ param(
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
-    [switch]$quiet
+    [switch]$quiet,
+    [switch]$showPercent
 )
 
 $timer = get-date
@@ -186,17 +190,23 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
             log-info -debug -data "checking previous dir: $($previousDir)"
         }
 
-        if($directorySizesIndex -eq 0)
+        $percent = ""
+
+        if ($showPercent)
         {
-            # set root to files in root dir
-            $percentSize = $script:directories[$directorySizesIndex].sizeGB / $totalFilesSize
-        }
-        else 
-        {
-            $percentSize = $size / $totalFilesSize
+            if ($directorySizesIndex -eq 0)
+            {
+                # set root to files in root dir
+                $percentSize = $script:directories[$directorySizesIndex].sizeGB / $totalFilesSize
+            }
+            else 
+            {
+                $percentSize = $size / $totalFilesSize
+            }
+
+            $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(10))]"
         }
 
-        $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(10))]"
         $output = $percent + $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
     }
     else
