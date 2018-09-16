@@ -34,6 +34,9 @@
     .\directory-treesize.ps1
     enumerate current working directory
 
+.PARAMETER depth
+    number of directory levels to display
+
 .PARAMETER directory
     directory to enumerate
 
@@ -60,6 +63,7 @@
 param(
     $directory = (get-location).path,
     [float]$minSizeGB = .01,
+    [int]$depth = 99,
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
@@ -87,7 +91,7 @@ function main()
     $script:directories = [dotnet]::_directories
     $script:directorySizes = @(([dotnet]::_directories).totalsizeGB)
     $totalFiles = (($script:directories).filesCount | Measure-Object -Sum).Sum
-
+    $totalFilesSize = $script:directories[0].totalsizeGB
     log-info "directory: $($directory) total files: $($totalFiles) total directories: $($script:directories.Count)"
 
     $sortedBySize = $script:directorySizes -ge $minSizeGB | Sort-Object
@@ -123,6 +127,18 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
     log-info -debug -data "checking dir $($script:directories[$directorySizesIndex].directory) previous dir $($previousDir) tree index $($directorySizesIndex)"
     [float]$size = $script:directories[$directorySizesIndex].totalsizeGB
     log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
+
+    if ([float]$size -lt [float]$minSizeGB)
+    {
+        log-info -debug -data "skipping below size dir $($sortedDir)"
+        continue 
+    }
+
+    if (($sortedDir -split '\\').count -gt $depth + 2)
+    {
+        log-info -debug -data "skipping max depth dir $($sortedDir)"
+        continue 
+    }
 
     switch ([float]$size)
     {
@@ -162,12 +178,6 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
         }
     }
 
-    if ([float]$size -lt [float]$minSizeGB)
-    {
-        log-info -debug -data "skipping below size dir $($sortedDir)"
-        continue 
-    }
-
     if (!$notree)
     {
         while (!$sortedDir.Contains("$($previousDir)\"))
@@ -176,20 +186,31 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
             log-info -debug -data "checking previous dir: $($previousDir)"
         }
 
-        $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
+        if($directorySizesIndex -eq 0)
+        {
+            # set root to files in root dir
+            $percentSize = $script:directories[$directorySizesIndex].sizeGB / $totalFilesSize
+        }
+        else 
+        {
+            $percentSize = $size / $totalFilesSize
+        }
+
+        $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(12))]"
+        $output = $percent + $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
     }
     else
     {
         $output = $sortedDir
     }
-
+    
     log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
 
     if ($showFiles)
     {
         foreach ($file in ($script:directories[$directorySizesIndex].files).getenumerator())
         {
-            log-info ("$(' '*($output.length))`t`t`t$([int]::Parse($file.value).tostring("N0").padleft(12))`t$($file.key)") -foregroundColor cyan
+            log-info ("$(' '*($output.length))$([int64]::Parse($file.value).tostring("N0").padleft(15))`t$($file.key)") -foregroundColor cyan
         }
     }
 
@@ -463,7 +484,7 @@ finally
 {
     [dotnet]::_directories.clear()
     $script.directories = $Null
-    
+
     if ($script:logStream)
     {
         $script:logStream.Close() 
