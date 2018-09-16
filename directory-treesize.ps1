@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     powershell script to to enumerate directory summarizing in tree view directories over a given size
 
@@ -37,12 +37,6 @@
 .PARAMETER directory
     directory to enumerate
 
-.PARAMETER displayProgress
-    display progress banner
-
-.PARAMETER depth
-    subdirectory levels to query
-
 .PARAMETER minSizeGB
     minimum size of directory / file to display in GB
 
@@ -65,13 +59,11 @@
 [cmdletbinding()]
 param(
     $directory = (get-location).path,
-    $depth = 99,
     [float]$minSizeGB = .01,
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
-    [switch]$quiet,
-    [switch]$displayProgress
+    [switch]$quiet
 )
 
 $timer = get-date
@@ -91,31 +83,22 @@ function main()
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    $script:directories = @((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName)
-    $totalFiles = 0
-
-    log-info "$(get-date) sorting"
-    # fix sorting with spaces 
-    $script:directories = ($script:directories.replace(" ", [char]28) | Sort-Object).replace([char]28, " ").ToLower()
-    $script:directorySizes = @(0) * $script:directories.length
-    log-info "$(get-date) enumerating"
-
-    for ($directoriesIndex = 0; $directoriesIndex -lt $script:directories.length; $directoriesIndex++)
-    {
-        if ($displayProgress)
-        {
-            display-progress -Activity "enumerating directory files" -status "directories processed: $($directoriesIndex)      totalfiles: $($totalFiles)" -PercentComplete (($directoriesIndex / $script:directories.Length) * 100)
-        }
-
-        $totalFiles = $totalFiles + (enumerate-directory -directoryIndex $directoriesIndex)
-    }
+    [dotNet]::Start($directory, [bool]$showFiles)
+    $script:directories= [dotnet]::_directories
+    $script:directorySizes = @(([dotnet]::_directories).totalsizeGB)
+    $totalFiles = (($script:directories).filesCount | Measure-Object -Sum).Sum
 
     log-info "directory: $($directory) total files: $($totalFiles) total directories: $($script:directories.Count)"
-    $rootSize = ($script:directorySizes | Measure-Object -Sum).Sum + ((Get-ChildItem -File -Path $directory | Measure-Object -Property Length -Sum).Sum / 1GB)
-    log-info -data "$($directory)`t$($rootSize.ToString("F3")) GB" -foregroundColor Cyan
 
     $sortedBySize = $script:directorySizes -ge $minSizeGB | Sort-Object
     $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
+    
+    if($categorySize -lt 1)
+    {
+        log-info "no directories found! exiting" -foregroundColor Yellow
+        exit
+    }
+
     $redmin = $sortedBySize[($categorySize * 6) - 1]
     $darkredmin = $sortedBySize[($categorySize * 5) - 1]
     $yellowmin = $sortedBySize[($categorySize * 4) - 1]
@@ -123,115 +106,22 @@ function main()
     $greenmin = $sortedBySize[($categorySize * 2) - 1]
     $darkgreenmin = $sortedBySize[($categorySize) - 1]
     $previousDir = $directory.ToLower()
-    log-info "$(get-date) totalling"
     [int]$i = 0
 
     for ($directorySizesIndex = 0; $directorySizesIndex -lt $script:directorySizes.Length; $directorySizesIndex++)
     {
-        if ($displayProgress)
-        {
-            display-progress -Activity "totalling directory file sizes" -status "directories processed: $($directorySizesIndex)" -PercentComplete (($directorySizesIndex / $script:directorySizes.Length) * 100)
-        }
 
-        $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
+         $previousDir = enumerate-directorySizes -directorySizesIndex $directorySizesIndex -previousDir $previousDir
     }
 
     log-info "$(get-date) finished. total time $((get-date) - $timer)"
 }
 
-function display-progress($activity, $status, $percentComplete)
-{
-    if (((get-date) - $script:progressTimer).TotalMilliSeconds -gt 250)
-    {       
-        Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
-        $script:progressTimer = get-date
-    }
-
-    if ($percentComplete -eq 100)
-    {
-        Write-Progress -Activity $activity -Completed
-    }
-}
-
-function enumerate-directory($directoryIndex)
-{
-    $subDir = $script:directories[$directoryIndex]
-
-    log-info -debug -data "enumerating $($subDir)"
-    $files = Get-ChildItem $subdir -Force -File -ErrorAction SilentlyContinue | Sort-Object -Descending -Property Length
-    $sum = ($files | Measure-Object -Property Length -Sum)
-    $size = [float]($sum.Sum / 1GB).ToString("F7")
-
-    if ($showFiles -or $writeDebug)
-    {
-        log-info "$($subdir) file count: $($files.Count) folder file size bytes: $($sum.Sum)" -foregroundColor Cyan
-
-        foreach ($file in $files)
-        {
-            $filePath = $file.name
-            
-            if ($notree)
-            {
-                $filePath = $file.fullname    
-            }
-
-            if ($notree)
-            {
-                log-info "$($filePath),$($file.length)"
-            }
-            else
-            {
-                log-info "`t$($file.length.tostring().padleft(16)) $($filePath)"    
-            }
-        }
-    }
-
-    $script:directorySizes[$directoryIndex] = $size
-
-    log-info -debug -data "adding $($subDir) $($size)"
-    return $sum.Count
-}
-
 function enumerate-directorySizes($directorySizesIndex, $previousDir)
 {
-    $sortedDir = $script:directories[$directorySizesIndex]
-    log-info -debug -data "checking dir $($sortedDir) previous dir $($previousDir) tree index $($script:foundtreeindex)"
-
-    [float]$size = 0
-
-    $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
-    $continueCheck = $true
-    $firstmatch = $false
-    $i = $script:foundtreeIndex
-
-    while ($continueCheck -and $i -lt $script:directorySizes.Length)
-    {
-        $dirName = $script:directories[$i]
-        $dirSize = $script:directorySizes[$i]
-                
-        if ([regex]::IsMatch($dirName, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase))
-        {
-            $size += [float]$dirSize
-            log-info -debug -data "match: pattern:$($pattern) $($dirName),$([float]$dirSize)"
-
-            if (!$firstmatch)
-            {
-                $firstmatch = $true
-                $script:foundtreeIndex = $i
-            }
-        }
-        elseif ($firstmatch)
-        {
-            $continueCheck = $false;
-        }
-        else
-        {
-            log-info -debug -data "no match: $($dirName) and $($pattern)"
-        }
-
-        $i++
-    }
-
+    $sortedDir = $script:directories[$directorySizesIndex].directory
+    log-info -debug -data "checking dir $($script:directories[$directorySizesIndex].directory) previous dir $($previousDir) tree index $($directorySizesIndex)"
+    [float]$size = $script:directories[$directorySizesIndex].totalsizeGB
     log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
 
     switch ([float]$size)
@@ -295,6 +185,14 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
 
     log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
 
+    if($showFiles)
+    {
+        foreach($file in ($script:directories[$directorySizesIndex].files).getenumerator())
+        {
+            log-info ("$(' '*($output.length))`t`t`t$([int]::Parse($file.value).tostring("N0").padleft(12))`t$($file.key)") -foregroundColor cyan
+        }
+    }
+
     return $sortedDir
 }
 
@@ -326,8 +224,234 @@ function log-info($data, [switch]$debug, $foregroundColor = "White")
     }
 }
 
+
+$code = @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class dotNet
+{
+    public class directoryInfo : IComparable<directoryInfo>
+    {
+        public string directory;
+        public float sizeGB;
+        public float totalSizeGB;
+        public int filesCount;
+        public Dictionary<string, long> files = new Dictionary<string, long>();
+
+        int IComparable<directoryInfo>.CompareTo(directoryInfo other)
+        {
+            // fix string sort 'git' vs 'git lb' when there are subdirs comparing space to \ and set \ to 29
+            string compareDir = new String(directory.ToCharArray().Select(ch => ch <= (char)47 ? (char)29 : ch).ToArray());
+            string otherCompareDir = new String(other.directory.ToCharArray().Select(ch => ch <= (char)47 ? (char)29 : ch).ToArray());
+            return String.Compare(compareDir,otherCompareDir, true);
+        }
+    }
+
+    public static List<directoryInfo> _directories;
+    public static ParallelOptions _po = new ParallelOptions();
+    public static DateTime _timer;
+    public static bool _showFiles = false;
+
+    public static void Main(string[] args)
+    {
+        if(args.Length > 1)
+        {
+            Start(args[0], args[1].Length > 0);
+        }
+        else if (args.Length > 0)
+        {
+            Start(args[0]);
+        }
+        else
+        {
+            Start(Directory.GetCurrentDirectory());
+        }
+    }
+
+    public static void Start(string path, bool showFiles = false)
+    {
+        _directories = new List<directoryInfo>();
+        _timer = DateTime.Now;
+        _showFiles = showFiles;
+
+        // add 'root' path
+        directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd('\\') };
+        _directories.Add(rootPath);
+
+        ParallelJob(path);
+        Console.WriteLine("sorting directories");
+        _directories.Sort();
+        Console.WriteLine("rolling up dir sizes");
+        TotalDirectories(_directories);
+
+        // put trailing slash back in case 'root' path is root
+        if(path.EndsWith("\\"))
+        {
+            rootPath.directory = path;
+            rootPath.filesCount = _directories.ElementAt(0).filesCount;
+            rootPath.files = _directories.ElementAt(0).files;
+            rootPath.sizeGB = _directories.ElementAt(0).sizeGB;
+            rootPath.totalSizeGB = _directories.ElementAt(0).totalSizeGB;
+            _directories.RemoveAt(0);
+            _directories.Insert(0, rootPath);
+        }
+
+#if DEBUG
+        Console.WriteLine(string.Format("directory,size,totalSize,totalFiles"));
+        foreach (directoryInfo d in _directories)
+        {
+            Console.WriteLine(string.Format("{0},{1},{2},{3}", d.directory, d.sizeGB, d.totalSizeGB, d.filesCount));
+            foreach (KeyValuePair<string, long> fileInfo in d.files)
+            {
+                Console.WriteLine(string.Format("\t\t{0}\t\t{1}", fileInfo.Value, fileInfo.Key));
+            }
+        }
+#endif
+        Console.WriteLine(string.Format("Processing complete. minutes: {0:F3} directories: {1}", (DateTime.Now - _timer).TotalMinutes, _directories.Count));
+        return;
+    }
+
+    private static void ParallelJob(string path)
+    {
+        _po.MaxDegreeOfParallelism = 8;
+        
+        Console.WriteLine("getting directories");
+        AddDirectories(path, _directories);
+
+        Console.WriteLine("adding files");
+        Parallel.ForEach(_directories, _po, (currentDirectory) =>
+         {
+             Debug.Print("Processing {0} on thread {1}", currentDirectory.directory, Thread.CurrentThread.ManagedThreadId);
+             AddFiles(currentDirectory.directory, _directories);
+         });
+
+    }
+
+    private static void AddFiles(string path, List<directoryInfo> directories)
+    {
+        Debug.Print("checking " + path);
+
+        try
+        {
+            List<FileInfo> filesList = new DirectoryInfo(path).GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
+            long sum = filesList.Sum(x => x.Length);
+
+            if (sum > 0)
+            {
+                directoryInfo directory = directories.First(x => x.directory == path);
+                directory.sizeGB = (float)sum / (1024 * 1024 * 1024);
+                directory.filesCount = filesList.Count;
+                if(_showFiles)
+                {
+                    foreach(FileInfo file in filesList)
+                    {
+                        directory.files.Add(file.Name, file.Length);
+                    }
+
+                    directory.files = new Dictionary<string, long>(directory.files.OrderByDescending(v => v.Value).ToDictionary(x => x.Key, x => x.Value));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.Print("exception: " + path + ex.ToString());
+        }
+    }
+
+    private static void AddDirectories(string path, List<directoryInfo> directories)
+    {
+        Debug.Print("checking " + path);
+
+        try
+        {
+            List<string> subDirectories = Directory.GetDirectories(path).ToList();
+
+            foreach (string dir in subDirectories)
+            {
+                directoryInfo directory = new directoryInfo() { directory = dir };
+                directories.Add(directory);
+                AddDirectories(dir, directories);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.Print("exception: " + ex.ToString());
+        }
+    }
+
+    private static void TotalDirectories(List<directoryInfo> dInfo)
+    {
+        directoryInfo[] dirEnumerator = dInfo.ToArray();
+        int index = 0;
+        int firstMatchIndex = 0;
+        
+        foreach (directoryInfo directory in dInfo)
+        {
+            Debug.Print("checking directory {0}", directory.directory);
+            if (directory.totalSizeGB > 0)
+            {
+                Debug.Print("warning: total size already populated {0}: {1}", directory.directory, directory.totalSizeGB);
+                continue;
+            }
+
+            bool match = true;
+            bool firstmatch = false;
+
+            if (index == dInfo.Count)
+            {
+                index = 0;
+            }
+
+            string pattern = string.Format(@"{0}(\\|$)", Regex.Escape(directory.directory));
+
+            while (match && index < dInfo.Count)
+            {
+                string dirToMatch = dirEnumerator[index].directory;
+                Debug.Print("checking match directory {0}", dirToMatch);
+
+                if(Regex.IsMatch(dirToMatch,pattern, RegexOptions.IgnoreCase))
+                {
+                    if (!firstmatch)
+                    {
+                        Debug.Print("first match directory {0}", dirToMatch);
+                        firstmatch = true;
+                        firstMatchIndex = index;
+                    }
+                    else
+                    {
+                        Debug.Print("additional match directory {0}", dirToMatch);
+                    }
+
+                    directory.totalSizeGB += dirEnumerator[index].sizeGB;
+                }
+                else if (firstmatch)
+                {
+                    match = false;
+                    index = firstMatchIndex;
+                    Debug.Print("first no match after match directory {0}", dirToMatch);
+                }
+                else
+                {
+                    Debug.Print("no match directory {0}", dirToMatch);
+                }
+
+                index++;
+            }
+        }
+    }
+}
+'@
+
 try
 {
+    Add-Type $code
     main
 }
 catch
@@ -337,6 +461,8 @@ catch
 }
 finally
 {
+    [dotnet]::_directories.clear()
+    $script.directories = $Null
     if ($script:logStream)
     {
         $script:logStream.Close() 
