@@ -58,6 +58,9 @@
 .PARAMETER showPercent
     show percent graph
 
+.PARAMETER uncompressed
+    show file length instead of size on disk. slightly faster and does not use pinvoke
+
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1
 #>
@@ -71,7 +74,8 @@ param(
     [switch]$showFiles,
     [string]$logFile,
     [switch]$quiet,
-    [switch]$showPercent
+    [switch]$showPercent,
+    [switch]$uncompressed
 )
 
 $timer = get-date
@@ -89,9 +93,9 @@ function main()
 {
     log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
-    log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
+    log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    [dotNet]::Start($directory, [bool]$showFiles)
+    [dotNet]::Start($directory, [bool]$showFiles, [bool]$uncompressed)
     $script:directories = [dotnet]::_directories
     $script:directorySizes = @(([dotnet]::_directories).totalsizeGB)
     $totalFiles = (($script:directories).filesCount | Measure-Object -Sum).Sum
@@ -265,6 +269,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 public class dotNet
 {
@@ -285,13 +290,28 @@ public class dotNet
         }
     }
 
+    [DllImport("kernel32.dll")]
+    static extern uint GetCompressedFileSizeW([In, MarshalAs(UnmanagedType.LPWStr)] string lpFileName,
+   [Out, MarshalAs(UnmanagedType.U4)] out uint lpFileSizeHigh);
+
+    [DllImport("kernel32.dll", SetLastError = true, PreserveSig = true)]
+    static extern int GetDiskFreeSpaceW([In, MarshalAs(UnmanagedType.LPWStr)] string lpRootPathName,
+       out uint lpSectorsPerCluster, out uint lpBytesPerSector, out uint lpNumberOfFreeClusters,
+       out uint lpTotalNumberOfClusters);
+
     public static List<directoryInfo> _directories;
     public static DateTime _timer;
     public static bool _showFiles = false;
     public static List<Task> _tasks;
+    public static bool _uncompressed = false;
+    public static uint _clusterSize = 0;
 
     public static void Main(string[] args)
     {
+        if (args.Length > 2)
+        {
+            Start(args[0], args[1].Length > 0, args[2].Length > 0);
+        }
         if (args.Length > 1)
         {
             Start(args[0], args[1].Length > 0);
@@ -306,12 +326,14 @@ public class dotNet
         }
     }
 
-    public static void Start(string path, bool showFiles = false)
+    public static void Start(string path, bool showFiles = false, bool uncompressed = false)
     {
         _directories = new List<directoryInfo>();
         _timer = DateTime.Now;
         _showFiles = showFiles;
         _tasks = new List<Task>();
+        _uncompressed = uncompressed;
+        _clusterSize = GetClusterSize(path);
 
         // add 'root' path
         directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd('\\') };
@@ -329,7 +351,7 @@ public class dotNet
 
         Console.WriteLine("sorting directories");
         _directories.Sort();
-        Console.WriteLine("rolling up dir sizes");
+        Console.WriteLine("rolling up directory sizes");
         TotalDirectories(_directories);
 
         // put trailing slash back in case 'root' path is root
@@ -356,11 +378,21 @@ public class dotNet
     private static void AddFiles(directoryInfo directoryInfo)
     {
         Debug.Print("checking " + directoryInfo.directory);
+        long sum = 0;
 
         try
         {
             List<FileInfo> filesList = new DirectoryInfo(directoryInfo.directory).GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
-            long sum = filesList.Sum(x => x.Length);
+
+
+            if (_uncompressed)
+            {
+                sum = filesList.Sum(x => x.Length);
+            }
+            else
+            {
+                sum = GetSizeOnDisk(filesList);
+            }
 
             if (sum > 0)
             {
@@ -381,6 +413,35 @@ public class dotNet
         {
             Debug.Print("exception: " + directoryInfo + ex.ToString());
         }
+    }
+
+    private static long GetSizeOnDisk(List<FileInfo> filesList)
+    {
+        long result = 0;
+
+        foreach(FileInfo fileInfo in filesList)
+        {
+            result += GetFileSizeOnDisk(fileInfo);
+        }
+
+        return result;
+    }
+
+    public static long GetFileSizeOnDisk(FileInfo file)
+    {
+        uint hosize;
+        uint losize = GetCompressedFileSizeW(file.FullName, out hosize);
+        long size;
+        size = (long)hosize << 32 | losize;
+        return ((size + _clusterSize - 1) / _clusterSize) * _clusterSize;
+    }
+
+    private static uint GetClusterSize(string fullName)
+    {
+        uint dummy, sectorsPerCluster, bytesPerSector;
+        int result = GetDiskFreeSpaceW(fullName, out sectorsPerCluster, out bytesPerSector, out dummy, out dummy);
+        if (result == 0) return 0;
+        return sectorsPerCluster * bytesPerSector;
     }
 
     private static void AddDirectories(string path, List<directoryInfo> directories)
