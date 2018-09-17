@@ -95,7 +95,7 @@ function main()
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    [dotNet]::Start($directory, [bool]$showFiles, [bool]$uncompressed)
+    [dotNet]::Start($directory, $minSizeGB, $depth, [bool]$showFiles, [bool]$uncompressed)
     $script:directories = [dotnet]::_directories
     $script:directorySizes = @(([dotnet]::_directories).totalsizeGB)
     $totalFiles = (($script:directories).filesCount | Measure-Object -Sum).Sum
@@ -135,18 +135,6 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
     log-info -debug -data "checking dir $($script:directories[$directorySizesIndex].directory) previous dir $($previousDir) tree index $($directorySizesIndex)"
     [float]$size = $script:directories[$directorySizesIndex].totalsizeGB
     log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
-
-    if ([float]$size -lt [float]$minSizeGB)
-    {
-        log-info -debug -data "skipping below size dir $($sortedDir)"
-        continue 
-    }
-
-    if (($sortedDir -split '\\').count -gt $depth + 2)
-    {
-        log-info -debug -data "skipping max depth dir $($sortedDir)"
-        continue 
-    }
 
     switch ([float]$size)
     {
@@ -292,7 +280,7 @@ public class dotNet
 
     [DllImport("kernel32.dll")]
     static extern uint GetCompressedFileSizeW([In, MarshalAs(UnmanagedType.LPWStr)] string lpFileName,
-   [Out, MarshalAs(UnmanagedType.U4)] out uint lpFileSizeHigh);
+    [Out, MarshalAs(UnmanagedType.U4)] out uint lpFileSizeHigh);
 
     [DllImport("kernel32.dll", SetLastError = true, PreserveSig = true)]
     static extern int GetDiskFreeSpaceW([In, MarshalAs(UnmanagedType.LPWStr)] string lpRootPathName,
@@ -301,32 +289,14 @@ public class dotNet
 
     public static List<directoryInfo> _directories;
     public static DateTime _timer;
-    public static bool _showFiles = false;
+    public static bool _showFiles;
     public static List<Task> _tasks;
-    public static bool _uncompressed = false;
-    public static uint _clusterSize = 0;
+    public static bool _uncompressed;
+    public static uint _clusterSize;
+    public static int _depth;
+    public static float _minSizeGB;
 
-    public static void Main(string[] args)
-    {
-        if (args.Length > 2)
-        {
-            Start(args[0], args[1].Length > 0, args[2].Length > 0);
-        }
-        if (args.Length > 1)
-        {
-            Start(args[0], args[1].Length > 0);
-        }
-        else if (args.Length > 0)
-        {
-            Start(args[0]);
-        }
-        else
-        {
-            Start(Directory.GetCurrentDirectory());
-        }
-    }
-
-    public static void Start(string path, bool showFiles = false, bool uncompressed = false)
+    public static void Start(string path, float minSizeGB = 0.01f, int depth = 99, bool showFiles = false, bool uncompressed = false )
     {
         _directories = new List<directoryInfo>();
         _timer = DateTime.Now;
@@ -334,6 +304,8 @@ public class dotNet
         _tasks = new List<Task>();
         _uncompressed = uncompressed;
         _clusterSize = GetClusterSize(path);
+        _depth = depth + (path.Split('\\').Count());
+        _minSizeGB = minSizeGB;
 
         // add 'root' path
         directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd('\\') };
@@ -342,6 +314,7 @@ public class dotNet
 
         Console.WriteLine("getting directories");
         AddDirectories(path, _directories);
+        Console.WriteLine("waiting for task completion");
 
         while (_tasks.Where(x => !x.IsCompleted).Count() > 0)
         {
@@ -353,6 +326,8 @@ public class dotNet
         _directories.Sort();
         Console.WriteLine("rolling up directory sizes");
         TotalDirectories(_directories);
+        Console.WriteLine("filtering directory sizes");
+        FilterDirectories(_directories);
 
         // put trailing slash back in case 'root' path is root
         if (path.EndsWith("\\"))
@@ -360,24 +335,17 @@ public class dotNet
             _directories.ElementAt(0).directory = path;
         }
 
-#if DEBUG
-        Console.WriteLine(string.Format("directory,size,totalSize,totalFiles"));
-        foreach (directoryInfo d in _directories)
-        {
-            Console.WriteLine(string.Format("{0},{1},{2},{3}", d.directory, d.sizeGB, d.totalSizeGB, d.filesCount));
-            foreach (KeyValuePair<string, long> fileInfo in d.files)
-            {
-                Console.WriteLine(string.Format("\t\t{0}\t\t{1}", fileInfo.Value, fileInfo.Key));
-            }
-        }
-#endif
         Console.WriteLine(string.Format("Processing complete. minutes: {0:F3} directories: {1}", (DateTime.Now - _timer).TotalMinutes, _directories.Count));
         return;
     }
 
+    private static void FilterDirectories(List<directoryInfo> directories)
+    {
+        _directories = directories.Where(x => x.totalSizeGB >= _minSizeGB & (x.directory.Split('\\').Count() <= (_depth))).ToList();
+    }
+
     private static void AddFiles(directoryInfo directoryInfo)
     {
-        Debug.Print("checking " + directoryInfo.directory);
         long sum = 0;
 
         try
@@ -411,7 +379,7 @@ public class dotNet
         }
         catch (Exception ex)
         {
-            Debug.Print("exception: " + directoryInfo + ex.ToString());
+            Debug.Print (ex.ToString());
         }
     }
 
@@ -446,8 +414,6 @@ public class dotNet
 
     private static void AddDirectories(string path, List<directoryInfo> directories)
     {
-        Debug.Print("checking " + path);
-
         try
         {
             List<string> subDirectories = Directory.GetDirectories(path).ToList();
@@ -462,7 +428,7 @@ public class dotNet
         }
         catch (Exception ex)
         {
-            Debug.Print("exception: " + ex.ToString());
+            Debug.Print (ex.ToString());
         }
     }
 
@@ -474,7 +440,6 @@ public class dotNet
 
         foreach (directoryInfo directory in dInfo)
         {
-            Debug.Print("checking directory {0}", directory.directory);
             if (directory.totalSizeGB > 0)
             {
                 Debug.Print("warning: total size already populated {0}: {1}", directory.directory, directory.totalSizeGB);
@@ -494,19 +459,13 @@ public class dotNet
             while (match && index < dInfo.Count)
             {
                 string dirToMatch = dirEnumerator[index].directory;
-                Debug.Print("checking match directory {0}", dirToMatch);
 
                 if (Regex.IsMatch(dirToMatch, pattern, RegexOptions.IgnoreCase))
                 {
                     if (!firstmatch)
                     {
-                        Debug.Print("first match directory {0}", dirToMatch);
                         firstmatch = true;
                         firstMatchIndex = index;
-                    }
-                    else
-                    {
-                        Debug.Print("additional match directory {0}", dirToMatch);
                     }
 
                     directory.totalSizeGB += dirEnumerator[index].sizeGB;
@@ -515,11 +474,6 @@ public class dotNet
                 {
                     match = false;
                     index = firstMatchIndex;
-                    Debug.Print("first no match after match directory {0}", dirToMatch);
-                }
-                else
-                {
-                    Debug.Print("no match directory {0}", dirToMatch);
                 }
 
                 index++;
