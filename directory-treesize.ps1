@@ -281,18 +281,18 @@ public class dotNet
             // fix string sort 'git' vs 'git lb' when there are subdirs comparing space to \ and set \ to 29
             string compareDir = new String(directory.ToCharArray().Select(ch => ch <= (char)47 ? (char)29 : ch).ToArray());
             string otherCompareDir = new String(other.directory.ToCharArray().Select(ch => ch <= (char)47 ? (char)29 : ch).ToArray());
-            return String.Compare(compareDir,otherCompareDir, true);
+            return String.Compare(compareDir, otherCompareDir, true);
         }
     }
 
     public static List<directoryInfo> _directories;
-    public static ParallelOptions _po = new ParallelOptions();
     public static DateTime _timer;
     public static bool _showFiles = false;
+    public static List<Task> _tasks;
 
     public static void Main(string[] args)
     {
-        if(args.Length > 1)
+        if (args.Length > 1)
         {
             Start(args[0], args[1].Length > 0);
         }
@@ -311,27 +311,31 @@ public class dotNet
         _directories = new List<directoryInfo>();
         _timer = DateTime.Now;
         _showFiles = showFiles;
+        _tasks = new List<Task>();
 
         // add 'root' path
         directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd('\\') };
         _directories.Add(rootPath);
+        _tasks.Add(Task.Run(() => { AddFiles(rootPath); }));
 
-        ParallelJob(path);
+        Console.WriteLine("getting directories");
+        AddDirectories(path, _directories);
+
+        while (_tasks.Where(x => !x.IsCompleted).Count() > 0)
+        {
+            Debug.Print("sleeping");
+            Thread.Sleep(1000);
+        }
+
         Console.WriteLine("sorting directories");
         _directories.Sort();
         Console.WriteLine("rolling up dir sizes");
         TotalDirectories(_directories);
 
         // put trailing slash back in case 'root' path is root
-        if(path.EndsWith("\\"))
+        if (path.EndsWith("\\"))
         {
-            rootPath.directory = path;
-            rootPath.filesCount = _directories.ElementAt(0).filesCount;
-            rootPath.files = _directories.ElementAt(0).files;
-            rootPath.sizeGB = _directories.ElementAt(0).sizeGB;
-            rootPath.totalSizeGB = _directories.ElementAt(0).totalSizeGB;
-            _directories.RemoveAt(0);
-            _directories.Insert(0, rootPath);
+            _directories.ElementAt(0).directory = path;
         }
 
 #if DEBUG
@@ -349,50 +353,33 @@ public class dotNet
         return;
     }
 
-    private static void ParallelJob(string path)
+    private static void AddFiles(directoryInfo directoryInfo)
     {
-        _po.MaxDegreeOfParallelism = 8;
-        
-        Console.WriteLine("getting directories");
-        AddDirectories(path, _directories);
-
-        Console.WriteLine("adding files");
-        Parallel.ForEach(_directories, _po, (currentDirectory) =>
-         {
-             Debug.Print("Processing {0} on thread {1}", currentDirectory.directory, Thread.CurrentThread.ManagedThreadId);
-             AddFiles(currentDirectory.directory, _directories);
-         });
-
-    }
-
-    private static void AddFiles(string path, List<directoryInfo> directories)
-    {
-        Debug.Print("checking " + path);
+        Debug.Print("checking " + directoryInfo.directory);
 
         try
         {
-            List<FileInfo> filesList = new DirectoryInfo(path).GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
+            List<FileInfo> filesList = new DirectoryInfo(directoryInfo.directory).GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
             long sum = filesList.Sum(x => x.Length);
 
             if (sum > 0)
             {
-                directoryInfo directory = directories.First(x => x.directory == path);
-                directory.sizeGB = (float)sum / (1024 * 1024 * 1024);
-                directory.filesCount = filesList.Count;
-                if(_showFiles)
+                directoryInfo.sizeGB = (float)sum / (1024 * 1024 * 1024);
+                directoryInfo.filesCount = filesList.Count;
+                if (_showFiles)
                 {
-                    foreach(FileInfo file in filesList)
+                    foreach (FileInfo file in filesList)
                     {
-                        directory.files.Add(file.Name, file.Length);
+                        directoryInfo.files.Add(file.Name, file.Length);
                     }
 
-                    directory.files = new Dictionary<string, long>(directory.files.OrderByDescending(v => v.Value).ToDictionary(x => x.Key, x => x.Value));
+                    directoryInfo.files = new Dictionary<string, long>(directoryInfo.files.OrderByDescending(v => v.Value).ToDictionary(x => x.Key, x => x.Value));
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.Print("exception: " + path + ex.ToString());
+            Debug.Print("exception: " + directoryInfo + ex.ToString());
         }
     }
 
@@ -408,6 +395,7 @@ public class dotNet
             {
                 directoryInfo directory = new directoryInfo() { directory = dir };
                 directories.Add(directory);
+                _tasks.Add(Task.Run(() => { AddFiles(directory); }));
                 AddDirectories(dir, directories);
             }
         }
@@ -422,7 +410,7 @@ public class dotNet
         directoryInfo[] dirEnumerator = dInfo.ToArray();
         int index = 0;
         int firstMatchIndex = 0;
-        
+
         foreach (directoryInfo directory in dInfo)
         {
             Debug.Print("checking directory {0}", directory.directory);
@@ -447,7 +435,7 @@ public class dotNet
                 string dirToMatch = dirEnumerator[index].directory;
                 Debug.Print("checking match directory {0}", dirToMatch);
 
-                if(Regex.IsMatch(dirToMatch,pattern, RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(dirToMatch, pattern, RegexOptions.IgnoreCase))
                 {
                     if (!firstmatch)
                     {
