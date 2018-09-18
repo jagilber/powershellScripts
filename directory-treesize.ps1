@@ -283,6 +283,12 @@ public class dotNet
         uint hosize;
         uint losize = GetCompressedFileSizeW("\\\\?\\" + file.FullName, out hosize);
         long size;
+        if(losize == 4294967295 && hosize == 0)
+        {
+            // 0 byte file
+            return 0;
+        }
+
         size = (long)hosize << 32 | losize;
         return ((size + _clusterSize - 1) / _clusterSize) * _clusterSize;
     }
