@@ -369,8 +369,7 @@ public class dotNet
                 directoryInfo directory = new directoryInfo() { directory = dir };
                 directories.Add(directory);
                 FileAttributes att = new DirectoryInfo(dir).Attributes;
-                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint |
-                    (att & FileAttributes.NotContentIndexed) == FileAttributes.NotContentIndexed)
+                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
                 {
                     continue;
                 }
