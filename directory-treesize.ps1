@@ -261,6 +261,15 @@ using System.Runtime.InteropServices;
 
 public class dotNet
 {
+    [DllImport("kernel32.dll")]
+    static extern uint GetCompressedFileSizeW([In, MarshalAs(UnmanagedType.LPWStr)] string lpFileName,
+        [Out, MarshalAs(UnmanagedType.U4)] out uint lpFileSizeHigh);
+
+    [DllImport("kernel32.dll", SetLastError = true, PreserveSig = true)]
+    static extern int GetDiskFreeSpaceW([In, MarshalAs(UnmanagedType.LPWStr)] string lpRootPathName,
+       out uint lpSectorsPerCluster, out uint lpBytesPerSector, out uint lpNumberOfFreeClusters,
+       out uint lpTotalNumberOfClusters);
+
     public static uint _clusterSize;
 
     public static int _depth;
@@ -276,22 +285,6 @@ public class dotNet
     public static DateTime _timer;
 
     public static bool _uncompressed;
-
-    public static long GetFileSizeOnDisk(FileInfo file)
-    {
-        // https://stackoverflow.com/questions/3750590/get-size-of-file-on-disk
-        uint hosize;
-        uint losize = GetCompressedFileSizeW("\\\\?\\" + file.FullName, out hosize);
-        long size;
-        if(losize == 4294967295 && hosize == 0)
-        {
-            // 0 byte file
-            return 0;
-        }
-
-        size = (long)hosize << 32 | losize;
-        return ((size + _clusterSize - 1) / _clusterSize) * _clusterSize;
-    }
 
     public static void Main(string[] args)
     {
@@ -327,8 +320,9 @@ public class dotNet
 
         while (_tasks.Where(x => !x.IsCompleted).Count() > 0)
         {
+            _tasks.RemoveAll(x => x.IsCompleted);
             Debug.Print("sleeping");
-            Thread.Sleep(1000);
+            Thread.Sleep(100);
         }
 
         Console.WriteLine(string.Format("total files: {0} total directories: {1}", _directories.Sum(x => x.filesCount), _directories.Count));
@@ -444,14 +438,22 @@ public class dotNet
         return sectorsPerCluster * bytesPerSector;
     }
 
-    [DllImport("kernel32.dll")]
-    static extern uint GetCompressedFileSizeW([In, MarshalAs(UnmanagedType.LPWStr)] string lpFileName,
-   [Out, MarshalAs(UnmanagedType.U4)] out uint lpFileSizeHigh);
+    public static long GetFileSizeOnDisk(FileInfo file)
+    {
+        // https://stackoverflow.com/questions/3750590/get-size-of-file-on-disk
+        uint hosize;
+        uint losize = GetCompressedFileSizeW("\\\\?\\" + file.FullName, out hosize);
+        long size;
+        if (losize == 4294967295 && hosize == 0)
+        {
+            // 0 byte file
+            return 0;
+        }
 
-    [DllImport("kernel32.dll", SetLastError = true, PreserveSig = true)]
-    static extern int GetDiskFreeSpaceW([In, MarshalAs(UnmanagedType.LPWStr)] string lpRootPathName,
-       out uint lpSectorsPerCluster, out uint lpBytesPerSector, out uint lpNumberOfFreeClusters,
-       out uint lpTotalNumberOfClusters);
+        size = (long)hosize << 32 | losize;
+        return ((size + _clusterSize - 1) / _clusterSize) * _clusterSize;
+    }
+
 
     private static long GetSizeOnDisk(List<FileInfo> filesList)
     {
@@ -459,6 +461,12 @@ public class dotNet
 
         foreach (FileInfo fileInfo in filesList)
         {
+            if((fileInfo.Attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint |
+                (fileInfo.Attributes & FileAttributes.NotContentIndexed) == FileAttributes.NotContentIndexed)
+            {
+                continue;
+            }
+
             result += GetFileSizeOnDisk(fileInfo);
             Debug.Print("getsizeondisk: {0} {1}", result, fileInfo.FullName);
         }
