@@ -3,9 +3,6 @@
     powershell script to to enumerate directory summarizing in tree view directories over a given size
 
 .DESCRIPTION
-    To download and execute, run the following command in powershell:
-    iex (new-object net.webclient).DownloadString("http://aka.ms/directory-treesize.ps1")
-
     To download and execute with arguments:
     (new-object net.webclient).downloadfile("http://aka.ms/directory-treesize.ps1","c:\directory-treesize.ps1");
     c:\directory-treesize.ps1 c:\windows\system32
