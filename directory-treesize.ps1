@@ -368,6 +368,13 @@ public class dotNet
             {
                 directoryInfo directory = new directoryInfo() { directory = dir };
                 directories.Add(directory);
+                FileAttributes att = new DirectoryInfo(dir).Attributes;
+                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint |
+                    (att & FileAttributes.NotContentIndexed) == FileAttributes.NotContentIndexed)
+                {
+                    continue;
+                }
+
                 _tasks.Add(Task.Run(() => { AddFiles(directory); }));
                 AddDirectories(dir, directories);
                 /*
@@ -444,6 +451,7 @@ public class dotNet
         uint hosize;
         uint losize = GetCompressedFileSizeW("\\\\?\\" + file.FullName, out hosize);
         long size;
+
         if (losize == 4294967295 && hosize == 0)
         {
             // 0 byte file
@@ -461,12 +469,6 @@ public class dotNet
 
         foreach (FileInfo fileInfo in filesList)
         {
-            if((fileInfo.Attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint |
-                (fileInfo.Attributes & FileAttributes.NotContentIndexed) == FileAttributes.NotContentIndexed)
-            {
-                continue;
-            }
-
             result += GetFileSizeOnDisk(fileInfo);
             Debug.Print("getsizeondisk: {0} {1}", result, fileInfo.FullName);
         }
