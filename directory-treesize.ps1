@@ -103,14 +103,14 @@ function main()
     log-info "displaying $($directory) sub directories over -minSizeGB $($minSizeGB): files: $($totalFiles) directories: $($script:directories.Count)"
 
     $sortedBySize = $script:directorySizes -ge $minSizeGB | Sort-Object
-    $categorySize = [int]([math]::Floor($sortedBySize.Count / 6))
-    
-    if ($categorySize -lt 1)
+        
+    if ($sortedBySize.Count -lt 1)
     {
         log-info "no directories found! exiting" -foregroundColor Yellow
         exit
     }
 
+    $categorySize = [int]([math]::Floor([math]::max(1,$sortedBySize.Count) / 6))
     $redmin = $sortedBySize[($categorySize * 6) - 1]
     $darkredmin = $sortedBySize[($categorySize * 5) - 1]
     $yellowmin = $sortedBySize[($categorySize * 4) - 1]
