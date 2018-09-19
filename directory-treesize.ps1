@@ -250,6 +250,11 @@ function log-info($data, [switch]$debug, $foregroundColor = "White")
         write-host $data -ForegroundColor $foregroundColor
     }
 
+    if($InformationPreference -ieq "continue")
+    {
+        Write-Information $data
+    }
+
     if ($logFile)
     {
         if ($script:logStream -eq $null)
