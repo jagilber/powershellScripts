@@ -371,8 +371,6 @@ public class dotNet
 
             foreach (string dir in subDirectories)
             {
-                directoryInfo directory = new directoryInfo() { directory = dir };
-                
                 FileAttributes att = new DirectoryInfo(dir).Attributes;
 
                 if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint
@@ -381,8 +379,7 @@ public class dotNet
                     continue;
                 }
 
-                // directory.directoriesCount = Directory.GetDirectories(path).Count();
-
+                directoryInfo directory = new directoryInfo() { directory = dir };
                 directories.Add(directory);
                 _tasks.Add(Task.Run(() => { AddFiles(directory); }));
                 AddDirectories(dir, directories);
@@ -403,6 +400,7 @@ public class dotNet
         {
             DirectoryInfo dInfo = new DirectoryInfo(directoryInfo.directory);
             List<FileInfo> filesList = dInfo.GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
+            directoryInfo.directoriesCount = dInfo.GetDirectories().Count();
 
             if (_uncompressed)
             {
@@ -417,7 +415,7 @@ public class dotNet
             {
                 directoryInfo.sizeGB = (float)sum / (1024 * 1024 * 1024);
                 directoryInfo.filesCount = filesList.Count;
-                directoryInfo.directoriesCount = dInfo.GetDirectories().Count();
+
 
                 if (_showFiles)
                 {
