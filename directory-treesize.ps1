@@ -34,6 +34,9 @@
 .PARAMETER depth
     number of directory levels to display
 
+.PARAMETER detail
+    display additional file / directory detail
+
 .PARAMETER directory
     directory to enumerate
 
@@ -64,9 +67,10 @@
 
 [cmdletbinding()]
 param(
-    $directory = (get-location).path,
+    [string]$directory = (get-location).path,
     [float]$minSizeGB = .01,
     [int]$depth = 99,
+    [switch]$detail,
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
@@ -107,7 +111,7 @@ function main()
         exit
     }
 
-    $categorySize = [int]([math]::Floor([math]::max(1,$sortedBySize.Count) / 6))
+    $categorySize = [int]([math]::Floor([math]::max(1, $sortedBySize.Count) / 6))
     $redmin = $sortedBySize[($categorySize * 6) - 1]
     $darkredmin = $sortedBySize[($categorySize * 5) - 1]
     $yellowmin = $sortedBySize[($categorySize * 4) - 1]
@@ -128,12 +132,13 @@ function main()
 
 function enumerate-directorySizes($directorySizesIndex, $previousDir)
 {
-    $sortedDir = $script:directories[$directorySizesIndex].directory
-    log-info -debug -data "checking dir $($script:directories[$directorySizesIndex].directory) previous dir $($previousDir) tree index $($directorySizesIndex)"
-    [float]$size = $script:directories[$directorySizesIndex].totalsizeGB
-    log-info -debug -data "rollup size: $($sortedDir) $([float]$size)"
+    $currentIndex = $script:directories[$directorySizesIndex]
+    $sortedDir = $currentIndex.directory
+    log-info -debug -data "checking dir $($currentIndex.directory) previous dir $($previousDir) tree index $($directorySizesIndex)"
+    [float]$totalSizeGB = $currentIndex.totalsizeGB
+    log-info -debug -data "rollup size: $($sortedDir) $([float]$totalSizeGB)"
 
-    switch ([float]$size)
+    switch ([float]$totalSizeGB)
     {
         {$_ -ge $redmin}
         {
@@ -186,11 +191,11 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
             if ($directorySizesIndex -eq 0)
             {
                 # set root to files in root dir
-                $percentSize = $script:directories[$directorySizesIndex].sizeGB / $totalFilesSize
+                $percentSize = $currentIndex.sizeGB / $totalFilesSize
             }
             else 
             {
-                $percentSize = $size / $totalFilesSize
+                $percentSize = $totalSizeGB / $totalFilesSize
             }
 
             $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(10))]"
@@ -202,12 +207,24 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
     {
         $output = $sortedDir
     }
-    
-    log-info "$($output)`t$(($size).ToString(`"F3`")) GB" -ForegroundColor $foreground
+
+    if ($detail)
+    {
+        log-info ("$($output)" `
+            + "`tsize:$(($totalSizeGB).ToString(`"F3`")) GB" `
+            + " files:$($currentIndex.filesCount)" `
+            + " dirs:$($currentIndex.directoriesCount)" `
+            + " /files:$($currentIndex.totalFilesCount)" `
+            + " /dirs:$($currentIndex.totalDirectoriesCount)") -ForegroundColor $foreground
+    }
+    else
+    {
+        log-info "$($output)`t$(($totalSizeGB).ToString(`"F3`")) GB" -ForegroundColor $foreground
+    }
 
     if ($showFiles)
     {
-        foreach ($file in ($script:directories[$directorySizesIndex].files).getenumerator())
+        foreach ($file in ($currentIndex.files).getenumerator())
         {
             log-info ("$(' '*($output.length))$([int64]::Parse($file.value).tostring("N0").padleft(15))`t$($file.key)") -foregroundColor cyan
         }
@@ -350,7 +367,8 @@ public class dotNet
 
         try
         {
-            List<string> subDirectories = Directory.GetDirectories(path).ToList();
+            List<string> subDirectories = Directory.GetDirectories(path,"*", SearchOption.TopDirectoryOnly).ToList();
+            directories.First(x => x.directory == path).directoriesCount = subDirectories.Count;
 
             foreach (string dir in subDirectories)
             {
@@ -504,6 +522,11 @@ public class dotNet
                         firstmatch = true;
                         firstMatchIndex = index;
                     }
+                    else
+                    {
+                        directory.totalDirectoriesCount += dirEnumerator[index].directoriesCount;
+                        directory.totalFilesCount += dirEnumerator[index].filesCount;
+                    }
 
                     directory.totalSizeGB += dirEnumerator[index].sizeGB;
                 }
@@ -522,9 +545,12 @@ public class dotNet
     public class directoryInfo : IComparable<directoryInfo>
     {
         public string directory;
+        public int directoriesCount;
         public Dictionary<string, long> files = new Dictionary<string, long>();
         public int filesCount;
         public float sizeGB;
+        public int totalDirectoriesCount;
+        public int totalFilesCount;
         public float totalSizeGB;
 
         int IComparable<directoryInfo>.CompareTo(directoryInfo other)
