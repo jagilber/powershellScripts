@@ -36,6 +36,8 @@
 
 .PARAMETER detail
     display additional file / directory detail
+    output: path, total size of files in path, files in current directory / sub directories, directories in current directory / sub directories 
+    example: g:\ size:184.209 GB files:5/98053 dirs:10/19387
 
 .PARAMETER directory
     directory to enumerate
@@ -212,10 +214,8 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
     {
         log-info ("$($output)" `
             + "`tsize:$(($totalSizeGB).ToString(`"F3`")) GB" `
-            + " files:$($currentIndex.filesCount)" `
-            + " dirs:$($currentIndex.directoriesCount)" `
-            + " /files:$($currentIndex.totalFilesCount)" `
-            + " /dirs:$($currentIndex.totalDirectoriesCount)") -ForegroundColor $foreground
+            + " files:$($currentIndex.filesCount)/$($currentIndex.totalFilesCount)" `
+            + " dirs:$($currentIndex.directoriesCount)/$($currentIndex.totalDirectoriesCount)") -ForegroundColor $foreground
     }
     else
     {
