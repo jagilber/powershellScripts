@@ -460,7 +460,7 @@ public class dotNet
     {
         // https://stackoverflow.com/questions/3750590/get-size-of-file-on-disk
         uint hosize;
-        uint losize = GetCompressedFileSizeW("\\\\?\\" + file.FullName, out hosize);
+        uint losize = GetCompressedFileSizeW(file.FullName.StartsWith("\\\\") ? file.FullName : "\\\\?\\" + file.FullName, out hosize);
         long size;
 
         if (losize == 4294967295 && hosize == 0)
