@@ -343,7 +343,7 @@ public class dotNet
         // put trailing slash back in case 'root' path is root
         if (path.EndsWith("\\"))
         {
-            _directories.ElementAt(0).directory = path;
+           _directories.ElementAt(0).directory = path;
         }
 
 #if DEBUG
@@ -367,20 +367,23 @@ public class dotNet
 
         try
         {
-            List<string> subDirectories = Directory.GetDirectories(path,"*", SearchOption.TopDirectoryOnly).ToList();
-            directories.First(x => x.directory == path).directoriesCount = subDirectories.Count;
+            List<string> subDirectories = Directory.GetDirectories(path).ToList();
 
             foreach (string dir in subDirectories)
             {
                 directoryInfo directory = new directoryInfo() { directory = dir };
-                directories.Add(directory);
+                
                 FileAttributes att = new DirectoryInfo(dir).Attributes;
 
-                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
+                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint
+                    | (att & FileAttributes.System) == FileAttributes.System)
                 {
                     continue;
                 }
 
+                // directory.directoriesCount = Directory.GetDirectories(path).Count();
+
+                directories.Add(directory);
                 _tasks.Add(Task.Run(() => { AddFiles(directory); }));
                 AddDirectories(dir, directories);
             }
@@ -398,7 +401,8 @@ public class dotNet
 
         try
         {
-            List<FileInfo> filesList = new DirectoryInfo(directoryInfo.directory).GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
+            DirectoryInfo dInfo = new DirectoryInfo(directoryInfo.directory);
+            List<FileInfo> filesList = dInfo.GetFileSystemInfos().Where(x => (x is FileInfo)).Cast<FileInfo>().ToList();
 
             if (_uncompressed)
             {
@@ -413,6 +417,7 @@ public class dotNet
             {
                 directoryInfo.sizeGB = (float)sum / (1024 * 1024 * 1024);
                 directoryInfo.filesCount = filesList.Count;
+                directoryInfo.directoriesCount = dInfo.GetDirectories().Count();
 
                 if (_showFiles)
                 {
