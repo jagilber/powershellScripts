@@ -48,6 +48,9 @@
 .PARAMETER minSizeGB
     minimum size of directory / file to display in GB
 
+.PARAMETER noColor
+    output in default foreground color only
+
 .PARAMETER noTree
     output complete directory and file paths
 
@@ -73,6 +76,7 @@ param(
     [float]$minSizeGB = .01,
     [int]$depth = 99,
     [switch]$detail,
+    [switch]$noColor,
     [switch]$notree,
     [switch]$showFiles,
     [string]$logFile,
@@ -243,6 +247,11 @@ function log-info($data, [switch]$debug, $foregroundColor = "White")
     if ($debug)
     {
         $foregroundColor = "Yellow"
+    }
+
+    if($noColor)
+    {
+        $foregroundColor = "White"
     }
 
     if (!$quiet)
