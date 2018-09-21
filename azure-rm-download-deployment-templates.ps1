@@ -10,35 +10,33 @@ param(
 $outputDir = $outputDir + "\armDeploymentTemplates"
 $ErrorActionPreference = "silentlycontinue"
 
-    # authenticate
+# authenticate
+try
+{
+    $tenants = @(Get-AzureRmTenant)
+                
+    if ($tenants)
+    {
+        write-host "auth passed $($tenants.Count)"
+    }
+    else
+    {
+        write-host "auth error $($tenants)" -ForegroundColor Yellow
+        return
+    }
+}
+catch
+{
     try
     {
-        $tenants = @(Get-AzureRmTenant)
-                
-        if ($tenants)
-        {
-            write-host "auth passed $($tenants.Count)"
-        }
-        else
-        {
-            write-host "auth error $($tenants)" -ForegroundColor Yellow
-            return
-        }
+        Add-AzureRmAccount
     }
     catch
     {
-        try
-        {
-            Add-AzureRmAccount
-        }
-        catch
-        {
-            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
-            return
-        }
+        write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+        return
     }
-
-
+}
 
 New-Item -ItemType Directory $outputDir -ErrorAction SilentlyContinue
 Get-AzureRmDeployment | Save-AzureRmDeploymentTemplate -Path $outputDir -Force
