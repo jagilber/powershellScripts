@@ -387,8 +387,7 @@ public class dotNet
             {
                 FileAttributes att = new DirectoryInfo(dir).Attributes;
 
-                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint
-                    | (att & FileAttributes.System) == FileAttributes.System)
+                if ((att & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
                 {
                     continue;
                 }
