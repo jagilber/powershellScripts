@@ -35,7 +35,7 @@ function main ()
             #-TenantId $tenantId
         }
 
-        $tenantId = (Get-AzureRmSubscription).TenantId
+        $tenantId = (Get-AzureRmContext).TenantId
     }
 
     $data = $null
