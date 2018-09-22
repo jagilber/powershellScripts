@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     To download and execute with arguments:
-    (new-object net.webclient).downloadfile("http://aka.ms/directory-treesize.ps1","c:\directory-treesize.ps1");
+    (new-object net.webclient).downloadfile("http://aka.ms/directory-treesize.ps1","$(get-location)\directory-treesize.ps1");
     c:\directory-treesize.ps1 c:\windows\system32
 
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
