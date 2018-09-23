@@ -73,7 +73,7 @@ function main()
         $uri = "https://$($env:Computername)/$($aadDisplayName)"
     }
 
-    $tenantId = (Get-AzureRmSubscription).TenantId
+    $tenantId = (Get-AzureRmContext).TenantId
 
     if ((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName -ErrorAction SilentlyContinue))
     {

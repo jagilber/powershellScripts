@@ -83,8 +83,8 @@ function main()
         write-host "rerun script with clientid and clientsecret or thumbprint arguments"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
         write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)"
-        write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$(get-location)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Yellow
-        write-host "c:\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Yellow
+        write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$($currentDir)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Yellow
+        write-host "$($currentDir)\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Yellow
         write-host "output will contain clientid and clientsecret (thumbprint)"
         write-host "see for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
 
