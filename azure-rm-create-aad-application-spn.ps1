@@ -188,13 +188,13 @@ function main()
     } 
 
     $app
-    write-host "application id: $($app.ApplicationId)"
-    write-host "tenant id: $($tenantId)"
-    write-host "application identifier Uri: $($uri)"
-    write-host "keyValue: $($keyValue)"
-    write-host "clientsecret: $($clientsecret)"
-    write-host "thumbprint: $($thumbprint)"
-    write-host "pfx path: $($pfxPath)"
+    write-host "application id: $($app.ApplicationId)" -ForegroundColor Cyan
+    write-host "tenant id: $($tenantId)" -ForegroundColor Cyan
+    write-host "application identifier Uri: $($uri)" -ForegroundColor Cyan
+    write-host "keyValue: $($keyValue)" -ForegroundColor Cyan
+    write-host "clientsecret: $($clientsecret)" -ForegroundColor Cyan
+    write-host "thumbprint: $($thumbprint)" -ForegroundColor Cyan
+    write-host "pfx path: $($pfxPath)" -ForegroundColor Cyan
     $global:thumbprint = $thumbprint
     $global:applicationId = $app.Applicationid
     $global:tenantId = $tenantId
