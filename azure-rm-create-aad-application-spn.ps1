@@ -194,6 +194,7 @@ function main()
     write-host "keyValue: $($keyValue)"
     write-host "clientsecret: $($clientsecret)"
     write-host "thumbprint: $($thumbprint)"
+    write-host "pfx path: $($pfxPath)"
     $global:thumbprint = $thumbprint
     $global:applicationId = $app.Applicationid
     $global:tenantId = $tenantId
