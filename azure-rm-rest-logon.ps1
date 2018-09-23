@@ -16,7 +16,6 @@ param(
 $ErrorActionPreference = "stop"
 $error.Clear()
 
-
 function main ()
 {
     if (!$tenantId)
@@ -92,8 +91,9 @@ function main ()
     $clientSecret
 
     $token = Invoke-RestMethod @params -Verbose -Debug
-    $token | format-list *
+    #$token | format-list *
     $global:token = $token
+    Write-Output $global:token
 }
 
 main

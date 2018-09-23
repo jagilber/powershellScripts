@@ -1,23 +1,36 @@
-﻿$token = $Global:token
-$SubscriptionID = (Get-AzureRmSubscription).Id
-$baseURI = "https://management.azure.com" 
-$suffixURI = "?api-version=2016-09-01" 
-$SubscriptionURI = $baseURI + "/subscriptions/$($SubscriptionID)" + $suffixURI
-$uri = $SubscriptionURI 
- $Body = @{
-        'client_id'     = $applicationId
-    }
+﻿param(
+    $token = $Global:token,
+    $SubscriptionID = (Get-AzureRmContext).Subscription.Id,
+    $apiVersion = "2016-09-01",
+    $baseURI = "https://management.azure.com/subscriptions/$($SubscriptionID)/",
+    $query,
+    $arguments,
+    [ValidateSet("get","post","put")]
+    $method = "get",
+    [ValidateSet('application/x-www-form-urlencoded','application/json')]
+    $contentType = 'application/json',
+    $body=@{}
+)
+
+$uri = $baseURI + $query + "?api-version=" + $apiVersion + $arguments
+$uri
+
 $params = @{ 
-    ContentType = 'application/x-www-form-urlencoded'
+    ContentType = $contentType
     Headers     = @{
         'authorization' = "Bearer $($Token.access_token)" 
         'accept' = 'application/json'
+        'client_id' = $applicationId
     }
-    Method      = 'Get' 
+
+    Method      = $method 
     uri         = $uri
-    Body = $Body
+    Body = $body
 } 
+
+$params
+
 $response = Invoke-RestMethod @params -Verbose -Debug
-$response
 $global:response = $response
-$global:response.value.properties | ConvertTo-Json
+write-host (ConvertTo-Json -Depth 99 ($global:response))
+Write-Output $global:response

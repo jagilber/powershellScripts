@@ -73,7 +73,7 @@ function main()
     {
         foreach($rg in $resourceGroups)
         {
-            out-file -InputObject (convertto-json get-CurrentConfig) -FilePath "$($outputDir)\$($rg)\current.json" -Force
+            out-file -InputObject (convertto-json (get-CurrentConfig -rg $rg)) -FilePath "$($outputDir)\$($rg)\current.json" -Force
         }
     }
     else
@@ -82,25 +82,32 @@ function main()
         write-host "to get the current running configuration ('automation script' in portal), use portal, or"
         write-host "rerun script with clientid and clientsecret or thumbprint arguments"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
+        write-host "output will contain clientid and clientsecret (thumbprint)"
+        write-host "see link for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
+
         write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)"
         write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$($currentDir)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Yellow
         write-host "$($currentDir)\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Yellow
-        write-host "output will contain clientid and clientsecret (thumbprint)"
-        write-host "see for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
-
     }
 }
 
-function get-CurrentConfig()
+function get-CurrentConfig($rg)
 {
+    $url = "https://management.azure.com/subscriptions/$((get-azurermcontext).subscription.id)/resourcegroups/$($rg)/exportTemplate?api-version=2018-02-01"
+    $url
+
     if($thumbprint)
     {
-        return convertto-json (Invoke-RestMethod -Method Get -Uri "https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate" -CertificateThumbprint $thumbprint) 
+
+        $results =  convertto-json (Invoke-RestMethod -Method Post -Uri $url -CertificateThumbprint $thumbprint) 
+        #POST https://management.azure.com/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/exportTemplate?api-version=2018-02-01
     }
     else
     {
-#        return convertto-json (Invoke-RestMethod -Method Get -Uri "https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate" ) 
+#        $results =  convertto-json (Invoke-RestMethod -Method Get -Uri "https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate" ) 
     }
+
+    return $results
 }
 
 function check-authentication()
