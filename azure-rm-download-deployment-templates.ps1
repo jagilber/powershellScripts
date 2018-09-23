@@ -100,6 +100,13 @@ function main()
             $results = get-CurrentConfig -rg $rg
             $results
             out-file -InputObject $results -FilePath "$($outputDir)\$($rg)\current.json" -Force
+
+            if($useGit)
+            {
+                git add -A
+                git commit -a -m "$($rg) current config $((get-date).tostring("o"))"
+            }
+
         }
     }
     else
