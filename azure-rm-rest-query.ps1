@@ -15,6 +15,13 @@
 $uri = $baseURI + $query + "?api-version=" + $apiVersion + $arguments
 $uri
 
+if($contentType -imatch "json")
+{
+    $body = convertto-json $body
+}
+
+$body
+
 $params = @{ 
     ContentType = $contentType
     Headers     = @{

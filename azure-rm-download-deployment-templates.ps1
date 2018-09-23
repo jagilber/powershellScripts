@@ -14,15 +14,20 @@ param(
     [string[]]$resourceGroups,
     [string]$clientId,
     [string]$clientSecret,
-    [string]$thumbprint,
-    [switch]$useGit
+    [switch]$useGit,
+    [switch]$currentOnly
 )
 
 $outputDir = $outputDir + "\armDeploymentTemplates"
 $ErrorActionPreference = "silentlycontinue"
-$getCurrentConfig = $clientId + $clientSecret + $thumbprint -gt 0
+$getCurrentConfig = $clientId + $clientSecret -gt 0
 $currentdir = (get-location).path
 $error.Clear()
+$repo = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/"
+$restLogonScript = "$($currentDir)\azure-rm-rest-logon.ps1"
+$restQueryScript = "$($currentDir)\azure-rm-rest-query.ps1"
+$global:token = $Null
+
 function main()
 {
     check-authentication
@@ -47,40 +52,61 @@ function main()
         $resourceGroups = @((Get-AzureRmResourceGroup).ResourceGroupName)
     }
 
-    $deployments = (Get-AzureRmResourceGroup) | Where-Object ResourceGroupName -imatch ($resourceGroups -join "|") | Get-AzureRmResourceGroupDeployment
 
-    foreach($dep in ($deployments | sort-object -Property Timestamp))
+    if(!$currentOnly)
     {
-        $rg = $dep.ResourceGroupName
-        $rgDir = "$($outputDir)\$($rg)"
-        New-Item -ItemType Directory $rgDir -ErrorAction SilentlyContinue
+        $deployments = (Get-AzureRmResourceGroup) | Where-Object ResourceGroupName -imatch ($resourceGroups -join "|") | Get-AzureRmResourceGroupDeployment
 
-        $baseFile = "$($rgDir)\$($dep.deploymentname)"
-        Save-AzureRmResourceGroupDeploymentTemplate -Path "$($baseFile).template.json" -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
-        out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($baseFile).parameters.json" -Force
-
-        $operations = Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg
-        out-file -Encoding ascii -InputObject (convertto-json $operations -Depth 99) -FilePath "$($baseFile).operations.json" -Force
-
-        if($useGit)
+        foreach($dep in ($deployments | sort-object -Property Timestamp))
         {
-            git add -A
-            git commit -a -m "$($rg) $($dep.deploymentname) $($dep.TimeStamp) $($dep.ProvisioningState)`n$($dep.outputs | fl * | out-string)" --date (($dep.TimeStamp).ToString("o"))
+            $rg = $dep.ResourceGroupName
+            $rgDir = "$($outputDir)\$($rg)"
+            New-Item -ItemType Directory $rgDir -ErrorAction SilentlyContinue
+
+            $baseFile = "$($rgDir)\$($dep.deploymentname)"
+            Save-AzureRmResourceGroupDeploymentTemplate -Path "$($baseFile).template.json" -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
+            out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($baseFile).parameters.json" -Force
+
+            $operations = Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg
+            out-file -Encoding ascii -InputObject (convertto-json $operations -Depth 99) -FilePath "$($baseFile).operations.json" -Force
+
+            if($useGit)
+            {
+                git add -A
+                git commit -a -m "$($rg) $($dep.deploymentname) $($dep.TimeStamp) $($dep.ProvisioningState)`n$($dep.outputs | fl * | out-string)" --date (($dep.TimeStamp).ToString("o"))
+            }
         }
     }
-    
+
     if($getCurrentConfig)
     {
+        
+        if(!(test-path $restLogonScript))
+        {
+            get-update -destinationFile $restLogonScript -updateUrl "$($repo)$([io.path]::GetFileName($restLogonScript))"
+        }
+      
+        if(!(test-path $restQueryScript))
+        {
+            get-update -destinationFile $restQueryScript -updateUrl "$($repo)$([io.path]::GetFileName($restQueryScript))"
+        }
+
+        $global:token = Invoke-Expression "$($restLogonScript) -clientSecret $($clientSecret) -applicationId $($clientId)" 
+        $global:token
+
         foreach($rg in $resourceGroups)
         {
-            out-file -InputObject (convertto-json (get-CurrentConfig -rg $rg)) -FilePath "$($outputDir)\$($rg)\current.json" -Force
+            New-Item -Path "$($outputDir)\$($rg)" -ItemType Directory -ErrorAction SilentlyContinue
+            $results = get-CurrentConfig -rg $rg
+            $results
+            out-file -InputObject $results -FilePath "$($outputDir)\$($rg)\current.json" -Force
         }
     }
     else
     {
         write-warning "this information does *not* include the currently running confiruration, only the last deployments. example no changes made in portal after deployment"
         write-host "to get the current running configuration ('automation script' in portal), use portal, or"
-        write-host "rerun script with clientid and clientsecret or thumbprint arguments"
+        write-host "rerun script with clientid and clientsecret"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
         write-host "output will contain clientid and clientsecret (thumbprint)"
         write-host "see link for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
@@ -91,23 +117,64 @@ function main()
     }
 }
 
+function get-update($updateUrl, $destinationFile)
+{
+    write-host "get-update:checking for updated script: $($updateUrl)"
+    $file = ""
+    $git = $null
+
+    try 
+    {
+        $git = Invoke-RestMethod -UseBasicParsing -Method Get -Uri $updateUrl 
+
+        # git may not have carriage return
+        # reset by setting all to just lf
+        $git = [regex]::Replace($git, "`r`n","`n")
+        # add cr back
+        $git = [regex]::Replace($git, "`n", "`r`n")
+
+        if ([IO.File]::Exists($destinationFile))
+        {
+            $file = [IO.File]::ReadAllText($destinationFile)
+        }
+
+        if (([string]::Compare($git, $file) -ne 0))
+        {
+            write-host "copying script $($destinationFile)"
+            [IO.File]::WriteAllText($destinationFile, $git)
+            return $true
+        }
+        else
+        {
+            write-host "script is up to date"
+        }
+        
+        return $false
+    }
+    catch [System.Exception] 
+    {
+        write-host "get-update:exception: $($error)"
+        $error.Clear()
+        return $false    
+    }
+}
+
+
 function get-CurrentConfig($rg)
 {
     $url = "https://management.azure.com/subscriptions/$((get-azurermcontext).subscription.id)/resourcegroups/$($rg)/exportTemplate?api-version=2018-02-01"
-    $url
+    write-host $url
+    $body = "@{'options'='IncludeParameterDefaultValue, IncludeComments';'resources' = @('*')}"
+    $command = "$($restQueryScript) -query `"resourcegroups/$($rg)/exportTemplate`" -apiVersion `"2018-02-01`" -method post -body " + $body
+    write-host $command 
+    $results = invoke-expression $command
 
-    if($thumbprint)
+    if($results.error)
     {
-
-        $results =  convertto-json (Invoke-RestMethod -Method Post -Uri $url -CertificateThumbprint $thumbprint) 
-        #POST https://management.azure.com/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/exportTemplate?api-version=2018-02-01
-    }
-    else
-    {
-#        $results =  convertto-json (Invoke-RestMethod -Method Get -Uri "https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate" ) 
+        write-warning (convertto-json ($results.error))
     }
 
-    return $results
+    return [Text.RegularExpressions.Regex]::Unescape((convertto-json ($results.template) -Depth 99))
 }
 
 function check-authentication()
