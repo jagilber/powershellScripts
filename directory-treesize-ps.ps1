@@ -84,12 +84,18 @@ $script:directories = @()
 $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
+$pathSeparator = "\"
 
 function main()
 {
     log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "all sizes in GB and are 'uncompressed' and *not* size on disk. enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
+
+    if($directory.Contains("/"))
+    {
+        $pathSeparator = "/"
+    }
 
     $script:directories = @((Get-ChildItem -Directory -Path $directory -Depth $depth -Force -ErrorAction SilentlyContinue).FullName)
     $totalFiles = 0
@@ -199,7 +205,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
 
     [float]$size = 0
 
-    $pattern = "$([regex]::Escape($sortedDir))(\\|$)"
+    $pattern = "$([regex]::Escape($sortedDir))(\\|/|$)"
     $continueCheck = $true
     $firstmatch = $false
     $i = $script:foundtreeIndex
@@ -280,13 +286,13 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
 
     if (!$notree)
     {
-        while (!$sortedDir.Contains("$($previousDir)\"))
+        while (!$sortedDir.Contains("$($previousDir)$($pathSeparator)"))
         {
             $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
             log-info -debug -data "checking previous dir: $($previousDir)"
         }
 
-        $output = $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
+        $output = $sortedDir.Replace("$($previousDir)$($pathSeparator)", "$(`" `" * $previousDir.Length)$($pathSeparator)")
     }
     else
     {

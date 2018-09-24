@@ -64,7 +64,9 @@
     show percent graph
 
 .PARAMETER uncompressed
-    show file length instead of size on disk. slightly faster and does not use pinvoke
+    for windows file length is used instead of size on disk. this will show higher disk used but does *not* use pinvoke to kernel32
+    uncompressed switch makes script pwsh compatible and is enabled by default when path contains '/'
+    tested on ubuntu 18.04
 
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1
@@ -95,12 +97,19 @@ $script:directories = @()
 $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
-
+$pathSeparator = "\"
+$isWin32 = $psversiontable.psversion -gt 6 -and $psversiontable.Platform -inotcontains "win"
 function main()
 {
     log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
+
+    if($directory.Contains("/") -or !$isWin32)
+    {
+        $pathSeparator = "/"
+        $uncompressed = $true
+    }
 
     [dotNet]::Start($directory, $minSizeGB, $depth, [bool]$showFiles, [bool]$uncompressed)
     $script:directories = [dotnet]::_directories
@@ -184,7 +193,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
 
     if (!$notree)
     {
-        while (!$sortedDir.Contains("$($previousDir)\"))
+        while (!$sortedDir.Contains("$($previousDir)$($pathSeparator)"))
         {
             $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
             log-info -debug -data "checking previous dir: $($previousDir)"
@@ -207,7 +216,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
             $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(10))]"
         }
 
-        $output = $percent + $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
+        $output = $percent + $sortedDir.Replace("$($previousDir)$($pathSeparator)", "$(`" `" * $previousDir.Length)$($pathSeparator)")
     }
     else
     {
@@ -223,7 +232,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
     }
     else
     {
-        log-info "$($output)`t$(($totalSizeGB).ToString(`"F3`")) GB" -ForegroundColor $foreground
+        log-info "$($output) `t$(($totalSizeGB).ToString(`"F3`")) GB" -ForegroundColor $foreground
     }
 
     if ($showFiles)
@@ -279,7 +288,6 @@ function log-info($data, [switch]$debug, $foregroundColor = "White")
 $code = @'
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -306,19 +314,9 @@ public class dotNet
     public static List<Task> _tasks;
     public static DateTime _timer;
     public static bool _uncompressed;
+    public static string _pathSeparator = @"\";
 
-    public static void Main(string[] args)
-    {
-        if (args.Length > 0)
-        {
-            Start(args[0], float.Parse(args[1]), Convert.ToInt32(args[2]), Convert.ToBoolean(args[3]), Convert.ToBoolean(args[4]));
-        }
-        else
-        {
-            Console.WriteLine("supply arguments path minsizegb depth showfiles uncompressed");
-        }
-    }
-
+    public static void Main() { }
     public static void Start(string path, float minSizeGB = 0.01f, int depth = 99, bool showFiles = false, bool uncompressed = false)
     {
         _directories = new List<directoryInfo>();
@@ -326,12 +324,22 @@ public class dotNet
         _showFiles = showFiles;
         _tasks = new List<Task>();
         _uncompressed = uncompressed;
-        _clusterSize = GetClusterSize(path);
-        _depth = depth + path.Split('\\').Count();
         _minSizeGB = minSizeGB;
 
+        if(path.Contains("/"))
+        {
+            _pathSeparator = "/";
+        }
+
+        _depth = depth + path.Split(_pathSeparator.ToCharArray()).Count();
+
+        if (!_uncompressed)
+        {
+            _clusterSize = GetClusterSize(path);
+        }
+
         // add 'root' path
-        directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd('\\') };
+        directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd(_pathSeparator.ToCharArray()) };
         _directories.Add(rootPath);
         _tasks.Add(Task.Run(() => { AddFiles(rootPath); }));
 
@@ -342,7 +350,6 @@ public class dotNet
         while (_tasks.Where(x => !x.IsCompleted).Count() > 0)
         {
             _tasks.RemoveAll(x => x.IsCompleted);
-            Debug.Print("sleeping");
             Thread.Sleep(100);
         }
 
@@ -355,30 +362,17 @@ public class dotNet
         FilterDirectories(_directories);
 
         // put trailing slash back in case 'root' path is root
-        if (path.EndsWith("\\"))
+        if (path.EndsWith(_pathSeparator))
         {
            _directories.ElementAt(0).directory = path;
         }
 
-#if DEBUG
-        Console.WriteLine(string.Format("directory,size,totalSize,totalFiles"));
-        foreach (directoryInfo d in _directories)
-        {
-            Console.WriteLine(string.Format("{0},{1},{2},{3}", d.directory, d.sizeGB, d.totalSizeGB, d.filesCount));
-            foreach (KeyValuePair<string, long> fileInfo in d.files)
-            {
-                Console.WriteLine(string.Format("\t\t{0}\t\t{1}", fileInfo.Value, fileInfo.Key));
-            }
-        }
-#endif
         Console.WriteLine(string.Format("Processing complete. minutes: {0:F3} filtered directories: {1}", (DateTime.Now - _timer).TotalMinutes, _directories.Count));
         return;
     }
 
     private static void AddDirectories(string path, List<directoryInfo> directories)
     {
-        Debug.Print("checking " + path);
-
         try
         {
             List<string> subDirectories = Directory.GetDirectories(path).ToList();
@@ -398,15 +392,11 @@ public class dotNet
                 AddDirectories(dir, directories);
             }
         }
-        catch (Exception ex)
-        {
-            Debug.Print("exception: " + ex.ToString());
-        }
+        catch { }
     }
 
     private static void AddFiles(directoryInfo directoryInfo)
     {
-        Debug.Print("checking " + directoryInfo.directory);
         long sum = 0;
 
         try
@@ -441,15 +431,12 @@ public class dotNet
                 }
             }
         }
-        catch (Exception ex)
-        {
-            Debug.Print("exception: " + directoryInfo + ex.ToString());
-        }
+        catch { }
     }
 
     private static void FilterDirectories(List<directoryInfo> directories)
     {
-        _directories = directories.Where(x => x.totalSizeGB >= _minSizeGB & (x.directory.Split('\\').Count() <= _depth)).ToList();
+        _directories = directories.Where(x => x.totalSizeGB >= _minSizeGB & (x.directory.Split(_pathSeparator.ToCharArray()).Count() <= _depth)).ToList();
     }
 
     private static uint GetClusterSize(string fullName)
@@ -473,7 +460,8 @@ public class dotNet
     {
         // https://stackoverflow.com/questions/3750590/get-size-of-file-on-disk
         uint hosize;
-        uint losize = GetCompressedFileSizeW(file.FullName.StartsWith("\\\\") ? file.FullName : "\\\\?\\" + file.FullName, out hosize);
+        string name = file.FullName.StartsWith("\\\\") ? file.FullName : "\\\\?\\" + file.FullName;
+        uint losize = GetCompressedFileSizeW(name, out hosize);
         long size;
 
         if (losize == 4294967295 && hosize == 0)
@@ -493,7 +481,6 @@ public class dotNet
         foreach (FileInfo fileInfo in filesList)
         {
             result += GetFileSizeOnDisk(fileInfo);
-            Debug.Print("getsizeondisk: {0} {1}", result, fileInfo.FullName);
         }
 
         return result;
@@ -507,11 +494,9 @@ public class dotNet
 
         foreach (directoryInfo directory in dInfo)
         {
-            Debug.Print("checking directory {0}", directory.directory);
 
             if (directory.totalSizeGB > 0)
             {
-                Debug.Print("warning: total size already populated {0}: {1}", directory.directory, directory.totalSizeGB);
                 continue;
             }
 
@@ -523,18 +508,16 @@ public class dotNet
                 index = 0;
             }
 
-            string pattern = string.Format(@"{0}(\\|$)", Regex.Escape(directory.directory));
+            string pattern = string.Format(@"{0}(\\|/|$)", Regex.Escape(directory.directory));
 
             while (match && index < dInfo.Count)
             {
                 string dirToMatch = dirEnumerator[index].directory;
-                Debug.Print("checking match directory {0}", dirToMatch);
 
                 if (Regex.IsMatch(dirToMatch, pattern, RegexOptions.IgnoreCase))
                 {
                     if (!firstmatch)
                     {
-                        Debug.Print("first match directory {0}", dirToMatch);
                         firstmatch = true;
                         firstMatchIndex = index;
                     }
@@ -550,7 +533,6 @@ public class dotNet
                 {
                     match = false;
                     index = firstMatchIndex;
-                    Debug.Print("first no match after match directory {0}", dirToMatch);
                 }
 
                 index++;

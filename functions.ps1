@@ -134,11 +134,11 @@ function authenticate-azureRm($context)
     # authenticate
     try
     {
-        $rg = @(Get-AzureRmTenant)
+        $tenants = @(Get-AzureRmTenant)
                 
-        if ($rg)
+        if ($tenants)
         {
-            write-host "auth passed $($rg.Count)"
+            write-host "auth passed $($tenants.Count)"
         }
         else
         {

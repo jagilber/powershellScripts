@@ -10,14 +10,11 @@ param(
     [string]$thumbPrint,
     [string]$applicationId,
     [string]$clientSecret,
-    [string]$tenantId#,
-    #   [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
-    #   [pscredential]$credentials = (get-credential)
+    [string]$tenantId
 )
 
 $ErrorActionPreference = "stop"
 $error.Clear()
-
 
 function main ()
 {
@@ -35,7 +32,7 @@ function main ()
             #-TenantId $tenantId
         }
 
-        $tenantId = (Get-AzureRmContext).TenantId
+        $tenantId = (Get-AzureRmContext).Tenant.Id
     }
 
     $data = $null
@@ -60,15 +57,6 @@ function main ()
         $cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -imatch $certSubject)
     }
 
-    #$keyValue = [Convert]::ToBase64String($cert.GetRawCertData())
-    #$clientSecret = $keyValue
-
-    #$pwd = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
-    #Export-PfxCertificate -cert "cert:\currentuser\my\$thumbprint" -FilePath $pfxPath -Password $pwd
-    #            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
-    #            $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
-    #            $clientsecret = $keyValue
-
     if ($cert)
     {
         $data = $cert.Thumbprint
@@ -82,7 +70,6 @@ function main ()
 
     $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
     $armResource = "https://management.core.windows.net/"
-    #$armResource = "https://graph.windows.net/"
 
     $Body = @{
         'resource'      = $armResource
@@ -104,10 +91,9 @@ function main ()
     $clientSecret
 
     $token = Invoke-RestMethod @params -Verbose -Debug
-    #$token = Invoke-RestMethod @params -CertificateThumbprint $thumbPrint -Certificate $cert
-    #$token | select-object access_token, @{L='Expires';E={[timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($_.expires_on))}} | Format-List *
-    $token | format-list *
+    #$token | format-list *
     $global:token = $token
+    Write-Output $global:token
 }
 
 main

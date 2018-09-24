@@ -21,8 +21,11 @@
     # Add-AzureRmAccount -ServicePrincipal -CertificateThumbprint $cert.Thumbprint -ApplicationId $app.ApplicationId -TenantId $tenantId
     # requires free AAD base subscription
     # https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal#provide-credentials-through-automated-powershell-script
-
-    # 170609
+    
+    example command:
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1","$(get-location)\azure-rm-create-aad-application-spn.ps1");
+    .\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb
+    # 180923
 #>
 param(
     [pscredential]$credentials,
@@ -73,7 +76,7 @@ function main()
         $uri = "https://$($env:Computername)/$($aadDisplayName)"
     }
 
-    $tenantId = (Get-AzureRmSubscription).TenantId
+    $tenantId = (Get-AzureRmContext).Tenant.Id
 
     if ((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName -ErrorAction SilentlyContinue))
     {
@@ -103,7 +106,7 @@ function main()
             {
                 $credentials = (get-credential)
             }
-            #$cert = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumbPrint)
+
             $pwd = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
 
             if([io.file]::Exists($pfxPath))
@@ -116,14 +119,6 @@ function main()
             $thumbprint = $cert509.thumbprint
             $keyValue = [System.Convert]::ToBase64String($cert509.GetCertHash())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
-            #$keyCredential = New-Object  Microsoft.Azure.Commands.Resources.Models.ActiveDirectory.PSADKeyCredential
-            #$keyCredential.StartDate = $cert.NotBefore
-            #$keyCredential.EndDate = $cert.NotAfter
-            #$keyCredential.KeyId = [guid]::NewGuid()
-            ##$keyCredential.Type = "AsymmetricX509Cert"
-            ##$keyCredential.Usage = "Verify"
-            #$keyCredential.CertValue = $cert.GetRawData()
-            #$keyCredential
 
             if($oldAdApp = Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName)
             {
@@ -132,7 +127,6 @@ function main()
             
             $DebugPreference = "Continue"    
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $($cert.NotAfter) -StartDate $($cert.NotBefore) -verbose"
-            #$app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $cert.GetRawCertData() -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
             
             $DebugPreference = "SilentlyContinue"
@@ -145,10 +139,7 @@ function main()
             $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
             $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
-            #$thumbprint = $cert.Thumbprint
-            #$enc = [system.Text.Encoding]::UTF8
-            #$bytes = $enc.GetBytes($cert.Thumbprint)
-            #$ClientSecret = [System.Convert]::ToBase64String($bytes)
+            $thumbprint = $cert.Thumbprint
             $ClientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
             $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
             $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate $cert.NotAfter
@@ -194,15 +185,16 @@ function main()
             write-host "certificate thumbprint: $($cert.Thumbprint)"
             
         }
-    } # else
+    } 
 
     $app
-    write-host "application id: $($app.ApplicationId)"
-    write-host "tenant id: $($tenantId)"
-    write-host "application identifier Uri: $($uri)"
-    write-host "keyValue: $($keyValue)"
-    write-host "clientsecret: $($clientsecret)"
-    write-host "thumbprint: $($thumbprint)"
+    write-host "application id: $($app.ApplicationId)" -ForegroundColor Cyan
+    write-host "tenant id: $($tenantId)" -ForegroundColor Cyan
+    write-host "application identifier Uri: $($uri)" -ForegroundColor Cyan
+    write-host "keyValue: $($keyValue)" -ForegroundColor Cyan
+    write-host "clientsecret: $($clientsecret)" -ForegroundColor Cyan
+    write-host "thumbprint: $($thumbprint)" -ForegroundColor Cyan
+    write-host "pfx path: $($pfxPath)" -ForegroundColor Cyan
     $global:thumbprint = $thumbprint
     $global:applicationId = $app.Applicationid
     $global:tenantId = $tenantId
