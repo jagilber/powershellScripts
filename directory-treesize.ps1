@@ -84,7 +84,7 @@ param(
     [string]$logFile,
     [switch]$quiet,
     [switch]$showPercent,
-    [switch]$uncompressed = $directory.Contains("/")
+    [switch]$uncompressed
 )
 
 $timer = get-date
@@ -98,16 +98,17 @@ $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
 $pathSeparator = "\"
-
+$isWin32 = $psversiontable.psversion -gt 6 -and $psversiontable.Platform -ine "Win32"
 function main()
 {
     log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    if($directory.Contains("/"))
+    if($directory.Contains("/") -or !$isWin32)
     {
         $pathSeparator = "/"
+        $uncompressed = $true
     }
 
     [dotNet]::Start($directory, $minSizeGB, $depth, [bool]$showFiles, [bool]$uncompressed)
