@@ -98,7 +98,7 @@ $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
 $pathSeparator = "\"
-$isWin32 = $psversiontable.psversion -gt 6 -and $psversiontable.Platform -ine "Win32"
+$isWin32 = $psversiontable.psversion -gt 6 -and $psversiontable.Platform -inotcontains "win"
 function main()
 {
     log-info "$(get-date) starting"
