@@ -288,7 +288,6 @@ function log-info($data, [switch]$debug, $foregroundColor = "White")
 $code = @'
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -317,18 +316,7 @@ public class dotNet
     public static bool _uncompressed;
     public static string _pathSeparator = @"\";
 
-    public static void Main(string[] args)
-    {
-        if (args.Length > 0)
-        {
-            Start(args[0], float.Parse(args[1]), Convert.ToInt32(args[2]), Convert.ToBoolean(args[3]), Convert.ToBoolean(args[4]));
-        }
-        else
-        {
-            Console.WriteLine("supply arguments path minsizegb depth showfiles uncompressed");
-        }
-    }
-
+    public static void Main() { }
     public static void Start(string path, float minSizeGB = 0.01f, int depth = 99, bool showFiles = false, bool uncompressed = false)
     {
         _directories = new List<directoryInfo>();
@@ -362,7 +350,6 @@ public class dotNet
         while (_tasks.Where(x => !x.IsCompleted).Count() > 0)
         {
             _tasks.RemoveAll(x => x.IsCompleted);
-            Debug.Print("sleeping");
             Thread.Sleep(100);
         }
 
@@ -380,25 +367,12 @@ public class dotNet
            _directories.ElementAt(0).directory = path;
         }
 
-#if DEBUG
-        Console.WriteLine(string.Format("directory,size,totalSize,totalFiles"));
-        foreach (directoryInfo d in _directories)
-        {
-            Console.WriteLine(string.Format("{0},{1},{2},{3}", d.directory, d.sizeGB, d.totalSizeGB, d.filesCount));
-            foreach (KeyValuePair<string, long> fileInfo in d.files)
-            {
-                Console.WriteLine(string.Format("\t\t{0}\t\t{1}", fileInfo.Value, fileInfo.Key));
-            }
-        }
-#endif
         Console.WriteLine(string.Format("Processing complete. minutes: {0:F3} filtered directories: {1}", (DateTime.Now - _timer).TotalMinutes, _directories.Count));
         return;
     }
 
     private static void AddDirectories(string path, List<directoryInfo> directories)
     {
-        Debug.Print("checking " + path);
-
         try
         {
             List<string> subDirectories = Directory.GetDirectories(path).ToList();
@@ -418,15 +392,11 @@ public class dotNet
                 AddDirectories(dir, directories);
             }
         }
-        catch (Exception ex)
-        {
-            Debug.Print("exception: " + ex.ToString());
-        }
+        catch { }
     }
 
     private static void AddFiles(directoryInfo directoryInfo)
     {
-        Debug.Print("checking " + directoryInfo.directory);
         long sum = 0;
 
         try
@@ -461,10 +431,7 @@ public class dotNet
                 }
             }
         }
-        catch (Exception ex)
-        {
-            Debug.Print("exception: " + directoryInfo + ex.ToString());
-        }
+        catch { }
     }
 
     private static void FilterDirectories(List<directoryInfo> directories)
@@ -519,7 +486,6 @@ public class dotNet
         foreach (FileInfo fileInfo in filesList)
         {
             result += GetFileSizeOnDisk(fileInfo);
-            Debug.Print("getsizeondisk: {0} {1}", result, fileInfo.FullName);
         }
 
         return result;
@@ -533,11 +499,9 @@ public class dotNet
 
         foreach (directoryInfo directory in dInfo)
         {
-            Debug.Print("checking directory {0}", directory.directory);
 
             if (directory.totalSizeGB > 0)
             {
-                Debug.Print("warning: total size already populated {0}: {1}", directory.directory, directory.totalSizeGB);
                 continue;
             }
 
@@ -554,13 +518,11 @@ public class dotNet
             while (match && index < dInfo.Count)
             {
                 string dirToMatch = dirEnumerator[index].directory;
-                Debug.Print("checking match directory {0}", dirToMatch);
 
                 if (Regex.IsMatch(dirToMatch, pattern, RegexOptions.IgnoreCase))
                 {
                     if (!firstmatch)
                     {
-                        Debug.Print("first match directory {0}", dirToMatch);
                         firstmatch = true;
                         firstMatchIndex = index;
                     }
@@ -576,7 +538,6 @@ public class dotNet
                 {
                     match = false;
                     index = firstMatchIndex;
-                    Debug.Print("first no match after match directory {0}", dirToMatch);
                 }
 
                 index++;
