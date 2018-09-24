@@ -14,22 +14,12 @@ param(
     [string[]]$resourceGroups,
     [string]$clientId,
     [string]$clientSecret,
-<<<<<<< HEAD
-    [string]$thumbprint,
-    [switch]$useGit
-=======
     [switch]$useGit,
     [switch]$currentOnly
->>>>>>> 5bc5f003cfdf2d9bfb471c2d24e5c35165b32343
 )
 
 $outputDir = $outputDir + "\armDeploymentTemplates"
 $ErrorActionPreference = "silentlycontinue"
-<<<<<<< HEAD
-$getCurrentConfig = $clientId + $clientSecret + $thumbprint -gt 0
-$currentdir = (get-location).path
-$error.Clear()
-=======
 $getCurrentConfig = $clientId + $clientSecret -gt 0
 $currentdir = (get-location).path
 $error.Clear()
@@ -38,7 +28,6 @@ $restLogonScript = "$($currentDir)\azure-rm-rest-logon.ps1"
 $restQueryScript = "$($currentDir)\azure-rm-rest-query.ps1"
 $global:token = $Null
 
->>>>>>> 5bc5f003cfdf2d9bfb471c2d24e5c35165b32343
 function main()
 {
     check-authentication
@@ -47,12 +36,6 @@ function main()
     set-location $outputDir
 
     if($useGit -and !(git))
-<<<<<<< HEAD
-    {
-        write-host "git not installed"
-        $useGit = $false
-        $error.Clear()
-=======
     {
         write-host "git not installed"
         $useGit = $false
@@ -125,7 +108,6 @@ function main()
             }
 
         }
->>>>>>> 5bc5f003cfdf2d9bfb471c2d24e5c35165b32343
     }
     
     if($useGit -and !(git status))
@@ -178,65 +160,6 @@ function main()
     {
         write-warning "this information does *not* include the currently running confiruration, only the last deployments. example no changes made in portal after deployment"
         write-host "to get the current running configuration ('automation script' in portal), use portal, or"
-<<<<<<< HEAD
-        write-host "rerun script with clientid and clientsecret or thumbprint arguments"
-        write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
-        write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)"
-        write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$(get-location)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Yellow
-        write-host "c:\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Yellow
-        write-host "output will contain clientid and clientsecret (thumbprint)"
-        write-host "see for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/"
-
-    }
-}
-function get-CurrentConfig()
-{
-    if($thumbprint)
-    {
-        return convertto-json (Invoke-RestMethod -Method Get -Uri "https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate" -CertificateThumbprint $thumbprint) 
-    }
-    else
-    {
-#        return convertto-json (Invoke-RestMethod -Method Get -Uri "https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate" ) 
-    }
-}
-
-function check-authentication()
-{
-        # authenticate
-        try
-        {
-            $tenants = @(Get-AzureRmTenant)
-                        
-            if ($tenants)
-            {
-                write-host "auth passed $($tenants.Count)"
-            }
-            else
-            {
-                write-host "auth error $($error)" -ForegroundColor Yellow
-                exit 1
-            }
-        }
-        catch
-        {
-            try
-            {
-                Add-AzureRmAccount
-            }
-            catch
-            {
-                write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
-                exit 1
-            }
-        }
-}
-
-try
-{
-    main
-}
-=======
         write-host "rerun script with clientid and clientsecret"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
         write-host "output will contain clientid and clientsecret (thumbprint)"
@@ -343,7 +266,6 @@ try
 {
     main
 }
->>>>>>> 5bc5f003cfdf2d9bfb471c2d24e5c35165b32343
 catch
 {
     write-host "main exception $($error | out-string)"
