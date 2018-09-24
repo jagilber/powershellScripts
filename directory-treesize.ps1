@@ -95,12 +95,18 @@ $script:directories = @()
 $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
+$pathSeparator = "\"
 
 function main()
 {
     log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
+
+    if($directory.Contains("/"))
+    {
+        $pathSeparator = "/"
+    }
 
     [dotNet]::Start($directory, $minSizeGB, $depth, [bool]$showFiles, [bool]$uncompressed)
     $script:directories = [dotnet]::_directories
@@ -184,7 +190,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
 
     if (!$notree)
     {
-        while (!$sortedDir.Contains("$($previousDir)\"))
+        while (!$sortedDir.Contains("$($previousDir)$($pathSeparator)"))
         {
             $previousDir = "$([io.path]::GetDirectoryName($previousDir))"
             log-info -debug -data "checking previous dir: $($previousDir)"
@@ -207,7 +213,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
             $percent = "[$(('X' * ($percentSize * 10)).tostring().padright(10))]"
         }
 
-        $output = $percent + $sortedDir.Replace("$($previousDir)\", "$(`" `" * $previousDir.Length)\")
+        $output = $percent + $sortedDir.Replace("$($previousDir)$($pathSeparator)", "$(`" `" * $previousDir.Length)$($pathSeparator)")
     }
     else
     {
@@ -306,6 +312,7 @@ public class dotNet
     public static List<Task> _tasks;
     public static DateTime _timer;
     public static bool _uncompressed;
+    public static string _pathSeparator = @"\";
 
     public static void Main(string[] args)
     {
@@ -326,12 +333,22 @@ public class dotNet
         _showFiles = showFiles;
         _tasks = new List<Task>();
         _uncompressed = uncompressed;
-        _clusterSize = GetClusterSize(path);
-        _depth = depth + path.Split('\\').Count();
         _minSizeGB = minSizeGB;
 
+        if(path.Contains("/"))
+        {
+            _pathSeparator = "/";
+        }
+
+        _depth = depth + path.Split(_pathSeparator.ToCharArray()).Count();
+
+        if (!_uncompressed)
+        {
+            _clusterSize = GetClusterSize(path);
+        }
+
         // add 'root' path
-        directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd('\\') };
+        directoryInfo rootPath = new directoryInfo() { directory = path.TrimEnd(_pathSeparator.ToCharArray()) };
         _directories.Add(rootPath);
         _tasks.Add(Task.Run(() => { AddFiles(rootPath); }));
 
@@ -355,7 +372,7 @@ public class dotNet
         FilterDirectories(_directories);
 
         // put trailing slash back in case 'root' path is root
-        if (path.EndsWith("\\"))
+        if (path.EndsWith(_pathSeparator))
         {
            _directories.ElementAt(0).directory = path;
         }
@@ -449,7 +466,7 @@ public class dotNet
 
     private static void FilterDirectories(List<directoryInfo> directories)
     {
-        _directories = directories.Where(x => x.totalSizeGB >= _minSizeGB & (x.directory.Split('\\').Count() <= _depth)).ToList();
+        _directories = directories.Where(x => x.totalSizeGB >= _minSizeGB & (x.directory.Split(_pathSeparator.ToCharArray()).Count() <= _depth)).ToList();
     }
 
     private static uint GetClusterSize(string fullName)
@@ -473,7 +490,13 @@ public class dotNet
     {
         // https://stackoverflow.com/questions/3750590/get-size-of-file-on-disk
         uint hosize;
-        uint losize = GetCompressedFileSizeW(file.FullName.StartsWith("\\\\") ? file.FullName : "\\\\?\\" + file.FullName, out hosize);
+        string name = file.FullName.StartsWith("\\\\") ? file.FullName : "\\\\?\\" + file.FullName;
+        if(_pathSeparator == "/")
+        {
+            name = file.FullName;
+        }
+
+        uint losize = GetCompressedFileSizeW(name, out hosize);
         long size;
 
         if (losize == 4294967295 && hosize == 0)
@@ -523,7 +546,7 @@ public class dotNet
                 index = 0;
             }
 
-            string pattern = string.Format(@"{0}(\\|$)", Regex.Escape(directory.directory));
+            string pattern = string.Format(@"{0}(\\|/|$)", Regex.Escape(directory.directory));
 
             while (match && index < dInfo.Count)
             {
