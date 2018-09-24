@@ -65,10 +65,10 @@ function main()
 
             $baseFile = "$($rgDir)\$($dep.deploymentname)"
             Save-AzureRmResourceGroupDeploymentTemplate -Path "$($baseFile).template.json" -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
-            out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($baseFile).parameters.json" -Force
+            out-file -Encoding ascii -InputObject ((convertto-json ($dep.Parameters) -Depth 99).Replace("    "," ")) -FilePath "$($baseFile).parameters.json" -Force
 
             $operations = Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg
-            out-file -Encoding ascii -InputObject (convertto-json $operations -Depth 99) -FilePath "$($baseFile).operations.json" -Force
+            out-file -Encoding ascii -InputObject ((convertto-json $operations -Depth 99).Replace("    "," ")) -FilePath "$($baseFile).operations.json" -Force
 
             if($useGit)
             {
@@ -178,10 +178,10 @@ function get-CurrentConfig($rg)
 
     if($results.error)
     {
-        write-warning (convertto-json ($results.error))
+        write-warning ((convertto-json ($results.error)).Replace("    "," "))
     }
 
-    return [Text.RegularExpressions.Regex]::Unescape((convertto-json ($results.template) -Depth 99))
+    return [Text.RegularExpressions.Regex]::Unescape(((convertto-json ($results.template) -Depth 99)).Replace("    "," "))
 }
 
 function check-authentication()
