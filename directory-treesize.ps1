@@ -64,7 +64,9 @@
     show percent graph
 
 .PARAMETER uncompressed
-    show file length instead of size on disk. slightly faster and does not use pinvoke
+    for windows file length is used instead of size on disk. this will show higher disk used but does *not* use pinvoke to kernel32
+    uncompressed switch makes script pwsh compatible and is enabled by default when path contains '/'
+    tested on ubuntu 18.04
 
 .LINK
     https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1
@@ -82,7 +84,7 @@ param(
     [string]$logFile,
     [switch]$quiet,
     [switch]$showPercent,
-    [switch]$uncompressed
+    [switch]$uncompressed = $directory.Contains("/")
 )
 
 $timer = get-date
@@ -229,7 +231,7 @@ function enumerate-directorySizes($directorySizesIndex, $previousDir)
     }
     else
     {
-        log-info "$($output)`t$(($totalSizeGB).ToString(`"F3`")) GB" -ForegroundColor $foreground
+        log-info "$($output) `t$(($totalSizeGB).ToString(`"F3`")) GB" -ForegroundColor $foreground
     }
 
     if ($showFiles)
