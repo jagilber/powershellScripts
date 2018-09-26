@@ -122,23 +122,16 @@ function main()
 
         foreach($dep in (Get-AzureRmResourceGroupDeployment -ResourceGroupName $rg))
         {
+            Save-AzureRmResourceGroupDeploymentTemplate -Path $rgDir -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
+            out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($rgDir)\$($dep.deploymentname).parameters.json" -Force
+            out-file -Encoding ascii -InputObject (convertto-json (Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg) -Depth 99) -FilePath "$($rgDir)\$($dep.deploymentname).operations.json" -Force
+            
             if($useGit)
             {
-                $templateFile = "$($rgDir)\template.json"
-
-                Save-AzureRmResourceGroupDeploymentTemplate -Path $templateFile -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
-                out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($rgDir)\parameters.json" -Force
-                out-file -Encoding ascii -InputObject (convertto-json (Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg) -Depth 99) -FilePath "$($rgDir)\operations.json" -Force
-                
                 git add -A
                 git commit -a -m "$($rg) $($dep.deploymentname)) $($dep.TimeStamp) $($dep.ProvisioningState)`n$($outputs | out-string)" --date (($dep.TimeStamp).ToString("o"))
             }
-            else
-            {
-                Save-AzureRmResourceGroupDeploymentTemplate -Path $rgDir -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
-                out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($rgDir)\$($dep.deploymentname).parameters.json" -Force
-                out-file -Encoding ascii -InputObject (convertto-json (Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg) -Depth 99) -FilePath "$($rgDir)\$($dep.deploymentname).operations.json" -Force
-            }
+
         }    
     }
 
