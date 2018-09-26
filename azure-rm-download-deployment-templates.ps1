@@ -210,11 +210,10 @@ function get-currentConfig($rg)
 
     if($results.error)
     {
-        write-warning ((convertto-json ($results.error)).Replace("    "," "))
+        write-warning (convertto-json ($results.error))
     }
     
     return $results
-    #return [Text.RegularExpressions.Regex]::Unescape(((convertto-json ($results.template) -Depth 99)).Replace("    "," "))
 }
 
 function check-authentication()
