@@ -9,6 +9,7 @@
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded','application/json')]
     $contentType = 'application/json',
+    $clientid,
     $body=@{}
 )
 
@@ -27,7 +28,7 @@ $params = @{
     Headers     = @{
         'authorization' = "Bearer $($Token.access_token)" 
         'accept' = 'application/json'
-        'client_id' = $applicationId
+        'client_id' = $clientid
     }
 
     Method      = $method 

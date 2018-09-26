@@ -135,11 +135,6 @@ function main()
             {
                 $templateFile = "$($rgDir)\template.json"
 
-                if((test-path $templateFile))
-                {
-                    $previousTemplate = ConvertFrom-Json $templateFile
-                }
-
                 Save-AzureRmResourceGroupDeploymentTemplate -Path $templateFile -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
                 out-file -Encoding ascii -InputObject (convertto-json $dep.Parameters) -FilePath "$($rgDir)\parameters.json" -Force
                 out-file -Encoding ascii -InputObject (convertto-json (Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg) -Depth 99) -FilePath "$($rgDir)\operations.json" -Force
@@ -219,7 +214,7 @@ function get-CurrentConfig($rg)
     $url = "https://management.azure.com/subscriptions/$((get-azurermcontext).subscription.id)/resourcegroups/$($rg)/exportTemplate?api-version=2018-02-01"
     write-host $url
     $body = "@{'options'='IncludeParameterDefaultValue, IncludeComments';'resources' = @('*')}"
-    $command = "$($restQueryScript) -query `"resourcegroups/$($rg)/exportTemplate`" -apiVersion `"2018-02-01`" -method post -body " + $body
+    $command = "$($restQueryScript) -clientId =$($clientid) -query `"resourcegroups/$($rg)/exportTemplate`" -apiVersion `"2018-02-01`" -method post -body " + $body
     write-host $command 
     $results = invoke-expression $command
 
