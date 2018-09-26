@@ -80,7 +80,6 @@ function main()
 
     if($getCurrentConfig)
     {
-        
         if(!(test-path $restLogonScript))
         {
             get-update -destinationFile $restLogonScript -updateUrl "$($repo)$([io.path]::GetFileName($restLogonScript))"
@@ -93,22 +92,7 @@ function main()
 
         $global:token = Invoke-Expression "$($restLogonScript) -clientSecret $($clientSecret) -applicationId $($clientId)" 
         $global:token
-
-        foreach($rg in $resourceGroups)
-        {
-            New-Item -Path "$($outputDir)\$($rg)" -ItemType Directory -ErrorAction SilentlyContinue
-            $results = get-CurrentConfig -rg $rg
-            $results
-            out-file -InputObject $results -FilePath "$($outputDir)\$($rg)\current.json" -Force
-
-            if($useGit)
-            {
-                git add -A
-                git commit -a -m "$($rg) current config $((get-date).tostring("o"))"
-            }
-
-        }
-    }
+   }
     
     if($useGit -and !(git status))
     {
@@ -125,8 +109,15 @@ function main()
         $rgDir = "$($outputDir)\$($rg)"
         New-Item -ItemType Directory $rgDir -ErrorAction SilentlyContinue
         if($getCurrentConfig)
-        {
-            out-file -InputObject (convertto-json (get-CurrentConfig)) -FilePath "$($rgDir)\current.json" -Force
+        {   
+            $currentConfig = get-currentConfig -rg $rg
+            #out-file -InputObject (convertto-json (get-currentConfig -rg $rg)) -FilePath "$($rgDir)\current.json" -Force
+            out-file -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.template)))) -FilePath "$($rgDir)\current.json" -Force
+
+            if($currentConfig.error)
+            {
+                out-file -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.error)))) -FilePath "$($rgDir)\current.errors.json" -Force
+            }
         }
 
         foreach($dep in (Get-AzureRmResourceGroupDeployment -ResourceGroupName $rg))
@@ -208,8 +199,7 @@ function get-update($updateUrl, $destinationFile)
     }
 }
 
-
-function get-CurrentConfig($rg)
+function get-currentConfig($rg)
 {
     $url = "https://management.azure.com/subscriptions/$((get-azurermcontext).subscription.id)/resourcegroups/$($rg)/exportTemplate?api-version=2018-02-01"
     write-host $url
@@ -222,8 +212,9 @@ function get-CurrentConfig($rg)
     {
         write-warning ((convertto-json ($results.error)).Replace("    "," "))
     }
-
-    return [Text.RegularExpressions.Regex]::Unescape(((convertto-json ($results.template) -Depth 99)).Replace("    "," "))
+    
+    return $results
+    #return [Text.RegularExpressions.Regex]::Unescape(((convertto-json ($results.template) -Depth 99)).Replace("    "," "))
 }
 
 function check-authentication()
