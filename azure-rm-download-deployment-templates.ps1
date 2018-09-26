@@ -126,7 +126,7 @@ function main()
         New-Item -ItemType Directory $rgDir -ErrorAction SilentlyContinue
         if($getCurrentConfig)
         {
-            out-file -InputObject (convertto-json get-CurrentConfig) -FilePath "$($rgDir)\current.json" -Force
+            out-file -InputObject (convertto-json (get-CurrentConfig)) -FilePath "$($rgDir)\current.json" -Force
         }
 
         foreach($dep in (Get-AzureRmResourceGroupDeployment -ResourceGroupName $rg))
