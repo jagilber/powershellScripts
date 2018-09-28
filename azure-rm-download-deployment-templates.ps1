@@ -124,6 +124,12 @@ function main()
             {
                 out-file -Encoding ascii -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.error) -Depth 99))) -FilePath "$($rgDir)\current.errors.json" -Force
             }
+
+            if ($useGit)
+            {
+                git add -A
+                git commit -a -m "$($rg) $((get-date).ToString("o"))"
+            }
         }
     }
     else
