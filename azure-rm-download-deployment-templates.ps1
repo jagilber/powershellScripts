@@ -143,15 +143,15 @@ function main()
     else
     {
         write-host
-        write-warning "`nthis information does *not* include the currently running configuration, only uniquely named deployments."
-        write-warning "some examples are any changes made in portal after deployment or any deployment using same name (only last will be available)"
+        write-warning ("`nthis information does *not* include the currently running configuration, only previous uniquely named deployments.`n" `
+            + "some examples are any changes made in portal after deployment or any deployment using same name (only last will be available)")
         write-host
         write-host "to get the current running configuration ('automation script' in portal), use portal, or rerun script with clientid and clientsecret"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
-        write-host "output will contain clientid and clientsecret (thumbprint)"
+        write-host "output will contain clientid and clientsecret (thumbprint)."
         write-host "see link for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
         write-host
-        write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)"
+        write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)."
         write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$($currentDir)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Cyan
         write-host "$($currentDir)\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Cyan
     }
