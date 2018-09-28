@@ -46,6 +46,7 @@ function main()
     New-Item -ItemType Directory $outputDir -ErrorAction SilentlyContinue
     Get-AzureRmDeployment | Save-AzureRmDeploymentTemplate -Path $outputDir -Force
     set-location $outputDir
+    write-host "using output location: $($outputDir)" -ForegroundColor Yellow
 
     if ($useGit -and !(git))
     {
@@ -141,23 +142,24 @@ function main()
     }
     else
     {
-        write-warning "this information does *not* include the currently running configuration, only uniquely named deployments."
+        write-host
+        write-warning "`nthis information does *not* include the currently running configuration, only uniquely named deployments."
         write-warning "some examples are any changes made in portal after deployment or any deployment using same name (only last will be available)"
-        write-host "to get the current running configuration ('automation script' in portal), use portal, or"
-        write-host "rerun script with clientid and clientsecret"
+        write-host
+        write-host "to get the current running configuration ('automation script' in portal), use portal, or rerun script with clientid and clientsecret"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
         write-host "output will contain clientid and clientsecret (thumbprint)"
         write-host "see link for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
-
+        write-host
         write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)"
-        write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$($currentDir)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Yellow
-        write-host "$($currentDir)\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Yellow
+        write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1`",`"$($currentDir)\azure-rm-create-aad-application-spn.ps1`");" -ForegroundColor Cyan
+        write-host "$($currentDir)\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Cyan
     }
 }
 
 function get-update($updateUrl, $destinationFile)
 {
-    write-host "get-update:checking for updated script: $($updateUrl)"
+    write-host "downloading helper script: $($updateUrl)" -ForegroundColor Green
     $file = ""
     $git = $null
 
@@ -260,7 +262,8 @@ finally
         code $outputDir
     }
 
-    $outputDir
-    set-location $currentdir
+    set-location $currentdir | Out-Null
+    write-host
+    write-host "output location: $($outputDir)" -ForegroundColor Yellow
     write-host "finished"
 }
