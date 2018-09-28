@@ -16,21 +16,8 @@ $result = $Null
 $cert = Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
 
 # to bypass self-signed cert 
-add-type @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-
-    public class IDontCarePolicy : ICertificatePolicy {
-            public IDontCarePolicy() {}
-            public bool CheckValidationResult(
-            ServicePoint sPoint, X509Certificate cert,
-            WebRequest wRequest, int certProb) {
-            return true;
-        }
-    }
-"@
-
-[System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
+[System.Net.ServicePointManager]::Expect100Continue = $true;
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 
 $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime)&EndTimeUtc=$($endTime)"
 

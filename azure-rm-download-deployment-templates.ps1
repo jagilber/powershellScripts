@@ -112,11 +112,11 @@ function main()
         {   
             $currentConfig = get-currentConfig -rg $rg
             #out-file -InputObject (convertto-json (get-currentConfig -rg $rg)) -FilePath "$($rgDir)\current.json" -Force
-            out-file -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.template) -Depth 99))) -FilePath "$($rgDir)\current.json" -Force
+            out-file -Encoding ascii -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.template) -Depth 99))) -FilePath "$($rgDir)\current.json" -Force
 
             if ($currentConfig.error)
             {
-                out-file -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.error) -Depth 99))) -FilePath "$($rgDir)\current.errors.json" -Force
+                out-file -Encoding ascii -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.error) -Depth 99))) -FilePath "$($rgDir)\current.errors.json" -Force
             }
         }
 
