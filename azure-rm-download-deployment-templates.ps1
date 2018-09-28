@@ -13,19 +13,14 @@ param(
     [string]$outputDir = (get-location).path,
     [string[]]$resourceGroups,
     [switch]$useGit,
-    [Parameter(ParameterSetName='CurrentOnly',Mandatory)]
-    [Parameter(ParameterSetName='EnableUser')]
+    [switch]$currentOnly,
     [string]$clientId,
-    [Parameter(ParameterSetName='CurrentOnly',Mandatory)]
-    [Parameter(ParameterSetName='EnableUser')]
-    [string]$clientSecret,
-    [Parameter(ParameterSetName='CurrentOnly')]
-    [switch]$currentOnly
+    [string]$clientSecret
 )
 
 $outputDir = $outputDir + "\armDeploymentTemplates"
 $ErrorActionPreference = "silentlycontinue"
-$getCurrentConfig = $clientId + $clientSecret -gt 0
+$getCurrentConfig = $clientId -and $clientSecret
 $currentdir = (get-location).path
 $error.Clear()
 $repo = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/"
@@ -35,7 +30,18 @@ $global:token = $Null
 
 function main()
 {
-    check-authentication
+
+    if($currentOnly -and (!$clientId -or !$clientSecret))
+    {
+        write-warning "if specifying -currentOnly, -clientId and -clientSecret must be used as well. exiting..."
+        return
+    }
+
+    if(!$getCurrentConfig -or !$resourceGroups -or !$currentOnly)
+    {
+        check-authentication
+    }
+
     New-Item -ItemType Directory $outputDir -ErrorAction SilentlyContinue
     Get-AzureRmDeployment | Save-AzureRmDeploymentTemplate -Path $outputDir -Force
     set-location $outputDir
