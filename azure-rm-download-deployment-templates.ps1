@@ -141,7 +141,8 @@ function main()
     }
     else
     {
-        write-warning "this information does *not* include the currently running confiruration, only the last deployments. example no changes made in portal after deployment"
+        write-warning "this information does *not* include the currently running configuration, only uniquely named deployments."
+        write-warning "some examples are any changes made in portal after deployment or any deployment using same name (only last will be available)"
         write-host "to get the current running configuration ('automation script' in portal), use portal, or"
         write-host "rerun script with clientid and clientsecret"
         write-host "these are values used when connecting to azure using a script either with powershel azure modules or rest methods"
