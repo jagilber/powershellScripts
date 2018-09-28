@@ -12,9 +12,14 @@
 param(
     [string]$outputDir = (get-location).path,
     [string[]]$resourceGroups,
-    [string]$clientId,
-    [string]$clientSecret,
     [switch]$useGit,
+    [Parameter(ParameterSetName='CurrentOnly',Mandatory)]
+    [Parameter(ParameterSetName='EnableUser')]
+    [string]$clientId,
+    [Parameter(ParameterSetName='CurrentOnly',Mandatory)]
+    [Parameter(ParameterSetName='EnableUser')]
+    [string]$clientSecret,
+    [Parameter(ParameterSetName='CurrentOnly')]
     [switch]$currentOnly
 )
 
@@ -104,12 +109,13 @@ function main()
         $resourceGroups = @((Get-AzureRmResourceGroup).ResourceGroupName)
     }
 
-    foreach ($rg in $resourceGroups)
-    {
-        $rgDir = "$($outputDir)\$($rg)"
-        New-Item -ItemType Directory $rgDir -ErrorAction SilentlyContinue
-        if ($getCurrentConfig)
-        {   
+    if ($getCurrentConfig)
+    {   
+
+        foreach ($rg in $resourceGroups)
+        {
+            $rgDir = "$($outputDir)\$($rg)"
+            New-Item -ItemType Directory $rgDir -ErrorAction SilentlyContinue
             $currentConfig = get-currentConfig -rg $rg
             #out-file -InputObject (convertto-json (get-currentConfig -rg $rg)) -FilePath "$($rgDir)\current.json" -Force
             out-file -Encoding ascii -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.template) -Depth 99))) -FilePath "$($rgDir)\current.json" -Force
@@ -119,23 +125,8 @@ function main()
                 out-file -Encoding ascii -InputObject ([Text.RegularExpressions.Regex]::Unescape((convertto-json ($currentConfig.error) -Depth 99))) -FilePath "$($rgDir)\current.errors.json" -Force
             }
         }
-
-        foreach ($dep in (Get-AzureRmResourceGroupDeployment -ResourceGroupName $rg))
-        {
-            Save-AzureRmResourceGroupDeploymentTemplate -Path $rgDir -ResourceGroupName $rg -DeploymentName ($dep.DeploymentName) -Force
-            out-file -Encoding ascii -InputObject (convertto-json ($dep.Parameters) -Depth 99) -FilePath "$($rgDir)\$($dep.deploymentname).parameters.json" -Force
-            out-file -Encoding ascii -InputObject (convertto-json (Get-AzureRmResourceGroupDeploymentOperation -DeploymentName $($dep.DeploymentName) -ResourceGroupName $rg) -Depth 99) -FilePath "$($rgDir)\$($dep.deploymentname).operations.json" -Force
-            
-            if ($useGit)
-            {
-                git add -A
-                git commit -a -m "$($rg) $($dep.deploymentname)) $($dep.TimeStamp) $($dep.ProvisioningState)`n$($outputs | out-string)" --date (($dep.TimeStamp).ToString("o"))
-            }
-
-        }    
     }
-
-    if (!$getCurrentConfig)
+    else
     {
         write-warning "this information does *not* include the currently running confiruration, only the last deployments. example no changes made in portal after deployment"
         write-host "to get the current running configuration ('automation script' in portal), use portal, or"
