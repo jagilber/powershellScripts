@@ -15,7 +15,8 @@ param(
     [switch]$useGit,
     [switch]$currentOnly,
     [string]$clientId,
-    [string]$clientSecret
+    [string]$clientSecret,
+    [switch]$vscode
 )
 
 $outputDir = $outputDir + "\armDeploymentTemplates"
@@ -253,7 +254,11 @@ catch
 }
 finally
 {
-    code $outputDir
+    if($vscode)
+    {
+        code $outputDir
+    }
+
     $outputDir
     set-location $currentdir
     write-host "finished"
