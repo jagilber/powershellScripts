@@ -13,8 +13,8 @@
     $body=@{}
 )
 
-[System.Net.ServicePointManager]::Expect100Continue = $true;
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true
+[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12
 $uri = $baseURI + $query + "?api-version=" + $apiVersion + $arguments
 $uri
 

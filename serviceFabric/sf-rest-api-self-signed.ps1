@@ -16,8 +16,8 @@ $result = $Null
 $cert = Get-ChildItem -Path cert: -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
 
 # to bypass self-signed cert 
-[System.Net.ServicePointManager]::Expect100Continue = $true;
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true
+#[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12
 
 $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime)&EndTimeUtc=$($endTime)"
 

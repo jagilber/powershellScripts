@@ -13,8 +13,8 @@ param(
     [string]$tenantId
 )
 
-[System.Net.ServicePointManager]::Expect100Continue = $true;
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true
+[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12
 $ErrorActionPreference = "stop"
 $error.Clear()
 
