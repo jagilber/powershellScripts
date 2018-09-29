@@ -68,7 +68,9 @@ param(
     [string]$templateFile,
     [Parameter(Mandatory = $true)]
     [string]$templateParameterFile,
-    [hashtable]$additionalParameters = @{}
+    [hashtable]$additionalParameters = @{},
+    [switch]$clean,
+    [switch]$force
 )
 
 # shouldnt need modification
@@ -212,9 +214,21 @@ write-host "checking for existing deployment"
 
 if ((Get-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName -ErrorAction SilentlyContinue))
 {
-    if ((read-host "resource group deployment exists! Do you want to delete?[y|n]") -ilike 'y')
+    if($clean -and $force)
     {
+        write-warning "resource group deployment exists! deleting as -clean and -force are specified!"
         Remove-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName
+    }
+    elseif($clean)
+    {
+        if ((read-host "resource group deployment exists! Do you want to delete?[y|n]") -ilike 'y')
+        {
+            Remove-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName
+        }
+    }
+    else
+    {
+        write-warning "resource group deployment exists!"
     }
 }
 
@@ -222,9 +236,21 @@ write-host "checking for existing resource group"
 
 if ((Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
 {
-    if ((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y')
+    if($clean -and $force)
     {
-        Remove-AzureRmResourceGroup -Name $resourceGroup -force
+        write-warning "resource group exists! deleting as -clean and -force are specified!"
+        Remove-AzureRmResourceGroup -ResourceGroupName $resourceGroup -Name $deploymentName -force
+    }
+    elseif($clean)
+    {
+        if ((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y')
+        {
+            Remove-AzureRmResourceGroup -ResourceGroupName $resourceGroup -Force
+        }
+    }
+    else
+    {
+        write-warning "resource group exists!"
     }
 }
 
