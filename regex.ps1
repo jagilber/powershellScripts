@@ -1,4 +1,4 @@
-﻿# does grep with findstr
+# does grep with findstr
 
 param(
 [parameter(Position=0,Mandatory=$true)]

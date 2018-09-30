@@ -1,4 +1,4 @@
-﻿# script to return friendly name of rds client decimal error codes
+# script to return friendly name of rds client decimal error codes
 
 Param(
 
@@ -9,5 +9,6 @@ Param(
 
 $mstsc = New-Object -ComObject MSTscAx.MsTscAx
 write-host "description: $($mstsc.GetErrorDescription($disconnectReason,0))"
+
 
 

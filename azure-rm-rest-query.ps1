@@ -1,4 +1,4 @@
-﻿param(
+param(
     $token = $Global:token,
     $SubscriptionID = (Get-AzureRmContext).Subscription.Id,
     $apiVersion = "2016-09-01",
@@ -42,3 +42,4 @@ $response = Invoke-RestMethod @params -Verbose -Debug
 $global:response = $response
 write-host (ConvertTo-Json -Depth 99 ($global:response))
 Write-Output $global:response
+

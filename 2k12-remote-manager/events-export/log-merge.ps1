@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
 
     powershell script to merge multiple csv files with timestamps by timestamp into new file
@@ -307,5 +307,6 @@ Add-Type $Code
 
 
 [LogMerge]::Start(@($sourceFolder,$filePattern,$outputFile),(get-location))
+
 
 

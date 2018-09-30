@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     powershell script to manage event logs on multiple machines
 
@@ -1850,4 +1850,5 @@ function start-listenJob([hashtable]$jobItem)
 
 # ----------------------------------------------------------------------------------------------------------------
 main
+
 

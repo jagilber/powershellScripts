@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell find unique lines in file
 .DESCRIPTION  
@@ -96,4 +96,5 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 
 main
+
 

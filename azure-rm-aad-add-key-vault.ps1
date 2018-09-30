@@ -1,4 +1,4 @@
-﻿<#
+<#
     script to add certificate to azure arm AAD key vault
     to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
@@ -218,3 +218,4 @@ write-output "subscription id: $($subscriptionId)"
 write-output "uri: $($uri)"
 write-output "cert thumbprint: $($azurecert.Thumbprint)"
 write-output "vault id: /subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.KeyVault/vaults/$($vaultName)"
+

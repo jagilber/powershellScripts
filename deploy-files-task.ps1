@@ -1,4 +1,4 @@
-﻿ 
+ 
 
 <#  
 .SYNOPSIS  
@@ -508,3 +508,4 @@ function is-fileLocked([string] $file)
 main
 
 log-info "finished"
+

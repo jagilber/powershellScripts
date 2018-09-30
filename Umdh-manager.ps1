@@ -1,4 +1,4 @@
-﻿ 
+ 
 
 <#  
 .SYNOPSIS  
@@ -492,3 +492,4 @@ function runas-admin([string] $arguments)
 main
 
 log-info "finished"
+

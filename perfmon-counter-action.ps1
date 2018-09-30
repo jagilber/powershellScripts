@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to monitor a performance counter and take an action
 .DESCRIPTION  
@@ -155,3 +155,4 @@ function runas-admin()
 
 #-------------------------------------------------------------------------------------------------
 main
+

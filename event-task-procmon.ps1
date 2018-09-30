@@ -1,4 +1,4 @@
-﻿<# 
+<# 
 .SYNOPSIS 
 powershell script to monitor debug event logs for event match
 .DESCRIPTION 
@@ -651,3 +651,4 @@ function runas-admin([string] $arguments)
 # ----------------------------------------------------------------------------------------------------------------
 
 main 
+

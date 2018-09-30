@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$jsonInputTemplateFile,
     [int]$numberOfAdditionalNodeTypes = 1,
     [string]$jsonOutputTemplateFile = "$($env:TEMP)\template.json",

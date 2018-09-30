@@ -1,4 +1,4 @@
-﻿# script to populate textFilter rvf filter file from etw inf.txt file
+# script to populate textFilter rvf filter file from etw inf.txt file
 # 170519 added multi file support
 
 param(

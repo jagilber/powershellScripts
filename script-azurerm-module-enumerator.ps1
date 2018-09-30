@@ -1,4 +1,4 @@
-﻿#script to scan other scripts for azure commands to list needed azure modules
+#script to scan other scripts for azure commands to list needed azure modules
 # 170518
 
 [CMDLETBINDING()]
@@ -90,3 +90,4 @@ function main()
 }
     
 main
+

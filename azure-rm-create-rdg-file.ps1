@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     powershell script to generate .rdg file for remote desktop connection manager 'rdcman'
 

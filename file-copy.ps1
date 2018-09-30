@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to copy files to remote machine
 .DESCRIPTION  

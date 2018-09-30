@@ -1,4 +1,4 @@
-﻿<#
+<#
 # https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-api-clusters_get
 #/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ServiceFabric/clusters/{clusterName}?api-version=2016-09-01
 #>

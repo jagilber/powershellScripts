@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to manage IaaS virtual machines in Azure Resource Manager
     
@@ -854,3 +854,4 @@ if ($host.Name -ine "ServerRemoteHost")
 {
     main
 }
+

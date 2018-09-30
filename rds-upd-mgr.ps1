@@ -1,4 +1,4 @@
-﻿<# 
+<# 
 .SYNOPSIS 
 powershell script to enumerate customer RDS environment for UPD information
     

@@ -1,4 +1,4 @@
-﻿#    This script will help with the deployment and undeployment of umdh. 
+#    This script will help with the deployment and undeployment of umdh. 
 #    
 #   File Name  : umdh-manager-2k8.ps1  
 #   Author     : jagilber
@@ -167,3 +167,4 @@ function runas-admin([string] $arguments)
 main
 
 log-info "finished"
+

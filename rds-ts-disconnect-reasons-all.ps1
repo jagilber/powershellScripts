@@ -1,4 +1,4 @@
-﻿# script to return friendly name of rds client hex /decimal error codes
+# script to return friendly name of rds client hex /decimal error codes
 cls
 $dupes = new-object Collections.ArrayList
 $mstsc = New-Object -ComObject MSTscAx.MsTscAx
@@ -68,3 +68,4 @@ for($id = 0;$id -lt 100000000;$id++)
     write-host "$($id)**Extended Reason:$($reason)"
     out-file -InputObject "$($id)**Extended Reason: $($reason)" -FilePath  $outFile -Append
 }
+

@@ -1,4 +1,4 @@
-﻿<#
+<#
     script to export all deployment templates, parameters, and operations from azure subscription or list of resourcegroups
     https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/exporttemplate
 

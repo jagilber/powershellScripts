@@ -1,4 +1,4 @@
-﻿# script to compare fileinfo for two directories
+# script to compare fileinfo for two directories
 # saves file info to json file
 
 param(

@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to enumerate license server connectivity.
     can be used on rdsh server or license server
@@ -746,4 +746,5 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
 
 # ----------------------------------------------------------------------------------------------------------------
 main
+
 

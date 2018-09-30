@@ -1,4 +1,4 @@
-﻿# calculate time difference between two dates and / or times
+# calculate time difference between two dates and / or times
 # can be just a date 5/28/2015
 # can be just a time 8:04:00
 # can be partial date 5/28/15
@@ -20,4 +20,5 @@ write-host "time difference Total Hours: $(($endDate - $beginningDate).TotalHour
 write-host "time difference Total Minutes: $(($endDate - $beginningDate).TotalMinutes)"
 write-host "time difference Total Seconds: $(($endDate - $beginningDate).TotalSeconds)"
 write-host "time difference Total Milliseconds: $(($endDate - $beginningDate).TotalMilliseconds)"
+
 

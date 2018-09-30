@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS
     powershell script to manage commands remotely across multiple machines
 

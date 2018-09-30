@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to manage registry auditing and permissions
 .DESCRIPTION  
@@ -198,3 +198,4 @@ function log-info($data)
 # ----------------------------------------------------------------------------------------------------------------
 
 main
+

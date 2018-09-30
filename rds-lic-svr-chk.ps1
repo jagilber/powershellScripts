@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to enumerate license server configuration and connectivity for remote desktop services (RDS).
     can be run from rdsh server or license server

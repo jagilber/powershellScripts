@@ -1,4 +1,4 @@
-﻿# script to read sf json files and add comment for convert ticks to timestamp
+# script to read sf json files and add comment for convert ticks to timestamp
 
 param(
     $inputFile = "F:\cases\118010717420117\jarvis-nodes-of-a-cluster-180120.1.json"

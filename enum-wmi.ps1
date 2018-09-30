@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     script to enumerate WMI at a given node matching a given class
 
@@ -145,3 +145,4 @@ function log-info($data)
 #-----------------------------------------------------------------------------------------------
 
 main 
+

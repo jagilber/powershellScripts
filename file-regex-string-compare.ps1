@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS  
     powershell script to compare regex pattern match strings in two files
 .DESCRIPTION  
@@ -150,4 +150,5 @@ write-host "*************************************************************"
 write-host "*************************************************************"
 write-host "finished"
 write-host "*************************************************************"
+
 

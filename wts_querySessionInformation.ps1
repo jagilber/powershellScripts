@@ -1,4 +1,4 @@
-﻿# From http://serverfault.com/questions/342533/wmi-object-to-get-current-sessions-with-client-name
+# From http://serverfault.com/questions/342533/wmi-object-to-get-current-sessions-with-client-name
 # QuerySessionInformation.ps1
 # Written by Ryan Ries, Jan. 2013, with help from MSDN and Stackoverflow.
 
@@ -214,3 +214,4 @@ Add-Type $Code -CompilerParameters $comParam
 
 
 [RDPInfo30]::ListUsers("localhost")
+

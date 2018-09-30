@@ -1,4 +1,4 @@
-﻿<#  
+<#  
 .SYNOPSIS
 
     powershell script to enumerate all event logs and enumerate all events for that event logs. Works only with newer logs 
