@@ -30,7 +30,9 @@ issue------>>>>     ???<#
 param(
     $path = (get-location).path,
     $extensionFilter = "*.ps1",
-    [switch]$listOnly
+    [switch]$listOnly,
+    [switch]$saveAsAscii,
+    [switch]$force
 )
 
 $Utf8NoBom = New-Object Text.UTF8Encoding($False)
@@ -38,16 +40,28 @@ $Utf8NoBom = New-Object Text.UTF8Encoding($False)
 function main()
 {
     foreach($file in get-childitem -Path $path -recurse -filter $extensionFilter)
-    {
-        if(has-bom -file $file)
+    {   
+        $hasBom = has-bom -file $file
+        if($hasBom -or ($saveAsAscii -and $force))
         {
-            write-host "file has bom: $($file.fullname)" -ForegroundColor Yellow
+            if($hasBom)
+            {
+                write-host "file has bom: $($file.fullname)" -ForegroundColor Yellow
+            }
 
             if(!$listOnly)
             {
                 write-warning "re-writing file without bom: $($file.fullname)"
                 $content = Get-Content $file.fullname -Raw
-                [System.IO.File]::WriteAllLines($file.fullname, $content, $Utf8NoBom)
+
+                if($saveAsAscii)
+                {
+                    out-file -InputObject $content -Encoding ascii -FilePath ($file.fullname)
+                }
+                else
+                {
+                    [System.IO.File]::WriteAllLines($file.fullname, $content, $Utf8NoBom)
+                }
             }
         }
         else
