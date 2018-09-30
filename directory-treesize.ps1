@@ -98,18 +98,12 @@ $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
 $pathSeparator = "\"
-$isWin32 = $false
+$isWin32 = $psversiontable.psversion -lt [version]6.0.0 -or $global:IsWindows
 function main()
 {
     log-info "$(get-date) starting"
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
-
-    if($psversiontable.psversion -lt [version]6.0.0 -or 
-        ($psversiontable.psversion -gt [version]6.0.0 -and $psversiontable.Platform -inotcontains "win"))
-    {
-        $isWin32 = $true
-    }
 
     if($directory.Contains("/") -or !$isWin32)
     {
