@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     powershell script to to enumerate directory summarizing in tree view directories over a given size
 
@@ -97,7 +97,7 @@ $script:directories = @()
 $script:directorySizes = @()
 $script:foundtreeIndex = 0
 $script:progressTimer = get-date
-$pathSeparator = "\"
+$pathSeparator = [io.path]::DirectorySeparatorChar
 $isWin32 = $psversiontable.psversion -lt [version]"6.0.0" -or $global:IsWindows
 
 function main()
@@ -106,12 +106,7 @@ function main()
     log-info "$($directory) drive total: $((($drive.free + $drive.used) / 1GB).ToString(`"F3`")) GB used: $(($drive.used / 1GB).ToString(`"F3`")) GB free: $(($drive.free / 1GB).ToString(`"F3`")) GB"
     log-info "enumerating $($directory) sub directories, please wait..." -ForegroundColor Yellow
 
-    if($directory.Contains("/") -or !$isWin32)
-    {
-        $pathSeparator = "/"
-        $uncompressed = $true
-    }
-
+    $uncompressed = !$isWin32
     [dotNet]::Start($directory, $minSizeGB, $depth, [bool]$showFiles, [bool]$uncompressed)
     $script:directories = [dotnet]::_directories
     $script:directorySizes = @(([dotnet]::_directories).totalsizeGB)
