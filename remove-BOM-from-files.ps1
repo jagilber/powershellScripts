@@ -42,7 +42,7 @@ function main()
     foreach($file in get-childitem -Path $path -recurse -filter $extensionFilter)
     {   
         $hasBom = has-bom -file $file
-        if($hasBom -or ($saveAsAscii -and $force))
+        if($hasBom -or $saveAsAscii -or $force)
         {
             if($hasBom)
             {
