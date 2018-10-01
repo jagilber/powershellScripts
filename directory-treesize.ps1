@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     powershell script to to enumerate directory summarizing in tree view directories over a given size
 
