@@ -1,8 +1,8 @@
 <#
 script to query tables in azure blob storage
 
-$sas = "https://sflogsho4nnyxerrwe22.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKwmnUaQIJQkFf0f8thKDUBYK7xQ%3D"
-$storage = "sflogsho4nnyxerrwe22"
+$sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKQkFf0f8thKDUBYK7xQ%3D"
+$storage = "sflogsxxxxxxxxxxxxxx"
 G:\github\jagilber-pr\serviceFabricInternal\powershellScripts\azure-storage-query-table.ps1 -saskeyTable $sas `
     -storageAccountName $storage `
     -outputDir "f:\cases\000000000000001\storageTables" `
@@ -16,8 +16,8 @@ G:\github\jagilber-pr\serviceFabricInternal\powershellScripts\azure-storage-quer
     $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Properties.instanceName.PropertyAsObject),$($_.Properties.EventType.PropertyAsObject),$($_.Properties.faultDomain.PropertyAsObject)"} 
 #>
 param(
-    [string]$saskeyTable = "https://sflogsho4nnyxerrwe22.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-29T21:35:00Z&st=2018-09-29T13:35:00Z&spr=https&sig=9e%2FLcoljDisUIDMskKCf0R7bdyQMn61qq4%2FVX8sOabY%3D",
-    [string]$storageAccountName = "sflogsho4nnyxerrwe22",
+    [string]$saskeyTable,
+    [string]$storageAccountName,
     [switch]$showDetail,
     [switch]$convertOutputToJson,
     [string]$outputDir,
