@@ -3,7 +3,7 @@ script to query tables in azure blob storage
 
 $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKQkFf0f8thKDUBYK7xQ%3D"
 $storage = "sflogsxxxxxxxxxxxxxx"
-G:\github\jagilber-pr\serviceFabricInternal\powershellScripts\azure-storage-query-table.ps1 -saskeyTable $sas `
+.\azure-storage-query-table.ps1 -saskeyTable $sas `
     -storageAccountName $storage `
     -outputDir "f:\cases\000000000000001\storageTables" `
     -starttime ((get-date).Touniversaltime().AddHours(-48)) #`
@@ -21,7 +21,8 @@ param(
     [switch]$showDetail,
     [switch]$convertOutputToJson,
     [string]$outputDir,
-    [datetime]$startTime = (get-date).AddDays(-7),
+    [datetime]$startTime = (get-date).AddHours(-24),
+    [datetime]$endTime = (get-date),
     [string]$tableName,
     [int]$takecount = 1000,
     [string[]]$listColumns
@@ -59,7 +60,12 @@ $tablesRef = $cloudTable.ServiceClient
 [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]
 $queryComparison = [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]::GreaterThanOrEqual
 #$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
-$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
+$squeryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
+$queryComparison = [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]::LessThanOrEqual
+$equeryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
+
+$tableOperator = [Microsoft.WindowsAzure.Storage.Table.TableOperators]::And
+$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::CombineFilters($squeryFilter,$tableOperator,$equeryFilter)
 $global:allTableResults = $null
 $global:allTableJson = $null
 
@@ -72,6 +78,7 @@ foreach($table in $tablesRef.ListTables())
     }
 
     write-host "table name:$($table.name)" -ForegroundColor Yellow
+    write-host "query: $($queryFilter)"
     $table
     $tableQuery = new-object microsoft.windowsazure.storage.table.tablequery
     $tableQuery.FilterString = $queryFilter
@@ -92,20 +99,38 @@ foreach($table in $tablesRef.ListTables())
         {
             continue
         }
-        write-host "converting to json"
-        $results = (convertto-json $tableResults -Depth 3)
-        
-        if($outputDir)
+
+        $outputFile = "$($outputdir)\$($table.name).records.txt"
+        remove-item $outputFile -erroraction silentlycontinue
+
+        if($outputDir -or $showDetail)
         {
-            write-host "writing json to file"
-            $results | out-file -encoding ascii "$($outputdir)\$($table.name).json"
-            write-host "finished writing json to file"
+            [text.stringbuilder]$sb = new-object text.stringbuilder
+
+            foreach($record in ($tableresults)| sort-object Timestamp)
+            {
+                [void]$sb.AppendLine("----------------------------")
+                [void]$sb.AppendLine("$($record.Timestamp):$($record.PartitionKey):$($record.RowKey)")
+
+                foreach($prop in $record.properties.getenumerator())
+                {
+                    [void]$sb.AppendLine("`t`t$($prop.Key):$($prop.Value.PropertyAsObject)")
+                }    
+
+                if($outputdir)
+                {
+                    out-file -append -inputobject ($sb.tostring()) -encoding ascii -filepath $outputFile
+                }
+
+                if($showDetail)
+                {
+                    write-host ($sb.ToString())
+                }
+
+                [void]$sb.Clear()
+           }
         }
-        
-        if($showDetail)
-        {
-            $results
-        }
+      
     }
 
    $global:allTableResults += $tableresults
@@ -115,7 +140,9 @@ if($convertOutputToJson)
 {
     write-host "converting to json..." -ForegroundColor Yellow
     $global:allTableJson = (convertto-json ($global:allTableResults) -Depth 3)
-    write-host "`noutput json stored in `$global:allTableJson" -ForegroundColor Magenta
+    $outputFile = "$($outputdir)\alltableevents.json"
+    $global:allTableJson | out-file -encoding ascii -filepath $outputFile
+    write-host "`noutput json stored in `$global:allTableJson and $($outputFile)" -ForegroundColor Magenta
 }
 
 write-host "`noutput object[] stored in `$global:allTableResults" -ForegroundColor Magenta
