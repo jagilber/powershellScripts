@@ -138,7 +138,7 @@ $ujson = ConvertFrom-Json (get-content -Raw -Path $templateparameterFile)
 
 $ujson | ConvertTo-Json
 
-if ($ujson.parameters.adminUserName -and $ujson.parameters.adminPassword)
+if ($ujson.parameters.adminUserName -and $ujson.parameters.adminPassword -and !$test)
 {
     write-host "checking password"
 
@@ -272,7 +272,7 @@ if ($global:credential.Password.Length)
     $ret = Test-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroup `
         -TemplateFile $templateFile `
         -Mode Complete `
-        -adminUsername $global:credential.UserName `
+        -adminUserName $global:credential.UserName `
         -adminPassword $global:credential.Password `
         -TemplateParameterFile $templateParameterFile `
         @additionalParameters
@@ -319,7 +319,7 @@ if (!$test)
             -ResourceGroupName $resourceGroup `
             -DeploymentDebugLogLevel All `
             -TemplateFile $templateFile `
-            -adminUsername $global:credential.UserName `
+            -adminUserName $global:credential.UserName `
             -adminPassword $global:credential.Password `
             -TemplateParameterFile $templateParameterFile `
             -Verbose `
