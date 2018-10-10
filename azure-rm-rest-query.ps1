@@ -1,5 +1,5 @@
 param(
-    $token = $Global:token,
+    $token = $global:token,
     $SubscriptionID = (Get-AzureRmContext).Subscription.Id,
     $apiVersion = "2016-09-01",
     $baseURI = "https://management.azure.com/subscriptions/$($SubscriptionID)/",
@@ -9,9 +9,26 @@ param(
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded','application/json')]
     $contentType = 'application/json',
-    $clientid,
+    $clientid = $global:clientId,
     $body=@{}
 )
+
+$epochTime = [int64](([datetime]::UtcNow)-(get-date "1/1/1970")).TotalSeconds
+
+if(!$token)
+{
+    write-warning "supply token for token argument or run azure-rm-rest-logon.ps1 to generate bearer token"
+    return
+}
+else 
+{
+    if($token.expires_on -le $epochTime)
+    {
+        write-error "expired token $($token)"
+        $global:token = $null
+        return
+    }
+}
 
 $uri = $baseURI + $query + "?api-version=" + $apiVersion + $arguments
 $uri
@@ -25,21 +42,26 @@ $body
 
 $params = @{ 
     ContentType = $contentType
-    Headers     = @{
+    Headers = @{
         'authorization' = "Bearer $($Token.access_token)" 
         'accept' = 'application/json'
         'client_id' = $clientid
     }
 
-    Method      = $method 
-    uri         = $uri
+    Method = $method 
+    uri = $uri
     Body = $body
 } 
 
 $params
-
+$error.Clear()
 $response = Invoke-RestMethod @params -Verbose -Debug
 $global:response = $response
 write-host (ConvertTo-Json -Depth 99 ($global:response))
 Write-Output $global:response
+write-host "output saved in `$global:response" -ForegroundColor Yellow
 
+if($error)
+{
+    exit 1
+}

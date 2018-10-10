@@ -24,7 +24,7 @@
     
     example command:
     (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1","$(get-location)\azure-rm-create-aad-application-spn.ps1");
-    .\azure-rm-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb
+    .\\azure-rm-create-aad-application-spn.ps1 -aadDisplayName azure-rm-rest-logon -logontype certthumb
     # 180923
 #>
 param(

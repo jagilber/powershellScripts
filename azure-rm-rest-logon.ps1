@@ -1,14 +1,14 @@
 <#
 a4ad335c-65e5-469c-9df5-03ca816fb82b
 13a5b24bd00cb110ef4b36a141c87483661f5bef
-.\azure-rm-rest-logon.ps1 -certSubject "azure-rm-rest-logon" -applicationId "2b79cbdf-424f-48d2-a569-26ff7deb8625"
+.\azure-rm-rest-logon.ps1 -certSubject "azure-rm-rest-logon" -clientId "2b79cbdf-424f-48d2-a569-26ff7deb8625"
 #>
 
 [cmdletbinding()]
 param(
     [string]$certSubject,
     [string]$thumbPrint,
-    [string]$applicationId,
+    [string]$clientId,
     [string]$clientSecret,
     [string]$tenantId
 )
@@ -28,7 +28,7 @@ function main ()
         {
             Add-AzureRmAccount -ServicePrincipal `
                 -CertificateThumbprint $thumbPrint `
-                -ApplicationId $applicationId 
+                -ApplicationId $clientId 
             #-TenantId $tenantId
         }
 
@@ -37,6 +37,20 @@ function main ()
 
     $data = $null
     $cert = $null
+
+    if (!$clientId)
+    {
+        $baseScriptName = [io.path]::GetFileNameWithoutExtension($MyInvocation.ScriptName)
+        $clientId = ((Get-AzureRmADApplication -DisplayNameStartWith ($baseScriptName)))[0].ApplicationId.Guid
+        
+        if (!$clientId)
+        {
+            Write-Warning "clientid (applicationid) info not provided. exiting"
+            return
+        }
+        
+        Write-Warning "clientid (applicationid) info not provided. trying $($clientId)"
+    }
 
     if ($ClientSecret)
     {
@@ -72,28 +86,38 @@ function main ()
     $armResource = "https://management.core.windows.net/"
 
     $Body = @{
-        'resource'      = $armResource
-        'client_id'     = $applicationId
-        'grant_type'    = 'client_credentials'
+        'resource' = $armResource
+        'client_id' = $clientId
+        'grant_type' = 'client_credentials'
         'client_secret' = $clientSecret
     }
     
     $params = @{
         ContentType = 'application/x-www-form-urlencoded' #'application/json'
-        Headers     = @{'accept' = 'application/json'}
-        Body        = $Body
-        Method      = 'Post'
-        URI         = $tokenEndpoint
+        Headers = @{'accept' = 'application/json'}
+        Body = $Body
+        Method = 'Post'
+        URI = $tokenEndpoint
     }
 
     $body
     $params
     $clientSecret
-
+    $error.Clear()
     $token = Invoke-RestMethod @params -Verbose -Debug
-    #$token | format-list *
-    $global:token = $token
-    Write-Output $global:token
+    
+    if (!$error)
+    {
+        $global:token = $token
+        Write-Output $global:token
+        $global:clientId = $clientId
+        write-host "access token output saved in `$global:token" -ForegroundColor Yellow
+        write-host "clientid / applicationid saved in `$global:clientId" -ForegroundColor Yellow
+    }
+    else
+    {
+        $global:token = $null   
+    }
 }
 
 main
