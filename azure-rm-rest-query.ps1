@@ -8,7 +8,7 @@ param(
     [ValidateSet("get","post","put")]
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded','application/json')]
-    $contentType = 'application/json',
+    $contentType = 'application/x-www-form-urlencoded',
     $clientid = $global:clientId,
     $body=@{}
 )
