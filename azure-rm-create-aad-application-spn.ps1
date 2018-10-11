@@ -29,8 +29,8 @@
 #>
 param(
     [pscredential]$credentials,
-    [Parameter(Mandatory = $true)]
-    [string]$aadDisplayName,
+    #[Parameter(Mandatory = $true)]
+    [string]$aadDisplayName = "azure-rm-rest-logon",
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
