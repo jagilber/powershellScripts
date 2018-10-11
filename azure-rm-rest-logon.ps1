@@ -122,7 +122,15 @@ function main ()
     {
         $certSubject = [io.path]::GetFileNameWithoutExtension($MyInvocation.ScriptName)
         Write-Warning "no cert info provided. trying $($certSubject)"
-        $cert = (Get-ChildItem $certStore | Where-Object Subject -imatch $certSubject)
+        $certs = @(Get-ChildItem $certStore | Where-Object {$_.Subject -imatch $certSubject -and $_.NotAfter -gt (get-date)})
+        
+        if($certs.count -gt 1)
+        {
+            $certs
+            write-warning "multiple valid certs! using first one. clean duplicates from $certStore"
+        }
+
+        $cert = $certs[0]
     }
 
     if ($cert)
