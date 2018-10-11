@@ -135,7 +135,7 @@ function main ()
         
         if($cert.NotAfter -lt (get-date))
         {
-            Write-Warning "cert is expired. run .\azure-rm-create-aad-application.spn.ps1 to create new cert"
+            Write-Warning "cert is expired. run .\azure-rm-create-aad-application-spn.ps1 to create new cert"
         }
     }
 
