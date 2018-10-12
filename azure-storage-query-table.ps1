@@ -4,18 +4,15 @@ script to query tables in azure blob storage
 (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1","$(get-location)\azure-storage-query-table.ps1")
 
 $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKQkFf0f8thKDUBYK7xQ%3D"
-$storage = "sflogsxxxxxxxxxxxxxx"
 
 .\azure-storage-query-table.ps1 -saskeyTable $sas `
     -outputDir f:\cases\0000000000001\tables `
-    -storageAccountName $storage `
     -showDetail `
     -startTime ((get-date).AddDays(-2)) `
     -endTime ((get-date).AddHours(-12)) `
     -tableName "[^T][^i][^m][^e]$"
 
 .\azure-storage-query-table.ps1 -saskeyTable $sas `
-    -storageAccountName $storage `
     -outputDir "f:\cases\000000000000001\storageTables" `
     -starttime ((get-date).Touniversaltime().AddHours(-48)) #`
     #-listColumns Timestamp `
@@ -28,7 +25,6 @@ $storage = "sflogsxxxxxxxxxxxxxx"
 #>
 param(
     [string]$saskeyTable,
-    [string]$storageAccountName,
     [switch]$showDetail,
     [switch]$convertOutputToJson,
     [string]$outputDir,
@@ -56,7 +52,7 @@ else
 
 [microsoft.windowsazure.storage.auth.storageCredentials]
 $accountSASTable = new-object microsoft.windowsazure.storage.auth.storageCredentials($saskeyTable);
-
+$storageAccountName = [regex]::Match($accountSASTable, "https://(.+?).table.core.windows.net/").Groups[1].Value
 $rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
 
 [Microsoft.WindowsAzure.Storage.Table.CloudTableClient]
