@@ -24,7 +24,8 @@ else
 {
     if($token.expires_on -le $epochTime)
     {
-        write-error "expired token $($token)"
+        $token
+        write-warning "expired token. run azure-rm-rest-logon.ps1 to generate bearer token"
         $global:token = $null
         return
     }
