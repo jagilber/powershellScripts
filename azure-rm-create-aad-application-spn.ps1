@@ -30,7 +30,7 @@
 param(
     [pscredential]$credentials,
     #[Parameter(Mandatory = $true)]
-    [string]$aadDisplayName = "azure-rm-rest-logon@$($env:Computername)",
+    [string]$aadDisplayName = "azure-rm-rest-logon/$($env:Computername)",
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
@@ -73,7 +73,7 @@ function main()
 
     if (!$uri)
     {
-        $uri = "https://$($env:Computername)/$($aadDisplayName)"
+        $uri = "https://$($aadDisplayName)"
     }
 
     $tenantId = (Get-AzureRmContext).Tenant.Id

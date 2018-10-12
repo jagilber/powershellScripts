@@ -18,6 +18,8 @@ param(
 
 $ErrorActionPreference = "stop"
 $error.Clear()
+$aadDisplayName = "azure-rm-rest-logon/$($env:Computername)"
+$cert = $null
 
 function main ()
 {
@@ -80,14 +82,9 @@ function main ()
         $tenantId = (Get-AzureRmContext).Tenant.Id
     }
 
-    $data = $null
-    $cert = $null
-
     if (!$clientId)
     {
-        $aadDisplayName = [io.path]::GetFileNameWithoutExtension($MyInvocation.ScriptName)
-        $identifierUri = "https://$($env:Computername)/$($aadDisplayName)"
-        $clientIds = @((Get-AzureRmADApplication -IdentifierUri ($identifierUri)).ApplicationId.Guid)
+        $clientIds = @((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName).ApplicationId.Guid)
         $clientIds
 
         if($clientIds.count -gt 1)
@@ -120,7 +117,7 @@ function main ()
     }
     else
     {
-        $certSubject = [io.path]::GetFileNameWithoutExtension($MyInvocation.ScriptName)
+        $certSubject = $aadDisplayName
         Write-Warning "no cert info provided. trying $($certSubject)"
         $certs = @(Get-ChildItem $certStore | Where-Object {$_.Subject -imatch $certSubject -and $_.NotAfter -gt (get-date)})
         
@@ -136,7 +133,6 @@ function main ()
     if ($cert)
     {
         $cert | fl *
-        $data = $cert.Thumbprint
         # works if using thumbprint only
         $ClientSecret = [convert]::ToBase64String($cert.GetCertHash())
         write-host "clientsecret set to: $($clientSecret)"
