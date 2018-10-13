@@ -1,4 +1,5 @@
 <#
+https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1
 downloads git client for use but no install
 git has to be pathed .\git.exe 
 by default it is added to 'path' for session 
