@@ -68,3 +68,13 @@ if($showDetail)
 {
     $skus | fl *
 }
+
+if($showDetail)
+{
+    foreach($sku in $skus)
+    {
+        write-host "checking sku image $($publisherName) $($offer) $($imageSku) $($sku.skus)"
+        $imageskus = Get-AzureRmVMImage -Location $location -PublisherName $publisherName -Offer $offer -skus $sku.skus
+        $imageskus | fl *
+    }
+}

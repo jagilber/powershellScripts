@@ -34,9 +34,6 @@ if(!$error -and !$force -and !$clean)
 }
 
 $error.clear()
-[net.servicePointManager]::Expect100Continue = $true
-[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12
-
 remove-item $clientFile -force -erroraction silentlycontinue
 $destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
 remove-item $destPath -force -recurse -erroraction silentlycontinue
