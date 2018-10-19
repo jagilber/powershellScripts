@@ -24,7 +24,8 @@
     
     example command:
     (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1","$(get-location)\azure-rm-create-aad-application-spn.ps1");
-    .\\azure-rm-create-aad-application-spn.ps1 -aadDisplayName azure-rm-rest-logon -logontype certthumb
+    .\azure-rm-create-aad-application-spn.ps1 -aadDisplayName azure-rm-rest-logon -logontype certthumb
+    .\azure-rm-create-aad-application-spn.ps1 -logontype certthumb
     # 180923
 #>
 param(
@@ -127,10 +128,10 @@ function main()
             
             $DebugPreference = "Continue"    
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $($cert.NotAfter) -StartDate $($cert.NotBefore) -verbose"
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $cert.GetRawCertData() -EndDate $cert.NotAfter -StartDate $cert.NotBefore -verbose #-Debug 
-            
-            $DebugPreference = "SilentlyContinue"
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue ($cert.GetRawCertData()) -EndDate ($cert.NotAfter) -StartDate ($cert.NotBefore) -verbose #-Debug 
+            $app            
+            #$DebugPreference = "SilentlyContinue"
+            $app = New-AzureRmADAppCredential -applicationId ($app.ApplicationId) -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
 
         }
         elseif ($logontype -ieq 'certthumb')
@@ -142,7 +143,7 @@ function main()
             $thumbprint = $cert.Thumbprint
             $ClientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
             $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate $cert.NotAfter
+            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate ($cert.NotAfter)
         }
         elseif ($logontype -ieq 'key')
         {
@@ -200,6 +201,8 @@ function main()
     $global:tenantId = $tenantId
     $global:clientSecret = $ClientSecret
     $global:keyValue = $keyValue
+    write-host "clientid / applicationid saved in `$global:applicationId" -ForegroundColor Yellow
+    write-host "clientsecret / base64 thumb saved in `$global:clientSecret" -ForegroundColor Yellow
 
 }
 # ----------------------------------------------------------------------------------------------------------------
