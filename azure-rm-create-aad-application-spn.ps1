@@ -173,11 +173,11 @@ function main()
 
         $app
         
-        New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId
+        New-AzureRmADServicePrincipal -ApplicationId ($app.ApplicationId) -DisplayName $aadDisplayName
         
         Start-Sleep 15
-        New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $app.ApplicationId
-        New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $app.ApplicationId
+        New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
+        New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
         
 
         if ($logontype -ieq 'cert' -or $logontype -ieq 'certthumb')
