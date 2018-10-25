@@ -174,6 +174,12 @@ function main ()
         $global:clientId = $clientId
         write-host "access token output saved in `$global:token" -ForegroundColor Yellow
         write-host "clientid / applicationid saved in `$global:clientId" -ForegroundColor Yellow
+        
+        if($ClientSecret)
+        {
+            $global:clientSecret = $clientSecret
+            write-host "client secret saved in `$global:clientSecret" -ForegroundColor Yellow
+        }
     }
     else
     {

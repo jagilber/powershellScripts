@@ -194,6 +194,7 @@ function main()
     write-host "application identifier Uri: $($uri)" -ForegroundColor Cyan
     write-host "keyValue: $($keyValue)" -ForegroundColor Cyan
     write-host "clientsecret: $($clientsecret)" -ForegroundColor Cyan
+    write-host "clientsecret BASE64:$([convert]::ToBase64String([text.encoding]::Unicode.GetBytes($clientsecret)))"
     write-host "thumbprint: $($thumbprint)" -ForegroundColor Cyan
     write-host "pfx path: $($pfxPath)" -ForegroundColor Cyan
     $global:thumbprint = $thumbprint

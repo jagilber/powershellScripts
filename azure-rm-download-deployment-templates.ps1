@@ -12,13 +12,15 @@
 param(
     [string]$outputDir = (get-location).path,
     [string[]]$resourceGroups,
+    [string]$exportTemplateApiVersion = "2018-02-01",
     [switch]$useGit,
     [switch]$currentOnly,
-    [string]$clientId,
-    [string]$clientSecret,
+    [string]$clientId = $global:clientId,
+    [string]$clientSecret = $global:clientSecret,
     [switch]$vscode
 )
 
+$error.Clear()
 $outputDir = $outputDir + "\armDeploymentTemplates"
 $ErrorActionPreference = "silentlycontinue"
 $getCurrentConfig = $clientId -and $clientSecret
@@ -103,7 +105,7 @@ function main()
             get-update -destinationFile $restQueryScript -updateUrl "$($repo)$([io.path]::GetFileName($restQueryScript))"
         }
 
-        $global:token = Invoke-Expression "$($restLogonScript) -clientSecret $($clientSecret) -applicationId $($clientId)" 
+        $global:token = Invoke-Expression "$($restLogonScript) -clientSecret $($clientSecret) -clientId $($clientId)" 
         $global:token
     }
     
@@ -201,10 +203,10 @@ function get-update($updateUrl, $destinationFile)
 
 function get-currentConfig($rg)
 {
-    $url = "https://management.azure.com/subscriptions/$((get-azurermcontext).subscription.id)/resourcegroups/$($rg)/exportTemplate?api-version=2018-02-01"
+    $url = "https://management.azure.com/subscriptions/$((get-azurermcontext).subscription.id)/resourcegroups/$($rg)/exportTemplate?api-version=$($exportTemplateApiVersion)"
     write-host $url
     $body = "@{'options'='IncludeParameterDefaultValue, IncludeComments';'resources' = @('*')}"
-    $command = "$($restQueryScript) -clientId =$($clientid) -query `"resourcegroups/$($rg)/exportTemplate`" -apiVersion `"2018-02-01`" -method post -body " + $body
+    $command = "$($restQueryScript) -clientId $($clientid) -contentType `"application/json`" -query `"resourcegroups/$($rg)/exportTemplate`" -apiVersion `"$($exportTemplateApiVersion)`" -method post -body " + $body
     write-host $command 
     $results = invoke-expression $command
 

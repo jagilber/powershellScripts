@@ -1,3 +1,11 @@
+<#
+https://docs.microsoft.com/en-us/rest/api/
+https://docs.microsoft.com/en-us/rest/api/compute/virtualmachines
+.\azure-rm-rest-query.ps1 -query resources
+.\azure-rm-rest-query.ps1 -query resourceGroups
+.\azure-rm-rest-query.ps1 -query providers/Microsoft.Compute
+#>
+
 param(
     $token = $global:token,
     $SubscriptionID = (Get-AzureRmContext).Subscription.Id,
