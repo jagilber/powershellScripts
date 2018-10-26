@@ -949,6 +949,8 @@ function enum-resourcegroup([string] $subid)
                 $ctx = $null
                 $displayMessage = $null
                 $t = $null
+                #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+                Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
                 $ctx = Import-AzureRmContext -Path $resource.profileContext
                 # bug to be fixed 8/2017

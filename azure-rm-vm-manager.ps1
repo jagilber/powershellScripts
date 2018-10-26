@@ -23,7 +23,9 @@
 .NOTES  
    File Name  : azure-rm-vm-manager.ps1
    Author     : jagilber
-   Version    : 180909 fix WARNING: Get-AzureRmResource: This cmdlet will be deprecated in an upcoming breaking change release.                 
+   Version    : 180909 fix WARNING: Get-AzureRmResource: This cmdlet will be deprecated in an upcoming breaking change release. 
+                    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+                    #Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
    History    : 
                 170909 add support for virtual machine scale sets -vmss
                 170902 added 'deallocate' action
@@ -783,6 +785,8 @@ function start-backgroundJob($jobInfo)
     { 
         param($jobInfo)
         $ctx = $null
+        #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+        Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
         . $($jobInfo.invocation.scriptname)
         $ctx = Import-AzureRmContext -Path $jobInfo.profileContext

@@ -1526,4 +1526,9 @@ if ($host.Name -ine "ServerRemoteHost")
     # called on foreground thread only
     main
 }
+else 
+{
+    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+    Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
+}
 

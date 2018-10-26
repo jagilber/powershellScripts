@@ -780,6 +780,8 @@ function start-backgroundJob($jobInfo)
     { 
         param($jobInfo)
         $ctx = $null
+        #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+        Disable-AzureAzContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
         . $($jobInfo.invocation.scriptname)
         $ctx = Import-AzContext -Path $jobInfo.profileContext

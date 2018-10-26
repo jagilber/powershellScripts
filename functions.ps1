@@ -47,16 +47,58 @@
 #>
 
 # proxy test
-$proxyString = "http://127.0.0.1:5555"
-$proxyUri = new-object System.Uri($proxyString)
-[Net.WebRequest]::DefaultWebProxy = new-object System.Net.WebProxy ($proxyUri, $true)
-$proxy = [System.Net.CredentialCache]::DefaultCredentials
-[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
+#$proxyString = "http://127.0.0.1:5555"
+#$proxyUri = new-object System.Uri($proxyString)
+#[Net.WebRequest]::DefaultWebProxy = new-object System.Net.WebProxy ($proxyUri, $true)
+#$proxy = [System.Net.CredentialCache]::DefaultCredentials
+#[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
 # end proxy test
+
+# auth test
+$profileContext = "$($env:TEMP)\ProfileContext.ctx"
+# end auth test
+
+function main()
+{
+    try {
+        authenticate-azureRm
+    }
+    catch {
+        write-warning "main:exception:$($error | out-string)"        
+    }
+    finally
+    {
+        if (test-path $profileContext)
+        {
+            Remove-Item -Path $profileContext -Force
+        }
+    }
+}
 
 # ----------------------------------------------------------------------------------------------------------------
 function authenticate-azureRm($context)
 {
+    <#
+        # 181026 Your Azure credentials have not been set up or have expired, please run Connect-AzureRmAccount to set up your Azure credentials
+        # https://github.com/Azure/azure-powershell/issues/7456
+        Clear-AzureRmContext # Thanks to Mark
+        Disable-AzureRmContextAutosave -Scope Process # Thanks to Mark, but my scope is Process
+        Import-AzureRmContext -Path $File # Where File is an EMPTY JSON FILE (saved when no context)
+        Dir "$($Env:Appdata)\Windows Azure Powershell" -Filter "Azure*.json" | Remove-Item -Force
+        Now you can Import-AzureRMContext yourjsonfile.json
+        and 4. are only needed for JSON logon, Connect-AzureRMAccount does not need them. probably only one of them is needed. Investigating further.
+    #>
+    # fix
+    Clear-AzureRmContext
+    Disable-AzureRmContextAutosave -Scope Process
+    $emptyJson = "$env:TEMP\empty.json"
+    remove-item $emptyJson -ErrorAction SilentlyContinue
+    New-Item -Path $emptyJson -ItemType File
+    Import-AzureRmContext -Path $emptyJson # Where File is an EMPTY JSON FILE (saved when no context)
+    #Remove-Item -Recurse -Filter "Azure*.json" -Path "$($Env:Appdata)\Windows Azure Powershell" -Force
+    Remove-Item -Recurse -Path "$($Env:Appdata)\Windows Azure Powershell\Azure*.json" -Force
+    # end fix
+
     if ($context)
     {
         $ctx = $null
@@ -66,8 +108,8 @@ function authenticate-azureRm($context)
         [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
         return $true
     }
-    # make sure at least wmf 5.0 installed
 
+    # make sure at least wmf 5.0 installed
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
     {
         write-host "update version of powershell to at least wmf 5.0. exiting..." -ForegroundColor Yellow
@@ -159,8 +201,10 @@ function authenticate-azureRm($context)
         }
     }
 
+    #main:
     #$profileContext = "$($env:TEMP)\ProfileContext.ctx"
-    #Save-AzureRmContext -Path $profileContext -Force
+    Save-AzureRmContext -Path $profileContext -Force
+    
     #main finally
     #finally
     #{
@@ -169,6 +213,9 @@ function authenticate-azureRm($context)
     #    Remove-Item -Path $profileContext -Force
     #}
     #}
+
+    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+    #Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
 }
 
@@ -640,3 +687,5 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     return $stdOut
 }
 
+# ----------------------------------------------------------------------------------------------------------------
+main
