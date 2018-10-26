@@ -134,7 +134,8 @@ function main()
     # connect to azure
     authenticate-azureRm
     $subscriptions = @(get-subscriptions)
-    
+    $global:redisplay = $true
+
     if($addPublicIp -and $subscriptions.Count -gt 0)
     {
         add-publicIp
@@ -143,6 +144,8 @@ function main()
 
     while ($global:redisplay -and $subscriptions.Count -gt 0)
     {
+        $global:redisplay = $false
+
         foreach ($sub in $subscriptions)
         {
             $resourceList = New-Object Collections.ArrayList
@@ -1158,7 +1161,29 @@ function get-subscriptions()
         write-host "enumerating subscription $($name)"
         [void]$subList.Add($id)
     }
-            
+
+    if($subList.Count -gt 1)
+    {
+        write-host "subscriptions:" -ForegroundColor Cyan
+        $count = 1
+
+        foreach($name in $subList)
+        {
+            write-host "$($count). $($name)"
+            $count++
+        }
+
+        Write-Host
+        $response = read-host "enter number of subscription to enumerate:"
+        $subList.Clear();
+
+        foreach($id in @(check-response -response $response))
+        {
+            $subList.Add($subs[$id-1])
+        }
+
+    }       
+
     write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
     return $subList
 }

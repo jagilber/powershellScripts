@@ -87,17 +87,13 @@ function authenticate-azureRm($context)
         Dir "$($Env:Appdata)\Windows Azure Powershell" -Filter "Azure*.json" | Remove-Item -Force
         Now you can Import-AzureRMContext yourjsonfile.json
         and 4. are only needed for JSON logon, Connect-AzureRMAccount does not need them. probably only one of them is needed. Investigating further.
+
+        # fix
+            Clear-AzureRmContext
+            Disable-AzureRmContextAutosave -Scope Process
+            Import-AzureRmContext -Path $emptyJson # Where File is an EMPTY JSON FILE (saved when no context)
+        # end fix
     #>
-    # fix
-    Clear-AzureRmContext
-    Disable-AzureRmContextAutosave -Scope Process
-    $emptyJson = "$env:TEMP\empty.json"
-    remove-item $emptyJson -ErrorAction SilentlyContinue
-    New-Item -Path $emptyJson -ItemType File
-    Import-AzureRmContext -Path $emptyJson # Where File is an EMPTY JSON FILE (saved when no context)
-    #Remove-Item -Recurse -Filter "Azure*.json" -Path "$($Env:Appdata)\Windows Azure Powershell" -Force
-    Remove-Item -Recurse -Path "$($Env:Appdata)\Windows Azure Powershell\Azure*.json" -Force
-    # end fix
 
     if ($context)
     {
