@@ -144,13 +144,15 @@ function main()
 function authenticate-azureRm()
 {
     # authenticate
-    try
+    if(!(Get-AzureRmResource -ErrorAction SilentlyContinue))
     {
-        Get-AzureRmResourceGroup | Out-Null
-    }
-    catch
-    {
-        Add-AzureRmAccount
+        $error.Clear()
+
+        if(!(Add-AzureRmAccount))
+        {
+           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
+            exit 1
+        }
     }
 
     if ($force)

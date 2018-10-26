@@ -357,20 +357,17 @@ function authenticate-azureRm()
         Import-Module azurerm
     }
 
+    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+    #Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
+
     # authenticate
-    try
+    if(!(Get-AzureRmResource -ErrorAction SilentlyContinue))
     {
-        Get-AzureRmResourceGroup | Out-Null
-    }
-    catch
-    {
-        try
+        $error.Clear()
+
+        if(!(Add-AzureRmAccount))
         {
-            Add-AzureRmAccount
-        }
-        catch
-        {
-            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
+           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }

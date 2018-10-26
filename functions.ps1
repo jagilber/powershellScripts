@@ -190,13 +190,9 @@ function authenticate-azureRm($context)
     }
     catch
     {
-        try
+        if(!(Add-AzureRmAccount))
         {
-            Add-AzureRmAccount
-        }
-        catch
-        {
-            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }

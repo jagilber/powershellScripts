@@ -725,13 +725,9 @@ function authenticate-azureRm()
     }
     catch
     {
-        try
+        if(!(Add-AzureRmAccount))
         {
-            Add-AzureRmAccount
-        }
-        catch
-        {
-            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -1472,3 +1468,9 @@ if ($host.Name -ine "ServerRemoteHost")
 {
     main
 }
+else 
+{
+    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+    Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
+}
+
