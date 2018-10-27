@@ -16,6 +16,8 @@ param(
     [switch]$clean
 )
 
+[System.Net.ServicePointManager]::Expect100Continue = $true;
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 $erroractionpreference = "silentlycontinue"
 $clientFile = "$($destPath)\gitminclient.zip"
 $error.clear()

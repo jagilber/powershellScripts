@@ -1123,9 +1123,11 @@ function get-subscriptions()
 {
     write-verbose "enumerating subscriptions"
     $subList = new-object Collections.ArrayList
+    $returnList = new-object Collections.ArrayList
+
     if($enumerateSubscriptions)
     {
-        $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue)
+        $subs = @(Get-AzureRmSubscription -WarningAction SilentlyContinue | Sort-Object -Property Name )
     }
     else
     {
@@ -1159,7 +1161,7 @@ function get-subscriptions()
         }
 
         #write-host "enumerating subscription $($name)"
-        [void]$subList.Add($name + " : " + $id)
+        [void]$subList.Add($name + ": " + $id)
     }
 
     if($subList.Count -gt 1)
@@ -1175,17 +1177,20 @@ function get-subscriptions()
 
         Write-Host
         $response = read-host "enter number of subscription to enumerate:"
-        $subList.Clear();
 
         foreach($id in @(check-response -response $response))
         {
-            $subList.Add($subs[$id-1])
+            $returnList.Add($subList[$id-1])
         }
 
-    }       
+    }   
+    else
+    {
+        $returnList = $subList
+    }    
 
     write-verbose "get-subscriptions returning:$($subs | fl | out-string)"
-    return $subList
+    return $returnList
 }
 
 # ----------------------------------------------------------------------------------------------------------------

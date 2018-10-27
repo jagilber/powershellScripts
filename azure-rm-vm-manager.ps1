@@ -139,7 +139,7 @@ function main()
             $global:allVmssSets = New-Object Collections.ArrayList (, @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
             foreach ($vmssSet in $global:allVmssSets)
             {
-                $global:allVmss = Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
+                $global:allVmss = @(Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name)
            
                 if ($global:allVmss.Count -gt 1)
                 {
