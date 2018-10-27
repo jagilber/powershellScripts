@@ -1158,8 +1158,8 @@ function get-subscriptions()
             continue
         }
 
-        write-host "enumerating subscription $($name)"
-        [void]$subList.Add($id)
+        #write-host "enumerating subscription $($name)"
+        [void]$subList.Add($name + " : " + $id)
     }
 
     if($subList.Count -gt 1)
