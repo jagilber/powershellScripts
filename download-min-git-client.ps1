@@ -1,5 +1,7 @@
 <#
-https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$($get-location)/download-min-git-client.ps1")
+.\download-min-git-client.ps1
+
 downloads git client for use but no install
 git has to be pathed .\git.exe 
 by default it is added to 'path' for session 
@@ -53,6 +55,7 @@ if($clean)
     return
 }
 
+# -usebasicparsing deprecated but needed for nano
 $apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
 $downloadUrl = @($apiResults.assets -imatch $gitClientType)[0].browser_download_url
 
