@@ -53,7 +53,7 @@ if($clean)
     return
 }
 
-$apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi)
+$apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
 $downloadUrl = @($apiResults.assets -imatch $gitClientType)[0].browser_download_url
 
 if(!$downloadUrl)
