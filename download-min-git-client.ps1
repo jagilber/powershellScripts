@@ -55,7 +55,7 @@ if($clean)
     return
 }
 
-# -usebasicparsing deprecated but needed for nano
+# -usebasicparsing deprecated but needed for nano / legacy
 $apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
 $downloadUrl = @($apiResults.assets -imatch $gitClientType)[0].browser_download_url
 
