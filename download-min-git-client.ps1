@@ -1,5 +1,5 @@
 <#
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$($get-location)/download-min-git-client.ps1")
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$(get-location)/download-min-git-client.ps1")
 .\download-min-git-client.ps1
 
 downloads git client for use but no install
