@@ -42,13 +42,13 @@ remove-item $clientFile -force -erroraction silentlycontinue
 $destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
 remove-item $destPath -force -recurse -erroraction silentlycontinue
 $newPath = "$($destPath)\cmd"
-$path = [System.Environment]::GetEnvironmentVariable("Path")
+$path = [environment]::GetEnvironmentVariable("Path")
 
 if($clean)
 {
     if($path.tolower().contains($destPath))
     {
-        [System.Environment]::SetEnvironmentVariable("Path", $($path.replace(";$($newPath)","")), "Machine")
+        [environment]::SetEnvironmentVariable("Path", $($path.replace(";$($newPath)","")), "Machine")
     }
     
     write-host "cleaned..."
@@ -74,7 +74,7 @@ $env:Path = $env:Path + ";$($newPath)"
 if($setPath -and !$path.tolower().contains($newPath))
 {
     # permanent
-    [System.Environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
+    [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
 }
 
 write-host "finished"
