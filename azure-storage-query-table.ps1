@@ -7,7 +7,7 @@ $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bf
 
 .\azure-storage-query-table.ps1 -saskeyTable $sas `
     -outputDir f:\cases\0000000000001\tables `
-    -showDetail `
+    -noDetail `
     -startTime ((get-date).AddDays(-2)) `
     -endTime ((get-date).AddHours(-12)) `
     -tableName "[^T][^i][^m][^e]$"
@@ -26,15 +26,19 @@ $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bf
 param(
     [Parameter(Mandatory=$true)]
     [string]$saskeyTable,
-    [switch]$showDetail,
-    [switch]$convertOutputToJson,
-    [string]$outputDir,
+    [switch]$noDetail,
+    [switch]$json,
+    [string]$outputDir,# = (get-location).path,
     [datetime]$startTime = (get-date).AddHours(-24),
     [datetime]$endTime = (get-date),
     [string]$tableName,
     [int]$takecount = 1000,
     [string[]]$listColumns
 )
+
+$global:allTableResults = $Null
+$global:allTableJson = $Null
+$global:allTableJsonObject = $Null
 
 if($outputDir)
 {
@@ -99,7 +103,7 @@ foreach($table in $tablesRef.ListTables())
 
     $tableResults = $table.ExecuteQuery($tableQuery,$null,$null)
     
-    if($showDetail -or $outputDir)
+    if(!$noDetail -or $outputDir)
     {
         write-host "table results:$(@($tableResults).Count)" -ForegroundColor Cyan
 
@@ -111,18 +115,24 @@ foreach($table in $tablesRef.ListTables())
         $outputFile = "$($outputdir)\$($table.name).records.txt"
         remove-item $outputFile -erroraction silentlycontinue
 
-        if($outputDir -or $showDetail)
+        if($outputDir -or !$noDetail -or $json)
         {
             [text.stringbuilder]$sb = new-object text.stringbuilder
 
             foreach($record in ($tableresults)| sort-object Timestamp)
             {
-                [void]$sb.AppendLine("----------------------------")
+                $recordObj = @{}
+
                 [void]$sb.AppendLine("$($record.Timestamp):$($record.PartitionKey):$($record.RowKey)")
+                $recordObj.Add("Table",$table.name)
+                $recordObj.Add("EventTimeStamp",$record.Timestamp.ToString())
+                $recordObj.Add("PartitionKey",$record.PartitionKey)
+                $recordObj.Add("RowKey",$record.RowKey)
 
                 foreach($prop in $record.properties.getenumerator())
                 {
                     [void]$sb.AppendLine("`t`t$($prop.Key):$($prop.Value.PropertyAsObject)")
+                    $recordObj.Add($prop.Key,$prop.Value.PropertyAsObject.ToString().Replace("`"","\`""))
                 }    
 
                 if($outputdir)
@@ -130,12 +140,18 @@ foreach($table in $tablesRef.ListTables())
                     out-file -append -inputobject ($sb.tostring()) -encoding ascii -filepath $outputFile
                 }
 
-                if($showDetail)
+                if(!$noDetail)
                 {
+                    write-host "----------------------------"
                     write-host ($sb.ToString())
                 }
 
                 [void]$sb.Clear()
+
+                if($json)
+                {
+                    $global:allTableJson += "$(ConvertTo-Json -InputObject $recordObj | foreach { [text.regularExpressions.regex]::Unescape($_) }),`r`n"
+                }
            }
         }
       
@@ -144,13 +160,30 @@ foreach($table in $tablesRef.ListTables())
    $global:allTableResults += $tableresults
 }
 
-if($convertOutputToJson)
+if($json)
 {
-    write-host "converting to json..." -ForegroundColor Yellow
-    $global:allTableJson = (convertto-json ($global:allTableResults) -Depth 3)
-    $outputFile = "$($outputdir)\alltableevents.json"
-    $global:allTableJson | out-file -encoding ascii -filepath $outputFile
-    write-host "`noutput json stored in `$global:allTableJson and $($outputFile)" -ForegroundColor Magenta
+    
+    # format
+    $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
+
+    if($outputDir)
+    {
+        $outputFile = "$($outputdir)\alltableevents.json"
+        $global:allTableJson | out-file -encoding ascii -filepath $outputFile
+        write-host "output json stored in `$global:allTableJson and $($outputFile)" -ForegroundColor Magenta
+    }
+
+    $global:allTableJsonObject = convertfrom-json $global:allTableJson
+    write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
 }
 
-write-host "`noutput object[] stored in `$global:allTableResults" -ForegroundColor Magenta
+write-host "output table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
+
+if($outputDir)
+{
+    write-host "output files stored in dir $outputDir\*records.txt" -ForegroundColor Magenta
+}
+else
+{
+    write-host "use -outputDir to write output to files"
+}
