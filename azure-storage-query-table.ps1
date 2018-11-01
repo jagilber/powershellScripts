@@ -24,6 +24,7 @@ $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bf
     $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Properties.instanceName.PropertyAsObject),$($_.Properties.EventType.PropertyAsObject),$($_.Properties.faultDomain.PropertyAsObject)"} 
 #>
 param(
+    [Parameter(Mandatory=$true)]
     [string]$saskeyTable,
     [switch]$showDetail,
     [switch]$convertOutputToJson,
@@ -52,7 +53,7 @@ else
 
 [microsoft.windowsazure.storage.auth.storageCredentials]
 $accountSASTable = new-object microsoft.windowsazure.storage.auth.storageCredentials($saskeyTable);
-$storageAccountName = [regex]::Match($accountSASTable, "https://(.+?).table.core.windows.net/").Groups[1].Value
+$storageAccountName = [regex]::Match($accountSASTable.SASToken, "https://(.+?).table.core.windows.net/").Groups[1].Value
 $rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
 
 [Microsoft.WindowsAzure.Storage.Table.CloudTableClient]
