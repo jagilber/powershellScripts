@@ -1,28 +1,106 @@
 <#
+.SYNOPSIS
+    powershell script to query tables in azure blob storage
 
-script to query tables in azure blob storage
+.DESCRIPTION
+    powershell script to query tables in azure blob storage.
+    results are stored in global objects for further analysis.
+    see examples and output.
 
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1","$(get-location)\azure-storage-query-table.ps1")
+    quickstart:
+    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1","$(get-location)\azure-storage-query-table.ps1")
+    $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKQkFf0f8thKDUBYK7xQ%3D"
+    .\azure-storage-query-table.ps1 -saskeyTable $sas
+            
+    Copyright 2018 Microsoft Corporation
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
 
-$sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKQkFf0f8thKDUBYK7xQ%3D"
-
-.\azure-storage-query-table.ps1 -saskeyTable $sas `
-    -outputDir f:\cases\0000000000001\tables `
-    -noDetail `
-    -startTime ((get-date).AddDays(-2)) `
-    -endTime ((get-date).AddHours(-12)) `
-    -tableName "[^T][^i][^m][^e]$"
-
-.\azure-storage-query-table.ps1 -saskeyTable $sas `
-    -outputDir "f:\cases\000000000000001\storageTables" `
-    -starttime ((get-date).Touniversaltime().AddHours(-48)) #`
-    #-listColumns Timestamp `
-    #-takecount 1000
-    #-tablename ops 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
     
-    $events = $global:allTableResults
-    $nodes = $events | where-object {$_.roleinstance -ne $Null}
-    $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Roleinstance),$($_.EventMessage),$($_.Opcodename)"} 
+.NOTES
+    File Name  : azure-storage-query-table.ps1
+    Author     : jagilber
+    Version    : 181102 original
+    History    : 
+    
+.EXAMPLE
+    .\azure-storage-query-table.ps1 -saskeyTable $sas `
+        -outputDir f:\cases\0000000000001\tables `
+        -noDetail `
+        -startTime ((get-date).AddDays(-2)) `
+        -endTime ((get-date).AddHours(-12)) `
+        -tableName "[^T][^i][^m][^e]$"
+
+.EXAMPLE
+    .\azure-storage-query-table.ps1 -saskeyTable $sas `
+        -outputDir "f:\cases\000000000000001\storageTables" `
+        -starttime ((get-date).Touniversaltime().AddHours(-48)) #`
+        #-listColumns Timestamp `
+        #-takecount 1000
+        #-tablename ops 
+        
+        $events = $global:allTableResults
+        $nodes = $events | where-object {$_.roleinstance -ne $Null}
+        $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Roleinstance),$($_.EventMessage),$($_.Opcodename)"} 
+
+.PARAMETER saskeyTable
+    saskey is mandatory argument for azure storage table to be queried
+
+.PARAMETER noDetail
+    disables output of records to console.
+    records are still added to global object and output file.
+
+.PARAMETER noJson
+    disables output of records to global json object and file.
+    this may reduce time to query.
+
+.PARAMETER outputDir
+    if specified, is the output location for generated record files and json
+
+.PARAMETER startTime
+    utc beginning timestamp for table query
+    default is -24 hours
+
+.PARAMETER endTime
+    utc end timestamp for table query
+    default is now
+
+.PARAMETER tableName
+    name of table to query
+    default is all
+
+.PARAMETER takeCount
+    number of records to return at one time
+
+.PARAMETER listColumns
+    names of columns to return
+    default is all
+.LINK
+    https://github.com/jagilber/powershellScripts
+    https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1
+
+.INPUTS
+   table saskey string
+   Input type  [string]
+
+.OUTPUTS
+    optional text / json files
+    Output type [$global:object[]]
+    $global:allTableResults
+    $global:allTableJsonObj
+
+.COMPONENT
+    azure.storage
+
+FORWARDHELPTARGETNAME https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1
+
 #>
 
 param(
