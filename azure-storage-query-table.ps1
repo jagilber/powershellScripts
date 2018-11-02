@@ -1,4 +1,5 @@
 <#
+
 script to query tables in azure blob storage
 
 (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1","$(get-location)\azure-storage-query-table.ps1")
@@ -23,16 +24,17 @@ $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bf
     $nodes = $events | where-object {$_.Properties.instanceName -ne $Null}
     $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Properties.instanceName.PropertyAsObject),$($_.Properties.EventType.PropertyAsObject),$($_.Properties.faultDomain.PropertyAsObject)"} 
 #>
+
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$saskeyTable,
     [switch]$noDetail,
-    [switch]$json,
-    [string]$outputDir,# = (get-location).path,
+    [switch]$noJson,
+    [string]$outputDir, # = (get-location).path,
     [datetime]$startTime = (get-date).AddHours(-24),
     [datetime]$endTime = (get-date),
     [string]$tableName,
-    [int]$takecount = 1000,
+    [int]$takecount = 100,
     [string[]]$listColumns
 )
 
@@ -40,12 +42,12 @@ $global:allTableResults = $Null
 $global:allTableJson = $Null
 $global:allTableJsonObject = $Null
 
-if($outputDir)
+if ($outputDir)
 {
     new-item -path $outputDir -itemtype directory -erroraction silentlycontinue
 }
 # Setup storage credentials with SASkey
-if($PSCloudShellUtilityModuleInfo)
+if ($PSCloudShellUtilityModuleInfo)
 {
     throw (new-object NotImplementedException)
     #import-module az.storage
@@ -77,13 +79,13 @@ $queryComparison = [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]::Less
 $equeryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
 
 $tableOperator = [Microsoft.WindowsAzure.Storage.Table.TableOperators]::And
-$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::CombineFilters($squeryFilter,$tableOperator,$equeryFilter)
+$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::CombineFilters($squeryFilter, $tableOperator, $equeryFilter)
 $global:allTableResults = $null
 $global:allTableJson = $null
 
-foreach($table in $tablesRef.ListTables())
+foreach ($table in $tablesRef.ListTables())
 {
-    if($tableName -and (($table.name) -inotmatch $tablename))
+    if ($tableName -and (($table.name) -inotmatch $tablename))
     {
         write-host "skipping $($table.name). does not match $($tablename)"
         continue
@@ -96,77 +98,89 @@ foreach($table in $tablesRef.ListTables())
     $tableQuery.FilterString = $queryFilter
     $tableQuery.takecount = $takecount
 
-    if($listColumns)
+    if ($listColumns)
     {
-        $tableQuery.SelectColumns = new-object collections.generic.list[string](,$listColumns)
+        $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
     }
 
-    $tableResults = $table.ExecuteQuery($tableQuery,$null,$null)
+    #$tableResults = $table.ExecuteQuery($tableQuery, $null, $null)
+    [Microsoft.WindowsAzure.Storage.Table.TableContinuationToken] $token = New-Object Microsoft.WindowsAzure.Storage.Table.TableContinuationToken
+
+    while ($token)
+    {
     
-    if(!$noDetail -or $outputDir)
-    {
-        write-host "table results:$(@($tableResults).Count)" -ForegroundColor Cyan
+        $tableResults = $table.ExecuteQuerySegmented($tableQuery, $token, $null, $null)
+        $token = $tableResults.continuationtoken
+        $token
+        $recordObjs = new-object collections.arraylist 
 
-        if(@($tableResults).Count -lt 1)
+        if (!$noDetail -or $outputDir -or !$noJson)
         {
-            continue
-        }
+            write-host "table results:$(@($tableResults).Count)" -ForegroundColor Cyan
 
-        $outputFile = "$($outputdir)\$($table.name).records.txt"
-        remove-item $outputFile -erroraction silentlycontinue
-
-        if($outputDir -or !$noDetail -or $json)
-        {
-            [text.stringbuilder]$sb = new-object text.stringbuilder
-
-            foreach($record in ($tableresults)| sort-object Timestamp)
+            if (@($tableResults).Count -lt 1)
             {
-                $recordObj = @{}
+                continue
+            }
 
-                [void]$sb.AppendLine("$($record.Timestamp):$($record.PartitionKey):$($record.RowKey)")
-                $recordObj.Add("Table",$table.name)
-                $recordObj.Add("EventTimeStamp",$record.Timestamp.ToString())
-                $recordObj.Add("PartitionKey",$record.PartitionKey)
-                $recordObj.Add("RowKey",$record.RowKey)
+            $outputFile = "$($outputdir)\$($table.name).records.txt"
+            remove-item $outputFile -erroraction silentlycontinue
 
-                foreach($prop in $record.properties.getenumerator())
+            if ($outputDir -or !$noDetail -or !$noJson)
+            {
+                [text.stringbuilder]$sb = new-object text.stringbuilder
+
+                foreach ($record in ($tableresults)| sort-object Timestamp)
                 {
-                    [void]$sb.AppendLine("`t`t$($prop.Key):$($prop.Value.PropertyAsObject)")
-                    $recordObj.Add($prop.Key,$prop.Value.PropertyAsObject.ToString().Replace("`"","\`""))
-                }    
+                    $recordObj = @{}    
+                    [void]$sb.AppendLine("$($record.Timestamp):$($record.PartitionKey):$($record.RowKey)")
+                    [void]$recordObj.Add("Table", $table.name)
+                    [void]$recordObj.Add("EventTimeStamp", $record.Timestamp.ToString())
+                    [void]$recordObj.Add("PartitionKey", $record.PartitionKey)
+                    [void]$recordObj.Add("RowKey", $record.RowKey)
 
-                if($outputdir)
-                {
-                    out-file -append -inputobject ($sb.tostring()) -encoding ascii -filepath $outputFile
+                    foreach ($prop in $record.properties.getenumerator())
+                    {
+                        [void]$sb.AppendLine("`t`t$($prop.Key):$($prop.Value.PropertyAsObject)")
+                        [void]$recordObj.Add($prop.Key, $prop.Value.PropertyAsObject.ToString().Replace("`"", "\`""))
+                    }    
+
+                    if ($outputdir)
+                    {
+                        out-file -append -inputobject ($sb.tostring()) -encoding ascii -filepath $outputFile
+                    }
+
+                    if (!$noDetail)
+                    {
+                        write-host "----------------------------"
+                        write-host ($sb.ToString())
+                    }
+
+                    [void]$sb.Clear()
+
+                    if (!$noJson)
+                    {
+                        $global:allTableJson += "$(ConvertTo-Json -InputObject $recordObj | foreach { [text.regularExpressions.regex]::Unescape($_) }),`r`n"
+                    }
+                
+                    [void]$recordObjs.Add($recordObj)
                 }
-
-                if(!$noDetail)
-                {
-                    write-host "----------------------------"
-                    write-host ($sb.ToString())
-                }
-
-                [void]$sb.Clear()
-
-                if($json)
-                {
-                    $global:allTableJson += "$(ConvertTo-Json -InputObject $recordObj | foreach { [text.regularExpressions.regex]::Unescape($_) }),`r`n"
-                }
-           }
-        }
+            }
       
-    }
+        }
 
-   $global:allTableResults += $tableresults
+        $global:allTableResults += $tableresults
+        $global:allTableResults += $recordObjs
+    }
 }
 
-if($json)
+if (!$noJson)
 {
     
     # format
     $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
 
-    if($outputDir)
+    if ($outputDir)
     {
         $outputFile = "$($outputdir)\alltableevents.json"
         $global:allTableJson | out-file -encoding ascii -filepath $outputFile
@@ -175,11 +189,20 @@ if($json)
 
     $global:allTableJsonObject = convertfrom-json $global:allTableJson
     write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
+    write-host "example queries:"
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message | ? level -lt 4" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message | ? message -imatch `"upgrade`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message | ? message -imatch `"fail`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message -ExpandProperty message | ? { `$_.message.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
+    write-host
+    write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,message -ExpandProperty message | ? message" -ForegroundColor Green
+    write-host "`$q -imatch `"fail|error`"" -ForegroundColor Green
+
 }
 
-write-host "output table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
+write-host "`noutput table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
 
-if($outputDir)
+if ($outputDir)
 {
     write-host "output files stored in dir $outputDir\*records.txt" -ForegroundColor Magenta
 }
