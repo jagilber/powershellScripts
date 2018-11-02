@@ -50,11 +50,18 @@ function main()
     set-location $outputDir
     write-host "using output location: $($outputDir)" -ForegroundColor Yellow
 
-    if ($useGit -and !(git))
+    if ($useGit)
     {
-        write-host "git not installed"
-        $useGit = $false
-        $error.Clear()
+        $error.clear()
+        (git)
+        
+        if($error)
+        {
+            $error.Clear()
+            write-host "git not installed"
+            $useGit = $false
+            $error.Clear()
+        }
     }
     
     if ($useGit -and !(git status))

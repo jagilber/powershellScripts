@@ -244,7 +244,6 @@ function main()
                 }
             }
 
-            #$global:allTableResults += $tableresults
             $global:allTableResults += $recordObjs
         }
     }
@@ -252,6 +251,7 @@ function main()
     if (!$noJson -and $global:allTableJson)
     {
         # final format
+        $global:allTableJson = $global:allTableJson | sort eventtimestamp
         $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
 
         if ($outputDir)
@@ -275,6 +275,7 @@ function main()
         write-host "`$q -imatch `"fail|error`"" -ForegroundColor Cyan
     }
 
+    $global:allTableResults = $global:allTableResults | sort eventtimestamp
     write-host "`noutput table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
 
     if ($outputDir)
