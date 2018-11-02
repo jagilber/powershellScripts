@@ -265,7 +265,7 @@ function main()
         write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
         write-host "example queries:"
         write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Cyan
-        write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`"" -ForegroundColor Cyan
+        write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`" | ft" -ForegroundColor Cyan
         write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Cyan
         write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Cyan
         write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Cyan
