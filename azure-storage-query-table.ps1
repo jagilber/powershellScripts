@@ -183,12 +183,13 @@ if (!$noJson -and $global:allTableJson)
     $global:allTableJsonObject = convertfrom-json $global:allTableJson
     write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
     write-host "example queries:"
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message | ? level -lt 4" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message | ? message -imatch `"upgrade`"" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message | ? message -imatch `"fail`"" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,message -ExpandProperty message | ? { `$_.message.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? { `$_.eventmessage.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
     write-host
-    write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,message -ExpandProperty message | ? message" -ForegroundColor Green
+    write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? eventmessage" -ForegroundColor Green
     write-host "`$q -imatch `"fail|error`"" -ForegroundColor Green
 }
 
