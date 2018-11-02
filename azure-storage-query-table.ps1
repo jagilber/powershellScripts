@@ -168,7 +168,7 @@ foreach ($table in $tablesRef.ListTables())
     }
 }
 
-if (!$noJson)
+if (!$noJson -and $global:allTableJson)
 {
     # final format
     $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
