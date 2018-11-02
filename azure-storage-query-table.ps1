@@ -168,7 +168,7 @@ foreach ($table in $tablesRef.ListTables())
       
         }
 
-        $global:allTableResults += $tableresults
+        #$global:allTableResults += $tableresults
         $global:allTableResults += $recordObjs
     }
 }
