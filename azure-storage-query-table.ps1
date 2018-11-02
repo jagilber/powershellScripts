@@ -103,15 +103,14 @@ foreach ($table in $tablesRef.ListTables())
         $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
     }
 
-    #$tableResults = $table.ExecuteQuery($tableQuery, $null, $null)
-    [Microsoft.WindowsAzure.Storage.Table.TableContinuationToken] $token = New-Object Microsoft.WindowsAzure.Storage.Table.TableContinuationToken
+    [Microsoft.WindowsAzure.Storage.Table.TableContinuationToken]
+    $token = New-Object Microsoft.WindowsAzure.Storage.Table.TableContinuationToken
 
     while ($token)
     {
     
         $tableResults = $table.ExecuteQuerySegmented($tableQuery, $token, $null, $null)
         $token = $tableResults.continuationtoken
-        $token
         $recordObjs = new-object collections.arraylist 
 
         if (!$noDetail -or $outputDir -or !$noJson)
