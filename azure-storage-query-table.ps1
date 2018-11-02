@@ -62,24 +62,24 @@ $accountSASTable = new-object microsoft.windowsazure.storage.auth.storageCredent
 $storageAccountName = [regex]::Match($accountSASTable.SASToken, "https://(.+?).table.core.windows.net/").Groups[1].Value
 $rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
 
-[Microsoft.WindowsAzure.Storage.Table.CloudTableClient]
-$cloudTableClient = new-object microsoft.windowsazure.storage.table.CloudTableClient((new-object Uri($rootTableUrl)), $accountSASTable);
+[microsoft.windowsAzure.storage.table.cloudTableClient]
+$cloudTableClient = new-object microsoft.windowsAzure.storage.table.cloudTableClient((new-object Uri($rootTableUrl)), $accountSASTable);
 $cloudTableClient
 
-[Microsoft.WindowsAzure.Storage.Table.CloudTable]
-$cloudTable = new-object microsoft.windowsazure.storage.table.CloudTable(new-object Uri($saskeyTable));
+[microsoft.windowsAzure.storage.table.cloudTable]
+$cloudTable = new-object microsoft.windowsAzure.storage.table.cloudTable(new-object Uri($saskeyTable));
 $cloudTable
 $tablesRef = $cloudTable.ServiceClient
 
-[Microsoft.WindowsAzure.Storage.Table.QueryComparisons]
-$queryComparison = [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]::GreaterThanOrEqual
-#$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
-$squeryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
-$queryComparison = [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]::LessThanOrEqual
-$equeryFilter = [microsoft.windowsazure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
+[microsoft.windowsAzure.storage.table.queryComparisons]
+$queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::GreaterThanOrEqual
+#$queryFilter = [microsoft.windowsAzure.storage.table.tablequery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
+$squeryFilter = [microsoft.windowsAzure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
+$queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::LessThanOrEqual
+$equeryFilter = [microsoft.windowsAzure.storage.table.tablequery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
 
-$tableOperator = [Microsoft.WindowsAzure.Storage.Table.TableOperators]::And
-$queryFilter = [microsoft.windowsazure.storage.table.tablequery]::CombineFilters($squeryFilter, $tableOperator, $equeryFilter)
+$tableOperator = [microsoft.windowsAzure.storage.table.tableOperators]::And
+$queryFilter = [microsoft.windowsAzure.storage.table.tablequery]::CombineFilters($squeryFilter, $tableOperator, $equeryFilter)
 $global:allTableResults = $null
 $global:allTableJson = $null
 
@@ -94,7 +94,7 @@ foreach ($table in $tablesRef.ListTables())
     write-host "table name:$($table.name)" -ForegroundColor Yellow
     write-host "query: $($queryFilter)"
     $table
-    $tableQuery = new-object microsoft.windowsazure.storage.table.tablequery
+    $tableQuery = new-object microsoft.windowsAzure.storage.table.tablequery
     $tableQuery.FilterString = $queryFilter
     $tableQuery.takecount = $takecount
 
@@ -103,8 +103,8 @@ foreach ($table in $tablesRef.ListTables())
         $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
     }
 
-    [Microsoft.WindowsAzure.Storage.Table.TableContinuationToken]
-    $token = New-Object Microsoft.WindowsAzure.Storage.Table.TableContinuationToken
+    [microsoft.windowsAzure.storage.table.tableContinuationToken]
+    $token = New-Object microsoft.windowsAzure.storage.table.tableContinuationToken
 
     while ($token)
     {
