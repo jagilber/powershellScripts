@@ -184,7 +184,8 @@ if (!$noJson -and $global:allTableJson)
     write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
     write-host "example queries:"
     write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`"" -ForegroundColor Green
+    write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Green
     write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
     write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Green
     write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? { `$_.eventmessage.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
@@ -203,3 +204,5 @@ else
 {
     write-host "use -outputDir to write output to files"
 }
+
+write-host "finished searching tables in $rootTableUrl for events between $starttime and $endtime" -ForegroundColor Yellow
