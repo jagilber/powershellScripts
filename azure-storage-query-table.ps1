@@ -206,5 +206,6 @@ else
     write-host "use -outputDir to write output to files"
 }
 
+write-host "use -starttime and -endtime to adjust time range"
 write-host "finished searching tables in $rootTableUrl. total minutes: $(((get-date) - $timer).TotalMinutes.tostring("F2"))"
 write-host "$($global:allTableResults.count) events total between $starttime and $endtime" -ForegroundColor Yellow
