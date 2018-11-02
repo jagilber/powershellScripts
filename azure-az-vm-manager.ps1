@@ -353,17 +353,11 @@ function authenticate-Az()
     }
 
     # authenticate
-    try
+    if(!(Get-AzResource -ErrorAction SilentlyContinue))
     {
-        Get-AzResourceGroup | Out-Null
-    }
-    catch
-    {
-        try
-        {
-            Add-AzAccount
-        }
-        catch
+        $error.Clear()
+
+        if(!(Add-AzAccount))
         {
             log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
