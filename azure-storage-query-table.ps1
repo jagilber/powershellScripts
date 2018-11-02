@@ -21,8 +21,8 @@ $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bf
     #-tablename ops 
     
     $events = $global:allTableResults
-    $nodes = $events | where-object {$_.Properties.instanceName -ne $Null}
-    $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Properties.instanceName.PropertyAsObject),$($_.Properties.EventType.PropertyAsObject),$($_.Properties.faultDomain.PropertyAsObject)"} 
+    $nodes = $events | where-object {$_.roleinstance -ne $Null}
+    $nodes | sort Timestamp |% {write-host "$($_.Timestamp),$($_.Roleinstance),$($_.EventMessage),$($_.Opcodename)"} 
 #>
 
 param(
