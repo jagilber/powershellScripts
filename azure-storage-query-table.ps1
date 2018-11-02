@@ -43,169 +43,176 @@ $global:allTableJson = $Null
 $global:allTableJsonObject = $Null
 $timer = get-date
 
-if ($outputDir)
+function main()
 {
-    new-item -path $outputDir -itemtype directory -erroraction silentlycontinue
-}
-# Setup storage credentials with SASkey
-if ($PSCloudShellUtilityModuleInfo)
-{
-    throw (new-object NotImplementedException)
-    #import-module az.storage
-}
-else
-{
-    import-module azure.storage
-}
-
-[microsoft.windowsAzure.storage.auth.storageCredentials]
-$accountSASTable = new-object microsoft.windowsAzure.storage.auth.storageCredentials($saskeyTable);
-$storageAccountName = [regex]::Match($accountSASTable.SASToken, "https://(.+?).table.core.windows.net/").Groups[1].Value
-$rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
-
-[microsoft.windowsAzure.storage.table.cloudTableClient] 
-$cloudTableClient = new-object microsoft.windowsAzure.storage.table.cloudTableClient((new-object Uri($rootTableUrl)), $accountSASTable);
-$cloudTableClient
-
-[microsoft.windowsAzure.storage.table.cloudTable]
-$cloudTable = new-object microsoft.windowsAzure.storage.table.cloudTable(new-object Uri($saskeyTable));
-$cloudTable
-$tablesRef = $cloudTable.ServiceClient
-
-[microsoft.windowsAzure.storage.table.queryComparisons]
-$queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::GreaterThanOrEqual
-#$queryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
-$squeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
-$queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::LessThanOrEqual
-$equeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
-
-$tableOperator = [microsoft.windowsAzure.storage.table.tableOperators]::And
-$queryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::CombineFilters($squeryFilter, $tableOperator, $equeryFilter)
-$global:allTableResults = $null
-$global:allTableJson = $null
-
-foreach ($table in $tablesRef.ListTables())
-{
-    if ($tableName -and (($table.name) -inotmatch $tablename))
+    if ($outputDir)
     {
-        write-host "skipping $($table.name). does not match $($tablename)"
-        continue
+        new-item -path $outputDir -itemtype directory -erroraction silentlycontinue
+    }
+    # Setup storage credentials with SASkey
+    if ($PSCloudShellUtilityModuleInfo)
+    {
+        throw (new-object NotImplementedException)
+        #import-module az.storage
+    }
+    else
+    {
+        import-module azure.storage
     }
 
-    write-host "table name:$($table.name)" -ForegroundColor Yellow
-    write-host "query: $($queryFilter)"
-    $table
-    $tableQuery = new-object microsoft.windowsAzure.storage.table.tableQuery
-    $tableQuery.FilterString = $queryFilter
-    $tableQuery.takecount = $takecount
+    [microsoft.windowsAzure.storage.auth.storageCredentials]
+    $accountSASTable = new-object microsoft.windowsAzure.storage.auth.storageCredentials($saskeyTable);
+    $storageAccountName = [regex]::Match($accountSASTable.SASToken, "https://(.+?).table.core.windows.net/").Groups[1].Value
+    $rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
 
-    if ($listColumns)
+    [microsoft.windowsAzure.storage.table.cloudTableClient] 
+    $cloudTableClient = new-object microsoft.windowsAzure.storage.table.cloudTableClient((new-object Uri($rootTableUrl)), $accountSASTable);
+    $cloudTableClient
+
+    [microsoft.windowsAzure.storage.table.cloudTable]
+    $cloudTable = new-object microsoft.windowsAzure.storage.table.cloudTable(new-object Uri($saskeyTable));
+    $cloudTable
+    $tablesRef = $cloudTable.ServiceClient
+
+    [microsoft.windowsAzure.storage.table.queryComparisons]
+    $queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::GreaterThanOrEqual
+    #$queryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
+    $squeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
+    $queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::LessThanOrEqual
+    $equeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
+
+    $tableOperator = [microsoft.windowsAzure.storage.table.tableOperators]::And
+    $queryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::CombineFilters($squeryFilter, $tableOperator, $equeryFilter)
+    $global:allTableResults = $null
+    $global:allTableJson = $null
+
+    foreach ($table in $tablesRef.ListTables())
     {
-        $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
-    }
-
-    [microsoft.windowsAzure.storage.table.tableContinuationToken]
-    $token = new-object microsoft.windowsAzure.storage.table.tableContinuationToken
-
-    while ($token)
-    {
-        $tableResults = $table.ExecuteQuerySegmented($tableQuery, $token, $null, $null)
-        $token = $tableResults.continuationtoken
-        $recordObjs = new-object collections.arraylist 
-
-        if (!$noDetail -or $outputDir -or !$noJson)
+        if ($tableName -and (($table.name) -inotmatch $tablename))
         {
-            write-host "table results:$(@($tableResults).Count)" -ForegroundColor Cyan
-
-            if (@($tableResults).Count -lt 1)
-            {
-                continue
-            }
-
-            $outputFile = "$($outputdir)\$($table.name).records.txt"
-            remove-item $outputFile -erroraction silentlycontinue
-
-            [text.stringbuilder]$sb = new-object text.stringbuilder
-
-            foreach ($record in ($tableresults)| sort-object Timestamp)
-            {
-                $recordObj = @{}    
-                [void]$sb.AppendLine("$($record.Timestamp):$($record.PartitionKey):$($record.RowKey)")
-                [void]$recordObj.Add("Table", $table.name)
-                [void]$recordObj.Add("EventTimeStamp", $record.Timestamp.ToString())
-                [void]$recordObj.Add("PartitionKey", $record.PartitionKey)
-                [void]$recordObj.Add("RowKey", $record.RowKey)
-
-                foreach ($prop in $record.properties.getenumerator())
-                {
-                    [void]$sb.AppendLine("`t`t$($prop.Key):$($prop.Value.PropertyAsObject)")
-                    [void]$recordObj.Add($prop.Key, $prop.Value.PropertyAsObject.ToString().Replace("`"", "\`""))
-                }    
-
-                if ($outputdir)
-                {
-                    out-file -append -inputobject ($sb.tostring()) -encoding ascii -filepath $outputFile
-                }
-
-                if (!$noDetail)
-                {
-                    write-host "----------------------------"
-                    write-host ($sb.ToString())
-                }
-
-                [void]$sb.Clear()
-
-                if (!$noJson)
-                {
-                    $global:allTableJson += "$(ConvertTo-Json -InputObject $recordObj | foreach { [text.regularExpressions.regex]::Unescape($_) }),`r`n"
-                }
-                
-                [void]$recordObjs.Add($recordObj)
-            }
+            write-host "skipping $($table.name). does not match $($tablename)"
+            continue
         }
 
-        #$global:allTableResults += $tableresults
-        $global:allTableResults += $recordObjs
-    }
-}
+        write-host "table name:$($table.name)" -ForegroundColor Yellow
+        write-host "query: $($queryFilter)"
+        $table
+        $tableQuery = new-object microsoft.windowsAzure.storage.table.tableQuery
+        $tableQuery.FilterString = $queryFilter
+        $tableQuery.takecount = $takecount
 
-if (!$noJson -and $global:allTableJson)
-{
-    # final format
-    $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
+        if ($listColumns)
+        {
+            $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
+        }
+
+        [microsoft.windowsAzure.storage.table.tableContinuationToken]
+        $token = new-object microsoft.windowsAzure.storage.table.tableContinuationToken
+
+        while ($token)
+        {
+            $tableResults = $table.ExecuteQuerySegmented($tableQuery, $token, $null, $null)
+            $token = $tableResults.continuationtoken
+            $recordObjs = new-object collections.arraylist 
+
+            if (!$noDetail -or $outputDir -or !$noJson)
+            {
+                write-host "table results:$(@($tableResults).Count)" -ForegroundColor Cyan
+
+                if (@($tableResults).Count -lt 1)
+                {
+                    continue
+                }
+
+                $outputFile = "$($outputdir)\$($table.name).records.txt"
+                remove-item $outputFile -erroraction silentlycontinue
+
+                [text.stringbuilder]$sb = new-object text.stringbuilder
+
+                foreach ($record in ($tableresults)| sort-object Timestamp)
+                {
+                    $recordObj = @{}    
+                    [void]$sb.AppendLine("$($record.Timestamp):$($record.PartitionKey):$($record.RowKey)")
+                    [void]$recordObj.Add("Table", $table.name)
+                    [void]$recordObj.Add("EventTimeStamp", $record.Timestamp.ToString())
+                    [void]$recordObj.Add("PartitionKey", $record.PartitionKey)
+                    [void]$recordObj.Add("RowKey", $record.RowKey)
+
+                    foreach ($prop in $record.properties.getenumerator())
+                    {
+                        [void]$sb.AppendLine("`t`t$($prop.Key):$($prop.Value.PropertyAsObject)")
+                        [void]$recordObj.Add($prop.Key, $prop.Value.PropertyAsObject.ToString().Replace("`"", "\`""))
+                    }    
+
+                    if ($outputdir)
+                    {
+                        out-file -append -inputobject ($sb.tostring()) -encoding ascii -filepath $outputFile
+                    }
+
+                    if (!$noDetail)
+                    {
+                        write-host "----------------------------"
+                        write-host ($sb.ToString())
+                    }
+
+                    [void]$sb.Clear()
+
+                    if (!$noJson)
+                    {
+                        $global:allTableJson += "$(ConvertTo-Json -InputObject $recordObj | foreach { [text.regularExpressions.regex]::Unescape($_) }),`r`n"
+                    }
+                
+                    [void]$recordObjs.Add($recordObj)
+                }
+            }
+
+            #$global:allTableResults += $tableresults
+            $global:allTableResults += $recordObjs
+        }
+    }
+
+    if (!$noJson -and $global:allTableJson)
+    {
+        # final format
+        $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
+
+        if ($outputDir)
+        {
+            $outputFile = "$($outputdir)\alltableevents.json"
+            $global:allTableJson | out-file -encoding ascii -filepath $outputFile
+            write-host "output json stored in `$global:allTableJson and $($outputFile)" -ForegroundColor Magenta
+        }
+
+        $global:allTableJsonObject = convertfrom-json $global:allTableJson
+        write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
+        write-host "example queries:"
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Green
+        write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`"" -ForegroundColor Green
+        write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Green
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Green
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? { `$_.eventmessage.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
+        write-host
+        write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? eventmessage" -ForegroundColor Green
+        write-host "`$q -imatch `"fail|error`"" -ForegroundColor Green
+    }
+
+    write-host "`noutput table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
 
     if ($outputDir)
     {
-        $outputFile = "$($outputdir)\alltableevents.json"
-        $global:allTableJson | out-file -encoding ascii -filepath $outputFile
-        write-host "output json stored in `$global:allTableJson and $($outputFile)" -ForegroundColor Magenta
+        write-host "output files stored in dir $outputDir\*records.txt" -ForegroundColor Magenta
+    }
+    else
+    {
+        write-host "use -outputDir to write output to files"
     }
 
-    $global:allTableJsonObject = convertfrom-json $global:allTableJson
-    write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
-    write-host "example queries:"
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`"" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Green
-    write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? { `$_.eventmessage.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
-    write-host
-    write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? eventmessage" -ForegroundColor Green
-    write-host "`$q -imatch `"fail|error`"" -ForegroundColor Green
+    write-host "use -starttime and -endtime to adjust time range"
+    help $MyInvocation.ScriptName
+    write-host "finished searching tables in $rootTableUrl. total minutes: $(((get-date) - $timer).TotalMinutes.tostring("F2"))"
+    write-host "$($global:allTableResults.count) events total between $starttime and $endtime" -ForegroundColor Yellow
+
 }
 
-write-host "`noutput table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
-
-if ($outputDir)
-{
-    write-host "output files stored in dir $outputDir\*records.txt" -ForegroundColor Magenta
-}
-else
-{
-    write-host "use -outputDir to write output to files"
-}
-
-write-host "use -starttime and -endtime to adjust time range"
-write-host "finished searching tables in $rootTableUrl. total minutes: $(((get-date) - $timer).TotalMinutes.tostring("F2"))"
-write-host "$($global:allTableResults.count) events total between $starttime and $endtime" -ForegroundColor Yellow
+main
