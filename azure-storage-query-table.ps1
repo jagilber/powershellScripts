@@ -264,15 +264,15 @@ function main()
         $global:allTableJsonObject = convertfrom-json $global:allTableJson
         write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
         write-host "example queries:"
-        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Green
-        write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`"" -ForegroundColor Green
-        write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Green
-        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Green
-        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Green
-        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? { `$_.eventmessage.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Green
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Cyan
+        write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`"" -ForegroundColor Cyan
+        write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Cyan
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"upgrade`"" -ForegroundColor Cyan
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? eventmessage -imatch `"fail`"" -ForegroundColor Cyan
+        write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? { `$_.eventmessage.tolower().contains(`"upgrade`") -and `$_.level -lt 4 }" -ForegroundColor Cyan
         write-host
-        write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? eventmessage" -ForegroundColor Green
-        write-host "`$q -imatch `"fail|error`"" -ForegroundColor Green
+        write-host "`$q = `$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage -ExpandProperty eventmessage | ? eventmessage" -ForegroundColor Cyan
+        write-host "`$q -imatch `"fail|error`"" -ForegroundColor Cyan
     }
 
     write-host "`noutput table object[] stored in `$global:allTableResults" -ForegroundColor Magenta
@@ -283,11 +283,11 @@ function main()
     }
     else
     {
-        write-host "use -outputDir to write output to files"
+        write-host "use -outputDir to write output to files" -ForegroundColor Gray
     }
 
-    write-host "use -starttime and -endtime to adjust time range"
-    help $MyInvocation.ScriptName
+    write-host "use -starttime and -endtime to adjust time range" -ForegroundColor Gray
+    write-host "type 'help $($MyInvocation.ScriptName) -full' for additional information" -ForegroundColor Gray
     write-host "finished searching tables in $rootTableUrl. total minutes: $(((get-date) - $timer).TotalMinutes.tostring("F2"))"
     write-host "$($global:allTableResults.count) events total between $starttime and $endtime" -ForegroundColor Yellow
 
