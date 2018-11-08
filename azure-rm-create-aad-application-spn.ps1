@@ -35,8 +35,8 @@ param(
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
-    [Parameter(Mandatory = $true)][ValidateSet('cert', 'key', 'password', 'certthumb')]
-    [string]$logonType
+    #[Parameter(Mandatory = $true)][ValidateSet('cert', 'key', 'password', 'certthumb')]
+    [string]$logonType = 'certthumb'
 )
 
 # ----------------------------------------------------------------------------------------------------------------
