@@ -1,5 +1,10 @@
 <#
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$(get-location)/download-min-git-client.ps1")
+
+to run with no arguments:
+iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1"|iex
+
+or use the following to save and pass arguments:
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$(get-location)/download-min-git-client.ps1");
 .\download-min-git-client.ps1
 
 downloads git client for use but no install

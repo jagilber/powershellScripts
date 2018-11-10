@@ -57,7 +57,7 @@ param(
     [string]$adminUsername = "cloudadmin",
     [string]$adminPassword = "", 
     [pscredential]$credentials,
-    [string]$deploymentName = $resourceGroup,
+    [string]$deploymentName = $resourceGroup + (get-date).ToString("yyMMddHHmmss"),
     [string]$location,
     [switch]$monitor,
     [switch]$postConnect,

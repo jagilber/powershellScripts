@@ -8,10 +8,15 @@
     # https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal#provide-credentials-through-automated-powershell-script
     
     example command:
-    (new-object net.webclient).downloadfile("https://tinyurl.com/create-azure-client-id","$(get-location)\azure-rm-create-aad-application-spn.ps1");
+    iwr https://tinyurl.com/create-azure-client-id | iex
+
+    example command to save and/or pass arguments:
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1","$(get-location)\azure-rm-create-aad-application-spn.ps1");
+    then:
     .\azure-rm-create-aad-application-spn.ps1 -aadDisplayName azure-rm-rest-logon -logontype certthumb
     or
     .\azure-rm-create-aad-application-spn.ps1 
+    
     # 181108
 #>
 param(
