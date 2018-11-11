@@ -100,6 +100,7 @@ param(
 DynamicParam
 {
     $cacheLifeMin = 10
+
     if(!$global:dynamicParameters -or
     ((get-date) - $Global:dynamicParameters.Item("lastenum")).totalminutes -gt $cacheLifeMin)
     {
@@ -189,7 +190,7 @@ process
     {
         $error.Clear()
         $filteredVms = New-Object Collections.ArrayList
-
+        
         try
         {
             log-info "$(get-date) enumerating vms for action '$($action) vms'. Ctrl-C to stop script."
@@ -205,12 +206,13 @@ process
 
             # see if we need to auth
             authenticate-azureRm
-            $global:allVms = New-Object Collections.ArrayList (, @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachines))
+            $allResources = Get-AzureRmResource
+            $global:allVms = New-Object Collections.ArrayList (, @($allResources | Where-Object ResourceType -eq Microsoft.Compute/virtualMachines))
 
             if (!$novmss)
             {
                 #log-info "checking virtual machine scale sets"
-                $global:allVmssSets = New-Object Collections.ArrayList (, @(Get-AzureRmResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+                $global:allVmssSets = New-Object Collections.ArrayList (, @($allResources | Where-Object ResourceType -eq Microsoft.Compute/virtualMachineScaleSets))
                 foreach ($vmssSet in $global:allVmssSets)
                 {
                     $global:allVmss = @(Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name)
@@ -240,7 +242,7 @@ process
 
             if (!$resourceGroupNames)
             {
-                $resourceGroupNames = (Get-AzureRmResourceGroup).ResourceGroupName
+                $resourceGroupNames = ($allResources | select-object -unique ResourceGroupName).ResourceGroupName
             }
 
             # check passed in resource group names
