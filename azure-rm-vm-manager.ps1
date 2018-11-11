@@ -111,12 +111,12 @@ DynamicParam
     $resources = $global:dynamicParameters.Item("resources")
     $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
 
-    out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has rgs pscmdlet: $($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('resourceGroupNames'))"
+    #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has rgs pscmdlet: $($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('resourceGroupNames'))"
     foreach($ParameterName in @('resourceGroupNames','excluderesourceGroupNames'))
     {
         if(!$global:dynamicParameters.ContainsKey($ParameterName))
         {
-            out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has rgs"
+            #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has rgs"
             $AttributeCollection = New-Object Collections.ObjectModel.Collection[Attribute]
             $ParameterAttribute = New-Object Management.Automation.ParameterAttribute
             # $ParameterAttribute.Mandatory = $true
@@ -137,12 +137,12 @@ DynamicParam
         }
     }
 
-    out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has vms pscmdlet: $($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('vms'))"
+    #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has vms pscmdlet: $($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('vms'))"
     foreach($ParameterName in @('vms','excludevms'))
     {
         if(!$global:dynamicParameters.ContainsKey($ParameterName))
         {
-            out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has vms"
+            #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has vms"
             $AttributeCollection = New-Object Collections.ObjectModel.Collection[Attribute]
             $ParameterAttribute = New-Object Management.Automation.ParameterAttribute
             #$ParameterAttribute.Mandatory = $true
