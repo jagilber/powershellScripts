@@ -6,7 +6,7 @@
     powershell script to manage IaaS virtual machines in Azure Resource Manager
     requires azure powershell sdk (install-module azurerm)
     
-    Copyright 2017 Microsoft Corporation
+    Copyright 2018 Microsoft Corporation
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -111,45 +111,24 @@ DynamicParam
     $resources = $global:dynamicParameters.Item("resources")
     $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
 
-    #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has rgs pscmdlet: $($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('resourceGroupNames'))"
-    foreach($ParameterName in @('resourceGroupNames','excluderesourceGroupNames'))
+    foreach($ParameterName in @('vms','excludevms','resourceGroupNames','excluderesourceGroupNames'))
     {
         if(!$global:dynamicParameters.ContainsKey($ParameterName))
         {
-            #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has rgs"
             $AttributeCollection = New-Object Collections.ObjectModel.Collection[Attribute]
             $ParameterAttribute = New-Object Management.Automation.ParameterAttribute
-            # $ParameterAttribute.Mandatory = $true
-            $ParameterAttribute.Position = 0    
-            $AttributeCollection.Add($ParameterAttribute)
-        
-            $arrSet = ($resources | Select-Object -unique ResourceGroupName).resourcegroupname
-            $ValidateSetAttribute = New-Object Management.Automation.ValidateSetAttribute($arrSet)
-            $AttributeCollection.Add($ValidateSetAttribute)
-        
-            $RuntimeParameter = New-Object Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
-            $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
-            $global:dynamicParameters.Add($ParameterName, $RuntimeParameter)
-        }
-        else 
-        {
-            $RuntimeParameterDictionary.Add($ParameterName,$Global:dynamicParameters.Item($ParameterName))
-        }
-    }
-
-    #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has vms pscmdlet: $($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('vms'))"
-    foreach($ParameterName in @('vms','excludevms'))
-    {
-        if(!$global:dynamicParameters.ContainsKey($ParameterName))
-        {
-            #out-file -Append -encoding ascii -FilePath c:\temp\ps.log -InputObject "has vms"
-            $AttributeCollection = New-Object Collections.ObjectModel.Collection[Attribute]
-            $ParameterAttribute = New-Object Management.Automation.ParameterAttribute
-            #$ParameterAttribute.Mandatory = $true
             $ParameterAttribute.Position = 0
             $AttributeCollection.Add($ParameterAttribute)
         
-            $arrSet = ($resources | where-object ResourceType -eq Microsoft.Compute/virtualMachines).Name
+            if($ParameterName -imatch "vms|excludevms")
+            {
+                $arrSet = ($resources | where-object ResourceType -eq Microsoft.Compute/virtualMachines).Name
+            }
+            else 
+            {
+                $arrSet = ($resources | Select-Object -unique ResourceGroupName).resourcegroupname
+            }
+
             $ValidateSetAttribute = New-Object Management.Automation.ValidateSetAttribute($arrSet)
             $AttributeCollection.Add($ValidateSetAttribute)
     
