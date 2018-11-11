@@ -219,11 +219,11 @@ process
             
                     if ($global:allVmss.Count -gt 1)
                     {
-                        $global:allVms.AddRange($global:allVmss)
+                        [void]$global:allVms.AddRange($global:allVmss)
                     }
                     elseif ($global:allVmss.Count -eq 1)
                     {
-                        $global:allVms.Add($global:allVmss)
+                        [void]$global:allVms.Add($global:allVmss)
                     }
                 }
             }
