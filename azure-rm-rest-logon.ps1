@@ -13,7 +13,9 @@ param(
     [string]$clientId,
     [string]$clientSecret,
     [string]$tenantId,
-    [switch]$force
+    [switch]$force,
+    [ValidateSet('arm','asm','graph')]
+    [string]$logonType = "arm"
 )
 
 $ErrorActionPreference = "stop"
@@ -144,35 +146,30 @@ function main ()
     }
 
     $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
-    $armResource = "https://management.core.windows.net/"
+    $armResource   = "https://management.azure.com/"
+    $asmResource   = "https://management.core.windows.net/"
+    $graphResource = "https://graph.microsoft.com/"
 
-    $Body = @{
-        'resource'      = $armResource
-        'client_id'     = $clientId
-        'grant_type'    = 'client_credentials'
-        'client_secret' = $clientSecret
+    if($logonType -eq "arm")
+    {
+        $token = acquire-token -resource $armResource    
     }
-    
-    $params = @{
-        ContentType = 'application/x-www-form-urlencoded' #'application/json'
-        Headers     = @{'accept' = 'application/json'}
-        Body        = $Body
-        Method      = 'Post'
-        URI         = $tokenEndpoint
+    elseif ($logontype -eq "graph")
+    {
+        $tokenEndpoint = "https://login.microsoftonline.com/$($tenantId)/oauth2/token"
+        $token = acquire-token -resource $graphResource    
+    }
+    else
+    {
+        $token = acquire-token -resource $asmResource    
     }
 
-    $body
-    $params
-    $clientSecret
-    $error.Clear()
-    $token = Invoke-RestMethod @params -Verbose -Debug
-    
     if (!$error)
     {
         $global:token = $token
         Write-Output $global:token
         $global:clientId = $clientId
-        write-host "access token output saved in `$global:token" -ForegroundColor Yellow
+        write-host "$logonType access token output saved in `$global:token" -ForegroundColor Yellow
         write-host "clientid / applicationid saved in `$global:clientId" -ForegroundColor Yellow
         
         if($ClientSecret)
@@ -185,6 +182,31 @@ function main ()
     {
         $global:token = $null   
     }
+}
+
+function acquire-token($resource)
+{
+    $error.clear()
+    $Body = @{
+        'resource'      = $resource
+        'client_id'     = $clientId
+        'grant_type'    = 'client_credentials'
+        'client_secret' = $clientSecret
+    }
+    
+    $params = @{
+        ContentType = 'application/x-www-form-urlencoded' #'application/json'
+        Headers     = @{'accept' = '*/*'}#'application/json'}
+        Body        = $Body
+        Method      = 'Post'
+        URI         = $tokenEndpoint
+    }
+
+    $body
+    $params
+    $clientSecret
+    $error.Clear()
+    return Invoke-RestMethod @params -Verbose -Debug
 }
 
 main
