@@ -207,8 +207,9 @@ function clean-up()
 function download-files()
 {
     $error.Clear()
-
-    $psexecSource = "http://live.sysinternals.com/psexec.exe"
+    [System.Net.ServicePointManager]::Expect100Continue = $true;
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+    $psexecSource = "https://live.sysinternals.com/psexec.exe"
     $psexecDest = "$(get-location)\psexec.exe"
 
     if (!(test-path $psexecDest))
@@ -221,7 +222,7 @@ function download-files()
         write-host "$($psexecDest) exists" -ForegroundColor Green
     }
 
-    $notMyFaultSource = "http://download.sysinternals.com/files/NotMyFault.zip"
+    $notMyFaultSource = "https://download.sysinternals.com/files/NotMyFault.zip"
     $notMyFaultDest = "$(get-location)\notmyfault.zip"
 
     if (!(test-path $notMyFaultSource))

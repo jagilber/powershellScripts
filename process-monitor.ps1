@@ -125,10 +125,11 @@ function get-sysInternalsUtility ([string] $utilityName)
     try
     {
         $destFile = "$(get-location)\$utilityName"
-        
+        [System.Net.ServicePointManager]::Expect100Continue = $true;
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
         if(![IO.File]::Exists($destFile))
         {
-            $sysUrl = "http://live.sysinternals.com/$($utilityName)"
+            $sysUrl = "https://live.sysinternals.com/$($utilityName)"
 
             write-host "Sysinternals process psexec.exe is needed for this option!" -ForegroundColor Yellow
             if((read-host "Is it ok to download $($sysUrl) ?[y:n]").ToLower().Contains('y'))

@@ -251,7 +251,6 @@ function main()
     if (!$noJson -and $global:allTableJson)
     {
         # final format
-        $global:allTableJson = $global:allTableJson | sort eventtimestamp
         $global:allTableJson = "[`r`n$($global:allTableJson.TrimEnd("`r`n,"))`r`n]"
 
         if ($outputDir)
@@ -262,6 +261,8 @@ function main()
         }
 
         $global:allTableJsonObject = convertfrom-json $global:allTableJson
+        $global:allTableJsonObject = $global:allTableJsonObject | sort eventtimestamp
+        
         write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
         write-host "example queries:"
         write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Cyan
