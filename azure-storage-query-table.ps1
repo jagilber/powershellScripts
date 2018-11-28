@@ -143,21 +143,21 @@ function main()
         import-module azure.storage
     }
 
-    [microsoft.windowsAzure.storage.auth.storageCredentials]
+    #[microsoft.windowsAzure.storage.auth.storageCredentials]
     $accountSASTable = new-object microsoft.windowsAzure.storage.auth.storageCredentials($saskeyTable);
     $storageAccountName = [regex]::Match($accountSASTable.SASToken, "https://(.+?).table.core.windows.net/").Groups[1].Value
     $rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
 
-    [microsoft.windowsAzure.storage.table.cloudTableClient] 
+    #[microsoft.windowsAzure.storage.table.cloudTableClient] 
     $cloudTableClient = new-object microsoft.windowsAzure.storage.table.cloudTableClient((new-object Uri($rootTableUrl)), $accountSASTable);
     $cloudTableClient
 
-    [microsoft.windowsAzure.storage.table.cloudTable]
+    #[microsoft.windowsAzure.storage.table.cloudTable]
     $cloudTable = new-object microsoft.windowsAzure.storage.table.cloudTable(new-object Uri($saskeyTable));
     $cloudTable
     $tablesRef = $cloudTable.ServiceClient
 
-    [microsoft.windowsAzure.storage.table.queryComparisons]
+    #[microsoft.windowsAzure.storage.table.queryComparisons]
     $queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::GreaterThanOrEqual
     #$queryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
     $squeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
@@ -177,12 +177,12 @@ function main()
             continue
         }
         
-        if ($excludeTableName -and (($table.name) -imatch $excludTablename))
+        if ($excludeTableName -and (($table.name) -imatch $excludeTablename))
         {
-            write-host "skipping excluded $($table.name). matches $($excludedTablename)"
+            write-host "skipping excluded $($table.name). matches $($excludeTablename)"
             continue
         }
-        
+
         write-host "table name:$($table.name)" -ForegroundColor Yellow
         write-host "query: $($queryFilter)"
         $table
@@ -195,7 +195,7 @@ function main()
             $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
         }
 
-        [microsoft.windowsAzure.storage.table.tableContinuationToken]
+        #[microsoft.windowsAzure.storage.table.tableContinuationToken]
         $token = new-object microsoft.windowsAzure.storage.table.tableContinuationToken
         $outputFile = "$($outputdir)\$($table.name).records.txt"
         remove-item $outputFile -erroraction silentlycontinue
@@ -275,6 +275,7 @@ function main()
         
         write-host "output json object stored in `$global:allTableJsonObject" -ForegroundColor Magenta
         write-host "example queries:"
+        write-host "`$global:allTableJsonObject | select EventType | sort -Unique -Property EventType"
         write-host "`$global:allTableJsonObject | select table,eventtimestamp,level,eventmessage | ? level -lt 4" -ForegroundColor Cyan
         write-host "`$global:allTableJsonObject | ? taskname -imatch `"FM`" | ft" -ForegroundColor Cyan
         write-host "`$global:allTableJsonObject | ? eventmessage -imatch `"upgrade`" | out-gridview" -ForegroundColor Cyan
