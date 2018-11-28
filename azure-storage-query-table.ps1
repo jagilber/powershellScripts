@@ -72,8 +72,12 @@
     utc end timestamp for table query
     default is now
 
+.PARAMETER excludeTableName
+    string / regex name of table to exclude
+    default is all
+
 .PARAMETER tableName
-    name of table to query
+    string / regex name of table to query
     default is all
 
 .PARAMETER takeCount
@@ -112,6 +116,7 @@ param(
     [datetime]$startTime = (get-date).AddHours(-24),
     [datetime]$endTime = (get-date),
     [string]$tableName,
+    [string]$excludeTableName,
     [int]$takecount = 100,
     [string[]]$listColumns
 )
@@ -171,7 +176,13 @@ function main()
             write-host "skipping $($table.name). does not match $($tablename)"
             continue
         }
-
+        
+        if ($excludeTableName -and (($table.name) -imatch $excludTablename))
+        {
+            write-host "skipping excluded $($table.name). matches $($excludedTablename)"
+            continue
+        }
+        
         write-host "table name:$($table.name)" -ForegroundColor Yellow
         write-host "query: $($queryFilter)"
         $table
@@ -186,6 +197,8 @@ function main()
 
         [microsoft.windowsAzure.storage.table.tableContinuationToken]
         $token = new-object microsoft.windowsAzure.storage.table.tableContinuationToken
+        $outputFile = "$($outputdir)\$($table.name).records.txt"
+        remove-item $outputFile -erroraction silentlycontinue
 
         while ($token)
         {
@@ -201,9 +214,6 @@ function main()
                 {
                     continue
                 }
-
-                $outputFile = "$($outputdir)\$($table.name).records.txt"
-                remove-item $outputFile -erroraction silentlycontinue
 
                 [text.stringbuilder]$sb = new-object text.stringbuilder
 
