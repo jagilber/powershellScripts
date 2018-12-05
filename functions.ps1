@@ -628,12 +628,12 @@ function runas-admin()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
+function run-process([string] $processName, [string] $arguments, [switch] $wait = $false)
 {
     $Error.Clear()
     log-info "Running process $processName $arguments"
     $exitVal = 0
-    $process = New-Object System.Diagnostics.Process
+    $process = New-Object Diagnostics.Process
     $process.StartInfo.UseShellExecute = !$wait
     $process.StartInfo.RedirectStandardOutput = $wait
     $process.StartInfo.RedirectStandardError = $wait
@@ -645,9 +645,6 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
     $process.StartInfo.ErrorDialogParentHandle = ([Diagnostics.Process]::GetCurrentProcess()).Handle
     $process.StartInfo.LoadUserProfile = $false
     $process.StartInfo.WindowStyle = [Diagnostics.ProcessWindowstyle]::Normal
-
-
-
     [void]$process.Start()
 
     if ($wait -and !$process.HasExited)
@@ -664,20 +661,15 @@ function run-process([string] $processName, [string] $arguments, [bool] $wait = 
             log-info $stdErr
             $Error.Clear()
         }
-            
     }
     elseif ($wait)
     {
         log-info "Error:Process ended before capturing output."
     }
     
-
-    
     $exitVal = $process.ExitCode
-
     log-info "Running process exit $($processName) : $($exitVal)"
     $Error.Clear()
-
     return $stdOut
 }
 
