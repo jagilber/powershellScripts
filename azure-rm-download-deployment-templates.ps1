@@ -27,7 +27,6 @@ $global:token = $Null
 
 function main()
 {
-
     if($currentOnly -and (!$clientId -or !$clientSecret))
     {
         write-warning "if specifying -currentOnly, -clientId and -clientSecret must be used as well. exiting..."
