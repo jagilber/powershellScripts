@@ -126,12 +126,12 @@ function main()
 
         # see if we need to auth
         authenticate-Az
-        $global:allVms = New-Object Collections.ArrayList (, @(Get-AzResource -ResourceType Microsoft.Compute/virtualMachines))
+        $global:allVms = [collections.ArrayList]@(Get-AzResource -ResourceType Microsoft.Compute/virtualMachines)
 
         if (!$novmss)
         {
             #log-info "checking virtual machine scale sets"
-            $global:allVmssSets = New-Object Collections.ArrayList (, @(Get-AzResource -ResourceType Microsoft.Compute/virtualMachineScaleSets))
+            $global:allVmssSets = [collections.ArrayList]@(Get-AzResource -ResourceType Microsoft.Compute/virtualMachineScaleSets)
             foreach ($vmssSet in $global:allVmssSets)
             {
                 $global:allVmss = Get-AzVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
@@ -192,7 +192,7 @@ function main()
         if ($vms -and $filteredVms)
         {
             # remove vm's not matching $vms list
-            foreach ($filteredVm in (new-object Collections.ArrayList (, $filteredVms)))
+            foreach ($filteredVm in ([collections.ArrayList]($filteredVms)))
             {
                 if (!($vms -imatch $filteredVm.Name))
                 {
