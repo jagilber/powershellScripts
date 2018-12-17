@@ -99,6 +99,7 @@ param(
 
 DynamicParam
 {
+    $ErrorActionPreference = "silentlycontinue"
     $cacheLifeMin = 10
 
     if(!$global:dynamicParameters -or
@@ -120,7 +121,7 @@ DynamicParam
             $ParameterAttribute = New-Object Management.Automation.ParameterAttribute
             $ParameterAttribute.Position = 0
             $AttributeCollection.Add($ParameterAttribute)
-        
+            # todo not working vmss instance search
             if($ParameterName -imatch "vms|excludevms")
             {
                 $arrSet = ($resources | where-object ResourceType -eq Microsoft.Compute/virtualMachines).Name
@@ -207,12 +208,12 @@ process
             # see if we need to auth
             authenticate-azureRm
             $allResources = Get-AzureRmResource
-            $global:allVms = New-Object Collections.ArrayList (, @($allResources | Where-Object ResourceType -eq Microsoft.Compute/virtualMachines))
+            $global:allVms = [collections.ArrayList]@($allResources | Where-Object ResourceType -eq Microsoft.Compute/virtualMachines)
 
             if (!$novmss)
             {
                 #log-info "checking virtual machine scale sets"
-                $global:allVmssSets = New-Object Collections.ArrayList (, @($allResources | Where-Object ResourceType -eq Microsoft.Compute/virtualMachineScaleSets))
+                $global:allVmssSets = [collections.ArrayList]@($allResources | Where-Object ResourceType -eq Microsoft.Compute/virtualMachineScaleSets)
                 foreach ($vmssSet in $global:allVmssSets)
                 {
                     $global:allVmss = @(Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name)
@@ -273,7 +274,7 @@ process
             if ($vms -and $filteredVms)
             {
                 # remove vm's not matching $vms list
-                foreach ($filteredVm in (new-object Collections.ArrayList (, $filteredVms)))
+                foreach ($filteredVm in ([collections.ArrayList]@($filteredVms)))
                 {
                     if (!($vms -imatch $filteredVm.Name))
                     {
