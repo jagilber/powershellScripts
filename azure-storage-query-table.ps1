@@ -192,7 +192,7 @@ function main()
 
         if ($listColumns)
         {
-            $tableQuery.SelectColumns = new-object collections.generic.list[string](, $listColumns)
+            $tableQuery.SelectColumns = [collections.generic.list[string]]@($listColumns)
         }
 
         #[microsoft.windowsAzure.storage.table.tableContinuationToken]
