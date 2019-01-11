@@ -111,7 +111,7 @@ DynamicParam
     }
 
     $resources = $global:dynamicParameters.Item("resources")
-    $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+    $RuntimeParameterDictionary = New-Object Management.Automation.RuntimeDefinedParameterDictionary
 
     foreach($ParameterName in @('vms','excludevms','resourceGroupNames','excluderesourceGroupNames'))
     {
@@ -702,7 +702,7 @@ process
             
             return $false
         }
-        catch [System.Exception] 
+        catch [Exception] 
         {
             log-info "get-update:exception: $($error | out-string)"
             $error.Clear()
@@ -742,7 +742,7 @@ process
         {
             try
             {
-                out-file -Append -InputObject "$([System.DateTime]::Now):$($data)`n" -FilePath $logFile
+                out-file -Append -InputObject "$([DateTime]::Now):$($data)`n" -FilePath $logFile
                 $dataWritten = $true
             }
             catch
