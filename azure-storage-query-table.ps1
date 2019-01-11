@@ -45,6 +45,7 @@
         #-listColumns Timestamp `
         #-takecount 1000
         #-tablename ops 
+        #-excludeTableName time
         
         $events = $global:allTableResults
         $nodes = $events | where-object {$_.roleinstance -ne $Null}
@@ -74,7 +75,7 @@
 
 .PARAMETER excludeTableName
     string / regex name of table to exclude
-    default is all
+    default is none
 
 .PARAMETER tableName
     string / regex name of table to query
@@ -159,7 +160,6 @@ function main()
 
     #[microsoft.windowsAzure.storage.table.queryComparisons]
     $queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::GreaterThanOrEqual
-    #$queryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterCondition("PartitionKey", $queryComparison, "x" )
     $squeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($startTime.ToUniversalTime().ToString("o")) )
     $queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::LessThanOrEqual
     $equeryFilter = [microsoft.windowsAzure.storage.table.tableQuery]::GenerateFilterConditionForDate("Timestamp", $queryComparison, ($endTime.ToUniversalTime().ToString("o")) )
