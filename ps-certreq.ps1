@@ -120,4 +120,10 @@ function New-CertificateRequest
     $CertificateREQ
 }
 
+if([string]::IsNullOrEmpty($subject))
+{
+    write-host "supply subject name. can be wildcard. ex: *.contoso.com. exiting"
+    return
+}
+
 New-CertificateRequest -subject "CN=$($subject)" -SANs $sans -outputDir $outputDir -pfxpassword $pfxPassword -OnlineCA $onlineCa
