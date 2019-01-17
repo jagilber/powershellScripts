@@ -131,13 +131,14 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
+        $allResources = Get-AzureRmResource
         $global:allVms = [collections.ArrayList]@($allResources `
             | Where-Object ResourceType -eq Microsoft.Compute/virtualMachines `
             | Sort-Object -Property ResourceGroupName,Name -Unique)
 
         if (!$novmss)
         {
-            #log-info "checking virtual machine scale sets"
+            log-info "checking virtual machine scale sets"
             $global:allVmssSets = [collections.ArrayList]@($allResources `
                     | Where-Object ResourceType -eq Microsoft.Compute/virtualMachineScaleSets `
                     | Sort-Object -Property ResourceGroupName,Name -Unique)
@@ -145,15 +146,7 @@ function main()
             foreach ($vmssSet in $global:allVmssSets)
             {
                 $global:allVmss = Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
-           
-                if ($global:allVmss.Count -gt 1)
-                {
-                    $global:allVms.AddRange($global:allVmss)
-                }
-                elseif ($global:allVmss.Count -eq 1)
-                {
-                    $global:allVms.Add($global:allVmss)
-                }
+                [void]$global:allVms.AddRange(@($global:allVmss))
             }
         }
 
