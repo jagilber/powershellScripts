@@ -271,7 +271,7 @@ function main()
     {
         if(!($resourcegroups = get-azurermresourcegroup))
         {
-            if(!(Login-AzureRmAccount))
+            if(!(connect-azurermaccount))
             {
                 return
             }

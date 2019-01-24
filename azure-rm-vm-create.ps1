@@ -148,7 +148,7 @@ function authenticate-azureRm()
     {
         $error.Clear()
 
-        if(!(Add-AzureRmAccount))
+        if(!(connect-azurermaccount))
         {
            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
@@ -157,7 +157,7 @@ function authenticate-azureRm()
 
     if ($force)
     {
-        Login-AzureRmAccount
+        connect-azurermaccount
     }
 
 
