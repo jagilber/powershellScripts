@@ -103,7 +103,7 @@ try
 }
 catch
 {
-    Add-AzureRmAccount
+    connect-azurermaccount
 
     try
     {

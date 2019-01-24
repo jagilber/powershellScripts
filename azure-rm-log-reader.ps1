@@ -552,7 +552,7 @@ function authenticate-azureRm($context = $Null)
     {
         try
         {
-            Add-AzureRmAccount
+            connect-azurermaccount
         }
         catch
         {
