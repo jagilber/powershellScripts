@@ -1,10 +1,12 @@
 #script to scan other scripts for azure commands to list needed azure modules
-# 170518
+# 190127
 
 [CMDLETBINDING()]
 param(
 [string]$scriptFile,
-[string]$scriptDir
+[string]$scriptDir,
+[ValidateSet('azurerm', 'az')]
+[string[]]$module = "azurerm"
 )
 
 function main()
@@ -25,7 +27,7 @@ function main()
     }
 
     $neededAzureModules = new-object Collections.ArrayList
-    $availableModules = (get-module azurerm.* -ListAvailable) | Sort-Object -Unique
+    $availableModules = (get-module "$module.*" -ListAvailable) | Sort-Object -Property Name,Version -Descending | Get-Unique 
 
     foreach($file in $files)
     {
@@ -43,8 +45,8 @@ function main()
             {
                 write-verbose "`t`t`tavailable module: $($availableModule)"
 
-                #if($availableModule.ExportedCommands.Keys -imatch $matchedValue)
-                if($availableModule.ExportedCmdlets.Keys -imatch $matchedValue)
+                if($availableModule.ExportedCmdlets.Keys -imatch $matchedValue `
+                    -or $availableModule.ExportedAliases.Keys -imatch $matchedValue)
                 {
                     $module = $availableModule.Name
 
