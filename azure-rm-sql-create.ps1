@@ -35,15 +35,15 @@
     https://aka.ms/azure-rm-sql-create.ps1
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-get-started-powershell
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-performance-guidance
+    https://docs.microsoft.com/en-us/azure/sql-database/sql-database-managed-instance-create-manage
 
     minimum parameters : resource group, location, databaseName, adminPassword
  
 .NOTES  
    File Name  : azure-rm-sql-create.ps1
    Author     : jagilber
-   History    : 180730 add all editions as validation set
-                170808 made $sqlVersion a variable defaulting to 12.0. authenticate-azurerm
-                170522 adding to wiki
+   History    : 190127 add sql managed instances
+                180730 add all editions as validation set
 .EXAMPLE  
     .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
     create a new sql database on an existing or new sql server

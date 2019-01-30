@@ -4,22 +4,22 @@
 #>
 
 param(
-[object]$token = $global:token,
-[string]$SubscriptionID = "$((Get-AzureRmSubscription).Id)",
-[string]$baseURI = "https://management.azure.com" ,
-[string]$suffixURI = "?api-version=2016-09-01" ,
-[string]$resourceGroup,
-[string]$clusterName
+    [object]$token = $global:token,
+    [string]$SubscriptionID = "$(@(Get-AzureRmSubscription)[0].Id)",
+    [string]$baseURI = "https://management.azure.com" ,
+    [string]$apiVersion = "?api-version=2018-02-01" ,
+    [string]$resourceGroup,
+    [string]$clusterName
 )
 
 
-if($resourceGroup -and $clusterName)
+if ($resourceGroup -and $clusterName)
 {
-    [string]$SubscriptionURI = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($resourceGroup)/providers/Microsoft.ServiceFabric/clusters/$($clusterName)" + $suffixURI
+    [string]$SubscriptionURI = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($resourceGroup)/providers/Microsoft.ServiceFabric/clusters/$($clusterName)" + $apiVersion
 }
 else
 {
-    [string]$SubscriptionURI = $baseURI + "/subscriptions/$($SubscriptionID)/providers/Microsoft.ServiceFabric/clusters" + $suffixURI
+    [string]$SubscriptionURI = $baseURI + "/subscriptions/$($SubscriptionID)/providers/Microsoft.ServiceFabric/clusters" + $apiVersion
 }
 
 
@@ -27,18 +27,18 @@ $uri = $SubscriptionURI
 $uri 
 
 
- $Body = @{
-        'client_id'     = $applicationId
-    }
+$Body = @{
+    'client_id' = $applicationId
+}
 $params = @{ 
     ContentType = 'application/x-www-form-urlencoded'
-    Headers     = @{
-        'authorization' = "Bearer $($token.access_token)" 
-        'accept' = 'application/json'
+        Headers = @{
+            'authorization' = "Bearer $($token.access_token)" 
+                   'accept' = 'application/json'
     }
-    Method      = 'Get' 
-    uri         = $uri
-    Body = $Body
+         Method = 'Get' 
+            uri = $uri
+           Body = $Body
 } 
 
 $params
