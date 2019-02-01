@@ -1,4 +1,6 @@
 <#
+## TESTING ##
+# script to test service fabric certificate settings
 # https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-api-clusters_get
 #/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ServiceFabric/clusters/{clusterName}?api-version=2016-09-01
 #>
@@ -10,7 +12,7 @@ param(
     [string]$clusterApiVersion = "?api-version=2018-02-01" ,
     [string]$nodeTypeApiVersion = "?api-version=2018-06-01",
     [string]$keyVaultApiVersion = "?api-version=7.0",
-    [string]$resourceGroup,
+    [string]$location = "eastus",
     [string]$script:clusterName,
     [string]$contentType = "application/json",
     [bool]$verify = $true
@@ -25,9 +27,14 @@ $script:cluster = $null
 $script:clusterCert = $null
 $script:clusterCertThumbprintPrimary = $null
 $script:clusterCertThumbprintSecondary = $null
+
 $script:clientCertificateThumbprints = $null
 $script:clientCertificateCommonNames = $null
-$script:reverseProxyCertificate = $null
+
+$script:reverseProxyCert = $null
+$script:reverseProxyCertThumbprintPrimary = $null
+$script:reverseProxyCertThumbprintSecondary = $null
+
 $script:sfnodeTypes = $null
 $script:nodeTypes = $null
 $script:resourceGroup = $resourceGroup
@@ -52,7 +59,7 @@ function main()
 
     if ($verify -and !(verify-certConfig))
     {
-
+        return 1
     }
 }
 
@@ -117,8 +124,14 @@ function get-clusterInfo()
     write-host ($script:clientCertificateCommonNames | convertto-json)
 
     write-host "reverse proxy cert:" -ForegroundColor Yellow
-    $script:reverseProxyCertificate = $script:cluster.properties.reverseProxyCertificate
-    write-host ($script:reverseProxyCertificate | convertto-json)
+    $script:reverseProxyCert = $script:cluster.properties.reverseProxyCertificate
+    write-host ($script:reverseProxyCert | convertto-json)
+    write-host "reverse proxy cert primary thumbprint:" -ForegroundColor Yellow
+    $script:reverseProxyCertThumbprintPrimary = $script:reverseProxyCert.thumbprint
+    write-host $script:reverseProxyCertThumbprintPrimary
+    write-host "reverse proxy cert secondary thumbprint:" -ForegroundColor Yellow
+    $script:reverseProxyCertThumbprintSecondary = $script:reverseProxyCert.thumbprintSecondary
+    write-host $script:reverseProxyCertThumbprintSecondary
 
     write-host "sf nodetypes:" -ForegroundColor Yellow
     $script:sfnodeTypes = $script:cluster.properties.nodeTypes
@@ -199,10 +212,9 @@ function get-nodeTypeExtensions($nodeTypeName)
     write-host ($sfExtensionReverseProxyCertInfo | convertto-json)
 }
 
-
 function invoke-rest($uri)
 {
-    $script:headers = @{
+    $headers = @{
         'authorization' = "Bearer $($token.access_token)" 
         'accept'        = "*/*"
         'ContentType'   = $contentType
@@ -210,7 +222,7 @@ function invoke-rest($uri)
 
     $params = @{ 
         ContentType = $contentType
-        Headers     = $script:headers
+        Headers     = $headers
         Method      = "get"
         uri         = $uri
     } 
@@ -218,11 +230,124 @@ function invoke-rest($uri)
     write-host $params
     $error.Clear()
     $response = Invoke-RestMethod @params -Verbose -Debug
-    #write-host "response: $(ConvertTo-Json -Depth 99 ($response))"
-    #write-host "raw response: $($response | out-string)" 
+    write-verbose "response: $response"
     write-host $error
     $global:response = $response
     return $response
+}
+
+function invoke-web($uri, $method, $body = "")
+{
+    $headers = @{
+        'authorization' = "Bearer $($token.access_token)" 
+        'ContentType'   = $contentType
+    }
+
+    $params = @{ 
+        ContentType = $contentType
+        Headers     = $headers
+        Method      = $method
+        uri         = $uri
+        timeoutsec  = 600
+    }
+
+    if($method -imatch "post")
+    {
+        $params.Add('body', $body)
+    }
+
+    write-host ($params | out-string)
+    $error.Clear()
+    $response = Invoke-WebRequest @params -Verbose -Debug
+
+    if($method -imatch "post")
+    {
+        $statusUri = ($response.Headers.'Azure-AsyncOperation')
+
+        while(!($error))
+        {
+            $response = (invoke-web -uri $statusUri -method "get")
+            write-host ($response | out-string)
+            
+            if(!($response.StatusCode -eq 200))
+            {
+                break
+            }
+            
+            $result = $response.Content | convertfrom-json
+
+            if($result.status -imatch "inprogress")
+            {
+                start-sleep -seconds 10
+            }
+            elseif($result.status -imatch "succeeded")
+            {
+                # ipconfig
+                # write-host ($result.properties.output.message)
+                # ps
+                write-host ($result.properties.output.value.message)
+                break
+            }
+            elseif($result.status -imatch "canceled")
+            {
+                write-warning "action canceled"
+                break
+            }
+            else
+            {
+                write-warning "unknown status $($result.status)"
+                break
+            }
+        }
+
+    }
+
+    write-verbose "response: $response"
+    write-host $error
+    $global:response = $response
+    return $response
+}
+
+function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$script, [collections.arraylist]$parameters)
+{
+    # first run can take 15 minutes! has to install run extension?
+    # simple subsequent commands can take minimum 30 sec
+
+    if(!$script)
+    {
+        return $false
+    }
+
+    if((test-path $script))
+    {
+        write-host "reading file $script"
+        $scriptList = [collections.arraylist]@([io.file]::readAllLines($script))
+    }
+    else
+    {
+        $scriptList = [collections.arraylist]@($script.split("`r`n",[stringsplitoptions]::removeEmptyEntries))
+    }
+    
+    write-host $scriptList 
+    
+    $posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($instanceId)/runCommand$($nodeTypeApiVersion)"
+    $body = @{
+        'commandId' = 'RunPowerShellScript'
+        'script' = $scriptList
+    } 
+
+    if($parameters)
+    {
+        $body.Add('parameters',$parameters)
+    }
+
+    write-host ($body | convertto-json)
+    $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
+    write-host ($response | out-string)
+    $result = $response.content | convertfrom-json
+    write-host ($result.properties.output.value.message)
+
+    return ($result.properties.output.value.message)
 }
 
 function verify-certConfig()
@@ -234,7 +359,7 @@ function verify-certConfig()
     $script:clusterCertThumbprintSecondary
     $script:clientCertificateThumbprints
     $script:clientCertificateCommonNames
-    $script:reverseProxyCertificate
+    
     $script:sfnodeTypes
     $script:nodeTypes
     $script:resourceGroup
@@ -255,8 +380,7 @@ function verify-certConfig()
     $script:vmExtensions
     
     $retval = verify-keyVault ($Script:vmProfiles.osProfile.secrets)
-    
-
+    $retval = $retval -and (verify-nodeCertStore)
 
     write-host "checking cert configuration completed"
     return $retVal
@@ -264,26 +388,166 @@ function verify-certConfig()
 
 function verify-keyVault($secrets)
 {
+    # cant test rest
     write-host $secrets.sourceVault
     write-host $secrets.vaultCertificates
     # The GET operation is applicable to any secret stored in Azure Key Vault. This operation requires the secrets/get permission.
     # https://docs.microsoft.com/en-us/rest/api/keyvault/getsecret/getsecret
     # https://docs.microsoft.com/en-us/azure/key-vault/key-vault-group-permissions-for-apps
+    # /subscriptions/$($subscriptionId)/resourceGroups/certsjagilber/providers/Microsoft.KeyVault/vaults/sfjagilber
+    # https://sfjagilber.vault.azure.net/secrets/sfjagilber/87fcb8695bcb4ac6ba103b7bbfd04911
 
-    foreach($secret in $secrets.vaultCertificates)
+    $pattern = "//(?<vaultName>.+?)\.vault\.azure\.net/secrets/(?<secretName>.+?)/"
+    $error.Clear()
+
+    
+    foreach ($secret in $secrets)
     {
-        $geturi = $secret.certificateUrl + $keyVaultApiVersion
+        write-verbose ($secret | convertto-json)
+        $match = [regex]::Match($secret.vaultCertificates.certificateUrl, $pattern)
+        $secretName = $match.Groups['secretName'].value
+        $vaultName = $match.Groups['vaultName'].value
+        write-host "checking secret:$secretname in vault:$vaultName" -ForegroundColor Cyan
+
+        $geturi = $secret.vaultCertificates.certificateUrl + $keyVaultApiVersion
         write-host $geturi
         $response = invoke-rest $geturi
         
-        if($error -and $error -imatch "401")
+        if(!($error))
+        {
+            write-host ($response)
+            $result = $response | convertfrom-json
+            if(!($result.attributes.enabled) -or ($result.attributes.exp -lt (get-date)))
+            {
+                Write-Warning "cert not valid! check if enabled and not expired"    
+                return $false
+            }
+        }
+        elseif($error -and $error -imatch "401")
         {
             write-host "to verify secret permissions, applicationid needs vault / key / secret 'get' rights in 'access policies' "
             write-host "https://docs.microsoft.com/en-us/rest/api/keyvault/getsecret/getsecret"
+        
+            if(get-command -name Get-AzureKeyVaultSecret)
+            {
+                if(!(get-azurermresource))
+                {
+                    add-azurermaccount
+                }
+                $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
+                write-host ($kvsecret | out-string)
+
+                if (!($kvsecret.Enabled) -or ($kvsecret.Expires -lt (get-date)))
+                {
+                    Write-Warning "cert not valid! check if enabled and not expired"    
+                    return $false
+                }
+
+                $error.Clear()
+            }
+            else
+            {
+                return $false;
+            }
         }
     }
-    pause
+
+    if ($error)
+    {
+        $error.Clear()
+        Write-Warning "error in azure rm keyvault validation. returning false."
+        return $false            
+    }
+
+    Write-host "keyvault(s) and cert(s) validated. returning true." -ForegroundColor Cyan
+    return $true
+}
+
+function verify-nodeCertStore
+{
+    $retval = $false
+    $parameters = [collections.arraylist]@() # @{}
+
+    foreach($nodetype in $script:sfnodeTypes)
+    {
+        for($i = 0;$i -lt $nodetype.vmInstanceCount; $i++)
+        {
+            # send match for every populated value and return True if all matched
+            $thumbArray = @($script:clusterCertThumbprintPrimary,$script:clusterCertThumbprintSecondary,$script:reverseProxyCertThumbprintPrimary,$script:reverseProxyCertThumbprintSecondary)
+            $joinstring = $thumbArray -join ","
+            $thumbArray = $joinstring.Split(",",[StringSplitOptions]::RemoveEmptyEntries)
+            $parameters.Add(@{"name" = "patterns";"value" = "$($thumbArray -join ",")"})
+
+            $result = run-vmssPsCommand -resourceGroup $script:resourceGroup -vmssName $nodeType.Name -instanceId $i -script (node-psCertScript) -parameters $parameters
+            write-host "node ps command result:$($result)" -ForegroundColor Magenta
+
+            $retval = $retval -and ($result -imatch "True")
+        }
+
+        return $retval
+    }
+}
+
+function node-psCertScript()
+{
+    return @'
+        param($patterns);
+        $erroractionpreference = "continue";
+        #write-host "patterns $patterns";
+        $certInfo = Get-ChildItem -Path cert: -Recurse | Out-String;
+        $retval = $true;
+        foreach($pattern in @($patterns.split(",")))
+        { 
+            if(!$pattern)
+            {
+                continue;
+            };
+
+            $retval = $retval -and [regex]::IsMatch($certInfo,$pattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::SingleLine);
+        };
+        return $retval;
+'@
 }
 
 main
 
+<#
+Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId RunPowerShellScript
+example run command with parameters
+DEBUG: ============================ HTTP REQUEST ============================
+
+HTTP Method:
+POST
+
+Absolute Uri:
+https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.Compute/virtualMachineScaleSets/{{scalesetName}}/virtualmachines/{{instanceId}}/runCommand?api-version=2018-10-01
+
+Headers:
+x-ms-client-request-id        : ed0ad00a-fc6c-40f3-9015-8d92665f8362
+accept-language               : en-US
+
+Body:
+{
+  "commandId": "RunPowerShellScript",
+  "script": [
+    "param($patterns)",
+    "$certInfo = Get-ChildItem -Path cert: -Recurse | Out-String;",
+    "$retval = $true;",
+    "foreach($pattern in $patterns.split(","))",
+    "{ ",
+    "    if(!$pattern)",
+    "    {",
+    "        continue ",
+    "    };",
+    "    $retval = $retval -and [regex]::IsMatch($certInfo,$pattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::SingleLine) ",
+    "};",
+    "return $retval;"
+  ],
+  "parameters": [
+    {
+      "name": "patterns",
+      "value": "{{certthumb1}},{{certthumb2}}"
+    }
+  ]
+}
+#>
