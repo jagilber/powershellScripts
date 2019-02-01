@@ -75,7 +75,7 @@ function main ()
         }
         catch
         {
-            Add-AzureRmAccount -ServicePrincipal `
+            connect-azurermaccount -ServicePrincipal `
                 -CertificateThumbprint $thumbPrint `
                 -ApplicationId $clientId 
                 #-TenantId $tenantId

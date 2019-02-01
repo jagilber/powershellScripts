@@ -3,7 +3,7 @@
     to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
     # can be used with scripts for example
-    # Add-AzureRmAccount -ServicePrincipal -CertificateThumbprint $cert.Thumbprint -ApplicationId $app.ApplicationId -TenantId $tenantId
+    # connect-azurermaccount -ServicePrincipal -CertificateThumbprint $cert.Thumbprint -ApplicationId $app.ApplicationId -TenantId $tenantId
     # requires free AAD base subscription
     # https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal#provide-credentials-through-automated-powershell-script
     
@@ -50,7 +50,7 @@ function main()
     {
         try
         {
-            Add-AzureRmAccount
+            connect-azurermaccount
         }
         catch [System.Management.Automation.CommandNotFoundException]
         {
@@ -59,7 +59,7 @@ function main()
             install-module azurerm
             import-module azurerm
 
-            Add-AzureRmAccount
+            connect-azurermaccount
         }
     }
 
@@ -173,7 +173,7 @@ function main()
 
         if ($logontype -ieq 'cert' -or $logontype -ieq 'certthumb')
         {
-            write-host "for use in script: Add-AzureRmAccount -ServicePrincipal -CertificateThumbprint $($cert.Thumbprint) -ApplicationId $($app.ApplicationId) -TenantId $($tenantId)"
+            write-host "for use in script: connect-azurermaccount -ServicePrincipal -CertificateThumbprint $($cert.Thumbprint) -ApplicationId $($app.ApplicationId) -TenantId $($tenantId)"
             write-host "certificate thumbprint: $($cert.Thumbprint)"
             
         }

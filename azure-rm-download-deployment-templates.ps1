@@ -239,7 +239,7 @@ function check-authentication()
     {
         try
         {
-            Add-AzureRmAccount
+            connect-azurermaccount
         }
         catch
         {
