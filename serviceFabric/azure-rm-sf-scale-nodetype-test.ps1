@@ -89,7 +89,7 @@ try
 }
 catch 
 {
-    Add-AzureRmAccount
+    connect-azurermaccount
 }
 
 import-module azurerm.servicefabric

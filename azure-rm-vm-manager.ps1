@@ -138,7 +138,7 @@ function main()
 
         if (!$novmss)
         {
-            #log-info "checking virtual machine scale sets"
+            log-info "checking virtual machine scale sets"
             $global:allVmssSets = [collections.ArrayList]@($allResources `
                     | Where-Object ResourceType -eq Microsoft.Compute/virtualMachineScaleSets `
                     | Sort-Object -Property ResourceGroupName,Name -Unique)
@@ -146,15 +146,7 @@ function main()
             foreach ($vmssSet in $global:allVmssSets)
             {
                 $global:allVmss = Get-AzureRmVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
-           
-                if ($global:allVmss.Count -gt 1)
-                {
-                    $global:allVms.AddRange($global:allVmss)
-                }
-                elseif ($global:allVmss.Count -eq 1)
-                {
-                    $global:allVms.Add($global:allVmss)
-                }
+                [void]$global:allVms.AddRange(@($global:allVmss))
             }
         }
 
@@ -371,7 +363,7 @@ function authenticate-azureRm()
     {
         $error.Clear()
 
-        if(!(Add-AzureRmAccount))
+        if(!(connect-azurermaccount))
         {
            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1

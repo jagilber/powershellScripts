@@ -54,14 +54,14 @@ catch
 {
     try
     {
-        Add-AzureRmAccount
+        connect-azurermaccount
     }
     catch [management.automation.commandNotFoundException]
     {
         write-host "installing azurerm sdk. this will take a while..."
         install-module azurerm
         import-module azurerm
-        Add-AzureRmAccount
+        connect-azurermaccount
     }
 }
 
