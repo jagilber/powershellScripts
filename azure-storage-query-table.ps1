@@ -143,19 +143,10 @@ function main()
         import-module azure.storage
     }
 
-    #[microsoft.windowsAzure.storage.auth.storageCredentials]
-    $accountSASTable = new-object microsoft.windowsAzure.storage.auth.storageCredentials($saskeyTable);
-    $storageAccountName = [regex]::Match($accountSASTable.SASToken, "https://(.+?).table.core.windows.net/").Groups[1].Value
-    $rootTableUrl = "https://$($storageAccountName).table.core.windows.net/"
-
-    #[microsoft.windowsAzure.storage.table.cloudTableClient] 
-    $cloudTableClient = new-object microsoft.windowsAzure.storage.table.cloudTableClient((new-object Uri($rootTableUrl)), $accountSASTable);
-    $cloudTableClient
-
     #[microsoft.windowsAzure.storage.table.cloudTable]
     $cloudTable = new-object microsoft.windowsAzure.storage.table.cloudTable(new-object Uri($saskeyTable));
     $cloudTable
-    $tablesRef = $cloudTable.ServiceClient
+    $tableClient = $cloudTable.ServiceClient
 
     #[microsoft.windowsAzure.storage.table.queryComparisons]
     $queryComparison = [microsoft.windowsAzure.storage.table.queryComparisons]::GreaterThanOrEqual
@@ -169,7 +160,7 @@ function main()
     $global:allTableResults = $null
     $global:allTableJson = $null
 
-    foreach ($table in $tablesRef.ListTables())
+    foreach ($table in $tableClient.ListTables())
     {
         if ($tableName -and (($table.name) -inotmatch $tablename))
         {
