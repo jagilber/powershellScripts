@@ -131,6 +131,7 @@ function main()
 
         # see if we need to auth
         authenticate-azureRm
+        $allResources = Get-AzureRmResource
         $global:allVms = [collections.ArrayList]@($allResources `
             | Where-Object ResourceType -eq Microsoft.Compute/virtualMachines `
             | Sort-Object -Property ResourceGroupName,Name -Unique)
