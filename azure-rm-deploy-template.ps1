@@ -239,7 +239,7 @@ if ((Get-AzureRmResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue
     if($clean -and $force)
     {
         write-warning "resource group exists! deleting as -clean and -force are specified!"
-        Remove-AzureRmResourceGroup -ResourceGroupName $resourceGroup -Name $deploymentName -force
+        Remove-AzureRmResourceGroup -ResourceGroupName $resourceGroup -Force
     }
     elseif($clean)
     {

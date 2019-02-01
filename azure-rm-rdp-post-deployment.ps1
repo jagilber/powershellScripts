@@ -856,7 +856,7 @@ function enum-resourcegroup([string] $subid)
         if(!$noprompt -and !$resourceGroupName)
         {
             write-host "resource group names:" -ForegroundColor Cyan
-            $resourceGroupNames = new-object Collections.ArrayList (,@(Get-AzureRmResourceGroup).ResourceGroupName)
+            $resourceGroupNames = [collections.ArrayList]@((Get-AzureRmResourceGroup).ResourceGroupName)
             $count = 1
 
             foreach($name in $resourceGroupNames)
