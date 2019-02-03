@@ -9,6 +9,7 @@ param(
     [string]$baseURI = "https://management.azure.com" ,
     [string]$clusterApiVersion = "?api-version=2018-02-01" ,
     [string]$nodeTypeApiVersion = "?api-version=2018-06-01",
+    [string]$keyVaultApiVersion = "?api-version=7.0",
     [string]$resourceGroup,
     [string]$script:clusterName,
     [string]$contentType = "application/json",
@@ -29,10 +30,7 @@ $script:clientCertificateCommonNames = $null
 $script:reverseProxyCertificate = $null
 $script:sfnodeTypes = $null
 $script:nodeTypes = $null
-#$script:nodeTypeExtensions = $null
 $script:resourceGroup = $resourceGroup
-#$script:sfExtensionCertInfo = $null
-#$script:sfExtensionReverseProxyCertInfo = $null
 $script:vmExtensions = [collections.arraylist]@()
 $script:vmProfiles = [collections.arraylist]@()
 
@@ -44,15 +42,15 @@ function main()
         return 1
     }
 
-    foreach($nodeType in $script:sfnodeTypes)
+    foreach ($nodeType in $script:sfnodeTypes)
     {
-        if (!(get-nodeTypInfo -nodeTypeName ($nodeType.Name)))
+        if (!(get-nodeTypeInfo -nodeTypeName ($nodeType.Name)))
         {
             return 1
         }
     }
 
-    if($verify -and !(verify-certConfig))
+    if ($verify -and !(verify-certConfig))
     {
 
     }
@@ -94,7 +92,7 @@ function get-clusterInfo()
     {
         $script:cluster = $script:clusters[$number - 1]
         $script:clusterName = $script:cluster.Name
-        $script:resourceGroup = [regex]::Match($script:cluster.Id,"/resourcegroups/(.+?)/").Groups[1].Value
+        $script:resourceGroup = [regex]::Match($script:cluster.Id, "/resourcegroups/(.+?)/").Groups[1].Value
         write-host $script:resourceGroup
     }
 
@@ -125,7 +123,7 @@ function get-clusterInfo()
     write-host "sf nodetypes:" -ForegroundColor Yellow
     $script:sfnodeTypes = $script:cluster.properties.nodeTypes
     write-verbose ($script:sfnodeTypes | convertto-json)
-    write-host ($script:sfnodeTypes| select name,vmInstanceCount,isPrimary | convertto-json -Depth 1)
+    write-host ($script:sfnodeTypes| select name, vmInstanceCount, isPrimary | convertto-json -Depth 1)
 }
 
 function get-nodeTypeInfo($nodeTypeName)
@@ -137,7 +135,7 @@ function get-nodeTypeInfo($nodeTypeName)
     $nodeTypesResponse = (invoke-rest ($geturi + $nodeTypeApiVersion))
     write-host "nodetypes:" -ForegroundColor Green
     $script:nodeTypes = @($nodeTypesResponse)
-    write-host ($script:nodeTypes| select name,id,tags | convertto-json -Depth 1)
+    write-host ($script:nodeTypes| select name, id, tags | convertto-json -Depth 1)
     write-verbose ($script:nodeTypes | convertto-json -Depth 1)
 
     if ($nodeTypes.length -lt 1)
@@ -146,7 +144,7 @@ function get-nodeTypeInfo($nodeTypeName)
         return $false
     }
 
-    foreach($nodeType in $script:nodeTypes)
+    foreach ($nodeType in $script:nodeTypes)
     {
 
         $vmProfile = $nodeType.properties.virtualMachineProfile
@@ -158,7 +156,7 @@ function get-nodeTypeInfo($nodeTypeName)
         write-host "nodetype secrets info:" -ForegroundColor Green
         $count = 1
 
-        foreach($secret in $script:nodeTypeSecrets)
+        foreach ($secret in $script:nodeTypeSecrets)
         {
             write-host "nodetype secret $count" -ForegroundColor Green
             write-host "nodetype secret source vault $count" -ForegroundColor Green
@@ -177,7 +175,7 @@ function get-nodeTypeExtensions($nodeTypeName)
 {
     $geturi = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($script:resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($nodeTypeName)/extensions"
     write-host $geturi 
-    $nodeTypesResponse = (invoke-rest $geturi)
+    $nodeTypesResponse = invoke-rest ($geturi + $nodeTypeApiVersion)
     write-verbose "nodetype extensions:"
     $nodeTypeExtensions = @($nodeTypesResponse)
     write-verbose ($nodeTypeExtensions.value.properties | convertto-json)
@@ -229,6 +227,21 @@ function invoke-rest($uri)
 
 function verify-certConfig()
 {
+    <#
+    $script:cluster
+    $script:clusterCert
+    $script:clusterCertThumbprintPrimary
+    $script:clusterCertThumbprintSecondary
+    $script:clientCertificateThumbprints
+    $script:clientCertificateCommonNames
+    $script:reverseProxyCertificate
+    $script:sfnodeTypes
+    $script:nodeTypes
+    $script:resourceGroup
+    $script:vmExtensions
+    $script:vmProfiles
+    #>
+
     $retVal = $false
     write-host "checking cert configuration"
     # check local store and connect to cluster if cert exists?
@@ -239,7 +252,28 @@ function verify-certConfig()
     write-host "checking cert configuration key vault certificates"
     write-host "checking cert configuration sf <-> vmss "
 
+    $script:vmExtensions
+    
+    $retval = verify-keyVault ($Script:vmProfiles.osProfile.secrets)
+    
+
+
+    write-host "checking cert configuration completed"
     return $retVal
+}
+
+function verify-keyVault($secrets)
+{
+    write-host $secrets.sourceVault
+    write-host $secrets.vaultCertificates
+    # The GET operation is applicable to any secret stored in Azure Key Vault. This operation requires the secrets/get permission.
+
+    foreach($secret in $secrets.vaultCertificates)
+    {
+        $geturi = $secret.certificateUrl + $keyVaultApiVersion
+        $response = invoke-rest $geturi
+    }
+    pause
 }
 
 main
