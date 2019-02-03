@@ -259,6 +259,16 @@ function invoke-web($uri, $method, $body = "")
     write-host ($params | out-string)
     $error.Clear()
     $response = Invoke-WebRequest @params -Verbose -Debug
+    $error.Clear()
+
+    write-host ($response | convertto-json) -ForegroundColor Green -ErrorAction SilentlyContinue
+
+    if($error)
+    {
+        write-host ($response) -ForegroundColor DarkGreen
+        $error.Clear()
+    }
+    
 
     if($method -imatch "post")
     {
@@ -491,21 +501,12 @@ function verify-nodeCertStore
 function node-psCertScript()
 {
     return @'
-        param($patterns);
-        $erroractionpreference = "continue";
-        #write-host "patterns $patterns";
-        $certInfo = Get-ChildItem -Path cert: -Recurse | Out-String;
-        $retval = $true;
-        foreach($pattern in @($patterns.split(",")))
-        { 
-            if(!$pattern)
-            {
-                continue;
-            };
-
-            $retval = $retval -and [regex]::IsMatch($certInfo,$pattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::SingleLine);
-        };
-        return $retval;
+        param($patterns)
+        $certInfo = Get-ChildItem -path cert: -recurse | Out-String
+        $patterns = @($patterns.split(",",[stringsplitoptions]::RemoveEmptyEntries))
+        $patternMatch = $patterns.length
+        $patterns | ForEach-Object {if($certInfo -imatch $_) { $patternMatch--}}
+        $patternMatch -eq 0
 '@
 }
 
