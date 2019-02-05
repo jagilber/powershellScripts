@@ -51,27 +51,27 @@ param(
     [string]$vmssName = "nt0",
     [int]$instanceId = -1,
     [string]$script,
-    [collections.arraylist]$parameters = [collections.arraylist]@()
+    [collections.arraylist]$parameters = [collections.arraylist]@() # list of hashtables @{"name" = "%parameter name%"; "value" = "%parameter value%"}
 )
 
 $ErrorActionPreference = "silentlycontinue"
 
 function main()
 {
-    if(!(get-azurermresource))
+    if (!(get-azurermresource))
     {
         add-azurermaccount
     }
 
-    if(!$script)
+    if (!$script)
     {
         $script = (node-psTestNetScript)
-        [void]$parameters.Add(@{"name" = "remoteHost";"value" = "time.windows.com"})
-        [void]$parameters.Add(@{"name" = "port";"value" = "80"})
+        [void]$parameters.Add(@{"name" = "remoteHost"; "value" = "time.windows.com"})
+        [void]$parameters.Add(@{"name" = "port"; "value" = "80"})
     }
 
 
-    if(!$resourceGroup -or !$vmssName)
+    if (!$resourceGroup -or !$vmssName)
     {
         $count = 1
         $resourceGroups = Get-AzureRmResourceGroup
@@ -105,22 +105,22 @@ function main()
     
     }
 
-    if($instanceId -lt 0)
+    if ($instanceId -lt 0)
     {
         $scaleset = get-azurermvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmss
         $maxInstanceId = $scaleset.Sku.Capacity
-        $instanceId = 1
+        $instanceId = 0
     }
     else
     {
-        $maxInstanceId = $instanceId
+        $maxInstanceId = $instanceId + 1
     }
 
-    $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $i -maxInstanceId $maxInstanceId -script $script -parameters $parameters
+    $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $instanceId -maxInstanceId $maxInstanceId -script $script -parameters $parameters
     write-host $result
 
 
-    if($error)
+    if ($error)
     {
         return 1
     }
@@ -141,12 +141,12 @@ function invoke-web($uri, $method, $body = "")
         timeoutsec  = 600
     }
 
-    if($method -imatch "post")
+    if ($method -imatch "post")
     {
-        $params.Add('body', $body)
+        [void]$params.Add('body', $body)
     }
 
-    write-host ($params | out-string)
+    write-verbose ($params | out-string)
     $error.Clear()
     $response = Invoke-WebRequest @params -Verbose -Debug
     write-verbose "response: $response"
@@ -156,7 +156,7 @@ function invoke-web($uri, $method, $body = "")
     $json = convertto-json -InputObject $response -ErrorAction SilentlyContinue 
     write-host $json -ForegroundColor Green 
 
-    if($error)
+    if ($error)
     {
         write-host ($response) -ForegroundColor DarkGreen
         $error.Clear()
@@ -179,19 +179,19 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     # first run can take 15 minutes! has to install run extension?
     # simple subsequent commands can take minimum 30 sec
 
-    if(!$script)
+    if (!$script)
     {
         return $false
     }
 
-    if((test-path $script))
+    if ((test-path $script))
     {
         write-host "reading file $script"
         $scriptList = [collections.arraylist]@([io.file]::readAllLines($script))
     }
     else
     {
-        $scriptList = [collections.arraylist]@($script.split("`r`n",[stringsplitoptions]::removeEmptyEntries))
+        $scriptList = [collections.arraylist]@($script.split("`r`n", [stringsplitoptions]::removeEmptyEntries))
     }
     
     write-host $scriptList 
@@ -199,12 +199,12 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     #$posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($instanceId)/runCommand$($nodeTypeApiVersion)"
     $body = @{
         'commandId' = 'RunPowerShellScript'
-        'script' = $scriptList
+        'script'    = $scriptList
     } 
 
-    if($parameters)
+    if ($parameters)
     {
-        $body.Add('parameters',$parameters)
+        [void]$body.Add('parameters', $parameters)
     }
 
     write-host ($body | convertto-json)
@@ -212,37 +212,38 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     $responses = [collections.arraylist]@()
     $statusUris = [collections.arraylist]@()
     
-    for($i = $instanceId; $i -le $maxInstanceId;$i++)
+    for ($i = $instanceId; $i -lt $maxInstanceId; $i++)
     {
         $posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($i)/runCommand$($nodeTypeApiVersion)"
         $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
-        write-host $response
-        $responses.Add($response)
+        write-verbose $response
+        [void]$responses.Add($response)
+
         $statusUri = ($response.Headers.'Azure-AsyncOperation')
         write-host $statusUri
-        $statusUris.Add($statusUri)
+        [void]$statusUris.Add($statusUri)
     }
 
     
-    foreach($statusUri in [collections.arraylist]@($statusUris))
+    foreach ($statusUri in [collections.arraylist]@($statusUris))
     {
         Write-Host "checking statusuri $statusuri" -ForegroundColor Magenta
-        while(!$error)
+        while (!$error)
         {
             $response = (invoke-web -uri $statusUri -method "get")
-            write-host ($response | out-string)
+            write-verbose ($response | out-string)
             $result = $response.Content | convertfrom-json
 
-            if($result.status -imatch "inprogress")
+            if ($result.status -imatch "inprogress")
             {
                 start-sleep -seconds 1
                 continue
             }
-            elseif($result.status -imatch "succeeded")
+            elseif ($result.status -imatch "succeeded")
             {
                 write-host ($result.properties.output.value.message)
             }
-            elseif($result.status -imatch "canceled")
+            elseif ($result.status -imatch "canceled")
             {
                 write-warning "action canceled"
             }
