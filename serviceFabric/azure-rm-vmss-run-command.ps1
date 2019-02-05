@@ -196,7 +196,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     
     write-host $scriptList 
     
-    #$posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($instanceId)/runCommand$($nodeTypeApiVersion)"
     $body = @{
         'commandId' = 'RunPowerShellScript'
         'script'    = $scriptList
@@ -252,16 +251,13 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
                 write-warning "unknown status $($result.status)"
             }
 
+            write-host ($response | out-string)
+            $result = $response.content | convertfrom-json
+            write-host ($result.properties.output.value.message)
             $statusUris.Remove($statusUri)
             break
         }
     }
-
-    write-host ($response | out-string)
-    $result = $response.content | convertfrom-json
-    write-host ($result.properties.output.value.message)
-
-    return ($result.properties.output.value.message)
 }
 
 main
