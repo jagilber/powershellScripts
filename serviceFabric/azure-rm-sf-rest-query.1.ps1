@@ -240,7 +240,7 @@ function invoke-web($uri, $method, $body = "")
 {
     $headers = @{
         'authorization' = "Bearer $($token.access_token)" 
-        'ContentType'   = $contentType
+        'ContentType'   = "application/json"
     }
 
     $params = @{ 
@@ -259,8 +259,10 @@ function invoke-web($uri, $method, $body = "")
     write-host ($params | out-string)
     $error.Clear()
     $response = Invoke-WebRequest @params -Verbose -Debug
-    $error.Clear()
+    write-verbose "response: $response"
+    write-host $error
 
+    $error.Clear()
     write-host ($response | convertto-json) -ForegroundColor Green -ErrorAction SilentlyContinue
 
     if($error)
@@ -269,47 +271,6 @@ function invoke-web($uri, $method, $body = "")
         $error.Clear()
     }
 
-    if($method -imatch "post")
-    {
-        $statusUri = ($response.Headers.'Azure-AsyncOperation')
-
-        while(!($error))
-        {
-            $response = (invoke-web -uri $statusUri -method "get")
-            write-host ($response | out-string)
-            
-            if(!($response.StatusCode -eq 200))
-            {
-                break
-            }
-            
-            $result = $response.Content | convertfrom-json
-
-            if($result.status -imatch "inprogress")
-            {
-                start-sleep -seconds 10
-            }
-            elseif($result.status -imatch "succeeded")
-            {
-                write-host ($result.properties.output.value.message)
-                break
-            }
-            elseif($result.status -imatch "canceled")
-            {
-                write-warning "action canceled"
-                break
-            }
-            else
-            {
-                write-warning "unknown status $($result.status)"
-                break
-            }
-        }
-
-    }
-
-    write-verbose "response: $response"
-    write-host $error
     $global:response = $response
     return $response
 }
@@ -349,6 +310,41 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$scr
 
     write-host ($body | convertto-json)
     $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
+    $statusUri = ($response.Headers.'Azure-AsyncOperation')
+
+    while(!$error)
+    {
+        $response = (invoke-web -uri $statusUri -method "get")
+        write-host ($response | out-string)
+        
+        if(!($response.StatusCode -eq 200))
+        {
+            break
+        }
+        
+        $result = $response.Content | convertfrom-json
+
+        if($result.status -imatch "inprogress")
+        {
+            start-sleep -seconds 10
+        }
+        elseif($result.status -imatch "succeeded")
+        {
+            write-host ($result.properties.output.value.message)
+            break
+        }
+        elseif($result.status -imatch "canceled")
+        {
+            write-warning "action canceled"
+            break
+        }
+        else
+        {
+            write-warning "unknown status $($result.status)"
+            break
+        }
+    }
+
     write-host ($response | out-string)
     $result = $response.content | convertfrom-json
     write-host ($result.properties.output.value.message)
@@ -415,45 +411,48 @@ function verify-keyVault($secrets)
         $vaultName = $match.Groups['vaultName'].value
         write-host "checking secret:$secretname in vault:$vaultName" -ForegroundColor Cyan
 
-        $geturi = $secret.vaultCertificates.certificateUrl + $keyVaultApiVersion
-        write-host $geturi
-        $response = invoke-web $geturi
-        
-        if(!($error))
+        foreach($secretUrl in $secret.vaultCertificates.certificateUrl)
         {
-            write-host ($response)
-            $result = $response | convertfrom-json
-            if(!($result.attributes.enabled) -or ($result.attributes.exp -lt (get-date)))
-            {
-                Write-Warning "cert not valid! check if enabled and not expired"    
-                return $false
-            }
-        }
-        elseif($error -and $error -imatch "401")
-        {
-            write-host "to verify secret permissions, applicationid needs vault / key / secret 'get' rights in 'access policies' "
-            write-host "https://docs.microsoft.com/en-us/rest/api/keyvault/getsecret/getsecret"
+            $geturi = $secretUrl + $keyVaultApiVersion
+            write-host $geturi
+            $response = invoke-web $geturi -method "get"
         
-            if(get-command -name Get-AzureKeyVaultSecret)
+            if(!($error))
             {
-                if(!(get-azurermresource))
-                {
-                    add-azurermaccount
-                }
-                $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
-                write-host ($kvsecret | out-string)
-
-                if (!($kvsecret.Enabled) -or ($kvsecret.Expires -lt (get-date)))
+                write-host ($response)
+                $result = $response | convertfrom-json
+                if(!($result.attributes.enabled) -or ($result.attributes.exp -lt (get-date)))
                 {
                     Write-Warning "cert not valid! check if enabled and not expired"    
                     return $false
                 }
-
-                $error.Clear()
             }
-            else
+            elseif($error -and $error -imatch "401")
             {
-                return $false;
+                write-host "to verify secret permissions, applicationid needs vault / key / secret 'get' rights in 'access policies' "
+                write-host "https://docs.microsoft.com/en-us/rest/api/keyvault/getsecret/getsecret"
+        
+                if(get-command -name Get-AzureKeyVaultSecret)
+                {
+                    if(!(get-azurermresource))
+                    {
+                        add-azurermaccount
+                    }
+                    $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
+                    write-host ($kvsecret | out-string)
+
+                    if (!($kvsecret.Enabled) -or ($kvsecret.Expires -lt (get-date)))
+                    {
+                        Write-Warning "cert not valid! check if enabled and not expired"    
+                        return $false
+                    }
+
+                    $error.Clear()
+                }
+                else
+                {
+                    return $false;
+                }
             }
         }
     }
