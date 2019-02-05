@@ -2,43 +2,6 @@
     script to invoke powershell script with output through rest to azure vm scaleset vms
 
     Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId RunPowerShellScript
-    example run command with parameters
-    DEBUG: ============================ HTTP REQUEST ============================
-
-    HTTP Method:
-    POST
-
-    Absolute Uri:
-    https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.Compute/virtualMachineScaleSets/{{scalesetName}}/virtualmachines/{{instanceId}}/runCommand?api-version=2018-10-01
-
-    Headers:
-    x-ms-client-request-id        : ed0ad00a-fc6c-40f3-9015-8d92665f8362
-    accept-language               : en-US
-
-    Body:
-    {
-    "commandId": "RunPowerShellScript",
-    "script": [
-        "param($patterns)",
-        "$certInfo = Get-ChildItem -Path cert: -Recurse | Out-String;",
-        "$retval = $true;",
-        "foreach($pattern in $patterns.split(","))",
-        "{ ",
-        "    if(!$pattern)",
-        "    {",
-        "        continue ",
-        "    };",
-        "    $retval = $retval -and [regex]::IsMatch($certInfo,$pattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::SingleLine) ",
-        "};",
-        "return $retval;"
-    ],
-    "parameters": [
-        {
-        "name": "patterns",
-        "value": "{{certthumb1}},{{certthumb2}}"
-        }
-    ]
-    }
 #>
 param(
     [object]$token = $global:token,
@@ -46,9 +9,9 @@ param(
     [string]$baseURI = "https://management.azure.com" ,
     [string]$nodeTypeApiVersion = "?api-version=2018-06-01",
     [string]$resourceGroup,
-    [string]$vmssName = "nt0",
+    [string]$vmssName,
     [int]$instanceId = -1,
-    [string]$script,
+    [string]$script, # script string content or file path to script
     [collections.arraylist]$parameters = [collections.arraylist]@() # list of hashtables @{"name" = "%parameter name%"; "value" = "%parameter value%"}
 )
 
@@ -56,6 +19,21 @@ $ErrorActionPreference = "silentlycontinue"
 
 function main()
 {
+    $epochTime = [int64](([datetime]::UtcNow)-(get-date "1/1/1970")).TotalSeconds
+
+    if(!$token)
+    {
+        write-warning "supply token for token argument or run azure-rm-rest-logon.ps1 to generate bearer token"
+        return
+    }
+    elseif($token.expires_on -le $epochTime)
+    {
+        $token
+        write-warning "expired token. run azure-rm-rest-logon.ps1 to generate bearer token"
+        $global:token = $null
+        return
+    }
+
     if (!(get-azurermresource))
     {
         add-azurermaccount
@@ -68,7 +46,6 @@ function main()
         [void]$parameters.Add(@{"name" = "remoteHost"; "value" = "time.windows.com"})
         [void]$parameters.Add(@{"name" = "port"; "value" = "80"})
     }
-
 
     if (!$resourceGroup -or !$vmssName)
     {
@@ -101,7 +78,6 @@ function main()
             $vmss = $scalesets[$number - 1].Name
             write-host $vmss
         }
-    
     }
 
     if ($instanceId -lt 0)
@@ -117,7 +93,6 @@ function main()
 
     $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $instanceId -maxInstanceId $maxInstanceId -script $script -parameters $parameters
     write-host $result
-
 
     if ($error)
     {
@@ -175,9 +150,6 @@ function node-psTestNetScript()
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstanceId, [string]$script, [collections.arraylist]$parameters)
 {
-    # first run can take 15 minutes! has to install run extension?
-    # simple subsequent commands can take minimum 30 sec
-
     if (!$script)
     {
         return $false
@@ -219,7 +191,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
         [void]$statusUris.Add($statusUri)
     }
 
-    
     foreach ($statusUri in [collections.arraylist]@($statusUris))
     {
         Write-Host "checking statusuri $statusuri" -ForegroundColor Magenta
