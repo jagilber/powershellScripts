@@ -67,16 +67,16 @@ function main()
         $count = 1
         $scalesets = Get-AzureRmVmss -ResourceGroupName $resourceGroup
         
-        foreach ($ss in $scalesets)
+        foreach ($scaleset in $scalesets)
         {
-            write-host "$($count). $($ss.Name)"
+            write-host "$($count). $($scaleset.Name)"
             $count++
         }
         
         if (($number = read-host "enter number of the cluster to query or ctrl-c to exit:") -le $count)
         {
-            $vmss = $scalesets[$number - 1].Name
-            write-host $vmss
+            $vmssName = $scalesets[$number - 1].Name
+            write-host $vmssName
         }
     }
 
@@ -194,7 +194,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     foreach ($statusUri in [collections.arraylist]@($statusUris))
     {
         Write-Host "checking statusuri $statusuri" -ForegroundColor Magenta
-        while (!$error)
+        while ($true)
         {
             $response = (invoke-web -uri $statusUri -method "get")
             write-verbose ($response | out-string)
