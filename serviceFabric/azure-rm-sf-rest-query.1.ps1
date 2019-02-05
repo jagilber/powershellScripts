@@ -17,10 +17,10 @@ param(
     [bool]$verify = $true
 )
 
+$ErrorActionPreference = "silentlycontinue"
 $global:response = $null
 $params = $null
 $geturi = $null
-
 
 $script:cluster = $null
 $script:clusterCert = $null
@@ -161,7 +161,7 @@ function get-nodeTypeInfo($nodeTypeName)
     {
 
         $vmProfile = $nodeType.properties.virtualMachineProfile
-        $script:vmProfiles.Add($vmProfile)
+        [void]$script:vmProfiles.Add($vmProfile)
         $osProfile = $vmProfile.osProfile
         $script:nodeTypeSecrets = $osProfile.secrets
         
@@ -200,7 +200,7 @@ function get-nodeTypeExtensions($nodeTypeName)
     }
 
     $sfExtension = $nodeTypeExtensions.value.properties |where-object type -imatch 'ServiceFabricNode'
-    $script:vmExtensions.Add($sfExtension)
+    [void]$script:vmExtensions.Add($sfExtension)
     $sfExtensionSettings = $sfExtension.settings
     $sfExtensionCertInfo = $sfExtensionSettings.certificate
     $sfExtensionReverseProxyCertInfo = $sfExtensionSettings.reverseProxycertificate
@@ -253,7 +253,7 @@ function invoke-web($uri, $method, $body = "")
 
     if($method -imatch "post")
     {
-        $params.Add('body', $body)
+        [void]$params.Add('body', $body)
     }
 
     write-host ($params | out-string)
@@ -262,7 +262,6 @@ function invoke-web($uri, $method, $body = "")
     write-verbose "response: $response"
     write-host $error
 
-    $error.Clear()
     write-host ($response | convertto-json) -ForegroundColor Green -ErrorAction SilentlyContinue
 
     if($error)
@@ -305,7 +304,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$scr
 
     if($parameters)
     {
-        $body.Add('parameters',$parameters)
+        [void]$body.Add('parameters',$parameters)
     }
 
     write-host ($body | convertto-json)
@@ -481,7 +480,7 @@ function verify-nodeCertStore
             $thumbArray = @($script:clusterCertThumbprintPrimary,$script:clusterCertThumbprintSecondary,$script:reverseProxyCertThumbprintPrimary,$script:reverseProxyCertThumbprintSecondary)
             $joinstring = $thumbArray -join ","
             $thumbArray = $joinstring.Split(",",[StringSplitOptions]::RemoveEmptyEntries)
-            $parameters.Add(@{"name" = "patterns";"value" = "$($thumbArray -join ",")"})
+            [void]$parameters.Add(@{"name" = "patterns";"value" = "$($thumbArray -join ",")"})
 
             $result = run-vmssPsCommand -resourceGroup $script:resourceGroup -vmssName $nodeType.Name -instanceId $i -script (node-psCertScript) -parameters $parameters
             write-host "node ps command result:$($result)" -ForegroundColor Magenta
