@@ -45,7 +45,6 @@ param(
     [string]$SubscriptionID = (Get-AzureRmContext).Subscription.Id,
     [string]$baseURI = "https://management.azure.com" ,
     [string]$nodeTypeApiVersion = "?api-version=2018-06-01",
-    [string]$location = "eastus",
     [string]$resourceGroup,
     [string]$vmssName = "nt0",
     [int]$instanceId = -1,
@@ -64,6 +63,7 @@ function main()
 
     if (!$script)
     {
+        Write-Warning "using test script. use -script and -parameters arguments to supply script and parameters"
         $script = (node-psTestNetScript)
         [void]$parameters.Add(@{"name" = "remoteHost"; "value" = "time.windows.com"})
         [void]$parameters.Add(@{"name" = "port"; "value" = "80"})
@@ -206,8 +206,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     }
 
     write-host ($body | convertto-json)
-
-    $responses = [collections.arraylist]@()
     $statusUris = [collections.arraylist]@()
     
     for ($i = $instanceId; $i -lt $maxInstanceId; $i++)
@@ -215,7 +213,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
         $posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($i)/runCommand$($nodeTypeApiVersion)"
         $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
         write-verbose $response
-        [void]$responses.Add($response)
 
         $statusUri = ($response.Headers.'Azure-AsyncOperation')
         write-host $statusUri
