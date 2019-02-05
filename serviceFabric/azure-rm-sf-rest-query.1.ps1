@@ -7,14 +7,13 @@
 
 param(
     [object]$token = $global:token,
-    [string]$SubscriptionID = "$(@(Get-AzureRmSubscription)[0].Id)",
+    [string]$SubscriptionID = (Get-AzureRmContext).Subscription.Id,
     [string]$baseURI = "https://management.azure.com" ,
     [string]$clusterApiVersion = "?api-version=2018-02-01" ,
     [string]$nodeTypeApiVersion = "?api-version=2018-06-01",
     [string]$keyVaultApiVersion = "?api-version=7.0",
     [string]$location = "eastus",
-    [string]$script:clusterName,
-    [string]$contentType = "application/json",
+    [string]$clusterName,
     [bool]$verify = $true
 )
 
@@ -41,6 +40,7 @@ $script:resourceGroup = $resourceGroup
 $script:vmExtensions = [collections.arraylist]@()
 $script:vmProfiles = [collections.arraylist]@()
 
+$contentType = "application/json"
 function main()
 {
     
@@ -66,9 +66,9 @@ function main()
 function get-clusterInfo()
 {
     #https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-model-clusterpropertiesupdateparameters
-    if ($resourceGroup -and $script:clusterName)
+    if ($resourceGroup -and $clusterName)
     {
-        $geturi = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($script:resourceGroup)/providers/Microsoft.ServiceFabric/clusters/$($script:clusterName)" + $clusterApiVersion
+        $geturi = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($script:resourceGroup)/providers/Microsoft.ServiceFabric/clusters/$($clusterName)" + $clusterApiVersion
     }
     else
     {
@@ -98,7 +98,7 @@ function get-clusterInfo()
     if (($number = read-host "enter number of the cluster to query or ctrl-c to exit:") -le $script:clusters.length)
     {
         $script:cluster = $script:clusters[$number - 1]
-        $script:clusterName = $script:cluster.Name
+        $clusterName = $script:cluster.Name
         $script:resourceGroup = [regex]::Match($script:cluster.Id, "/resourcegroups/(.+?)/").Groups[1].Value
         write-host $script:resourceGroup
     }
@@ -268,7 +268,6 @@ function invoke-web($uri, $method, $body = "")
         write-host ($response) -ForegroundColor DarkGreen
         $error.Clear()
     }
-    
 
     if($method -imatch "post")
     {
@@ -292,9 +291,6 @@ function invoke-web($uri, $method, $body = "")
             }
             elseif($result.status -imatch "succeeded")
             {
-                # ipconfig
-                # write-host ($result.properties.output.message)
-                # ps
                 write-host ($result.properties.output.value.message)
                 break
             }
@@ -421,7 +417,7 @@ function verify-keyVault($secrets)
 
         $geturi = $secret.vaultCertificates.certificateUrl + $keyVaultApiVersion
         write-host $geturi
-        $response = invoke-rest $geturi
+        $response = invoke-web $geturi
         
         if(!($error))
         {
@@ -512,43 +508,3 @@ function node-psCertScript()
 
 main
 
-<#
-Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId RunPowerShellScript
-example run command with parameters
-DEBUG: ============================ HTTP REQUEST ============================
-
-HTTP Method:
-POST
-
-Absolute Uri:
-https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.Compute/virtualMachineScaleSets/{{scalesetName}}/virtualmachines/{{instanceId}}/runCommand?api-version=2018-10-01
-
-Headers:
-x-ms-client-request-id        : ed0ad00a-fc6c-40f3-9015-8d92665f8362
-accept-language               : en-US
-
-Body:
-{
-  "commandId": "RunPowerShellScript",
-  "script": [
-    "param($patterns)",
-    "$certInfo = Get-ChildItem -Path cert: -Recurse | Out-String;",
-    "$retval = $true;",
-    "foreach($pattern in $patterns.split(","))",
-    "{ ",
-    "    if(!$pattern)",
-    "    {",
-    "        continue ",
-    "    };",
-    "    $retval = $retval -and [regex]::IsMatch($certInfo,$pattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::SingleLine) ",
-    "};",
-    "return $retval;"
-  ],
-  "parameters": [
-    {
-      "name": "patterns",
-      "value": "{{certthumb1}},{{certthumb2}}"
-    }
-  ]
-}
-#>
