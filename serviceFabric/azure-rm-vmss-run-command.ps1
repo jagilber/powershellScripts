@@ -68,8 +68,8 @@ function main()
     }
 
     $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $instanceId -script $script -parameters $parameters
-
     write-host $result
+
     if($error)
     {
         return 1
@@ -99,8 +99,10 @@ function invoke-web($uri, $method, $body = "")
     write-host ($params | out-string)
     $error.Clear()
     $response = Invoke-WebRequest @params -Verbose -Debug
-    $error.Clear()
+    write-verbose "response: $response"
+    write-host $error
 
+    $error.Clear()
     write-host ($response | convertto-json) -ForegroundColor Green -ErrorAction SilentlyContinue
 
     if($error)
@@ -109,8 +111,6 @@ function invoke-web($uri, $method, $body = "")
         $error.Clear()
     }
 
-    write-verbose "response: $response"
-    write-host $error
     $global:response = $response
     return $response
 }
