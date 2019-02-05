@@ -49,27 +49,76 @@ param(
     [string]$location = "eastus",
     [string]$resourceGroup,
     [string]$vmssName = "nt0",
-    [string]$instanceId = -1,
+    [int]$instanceId = -1,
     [string]$script,
-    [hashtable]$parameters = @{}
+    [collections.arraylist]$parameters = [collections.arraylist]@()
 )
+
+$ErrorActionPreference = "silentlycontinue"
 
 function main()
 {
+    if(!(get-azurermresource))
+    {
+        add-azurermaccount
+    }
+
     if(!$script)
     {
         $script = (node-psTestNetScript)
-        $parameters.Add(@{"name" = "remoteHost";"value" = "time.windows.com"})
-        $parameters.Add(@{"name" = "port";"value" = "80"})
+        [void]$parameters.Add(@{"name" = "remoteHost";"value" = "time.windows.com"})
+        [void]$parameters.Add(@{"name" = "port";"value" = "80"})
     }
+
 
     if(!$resourceGroup -or !$vmssName)
     {
+        $count = 1
+        $resourceGroups = Get-AzureRmResourceGroup
+        
+        foreach ($rg in $resourceGroups)
+        {
+            write-host "$($count). $($rg.ResourceGroupName)"
+            $count++
+        }
+        
+        if (($number = read-host "enter number of the resource group to query or ctrl-c to exit:") -le $count)
+        {
+            $resourceGroup = $resourceGroups[$number - 1].ResourceGroupName
+            write-host $resourceGroup
+        }
 
+        $count = 1
+        $scalesets = Get-AzureRmVmss -ResourceGroupName $resourceGroup
+        
+        foreach ($ss in $scalesets)
+        {
+            write-host "$($count). $($ss.Name)"
+            $count++
+        }
+        
+        if (($number = read-host "enter number of the cluster to query or ctrl-c to exit:") -le $count)
+        {
+            $vmss = $scalesets[$number - 1].Name
+            write-host $vmss
+        }
+    
     }
 
-    $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $instanceId -script $script -parameters $parameters
+    if($instanceId -lt 0)
+    {
+        $scaleset = get-azurermvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmss
+        $maxInstanceId = $scaleset.Sku.Capacity
+        $instanceId = 1
+    }
+    else
+    {
+        $maxInstanceId = $instanceId
+    }
+
+    $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $i -maxInstanceId $maxInstanceId -script $script -parameters $parameters
     write-host $result
+
 
     if($error)
     {
@@ -85,7 +134,7 @@ function invoke-web($uri, $method, $body = "")
     }
 
     $params = @{ 
-        ContentType = $contentType
+        ContentType = "application/json"
         Headers     = $headers
         Method      = $method
         uri         = $uri
@@ -104,7 +153,8 @@ function invoke-web($uri, $method, $body = "")
     write-host $error
 
     $error.Clear()
-    write-host ($response | convertto-json) -ForegroundColor Green -ErrorAction SilentlyContinue
+    $json = convertto-json -InputObject $response -ErrorAction SilentlyContinue 
+    write-host $json -ForegroundColor Green 
 
     if($error)
     {
@@ -115,6 +165,7 @@ function invoke-web($uri, $method, $body = "")
     $global:response = $response
     return $response
 }
+
 function node-psTestNetScript()
 {
     return @'
@@ -122,7 +173,8 @@ function node-psTestNetScript()
         test-netconnection $remoteHost -port $port
 '@
 }
-function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$script, [collections.arraylist]$parameters)
+
+function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstanceId, [string]$script, [collections.arraylist]$parameters)
 {
     # first run can take 15 minutes! has to install run extension?
     # simple subsequent commands can take minimum 30 sec
@@ -144,7 +196,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$scr
     
     write-host $scriptList 
     
-    $posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($instanceId)/runCommand$($nodeTypeApiVersion)"
+    #$posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($instanceId)/runCommand$($nodeTypeApiVersion)"
     $body = @{
         'commandId' = 'RunPowerShellScript'
         'script' = $scriptList
@@ -156,39 +208,50 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$scr
     }
 
     write-host ($body | convertto-json)
-    $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
 
-    $statusUri = ($response.Headers.'Azure-AsyncOperation')
-
-    while(!$error)
+    $responses = [collections.arraylist]@()
+    $statusUris = [collections.arraylist]@()
+    
+    for($i = $instanceId; $i -le $maxInstanceId;$i++)
     {
-        $response = (invoke-web -uri $statusUri -method "get")
-        write-host ($response | out-string)
-        
-        if(!($response.StatusCode -eq 200))
-        {
-            break
-        }
-        
-        $result = $response.Content | convertfrom-json
+        $posturl = "$($baseUri)/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroup)/providers/Microsoft.Compute/virtualMachineScaleSets/$($vmssName)/virtualmachines/$($i)/runCommand$($nodeTypeApiVersion)"
+        $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
+        write-host $response
+        $responses.Add($response)
+        $statusUri = ($response.Headers.'Azure-AsyncOperation')
+        write-host $statusUri
+        $statusUris.Add($statusUri)
+    }
 
-        if($result.status -imatch "inprogress")
+    
+    foreach($statusUri in [collections.arraylist]@($statusUris))
+    {
+        Write-Host "checking statusuri $statusuri" -ForegroundColor Magenta
+        while(!$error)
         {
-            start-sleep -seconds 10
-        }
-        elseif($result.status -imatch "succeeded")
-        {
-            write-host ($result.properties.output.value.message)
-            break
-        }
-        elseif($result.status -imatch "canceled")
-        {
-            write-warning "action canceled"
-            break
-        }
-        else
-        {
-            write-warning "unknown status $($result.status)"
+            $response = (invoke-web -uri $statusUri -method "get")
+            write-host ($response | out-string)
+            $result = $response.Content | convertfrom-json
+
+            if($result.status -imatch "inprogress")
+            {
+                start-sleep -seconds 1
+                continue
+            }
+            elseif($result.status -imatch "succeeded")
+            {
+                write-host ($result.properties.output.value.message)
+            }
+            elseif($result.status -imatch "canceled")
+            {
+                write-warning "action canceled"
+            }
+            else
+            {
+                write-warning "unknown status $($result.status)"
+            }
+
+            $statusUris.Remove($statusUri)
             break
         }
     }
