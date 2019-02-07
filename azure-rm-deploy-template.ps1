@@ -117,11 +117,11 @@ catch [management.automation.commandNotFoundException]
     }
 }
 
-if (!(Get-AzureRmResource | Out-Null))
+if (!(Get-AzureRmResource))
 {
     connect-azurermaccount
 
-    if (!(Get-AzureRmResource | Out-Null))
+    if (!(Get-AzureRmResource))
     {
         Write-Warning "unable to authenticate to azurerm. returning..."
         return 1
