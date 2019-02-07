@@ -433,9 +433,9 @@ function verify-keyVault($secrets)
         
                 if(get-command -name Get-AzureKeyVaultSecret)
                 {
-                    if(!(get-azurermresource))
+                    if(!(Get-AzureRmContext))
                     {
-                        add-azurermaccount
+                        connect-azurermaccount
                     }
                     $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
                     write-host ($kvsecret | out-string)

@@ -34,9 +34,9 @@ function main()
         return
     }
 
-    if (!(get-azurermresource))
+    if (!(Get-AzureRmContext))
     {
-        add-azurermaccount
+        connect-azurermaccount
     }
 
     if (!$script)

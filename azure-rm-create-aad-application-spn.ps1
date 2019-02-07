@@ -60,11 +60,11 @@ function main()
         }
     }
     
-    if (!(Get-AzureRmResource))
+    if (!(Get-AzureRmContext))
     {
         connect-azurermaccount
     
-        if (!(Get-AzureRmResource))
+        if (!(Get-AzureRmContext))
         {
             Write-Warning "unable to authenticate to azurerm. returning..."
             return 1

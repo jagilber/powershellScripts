@@ -359,7 +359,7 @@ function authenticate-azureRm()
     #Disable-AzureRmContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
     # authenticate
-    if(!(Get-AzureRmResource -ErrorAction SilentlyContinue))
+    if(!(Get-AzureRmContext))
     {
         $error.Clear()
 
