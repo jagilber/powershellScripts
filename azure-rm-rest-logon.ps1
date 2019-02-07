@@ -18,7 +18,7 @@ param(
     [string]$logonType = "arm"
 )
 
-$ErrorActionPreference = "stop"
+$ErrorActionPreference = "continue"
 $error.Clear()
 $aadDisplayName = "azure-rm-rest-logon/$($env:Computername)"
 $cert = $null
@@ -69,26 +69,19 @@ function main ()
 
     if (!$tenantId)
     {
-        check-azurerm
-
-        try
+        if(!(check-azurerm))
         {
-            Get-AzureRmResource
+            return $false
         }
-        catch
-        {
-            connect-azurermaccount -ServicePrincipal `
-                -CertificateThumbprint $thumbPrint `
-                -ApplicationId $clientId 
-            #-TenantId $tenantId
-        }
-
         $tenantId = (Get-AzureRmContext).Tenant.Id
     }
 
     if (!$clientId)
     {
-        check-azurerm
+        if(!(check-azurerm))
+        {
+            return $false
+        }
         $clientIds = @((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName).ApplicationId.Guid)
         $clientIds
 
@@ -229,6 +222,26 @@ function check-azurerm()
             import-module azurerm.resources
         }
         else
+        {
+            return $false
+        }
+    }
+
+    if(get-azurermresource)
+    {
+        return $true
+    }
+
+    if($thumbPrint -and $clientId)
+    {
+        connect-azurermaccount -ServicePrincipal `
+            -CertificateThumbprint $thumbPrint `
+            -ApplicationId $clientId 
+        #-TenantId $tenantId
+    }
+    else
+    {
+        if(!(connect-azurermaccount))
         {
             return $false
         }

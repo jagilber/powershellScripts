@@ -144,7 +144,7 @@ function main()
 function authenticate-azureRm()
 {
     # authenticate
-    if(!(Get-AzureRmResource -ErrorAction SilentlyContinue))
+    if(!(Get-AzureRmContext))
     {
         $error.Clear()
 
