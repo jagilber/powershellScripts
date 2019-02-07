@@ -48,20 +48,34 @@ $error.Clear()
 # authenticate
 try
 {
-    Get-AzureRmResourceGroup | Out-Null
+    get-command connect-azurermaccount | Out-Null
 }
-catch
+catch [management.automation.commandNotFoundException]
 {
-    try
+    if ((read-host "azurerm not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
     {
-        connect-azurermaccount
+        write-host "installing minimum required azurerm modules..."
+        install-module azurerm.profile
+        install-module azurerm.resources
+        install-module azurerm.keyVault
+        import-module azurerm.profile
+        import-module azurerm.resources
+        import-module azurerm.keyvault
     }
-    catch [management.automation.commandNotFoundException]
+    else
     {
-        write-host "installing azurerm sdk. this will take a while..."
-        install-module azurerm
-        import-module azurerm
-        connect-azurermaccount
+        return 1
+    }
+}
+
+if (!(Get-AzureRmResource | Out-Null))
+{
+    connect-azurermaccount
+
+    if (!(Get-AzureRmResource | Out-Null))
+    {
+        Write-Warning "unable to authenticate to azurerm. returning..."
+        return 1
     }
 }
 
@@ -110,13 +124,13 @@ $cert = $null
 
 if (![IO.File]::Exists($pfxPath))
 {
-    if(!$certSubject)
+    if (!$certSubject)
     {
         write-host "please provide argument certSubject. exiting"
         exit 1
     }
 
-    if($certs = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -imatch "CN=$($certSubject)"))
+    if ($certs = (Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -imatch "CN=$($certSubject)"))
     {
         foreach ($cert in $certs)
         {
@@ -127,7 +141,7 @@ if (![IO.File]::Exists($pfxPath))
         }
     }
 
-    if($certs = (Get-ChildItem Cert:\CurrentUser\Root | Where-Object Subject -imatch "CN=$($certSubject)"))
+    if ($certs = (Get-ChildItem Cert:\CurrentUser\Root | Where-Object Subject -imatch "CN=$($certSubject)"))
     {
         foreach ($cert in $certs)
         {
@@ -148,10 +162,10 @@ if (![IO.File]::Exists($pfxPath))
     Import-PfxCertificate -Exportable -Password $pwd -CertStoreLocation Cert:\CurrentUser\Root -FilePath $pfxPath
 }
 
-if(!$adApplicationOnly)
+if (!$adApplicationOnly)
 {
     $count = 0
-    while($count -lt $retryCount)
+    while ($count -lt $retryCount)
     {
         ipconfig /flushdns
         write-host "$($count) -- sleeping 30 seconds while vault is created and registered in dns"
@@ -160,7 +174,7 @@ if(!$adApplicationOnly)
         $error.Clear()
         $azurecert = Import-AzureKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
 
-        if(!$error)
+        if (!$error)
         {
             break
         }
@@ -174,7 +188,7 @@ if(!$adApplicationOnly)
     $error.Clear()
 }
 
-if($certOnly)
+if ($certOnly)
 {
     return
 }
@@ -192,7 +206,7 @@ if ($oldapp = Get-AzureRmADApplication -IdentifierUri $uri -ErrorAction Silently
     }
 }
 
-if($adApplicationName)
+if ($adApplicationName)
 {
     $app = New-AzureRmADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $pwd
     $sp = New-AzureRmADServicePrincipal -ApplicationId $app.ApplicationId

@@ -99,20 +99,32 @@ write-host "running quickstart:$($quickStartTemplate) for group $($resourceGroup
 write-host "authenticating to azure"
 try
 {
-    Get-AzureRmResourceGroup | Out-Null
+    get-command connect-azurermaccount | Out-Null
 }
-catch
+catch [management.automation.commandNotFoundException]
+{
+    if ((read-host "azurerm not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
+    {
+        write-host "installing minimum required azurerm modules..."
+        install-module azurerm.profile
+        install-module azurerm.resources
+        import-module azurerm.profile
+        import-module azurerm.resources
+    }
+    else
+    {
+        return 1
+    }
+}
+
+if (!(Get-AzureRmResource | Out-Null))
 {
     connect-azurermaccount
 
-    try
+    if (!(Get-AzureRmResource | Out-Null))
     {
-        Get-AzureRmResourceGroup | Out-Null
-    }
-    catch
-    {
-        write-warning "authentication failed. verify authentiation and restart script."
-        exit 1
+        Write-Warning "unable to authenticate to azurerm. returning..."
+        return 1
     }
 }
 
