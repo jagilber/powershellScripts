@@ -73,7 +73,7 @@ function main ()
 
         try
         {
-            Get-AzureRmResource | Out-Null
+            Get-AzureRmResource
         }
         catch
         {
