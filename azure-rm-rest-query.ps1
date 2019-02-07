@@ -29,15 +29,12 @@ if(!$token)
     write-warning "supply token for token argument or run azure-rm-rest-logon.ps1 to generate bearer token"
     return
 }
-else 
+elseif($token.expires_on -le $epochTime)
 {
-    if($token.expires_on -le $epochTime)
-    {
-        $token
-        write-warning "expired token. run azure-rm-rest-logon.ps1 to generate bearer token"
-        $global:token = $null
-        return
-    }
+    $token
+    write-warning "expired token. run azure-rm-rest-logon.ps1 to generate bearer token"
+    $global:token = $null
+    return
 }
 
 if($apiVersion)
@@ -58,25 +55,7 @@ if($contentType -imatch "json")
 
 $body
 
-if($headers.count -gt 0)
-{
-    <#
-    #.\azure-rm-rest-query.ps1 -baseURI https://management.core.windows.net/bedf79d7-6500-409e-b475-c4d0003bb6a7/services/hostedservices -token $global:token -headers @{"x-ms-version" = "2014-05-01" } -apiVersion $null
-    if(!$headers.contains('authorization'))
-    {
-        $headers.Add('authorization',"Bearer $($Token.access_token)")
-    }
-    if(!$headers.contains('accept'))
-    {
-        $headers.Add('accept',$contentType)
-    }
-    if(!$headers.contains('client_id'))
-    {
-        $headers.Add('client_id', $clientid)
-    }
-    #>
-}
-else
+if(!($headers)
 {
     $headers = @{
         'authorization' = "Bearer $($Token.access_token)" 
@@ -103,5 +82,5 @@ write-host "output saved in `$global:response" -ForegroundColor Yellow
 
 if($error)
 {
-    exit 1
+    return 1
 }

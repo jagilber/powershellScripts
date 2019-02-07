@@ -7,21 +7,20 @@
 
 param(
     [object]$token = $global:token,
-    [string]$SubscriptionID = "$(@(Get-AzureRmSubscription)[0].Id)",
+    [string]$SubscriptionID = (Get-AzureRmContext).Subscription.Id,
     [string]$baseURI = "https://management.azure.com" ,
     [string]$clusterApiVersion = "?api-version=2018-02-01" ,
     [string]$nodeTypeApiVersion = "?api-version=2018-06-01",
     [string]$keyVaultApiVersion = "?api-version=7.0",
     [string]$location = "eastus",
-    [string]$script:clusterName,
-    [string]$contentType = "application/json",
+    [string]$clusterName,
     [bool]$verify = $true
 )
 
+$ErrorActionPreference = "silentlycontinue"
 $global:response = $null
 $params = $null
 $geturi = $null
-
 
 $script:cluster = $null
 $script:clusterCert = $null
@@ -41,6 +40,7 @@ $script:resourceGroup = $resourceGroup
 $script:vmExtensions = [collections.arraylist]@()
 $script:vmProfiles = [collections.arraylist]@()
 
+$contentType = "application/json"
 function main()
 {
     
@@ -66,9 +66,9 @@ function main()
 function get-clusterInfo()
 {
     #https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-model-clusterpropertiesupdateparameters
-    if ($resourceGroup -and $script:clusterName)
+    if ($resourceGroup -and $clusterName)
     {
-        $geturi = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($script:resourceGroup)/providers/Microsoft.ServiceFabric/clusters/$($script:clusterName)" + $clusterApiVersion
+        $geturi = $baseURI + "/subscriptions/$($SubscriptionID)/resourceGroups/$($script:resourceGroup)/providers/Microsoft.ServiceFabric/clusters/$($clusterName)" + $clusterApiVersion
     }
     else
     {
@@ -98,7 +98,7 @@ function get-clusterInfo()
     if (($number = read-host "enter number of the cluster to query or ctrl-c to exit:") -le $script:clusters.length)
     {
         $script:cluster = $script:clusters[$number - 1]
-        $script:clusterName = $script:cluster.Name
+        $clusterName = $script:cluster.Name
         $script:resourceGroup = [regex]::Match($script:cluster.Id, "/resourcegroups/(.+?)/").Groups[1].Value
         write-host $script:resourceGroup
     }
@@ -161,7 +161,7 @@ function get-nodeTypeInfo($nodeTypeName)
     {
 
         $vmProfile = $nodeType.properties.virtualMachineProfile
-        $script:vmProfiles.Add($vmProfile)
+        [void]$script:vmProfiles.Add($vmProfile)
         $osProfile = $vmProfile.osProfile
         $script:nodeTypeSecrets = $osProfile.secrets
         
@@ -200,7 +200,7 @@ function get-nodeTypeExtensions($nodeTypeName)
     }
 
     $sfExtension = $nodeTypeExtensions.value.properties |where-object type -imatch 'ServiceFabricNode'
-    $script:vmExtensions.Add($sfExtension)
+    [void]$script:vmExtensions.Add($sfExtension)
     $sfExtensionSettings = $sfExtension.settings
     $sfExtensionCertInfo = $sfExtensionSettings.certificate
     $sfExtensionReverseProxyCertInfo = $sfExtensionSettings.reverseProxycertificate
@@ -240,7 +240,7 @@ function invoke-web($uri, $method, $body = "")
 {
     $headers = @{
         'authorization' = "Bearer $($token.access_token)" 
-        'ContentType'   = $contentType
+        'ContentType'   = "application/json"
     }
 
     $params = @{ 
@@ -253,13 +253,14 @@ function invoke-web($uri, $method, $body = "")
 
     if($method -imatch "post")
     {
-        $params.Add('body', $body)
+        [void]$params.Add('body', $body)
     }
 
     write-host ($params | out-string)
     $error.Clear()
     $response = Invoke-WebRequest @params -Verbose -Debug
-    $error.Clear()
+    write-verbose "response: $response"
+    write-host $error
 
     write-host ($response | convertto-json) -ForegroundColor Green -ErrorAction SilentlyContinue
 
@@ -268,52 +269,7 @@ function invoke-web($uri, $method, $body = "")
         write-host ($response) -ForegroundColor DarkGreen
         $error.Clear()
     }
-    
 
-    if($method -imatch "post")
-    {
-        $statusUri = ($response.Headers.'Azure-AsyncOperation')
-
-        while(!($error))
-        {
-            $response = (invoke-web -uri $statusUri -method "get")
-            write-host ($response | out-string)
-            
-            if(!($response.StatusCode -eq 200))
-            {
-                break
-            }
-            
-            $result = $response.Content | convertfrom-json
-
-            if($result.status -imatch "inprogress")
-            {
-                start-sleep -seconds 10
-            }
-            elseif($result.status -imatch "succeeded")
-            {
-                # ipconfig
-                # write-host ($result.properties.output.message)
-                # ps
-                write-host ($result.properties.output.value.message)
-                break
-            }
-            elseif($result.status -imatch "canceled")
-            {
-                write-warning "action canceled"
-                break
-            }
-            else
-            {
-                write-warning "unknown status $($result.status)"
-                break
-            }
-        }
-
-    }
-
-    write-verbose "response: $response"
-    write-host $error
     $global:response = $response
     return $response
 }
@@ -348,11 +304,46 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, [string]$scr
 
     if($parameters)
     {
-        $body.Add('parameters',$parameters)
+        [void]$body.Add('parameters',$parameters)
     }
 
     write-host ($body | convertto-json)
     $response = invoke-web -uri $posturl -method "post" -body ($body | convertto-json)
+    $statusUri = ($response.Headers.'Azure-AsyncOperation')
+
+    while(!$error)
+    {
+        $response = (invoke-web -uri $statusUri -method "get")
+        write-host ($response | out-string)
+        
+        if(!($response.StatusCode -eq 200))
+        {
+            break
+        }
+        
+        $result = $response.Content | convertfrom-json
+
+        if($result.status -imatch "inprogress")
+        {
+            start-sleep -seconds 10
+        }
+        elseif($result.status -imatch "succeeded")
+        {
+            write-host ($result.properties.output.value.message)
+            break
+        }
+        elseif($result.status -imatch "canceled")
+        {
+            write-warning "action canceled"
+            break
+        }
+        else
+        {
+            write-warning "unknown status $($result.status)"
+            break
+        }
+    }
+
     write-host ($response | out-string)
     $result = $response.content | convertfrom-json
     write-host ($result.properties.output.value.message)
@@ -419,45 +410,48 @@ function verify-keyVault($secrets)
         $vaultName = $match.Groups['vaultName'].value
         write-host "checking secret:$secretname in vault:$vaultName" -ForegroundColor Cyan
 
-        $geturi = $secret.vaultCertificates.certificateUrl + $keyVaultApiVersion
-        write-host $geturi
-        $response = invoke-rest $geturi
-        
-        if(!($error))
+        foreach($secretUrl in $secret.vaultCertificates.certificateUrl)
         {
-            write-host ($response)
-            $result = $response | convertfrom-json
-            if(!($result.attributes.enabled) -or ($result.attributes.exp -lt (get-date)))
-            {
-                Write-Warning "cert not valid! check if enabled and not expired"    
-                return $false
-            }
-        }
-        elseif($error -and $error -imatch "401")
-        {
-            write-host "to verify secret permissions, applicationid needs vault / key / secret 'get' rights in 'access policies' "
-            write-host "https://docs.microsoft.com/en-us/rest/api/keyvault/getsecret/getsecret"
+            $geturi = $secretUrl + $keyVaultApiVersion
+            write-host $geturi
+            $response = invoke-web $geturi -method "get"
         
-            if(get-command -name Get-AzureKeyVaultSecret)
+            if(!($error))
             {
-                if(!(get-azurermresource))
-                {
-                    add-azurermaccount
-                }
-                $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
-                write-host ($kvsecret | out-string)
-
-                if (!($kvsecret.Enabled) -or ($kvsecret.Expires -lt (get-date)))
+                write-host ($response)
+                $result = $response | convertfrom-json
+                if(!($result.attributes.enabled) -or ($result.attributes.exp -lt (get-date)))
                 {
                     Write-Warning "cert not valid! check if enabled and not expired"    
                     return $false
                 }
-
-                $error.Clear()
             }
-            else
+            elseif($error -and $error -imatch "401")
             {
-                return $false;
+                write-host "to verify secret permissions, applicationid needs vault / key / secret 'get' rights in 'access policies' "
+                write-host "https://docs.microsoft.com/en-us/rest/api/keyvault/getsecret/getsecret"
+        
+                if(get-command -name Get-AzureKeyVaultSecret)
+                {
+                    if(!(get-azurermresource))
+                    {
+                        add-azurermaccount
+                    }
+                    $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
+                    write-host ($kvsecret | out-string)
+
+                    if (!($kvsecret.Enabled) -or ($kvsecret.Expires -lt (get-date)))
+                    {
+                        Write-Warning "cert not valid! check if enabled and not expired"    
+                        return $false
+                    }
+
+                    $error.Clear()
+                }
+                else
+                {
+                    return $false;
+                }
             }
         }
     }
@@ -486,7 +480,7 @@ function verify-nodeCertStore
             $thumbArray = @($script:clusterCertThumbprintPrimary,$script:clusterCertThumbprintSecondary,$script:reverseProxyCertThumbprintPrimary,$script:reverseProxyCertThumbprintSecondary)
             $joinstring = $thumbArray -join ","
             $thumbArray = $joinstring.Split(",",[StringSplitOptions]::RemoveEmptyEntries)
-            $parameters.Add(@{"name" = "patterns";"value" = "$($thumbArray -join ",")"})
+            [void]$parameters.Add(@{"name" = "patterns";"value" = "$($thumbArray -join ",")"})
 
             $result = run-vmssPsCommand -resourceGroup $script:resourceGroup -vmssName $nodeType.Name -instanceId $i -script (node-psCertScript) -parameters $parameters
             write-host "node ps command result:$($result)" -ForegroundColor Magenta
@@ -512,43 +506,3 @@ function node-psCertScript()
 
 main
 
-<#
-Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId RunPowerShellScript
-example run command with parameters
-DEBUG: ============================ HTTP REQUEST ============================
-
-HTTP Method:
-POST
-
-Absolute Uri:
-https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.Compute/virtualMachineScaleSets/{{scalesetName}}/virtualmachines/{{instanceId}}/runCommand?api-version=2018-10-01
-
-Headers:
-x-ms-client-request-id        : ed0ad00a-fc6c-40f3-9015-8d92665f8362
-accept-language               : en-US
-
-Body:
-{
-  "commandId": "RunPowerShellScript",
-  "script": [
-    "param($patterns)",
-    "$certInfo = Get-ChildItem -Path cert: -Recurse | Out-String;",
-    "$retval = $true;",
-    "foreach($pattern in $patterns.split(","))",
-    "{ ",
-    "    if(!$pattern)",
-    "    {",
-    "        continue ",
-    "    };",
-    "    $retval = $retval -and [regex]::IsMatch($certInfo,$pattern,[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::SingleLine) ",
-    "};",
-    "return $retval;"
-  ],
-  "parameters": [
-    {
-      "name": "patterns",
-      "value": "{{certthumb1}},{{certthumb2}}"
-    }
-  ]
-}
-#>
