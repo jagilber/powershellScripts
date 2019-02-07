@@ -14,7 +14,7 @@ param(
     [string]$clientSecret,
     [string]$tenantId,
     [switch]$force,
-    [ValidateSet('arm','asm','graph')]
+    [ValidateSet('arm', 'asm', 'graph')]
     [string]$logonType = "arm"
 )
 
@@ -69,16 +69,18 @@ function main ()
 
     if (!$tenantId)
     {
+        check-azurerm
+
         try
         {
-            Get-AzureRmResourceGroup | Out-Null
+            Get-AzureRmResource | Out-Null
         }
         catch
         {
             connect-azurermaccount -ServicePrincipal `
                 -CertificateThumbprint $thumbPrint `
                 -ApplicationId $clientId 
-                #-TenantId $tenantId
+            #-TenantId $tenantId
         }
 
         $tenantId = (Get-AzureRmContext).Tenant.Id
@@ -86,10 +88,11 @@ function main ()
 
     if (!$clientId)
     {
+        check-azurerm
         $clientIds = @((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName).ApplicationId.Guid)
         $clientIds
 
-        if($clientIds.count -gt 1)
+        if ($clientIds.count -gt 1)
         {
             Write-Warning "multiple client ids / application ids found!!! trying first match only."
         }
@@ -123,7 +126,7 @@ function main ()
         Write-Warning "no cert info provided. trying $($certSubject)"
         $certs = @(Get-ChildItem $certStore | Where-Object {$_.Subject -imatch $certSubject -and $_.NotAfter -gt (get-date)})
         
-        if($certs.count -gt 1)
+        if ($certs.count -gt 1)
         {
             $certs
             write-warning "multiple valid certs! using first one. clean duplicates from $certStore"
@@ -139,18 +142,18 @@ function main ()
         $ClientSecret = [convert]::ToBase64String($cert.GetCertHash())
         write-host "clientsecret set to: $($clientSecret)"
         
-        if($cert.NotAfter -lt (get-date))
+        if ($cert.NotAfter -lt (get-date))
         {
             Write-Warning "cert is expired. run .\azure-rm-create-aad-application-spn.ps1 to create new cert"
         }
     }
 
     $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
-    $armResource   = "https://management.azure.com/"
-    $asmResource   = "https://management.core.windows.net/"
+    $armResource = "https://management.azure.com/"
+    $asmResource = "https://management.core.windows.net/"
     $graphResource = "https://graph.microsoft.com/"
 
-    if($logonType -eq "arm")
+    if ($logonType -eq "arm")
     {
         $token = acquire-token -resource $armResource    
     }
@@ -172,7 +175,7 @@ function main ()
         write-host "$logonType access token output saved in `$global:token" -ForegroundColor Yellow
         write-host "clientid / applicationid saved in `$global:clientId" -ForegroundColor Yellow
         
-        if($ClientSecret)
+        if ($ClientSecret)
         {
             $global:clientSecret = $clientSecret
             write-host "client secret saved in `$global:clientSecret" -ForegroundColor Yellow
@@ -207,6 +210,31 @@ function acquire-token($resource)
     $clientSecret
     $error.Clear()
     return Invoke-RestMethod @params -Verbose -Debug
+}
+
+function check-azurerm()
+{
+    try
+    {
+        get-command connect-azurermaccount | Out-Null
+    }
+    catch [management.automation.commandNotFoundException]
+    {
+        if ((read-host "azurerm not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
+        {
+            write-host "installing minimum required azurerm modules..."
+            install-module azurerm.profile
+            install-module azurerm.resources
+            import-module azurerm.profile
+            import-module azurerm.resources
+        }
+        else
+        {
+            return $false
+        }
+    }
+
+    return $true
 }
 
 main

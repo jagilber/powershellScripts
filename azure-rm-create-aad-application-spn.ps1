@@ -37,29 +37,37 @@ function main()
     $thumbprint = $null
     $ClientSecret = $null
     $keyvalue
-   
-    # todo: add new msi option
-    
     $error.Clear()
+
     # authenticate
     try
     {
-        Get-AzureRmResourceGroup | Out-Null
+        get-command connect-azurermaccount | Out-Null
     }
-    catch
+    catch [management.automation.commandNotFoundException]
     {
-        try
+        if ((read-host "azurerm not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
         {
-            connect-azurermaccount
+            write-host "installing minimum required azurerm modules..."
+            install-module azurerm.profile
+            install-module azurerm.resources
+            import-module azurerm.profile
+            import-module azurerm.resources
         }
-        catch [System.Management.Automation.CommandNotFoundException]
+        else
         {
-            write-host "installing azurerm sdk. this will take a while..."
-            
-            install-module azurerm
-            import-module azurerm
-
-            connect-azurermaccount
+            return 1
+        }
+    }
+    
+    if (!(Get-AzureRmResource | Out-Null))
+    {
+        connect-azurermaccount
+    
+        if (!(Get-AzureRmResource | Out-Null))
+        {
+            Write-Warning "unable to authenticate to azurerm. returning..."
+            return 1
         }
     }
 
