@@ -55,7 +55,7 @@ if($contentType -imatch "json")
 
 $body
 
-if(!($headers)
+if(!($headers))
 {
     $headers = @{
         'authorization' = "Bearer $($Token.access_token)" 
