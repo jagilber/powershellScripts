@@ -34,7 +34,7 @@ function main()
         return
     }
 
-    if (!(Get-AzureRmContext))
+    if (!(Get-AzureRmResourceGroup))
     {
         connect-azurermaccount
     }
