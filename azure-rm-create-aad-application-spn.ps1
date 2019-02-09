@@ -23,6 +23,7 @@ param(
     [pscredential]$credentials,
     #[Parameter(Mandatory = $true)]
     [string]$aadDisplayName = "azure-rm-rest-logon/$($env:Computername)",
+    [string]$certStore = "cert:\CurrentUser\My",
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
@@ -33,10 +34,12 @@ param(
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
+    $retryCount = 10
+    $cert = $null
     $keyCredential = $null
     $thumbprint = $null
     $ClientSecret = $null
-    $keyvalue
+    $keyvalue = $Null
     $error.Clear()
 
     # authenticate
@@ -94,13 +97,39 @@ function main()
             }
         }
     }
+
+    $certs = @(Get-ChildItem $certStore | Where-Object {$_.Subject -imatch "$($aadDisplayName)" -and $_.NotAfter -gt (get-date)})
+
+    if($certs.Count -ge 1)
+    {
+        $count = 1
+
+        foreach($certItem in $certs)
+        {
+            "$($count). $($certItem.Subject) $($certItem.NotAfter) $($certItem.Thumbprint)"
+            $count++
+        }
+
+        if(($result = read-host "enter line number of existing cert to use or 0 to create new") -gt 0)
+        {
+            $cert = $certs[$result]
+        }
+
+    }
     
     if (!$list)
     {
         if ($logontype -ieq 'cert')
         {
-            Write-Warning "this option is NOT currently working for rest authentication, but does work for ps auth!!!"
-            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            Write-Warning "this does not work for rest authentication, but does work for ps auth"
+            
+            if(!$cert)
+            {
+                $cert = New-SelfSignedCertificate -CertStoreLocation $certStore `
+                    -Subject "CN=$($aadDisplayName)" `
+                    -KeyExportPolicy Exportable `
+                    -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            }
             
             if (!$credentials)
             {
@@ -135,8 +164,14 @@ function main()
         }
         elseif ($logontype -ieq 'certthumb')
         {
-            
-            $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "$($aadDisplayName)" -KeyExportPolicy Exportable -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            if(!$cert)
+            {
+                $cert = New-SelfSignedCertificate -CertStoreLocation $certStore `
+                    -Subject "$($aadDisplayName)" `
+                    -KeyExportPolicy Exportable `
+                    -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+            }
+
             $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
             $thumbprint = $cert.Thumbprint
@@ -174,10 +209,31 @@ function main()
         
         New-AzureRmADServicePrincipal -ApplicationId ($app.ApplicationId) -DisplayName $aadDisplayName
         
-        Start-Sleep 15
-        New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
-        New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
-        
+        $count = 0
+
+        while ($count -lt $retryCount)
+        {
+            try 
+            {
+                write-host "$($count) -- sleeping 10 seconds while vault is created and registered in dns"
+                start-sleep -Seconds 10
+                write-host "adding role assignments"
+                New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
+                New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
+                write-host "role assignments added"
+            
+                if (!$error)
+                {
+                    break
+                }
+    
+            }
+            catch {}
+    
+            write-verbose ($error | out-string)
+            $error.Clear()
+            $count++
+        }
 
         if ($logontype -ieq 'cert' -or $logontype -ieq 'certthumb')
         {
