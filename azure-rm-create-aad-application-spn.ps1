@@ -215,18 +215,17 @@ function main()
         {
             try 
             {
-                write-host "$($count) -- sleeping 10 seconds while vault is created and registered in dns"
+                write-host "$($count) -- sleeping 10 seconds while new service principal is created."
                 start-sleep -Seconds 10
                 write-host "adding role assignments"
                 New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
-                New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
-                write-host "role assignments added"
-            
+                
                 if (!$error)
                 {
+                    New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
+                    write-host "role assignments added"
                     break
                 }
-    
             }
             catch {}
     
