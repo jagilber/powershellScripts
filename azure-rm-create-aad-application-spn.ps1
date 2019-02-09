@@ -17,17 +17,15 @@
     or
     .\azure-rm-create-aad-application-spn.ps1 
     
-    # 181108
+    # 190209
 #>
 param(
     [pscredential]$credentials,
-    #[Parameter(Mandatory = $true)]
     [string]$aadDisplayName = "azure-rm-rest-logon/$($env:Computername)",
     [string]$certStore = "cert:\CurrentUser\My",
     [string]$uri,
     [switch]$list,
     [string]$pfxPath = "$($env:temp)\$($aadDisplayName).pfx",
-    #[Parameter(Mandatory = $true)][ValidateSet('cert', 'key', 'password', 'certthumb')]
     [string]$logonType = 'certthumb'
 )
 
