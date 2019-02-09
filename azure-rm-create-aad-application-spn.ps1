@@ -110,7 +110,7 @@ function main()
             $count++
         }
 
-        if(($result = read-host "enter line number of existing cert to use or 0 to create new") -gt 0)
+        if(($result = read-host "enter line number of existing cert to use or 0 to create new. normally an existing cert from list should be used.") -gt 0)
         {
             $cert = $certs[$result]
         }
