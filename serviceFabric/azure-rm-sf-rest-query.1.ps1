@@ -433,7 +433,7 @@ function verify-keyVault($secrets)
         
                 if(get-command -name Get-AzureKeyVaultSecret)
                 {
-                    if(!(Get-AzureRmContext))
+                    if(!(Get-AzureRmResourceGroup))
                     {
                         connect-azurermaccount
                     }
