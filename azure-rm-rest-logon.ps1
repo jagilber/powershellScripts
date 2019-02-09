@@ -25,41 +25,12 @@ $cert = $null
 
 function main ()
 {
-    if ($global:token)
+    if (!(show-tokenInfo))
     {
-        $currentToken = $global:token
-        write-host "current token: $($currentToken)" -ForegroundColor Gray
-        
-        $epochDate = (get-date "1/1/1970")
-        $epochTimeNow = [int64](([datetime]::UtcNow) - $epochDate).TotalSeconds
-        $isExpired = $epochTimeNow -gt $currentToken.expires_on
-        $outputColor = "Green"
-
-        if ($isExpired)
-        {
-            $outputColor = "Red"
-            $global:token = $null
-        }
-
-        $tokenLifetimeMinutes = [int]($currentToken.expires_in / 60)
-        $notBefore = $epochDate.AddSeconds($currentToken.not_before).ToLocalTime()
-        $notAfter = $epochDate.AddSeconds($currentToken.expires_on).ToLocalTime()
-        $notBeforeUtc = $epochDate.AddSeconds($currentToken.not_before).ToString("o")
-        $notAfterUtc = $epochDate.AddSeconds($currentToken.expires_on).ToString("o")
-        $minutesLeft = $([int](($currentToken.expires_on - $epochTimeNow) / 60))
-
-        write-host "current token info:" -ForegroundColor $outputColor
-        write-host "`tepoch time now:`t$epochTimeNow" -ForegroundColor $outputColor
-        write-host "`ttoken lifetime minutes:`t$tokenLifetimeMinutes" -ForegroundColor $outputColor
-        write-host "`tnot before:`t$notBeforeUtc `t($notBefore)" -ForegroundColor $outputColor
-        write-host "`tnot after:`t$notAfterUtc `t($notAfter)" -ForegroundColor $outputColor
-        write-host "`tminutes left before expire:`t$minutesLeft" -ForegroundColor $outputColor
-        write-host "`tis expired:`t$isExpired" -ForegroundColor $outputColor
-
-        if (!$isExpired -and (($tokenLifetimeMinutes / $minutesLeft) -lt 2) -and !$force)
+        if (!$force)
         {
             Write-Warning "token has over 1/2 life left. use -force to force new token. returning"
-            return
+            return $false
         }
         else
         {
@@ -69,7 +40,7 @@ function main ()
 
     if (!$tenantId)
     {
-        if(!(check-azurerm))
+        if (!(check-azurerm))
         {
             return $false
         }
@@ -78,10 +49,11 @@ function main ()
 
     if (!$clientId)
     {
-        if(!(check-azurerm))
+        if (!(check-azurerm))
         {
             return $false
         }
+
         $clientIds = @((Get-AzureRmADApplication -DisplayNameStartWith $aadDisplayName).ApplicationId.Guid)
         $clientIds
 
@@ -101,36 +73,128 @@ function main ()
         Write-Warning "clientid (applicationid) info not provided. trying $($clientId)"
     }
 
-    if ($ClientSecret)
+    if (!$clientSecret)
     {
-        
+        foreach ($cert in Get-Certs)
+        {
+            if ((logon-rest $cert))
+            {
+                show-tokenInfo
+                break
+            }
+        }
     }
-    elseif ($thumbPrint)
+    else 
     {
-        $cert = (Get-ChildItem $certStore | Where-Object Thumbprint -ieq $thumbPrint)
+        logon-rest
+        show-tokenInfo
+    }
+}
+
+function acquire-token($resource)
+{
+    $error.clear()
+    $Body = @{
+        'resource'      = $resource
+        'client_id'     = $clientId
+        'grant_type'    = 'client_credentials'
+        'client_secret' = $clientSecret
+    }
+    
+    $params = @{
+        ContentType = 'application/x-www-form-urlencoded' #'application/json'
+        Headers     = @{'accept' = '*/*'}#'application/json'}
+        Body        = $Body
+        Method      = 'Post'
+        URI         = $tokenEndpoint
+    }
+
+    write-host $body
+    write-host $params
+    write-host $clientSecret
+    $error.Clear()
+
+    return Invoke-RestMethod @params -Verbose -Debug
+}
+
+function check-azurerm()
+{
+    try
+    {
+        get-command connect-azurermaccount | Out-Null
+    }
+    catch [management.automation.commandNotFoundException]
+    {
+        if ((read-host "azurerm not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
+        {
+            write-host "installing minimum required azurerm modules..."
+            install-module azurerm.profile
+            install-module azurerm.resources
+            import-module azurerm.profile
+            import-module azurerm.resources
+        }
+        else
+        {
+            return $false
+        }
+    }
+
+    if (Get-AzureRmContext)
+    {
+        return $true
+    }
+
+    if ($thumbPrint -and $clientId)
+    {
+        connect-azurermaccount -ServicePrincipal `
+            -CertificateThumbprint $thumbPrint `
+            -ApplicationId $clientId 
+        #-TenantId $tenantId
+    }
+    else
+    {
+        if (!(connect-azurermaccount))
+        {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Get-Certs
+{
+    if ($thumbPrint)
+    {
+        $certs = @(Get-ChildItem $certStore | Where-Object Thumbprint -ieq $thumbPrint)
     }
     elseif ($certSubject)
     {
-        $cert = (Get-ChildItem $certStore | Where-Object Subject -imatch $certSubject)
+        $certs = @(Get-ChildItem $certStore | Where-Object Subject -imatch $certSubject)
     }
     else
     {
         $certSubject = $aadDisplayName
         Write-Warning "no cert info provided. trying $($certSubject)"
         $certs = @(Get-ChildItem $certStore | Where-Object {$_.Subject -imatch $certSubject -and $_.NotAfter -gt (get-date)})
-        
-        if ($certs.count -gt 1)
-        {
-            $certs
-            write-warning "multiple valid certs! using first one. clean duplicates from $certStore"
-        }
-
-        $cert = $certs[0]
     }
+        
+    if ($certs.count -gt 1)
+    {
+        $certs
+        write-warning "multiple valid certs!"
+    }
+
+    return $certs
+}
+
+function logon-rest($cert)
+{
+    $error.Clear()
 
     if ($cert)
     {
-        $cert | fl *
+        write-host ($cert | fl *)
         # works if using thumbprint only
         $ClientSecret = [convert]::ToBase64String($cert.GetCertHash())
         write-host "clientsecret set to: $($clientSecret)"
@@ -173,78 +237,58 @@ function main ()
             $global:clientSecret = $clientSecret
             write-host "client secret saved in `$global:clientSecret" -ForegroundColor Yellow
         }
+        
+        return $true
     }
     else
     {
         $global:token = $null   
+        return $false
     }
 }
 
-function acquire-token($resource)
+function show-tokenInfo()
 {
-    $error.clear()
-    $Body = @{
-        'resource'      = $resource
-        'client_id'     = $clientId
-        'grant_type'    = 'client_credentials'
-        'client_secret' = $clientSecret
-    }
-    
-    $params = @{
-        ContentType = 'application/x-www-form-urlencoded' #'application/json'
-        Headers     = @{'accept' = '*/*'}#'application/json'}
-        Body        = $Body
-        Method      = 'Post'
-        URI         = $tokenEndpoint
-    }
-
-    $body
-    $params
-    $clientSecret
-    $error.Clear()
-    return Invoke-RestMethod @params -Verbose -Debug
-}
-
-function check-azurerm()
-{
-    try
+    if ($global:token)
     {
-        get-command connect-azurermaccount | Out-Null
-    }
-    catch [management.automation.commandNotFoundException]
-    {
-        if ((read-host "azurerm not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
+        $currentToken = $global:token
+        write-host "current token: $($currentToken)" -ForegroundColor Gray
+        
+        $epochDate = (get-date "1/1/1970")
+        $epochTimeNow = [int64](([datetime]::UtcNow) - $epochDate).TotalSeconds
+        $isExpired = $epochTimeNow -gt $currentToken.expires_on
+        $outputColor = "Green"
+
+        if ($isExpired)
         {
-            write-host "installing minimum required azurerm modules..."
-            install-module azurerm.profile
-            install-module azurerm.resources
-            import-module azurerm.profile
-            import-module azurerm.resources
+            $outputColor = "Red"
+            $global:token = $null
         }
-        else
+
+        $tokenLifetimeMinutes = [int]($currentToken.expires_in / 60)
+        $notBefore = $epochDate.AddSeconds($currentToken.not_before).ToLocalTime()
+        $notAfter = $epochDate.AddSeconds($currentToken.expires_on).ToLocalTime()
+        $notBeforeUtc = $epochDate.AddSeconds($currentToken.not_before).ToString("o")
+        $notAfterUtc = $epochDate.AddSeconds($currentToken.expires_on).ToString("o")
+        $minutesLeft = $([int](($currentToken.expires_on - $epochTimeNow) / 60))
+
+        write-host "current token info:" -ForegroundColor $outputColor
+        write-host "`tepoch time now:`t$epochTimeNow" -ForegroundColor $outputColor
+        write-host "`ttoken lifetime minutes:`t$tokenLifetimeMinutes" -ForegroundColor $outputColor
+        write-host "`tnot before:`t$notBeforeUtc `t($notBefore)" -ForegroundColor $outputColor
+        write-host "`tnot after:`t$notAfterUtc `t($notAfter)" -ForegroundColor $outputColor
+        write-host "`tminutes left before expire:`t$minutesLeft" -ForegroundColor $outputColor
+        write-host "`tis expired:`t$isExpired" -ForegroundColor $outputColor
+
+        if (!$isExpired -and (($tokenLifetimeMinutes / $minutesLeft) -lt 2) -and !$force)
         {
+            #Write-Warning "token has over 1/2 life left. use -force to force new token. returning"
             return $false
         }
-    }
-
-    if(get-azurermresource)
-    {
-        return $true
-    }
-
-    if($thumbPrint -and $clientId)
-    {
-        connect-azurermaccount -ServicePrincipal `
-            -CertificateThumbprint $thumbPrint `
-            -ApplicationId $clientId 
-        #-TenantId $tenantId
-    }
-    else
-    {
-        if(!(connect-azurermaccount))
-        {
-            return $false
-        }
+        #else
+        #{
+        #    Write-Host "refreshing token..." -ForegroundColor Yellow
+        #}
     }
 
     return $true
