@@ -39,6 +39,7 @@ function main()
     $ClientSecret = $null
     $keyvalue = $Null
     $error.Clear()
+    $app = $null
 
     # authenticate
     try
@@ -86,7 +87,7 @@ function main()
         if ((read-host "AAD application exists: $($aadDisplayName). Do you want to delete?[y|n]") -imatch "y")
         {
             remove-AzureRmADApplication -objectId $app.objectId -Force
-        
+            $app = $null
             $id = Get-AzureRmADServicePrincipal -SearchString $aadDisplayName
         
             if (@($id).Count -eq 1)
@@ -153,8 +154,13 @@ function main()
             }
             
             $DebugPreference = "Continue"    
-            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $($cert.NotAfter) -StartDate $($cert.NotBefore) -verbose"
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue ($cert.GetRawCertData()) -EndDate ($cert.NotAfter) -StartDate ($cert.NotBefore) -verbose #-Debug 
+            
+            if(!$app)
+            {
+                write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $($cert.NotAfter) -StartDate $($cert.NotBefore) -verbose"
+                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue ($cert.GetRawCertData()) -EndDate ($cert.NotAfter) -StartDate ($cert.NotBefore) -verbose #-Debug 
+            }
+
             $app            
             #$DebugPreference = "SilentlyContinue"
             $app = New-AzureRmADAppCredential -applicationId ($app.ApplicationId) -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
@@ -171,11 +177,15 @@ function main()
             }
 
             $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
-            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
             $thumbprint = $cert.Thumbprint
             $ClientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
             $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate ($cert.NotAfter)
+            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate $($cert.NotAfter)"
+
+            if(!$app)
+            {
+                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate ($cert.NotAfter)
+            }
         }
         elseif ($logontype -ieq 'key')
         {
@@ -187,7 +197,11 @@ function main()
             $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
             $endDate = [System.DateTime]::Now.AddYears(2)
 
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $pwd -EndDate $endDate
+            if(!$app)
+            {
+                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $pwd -EndDate $endDate
+            }
+
             write-host "client secret: $($ClientSecret)" -ForegroundColor Yellow
 
         }
@@ -200,13 +214,35 @@ function main()
                 exit 1
             }
             # to use password
-            $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -PasswordCredentials $credentials
+            if(!$app)
+            {
+                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -PasswordCredentials $credentials
+            }
         }
 
         $app
+        $count = 0
+
+        while ($count -lt $retryCount)
+        {
+            #todo check if principal exists
+            $error.clear()
+            start-sleep -Seconds 10
+            write-host "attempt $count New-AzureRmADServicePrincipal -ApplicationId $($app.ApplicationId)" # -DisplayName $aadDisplayName"
+            New-AzureRmADServicePrincipal -ApplicationId ($app.ApplicationId) #-DisplayName $aadDisplayName
+            if(!$error)
+            {
+                break
+            }
+            $count++
+        }
         
-        New-AzureRmADServicePrincipal -ApplicationId ($app.ApplicationId) -DisplayName $aadDisplayName
-        
+        if($error)
+        {
+            write-error "unable to add new principal, exiting"
+            return 1
+        }
+
         $count = 0
 
         while ($count -lt $retryCount)
@@ -215,17 +251,32 @@ function main()
             {
                 write-host "$($count) -- sleeping 10 seconds while new service principal is created."
                 start-sleep -Seconds 10
-                write-host "adding role assignments"
+                write-host "attempt $($count) to add role assignments read and contribute"
                 New-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
                 
                 if (!$error)
                 {
+                    write-host "role assignments read added" -ForegroundColor green
+                    write-host "to remove 'read' permissions, run: Remove-AzureRmRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $($app.ApplicationId)"
+                }
+
+                if (!$error)
+                {
                     New-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
-                    write-host "role assignments added"
+                    write-host "role assignments contribute added" -ForegroundColor green
+                    write-host "to remove 'contributor' permissions, run: Remove-AzureRmRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $($app.ApplicationId)"
                     break
                 }
             }
-            catch {}
+            catch 
+            {
+                if($error -imatch "401")
+                {
+                    write-error ($error | out-string)
+                    write-warning "unable to add role assignments read and or contribute due to permissions."
+                    break
+                }
+            }
     
             write-verbose ($error | out-string)
             $error.Clear()
