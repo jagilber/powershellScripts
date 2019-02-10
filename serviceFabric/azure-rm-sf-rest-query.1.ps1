@@ -182,6 +182,12 @@ function get-nodeTypeInfo($nodeTypeName)
         get-nodeTypeExtensions $nodeType.Name
     }
 
+    if(!$error)
+    {
+        return $true
+    }
+
+    return $false
 }
 
 function get-nodeTypeExtensions($nodeTypeName)
@@ -210,6 +216,13 @@ function get-nodeTypeExtensions($nodeTypeName)
     write-host ($sfExtensionCertInfo | convertto-json)
     write-host "nodetype sf extension reverse proxy certificate:" -ForegroundColor Green
     write-host ($sfExtensionReverseProxyCertInfo | convertto-json)
+
+    if(!$error)
+    {
+        return $true
+    }
+
+    return $false
 }
 
 function invoke-rest($uri)
@@ -437,6 +450,7 @@ function verify-keyVault($secrets)
                     {
                         connect-azurermaccount
                     }
+                    
                     $kvsecret = Get-AzureKeyVaultSecret -VaultName $vaultName -Name $secretName
                     write-host ($kvsecret | out-string)
 
