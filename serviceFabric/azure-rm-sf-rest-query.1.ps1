@@ -469,6 +469,7 @@ function verify-keyVault($secrets)
 
 function verify-nodeCertStore
 {
+    Write-host "verifying node cert stores." -ForegroundColor Magenta
     $retval = $false
     $parameters = [collections.arraylist]@() # @{}
 
