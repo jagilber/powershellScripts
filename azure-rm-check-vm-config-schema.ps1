@@ -1,6 +1,6 @@
 param(
     [string]$location = "eastus",
-    [string]$vmSize = "BASIC_A1",
+    [string]$vmSize = "Basic_A1",
     [string]$publisher = "MicrosoftWindowsServer", #"Canonical"
     [string]$offer = "WindowsServer", #"UbuntuServer"
     [string]$imagesku = "2016-Datacenter-with-containers", #"18.04-LTS"
@@ -45,7 +45,7 @@ $vmSizes = Get-AzureRmVMSize -Location $location
 if (!($vmSizes | Where-Object Name -Like $vmSize))
 {
     $vmSizes
-    write-warning "rdshVmSize: $($vmSize) not found in $($location). correct -rdshVmSize using one of the above options and restart script."
+    write-warning "vmSize: $($vmSize) not found in $($location). correct -vmSize using one of the above options and restart script."
     return
 }
 
