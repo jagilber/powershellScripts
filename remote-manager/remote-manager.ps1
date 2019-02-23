@@ -1150,14 +1150,14 @@ function build-jobsList()
     })
 
     $global:startCommands.Add(@{ 
-        'name' = "rds-tracing";
+        'name' = "remote-tracing";
         'enabled' = $false;
         'useWmi' = $true; 
         'wait' = $false;
         'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file logman-wrapper.ps1 -rds -action deploy -configurationfile .\single-session.xml";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -rds -action deploy -configurationfile .\single-session.xml";
         'workingDir' = $managedDirectory;
-        'sourceFiles' = "$(get-Location)\2k12-rds-tracing";
+        'sourceFiles' = "$(get-Location)\remote-tracing";
         'destfiles' = $managedRemoteDirectory;
         'searchSubDir' = $false
     })
@@ -1234,12 +1234,12 @@ function build-jobsList()
     })
 
     $global:stopCommands.Add(@{ 
-        'name' = "rds-tracing";
+        'name' = "remote-tracing";
         'enabled' = $false;
         'useWmi' = $true; 
         'wait' = $true;
         'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file logman-wrapper.ps1 -rds -action undeploy -configurationfile .\single-session.xml -nodynamicpath";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -rds -action undeploy -configurationfile .\single-session.xml -nodynamicpath";
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$($managedRemoteDirectory)\gather";
         'destfiles' = "";
