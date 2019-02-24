@@ -8,7 +8,7 @@
   <SchedulesEnabled>-1</SchedulesEnabled>
   <LatestOutputLocation>
   </LatestOutputLocation>
-  <Name>httptrace</Name>
+  <Name>single-session</Name>
   <OutputLocation>
   </OutputLocation>
   <RootPath>C:\windows\TEMP</RootPath>
@@ -27,7 +27,7 @@
   <Security>O:BAG:BAD:(A;;0x1800;;;WD)(A;;0x120fff;;;SY)(A;;0x120fff;;;LS)(A;;0x120fff;;;NS)(A;;0x120fff;;;BA)(A;;0xee5;;;LU)(A;;LC;;;MU)(A;;0x1800;;;AC)</Security>
   <TraceDataCollector>
     <DataCollectorType>1</DataCollectorType>
-    <Name>httptrace</Name>
+    <Name>single-session</Name>
     <FileName>
     </FileName>
     <FileNameFormat>0</FileNameFormat>
@@ -52,7 +52,7 @@
     <PreallocateFile>0</PreallocateFile>
     <ProcessMode>0</ProcessMode>
     <RealTimeBuffersLost>0</RealTimeBuffersLost>
-    <SessionName>httptrace</SessionName>
+    <SessionName>single-session</SessionName>
     <SessionThreadId>8048</SessionThreadId>
     <StreamMode>1</StreamMode>
     <TraceDataProvider>

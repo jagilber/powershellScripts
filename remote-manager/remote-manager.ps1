@@ -392,7 +392,7 @@ function deploy-files($command, $machine)
     {
         $subDirSearch = [IO.SearchOption]::TopDirectoryOnly
 
-        if($command.searchSubDir)
+        if($command.includeSubDir)
         {
             $subDirSearch = [IO.SearchOption]::AllDirectories
         }
@@ -523,7 +523,7 @@ function gather-files($command, $machine)
     {
         $subDirSearch = [IO.SearchOption]::TopDirectoryOnly
 
-        if($command.searchSubDir)
+        if($command.includeSubDir)
         {
             $subDirSearch = [IO.SearchOption]::AllDirectories
         }
@@ -1106,7 +1106,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$(get-Location)\rdgateway\rdgateway.mgr.bat";
         'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
 
@@ -1120,7 +1120,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$(get-Location)\perfmon\perfmon.mgr.bat";
         'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:startCommands.Add(@{ 
@@ -1129,11 +1129,11 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $false;
         'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -enableDebugLogs -rds -eventLogNamePattern `"hyper|host|virtual`"";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -enableDebugLogs -eventLogNamePattern `"system|application|fabric`"";
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$(get-Location)\events-export";
         'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $true
+        'includeSubDir' = $true
     })
 
     $global:startCommands.Add(@{ 
@@ -1146,7 +1146,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$(get-Location)\events-export";
         'destfiles' = $managedRemoteDirectory;   
-        'searchSubDir' = $true
+        'includeSubDir' = $true
     })
 
     $global:startCommands.Add(@{ 
@@ -1155,11 +1155,11 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $false;
         'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -rds -action deploy -configurationfile .\single-session.xml";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -action start -configurationfolder .\config";
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$(get-Location)\remote-tracing";
         'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:startCommands.Add(@{ 
@@ -1172,7 +1172,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:startCommands.Add(@{ 
@@ -1185,7 +1185,7 @@ function build-jobsList()
         'workingDir' = "$($managedDirectory)\xperf";
         'sourceFiles' = "$(get-Location)\xperf";
         'destfiles' = "$($managedRemoteDirectory)\xperf";
-        'searchSubDir' = $true
+        'includeSubDir' = $true
     })
 
     $global:startCommands.Add(@{ 
@@ -1198,7 +1198,20 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$(get-Location)\procmon-tracing";
         'destfiles' = $managedRemoteDirectory;
-        'searchSubDir' = $true
+        'includeSubDir' = $true
+    })
+
+    $global:startCommands.Add(@{ 
+        'name' = "process-list";
+        'enabled' = $true;
+        'useWmi' = $true; 
+        'wait' = $true;
+        'command' = "powershell.exe";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass &`"{get-process | fl * > $($managedDirectory)\processListStart.txt}`"";
+        'workingDir' = $managedDirectory;
+        'sourceFiles' = "";
+        'destfiles' = "";
+        'includeSubDir' = $false
     })
 
     #################
@@ -1217,7 +1230,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$($managedRemoteDirectory)\*.pml";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:stopCommands.Add(@{ 
@@ -1230,7 +1243,7 @@ function build-jobsList()
         'workingDir' = "$($managedDirectory)\xperf";
         'sourceFiles' = "$($managedRemoteDirectory)\xperf\*.etl";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:stopCommands.Add(@{ 
@@ -1239,11 +1252,11 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $true;
         'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -rds -action undeploy -configurationfile .\single-session.xml -nodynamicpath";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -action stop -configurationFolder .\config -nodynamicpath";
         'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\gather";
+        'sourceFiles' = "$($managedRemoteDirectory)\gather\*.etl";
         'destfiles' = "";
-        'searchSubDir' = $true
+        'includeSubDir' = $true
     })
 
     $global:stopCommands.Add(@{ 
@@ -1256,7 +1269,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$($managedRemoteDirectory)\net.etl";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:stopCommands.Add(@{ 
@@ -1265,12 +1278,12 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $true;
         'command' = "powershell.exe";
-    #   'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -clearEventLogsOnGather -rds -uploadDir $($managedDirectory)\events";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -minutes $($minutes) -rds -uploadDir $($managedDirectory)\events -nodynamicpath -eventLogNamePattern `'hyper|host|virtual`'";
+    #   'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -clearEventLogsOnGather -uploadDir $($managedDirectory)\events";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -minutes $($minutes) -uploadDir $($managedDirectory)\events -nodynamicpath -eventLogNamePattern `"system|application|fabric`"";
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$($managedRemoteDirectory)\events\*.csv";
         'destfiles' = "";
-        'searchSubDir' = $true
+        'includeSubDir' = $true
     })
 
     $global:stopCommands.Add(@{ 
@@ -1283,7 +1296,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:stopCommands.Add(@{ 
@@ -1292,11 +1305,11 @@ function build-jobsList()
         'useWmi' = $true; 
         'wait' = $true;
         'command' = "powershell.exe";
-        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass &`"{get-process | fl * > $($managedDirectory)\processList.txt}`"";
+        'arguments' = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass &`"{get-process | fl * > $($managedDirectory)\processListStop.txt}`"";
         'workingDir' = $managedDirectory;
-        'sourceFiles' = "$($managedRemoteDirectory)\processList.txt";
+        'sourceFiles' = "$($managedRemoteDirectory)\processList*.txt";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:stopCommands.Add(@{ 
@@ -1309,7 +1322,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "$($managedRemoteDirectory)\*.blg";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
     $global:stopCommands.Add(@{ 
@@ -1322,7 +1335,7 @@ function build-jobsList()
         'workingDir' = $managedDirectory;
         'sourceFiles' = "c`$\windows\tracing\*;c`$\windows\debug\i*.log;c$\windows\debug\n*.log";
         'destfiles' = "";
-        'searchSubDir' = $false
+        'includeSubDir' = $false
     })
 
 }

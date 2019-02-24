@@ -353,6 +353,7 @@ function main()
 
     if ($useSingleEtwSession -and [IO.File]::Exists($singleEtwSessionNameFile))
     {
+        populate-configFiles -action $currentAction -configFiles @($singleEtwSessionNameFile)
         $global:configurationFiles = $singleEtwSessionNameFile
     }
 
@@ -952,7 +953,10 @@ function populate-configFiles([string[]] $configFiles)
             {
                 [xml.xmldocument] $xmlDocSingle = xml-reader $singleEtwSessionNameFile
                 $dupe = $false
- 
+                $xmlDocSingle.DocumentElement.Name = $singleEtwSessionName
+                $xmlDocSingle.DocumentElement.TraceDataCollector.Name = $singleEtwSessionName
+                $xmlDocSingle.DocumentElement.TraceDataCollector.SessionName = $singleEtwSessionName
+                 
                 foreach ($node in $xmlDoc.DocumentElement.TraceDataCollector.GetElementsByTagName("TraceDataProvider"))
                 {
                     # check for dupes
