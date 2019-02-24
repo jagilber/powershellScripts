@@ -1110,19 +1110,6 @@ function build-jobsList()
     ##################
 
     $global:startCommands.Add(@{ 
-            'name'          = "rdgateway-tracing";
-            'enabled'       = $false;
-            'useWmi'        = $true; 
-            'wait'          = $false;
-            'command'       = "cmd.exe";
-            'arguments'     = "/c $($managedDirectory)\rdgateway.mgr.bat start";
-            'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$(get-Location)\rdgateway\rdgateway.mgr.bat";
-            'destfiles'     = $managedRemoteDirectory;
-            'includeSubDir' = $false
-        })
-
-    $global:startCommands.Add(@{ 
             'name'          = "perfmon-tracing";
             'enabled'       = $false;
             'useWmi'        = $true; 
@@ -1336,20 +1323,6 @@ function build-jobsList()
             'destfiles'     = "";
             'includeSubDir' = $false
         })
-
-    $global:stopCommands.Add(@{ 
-            'name'          = "rdgateway-tracing";
-            'enabled'       = $false;
-            'useWmi'        = $true; 
-            'wait'          = $true;
-            'command'       = "cmd.exe";
-            'arguments'     = "/c $($managedDirectory)\rdgateway.mgr.bat stop";
-            'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "c`$\windows\tracing\*;c`$\windows\debug\i*.log;c$\windows\debug\n*.log";
-            'destfiles'     = "";
-            'includeSubDir' = $false
-        })
-
 }
 
 # ----------------------------------------------------------------------------------------------------------------
