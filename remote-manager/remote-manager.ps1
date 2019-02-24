@@ -10,7 +10,7 @@
 .NOTES  
    File Name  : remote-manager.ps1  
    Author     : jagilber
-   Version    : 190224 fix remote-tracing
+   Version    : 190224 fix remote-tracing, fix cleanup
                 
                 
    History    : 
@@ -251,7 +251,7 @@ function clean-machines()
 
             foreach ($destinationDirectory in ($global:cleanupList.$machine).GetEnumerator())
             {
-                if ($destinationDirectory.Contains($remoteDirectory))
+                if ($destinationDirectory.Key.Contains($remoteDirectory))
                 {
                     continue
                 }
