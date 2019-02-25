@@ -1,3 +1,7 @@
+<#
+    resolves path to directory or file on local system using current and path variables
+#>
+
 param(
     $item = (get-location).path
 )
@@ -25,8 +29,8 @@ function resolve-path($item)
     }
 
     Write-Warning "unable to find $item"
-    return $null
+    return $item
 }
 
 $result = resolve-path $item
-write-host "result $result"
+write-host "result: $result"
