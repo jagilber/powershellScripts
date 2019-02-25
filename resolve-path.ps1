@@ -14,7 +14,7 @@ function resolve-path($item)
 
     if($result = Get-Item $item -ErrorAction SilentlyContinue)
     {
-        return $result
+        return $result.FullName
     }
 
     $paths = [collections.arraylist]@($env:Path.Split(";"))
@@ -24,7 +24,7 @@ function resolve-path($item)
     {
         if($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue)
         {
-            return $result
+            return $result.FullName
         }
     }
 
