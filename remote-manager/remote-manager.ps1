@@ -376,11 +376,6 @@ function deploy-files($command, $machine)
 {
     if (!$start)
     {
-        if ($debugScript)
-        {
-            log-info "deploy-files action not start. returning"
-        }
-
         return
     }
 
