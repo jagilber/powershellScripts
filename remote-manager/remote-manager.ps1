@@ -463,7 +463,7 @@ function deploy-files($command, $machine)
     }
     catch
     {
-        log-info "deploy-files error: $($error)"
+        log-info "deploy-files error: $($error | out-string)"
         $error.Clear()
     }
 }
@@ -927,7 +927,7 @@ function resolve-path($item)
     if($result = Get-Item $item -ErrorAction SilentlyContinue)
     {
         log-info "resolve-path returning $result"
-        return $result
+        return $result.FullName
     }
 
     $paths = [collections.arraylist]@($env:Path.Split(";"))
@@ -938,7 +938,7 @@ function resolve-path($item)
         if($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue)
         {
             log-info "resolve-path returning $result"
-            return $result
+            return $result.FullName
         }
     }
 
