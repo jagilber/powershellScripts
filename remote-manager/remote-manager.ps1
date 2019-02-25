@@ -916,7 +916,33 @@ function process-commands($commands, [string] $machine)
         }
     }
 }
+# ----------------------------------------------------------------------------------------------------------------
+function resolve-path($item)
+{
+    $item = [environment]::ExpandEnvironmentVariables($item)
+    $sepChar = [io.path]::DirectorySeparatorChar
 
+    if($result = Get-Item $item -ErrorAction SilentlyContinue)
+    {
+        log-info "resolve-path returning $result"
+        return $result
+    }
+
+    $paths = [collections.arraylist]@($env:Path.Split(";"))
+    [void]$paths.Add([io.path]::GetDirectoryName($MyInvocation.ScriptName))
+
+    foreach ($path in $paths)
+    {
+        if($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue)
+        {
+            log-info "resolve-path returning $result"
+            return $result
+        }
+    }
+
+    log-info "unable to find $item"
+    return $null
+}
 # ----------------------------------------------------------------------------------------------------------------
 function run-wmiCommandJob($command, $machine)
 {
