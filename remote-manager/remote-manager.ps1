@@ -8,14 +8,11 @@
     default job definitions at bottom of script
     
 .NOTES  
-   File Name  : remote-manager.ps1  
-   Author     : jagilber
-   Version    : 190224 fix remote-tracing, fix cleanup
-                
-                
-   History    : 
-                170313 fixed xperf dir
-                170219 added -noclean and machine cleanup
+    File Name  : remote-manager.ps1  
+    Author     : jagilber
+    Version    : 190225 fix relative path
+    History    : 
+                 190224 fix remote-tracing, fix cleanup
 
 .EXAMPLE  
     .\remote-manager.ps1 -start
@@ -895,7 +892,7 @@ function process-commands($commands, [string] $machine)
             continue
         }
 
-        $command.workingDir = reolve-path $command.workingDir
+        $command.workingDir = resolve-path $command.workingDir
         deploy-files -command $command -machine $machine
 
         if ([string]::IsNullOrEmpty($command.command))
