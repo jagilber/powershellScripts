@@ -1164,6 +1164,19 @@ function build-jobsList()
         })
 
     $global:startCommands.Add(@{ 
+            'name'          = "directory-treesize";
+            'enabled'       = $false;
+            'useWmi'        = $true; 
+            'wait'          = $false;
+            'command'       = "";
+            'arguments'     = "";
+            'workingDir'    = $managedDirectory;
+            'sourceFiles'   = ".\tree-size";
+            'destfiles'     = $managedRemoteDirectory;
+            'includeSubDir' = $false
+        })
+    
+    $global:startCommands.Add(@{ 
             'name'          = "event-log-manager";
             'enabled'       = $true;
             'useWmi'        = $true; 
@@ -1172,7 +1185,7 @@ function build-jobsList()
             'arguments'     = "";
             'workingDir'    = $managedDirectory;
             'sourceFiles'   = ".\events-export";
-            'destfiles'     = $managedRemoteDirectory;   
+            'destfiles'     = $managedRemoteDirectory;
             'includeSubDir' = $true
         })
 
@@ -1216,19 +1229,6 @@ function build-jobsList()
         })
 
     $global:startCommands.Add(@{ 
-            'name'          = "procmon-tracing";
-            'enabled'       = $false;
-            'useWmi'        = $false; 
-            'wait'          = $false;
-            'command'       = "powershell.exe";
-            'arguments'     = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1";
-            'workingDir'    = $managedDirectory;
-            'sourceFiles'   = ".\procmon-tracing";
-            'destfiles'     = $managedRemoteDirectory;
-            'includeSubDir' = $true
-        })
-
-    $global:startCommands.Add(@{ 
             'name'          = "process-list";
             'enabled'       = $true;
             'useWmi'        = $true; 
@@ -1248,17 +1248,17 @@ function build-jobsList()
     #################
 
     $global:stopCommands.Add(@{ 
-            'name'          = "procmon-tracing";
-            'enabled'       = $false;
-            'useWmi'        = $false; 
-            'wait'          = $true;
-            'command'       = "powershell.exe";
-            'arguments'     = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1 -terminate";
-            'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$($managedRemoteDirectory)\*.pml";
-            'destfiles'     = "";
-            'includeSubDir' = $false
-        })
+        'name'          = "directory-treesize";
+        'enabled'       = $false;
+        'useWmi'        = $true; 
+        'wait'          = $true;
+        'command'       = "powershell.exe";
+        'arguments'     = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file directory-treesize.ps1 -detail -directory d:\ -logFile .\directory-treesize.d.log";
+        'workingDir'    = $managedDirectory;
+        'sourceFiles'   = "$($managedRemoteDirectory)\directory-treesize*.log";
+        'destfiles'     = "";
+        'includeSubDir' = $false
+    })
 
     $global:stopCommands.Add(@{ 
             'name'          = "xperf-tracing";
