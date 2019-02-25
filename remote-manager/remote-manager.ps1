@@ -417,6 +417,8 @@ function deploy-files($command, $machine)
             }
             else
             {
+                $sourceFiles = resolve-path $sourceFiles
+
                 if ([IO.Directory]::Exists($sourceFiles))
                 {
                     $sourceFilter = "*"
@@ -552,6 +554,8 @@ function gather-files($command, $machine)
             }
             else
             {
+                $sourceFiles = resolve-path $sourceFiles
+
                 if ([IO.Directory]::Exists($sourceFilesPath))
                 {
                     $sourceFilter = "*"
@@ -891,6 +895,7 @@ function process-commands($commands, [string] $machine)
             continue
         }
 
+        $command.workingDir = reolve-path $command.workingDir
         deploy-files -command $command -machine $machine
 
         if ([string]::IsNullOrEmpty($command.command))
@@ -941,7 +946,7 @@ function resolve-path($item)
     }
 
     log-info "unable to find $item"
-    return $null
+    return $item
 }
 # ----------------------------------------------------------------------------------------------------------------
 function run-wmiCommandJob($command, $machine)
@@ -1143,7 +1148,7 @@ function build-jobsList()
             'command'       = "cmd.exe";
             'arguments'     = "/c $($managedDirectory)\perfmon.mgr.bat start";
             'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$(get-Location)\perfmon\perfmon.mgr.bat";
+            'sourceFiles'   = ".\perfmon\perfmon.mgr.bat";
             'destfiles'     = $managedRemoteDirectory;
             'includeSubDir' = $false
         })
@@ -1156,7 +1161,7 @@ function build-jobsList()
             'command'       = "powershell.exe";
             'arguments'     = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-log-manager.ps1 -enableDebugLogs -eventLogNamePattern `"system|application|fabric`"";
             'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$(get-Location)\events-export";
+            'sourceFiles'   = ".\events-export";
             'destfiles'     = $managedRemoteDirectory;
             'includeSubDir' = $true
         })
@@ -1169,7 +1174,7 @@ function build-jobsList()
             'command'       = "";
             'arguments'     = "";
             'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$(get-Location)\events-export";
+            'sourceFiles'   = ".\events-export";
             'destfiles'     = $managedRemoteDirectory;   
             'includeSubDir' = $true
         })
@@ -1182,7 +1187,7 @@ function build-jobsList()
             'command'       = "powershell.exe";
             'arguments'     = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file remote-tracing.ps1 -action start -configurationfolder .\config";
             'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$(get-Location)\remote-tracing";
+            'sourceFiles'   = ".\remote-tracing";
             'destfiles'     = $managedRemoteDirectory;
             'includeSubDir' = $false
         })
@@ -1208,7 +1213,7 @@ function build-jobsList()
             'command'       = "cmd.exe";
             'arguments'     = "/c $($managedDirectory)\xperf\wpr.mgr.bat start";
             'workingDir'    = "$($managedDirectory)\xperf";
-            'sourceFiles'   = "$(get-Location)\xperf";
+            'sourceFiles'   = ".\xperf";
             'destfiles'     = "$($managedRemoteDirectory)\xperf";
             'includeSubDir' = $true
         })
@@ -1221,7 +1226,7 @@ function build-jobsList()
             'command'       = "powershell.exe";
             'arguments'     = "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass -file event-task-procmon.ps1";
             'workingDir'    = $managedDirectory;
-            'sourceFiles'   = "$(get-Location)\procmon-tracing";
+            'sourceFiles'   = ".\procmon-tracing";
             'destfiles'     = $managedRemoteDirectory;
             'includeSubDir' = $true
         })
