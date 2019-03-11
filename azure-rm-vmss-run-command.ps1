@@ -18,11 +18,37 @@ $tempScript = ".\tempscript.ps1"
 
 function main()
 {
+    $error.Clear()
     get-job | remove-job -Force
+
+    get-command Invoke-AzureRmVmssVMRunCommand -ErrorAction SilentlyContinue
+    
+    if($error)
+    {
+        write-warning "Invoke-AzureRmVmssVMRunCommand not installed."
+
+        if((read-host "is it ok to install latest azurerm?[y|n]") -imatch "y")
+        {
+            $error.clear()
+            remove-module azurerm
+            install-module azurerm -AllowClobber -force
+            import-module azurerm
+        }
+        else
+        {
+            return
+        }
+
+        if($error)
+        {
+            return
+        }
+    }
 
     if (!(Get-AzureRmResourceGroup))
     {
         connect-azurermaccount
+
         if ($error)
         {
             return
@@ -100,13 +126,12 @@ function main()
     }
 
     write-host "finished. output stored in `$global:joboutputs"
+    $global:joboutputs | fl *
 
     if ($error)
     {
         return 1
     }
-
-    
 }
 
 function generate-list([string]$strList)
@@ -157,31 +182,26 @@ function monitor-jobs()
                 {
                     write-host ($jobInfo | fl * | out-string)
                 }
-            }            
-
+            }
         }
 
-        if($count -gt 80)
+        if($count -ge 60)
         {
-            write-host "."
-            $count = 0    
+            write-host
+            $count = 0
         }
-        else 
-        {
-            $count++
-            write-host "." -NoNewline    
-        }
-        
+
+        write-host "." -NoNewline    
         Start-Sleep -Seconds 1
- 
+        $count++ 
     }
 }
 
 function node-psTestNetScript()
 {
     return @'
-        param($remoteHost, $port)
-        test-netconnection $remoteHost -port $port
+    ipconfig;
+    hostname;
 '@
 }
 
@@ -224,9 +244,17 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
                 -CommandId RunPowerShellScript `
                 -AsJob
         }
+
+        if($response)
+        {
         
-        $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$i")
-        write-host ($response | fl * | out-string)
+            $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$i")
+            write-host ($response | fl * | out-string)
+        }
+        else
+        {
+            write-warning "no response from command!"
+        }
     }
 }
 
