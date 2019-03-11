@@ -92,6 +92,51 @@ function main()
     write-host $result
     $count = 0
 
+    monitor-jobs
+
+    if((test-path $tempScript))
+    {
+        remove-item $tempScript -Force
+    }
+
+    write-host "finished. output stored in `$global:joboutputs"
+
+    if ($error)
+    {
+        return 1
+    }
+
+    
+}
+
+function generate-list([string]$strList)
+{
+    $list = [collections.arraylist]@()
+
+    foreach($split in $strList.Replace(" ","").Split(","))
+    {
+        if($split.contains("-"))
+        {
+            [int]$lbound = [int][regex]::match($split,".+?-").value.trimend("-")
+            [int]$ubound = [int][regex]::match($split,"-.+").value.trimstart("-")
+
+            while($lbound -le $ubound)
+            {
+                [void]$list.add($lbound)
+                $lbound++
+            }
+        }
+        else
+        {
+            [void]$list.add($split)
+        }
+    }
+
+    return $list
+}
+
+function monitor-jobs()
+{
     while (get-job)
     {
         foreach ($job in get-job)
@@ -107,6 +152,7 @@ function main()
             else
             {
                 $jobInfo = Receive-Job -Job $job
+                
                 if($jobInfo)
                 {
                     write-host ($jobInfo | fl * | out-string)
@@ -122,26 +168,13 @@ function main()
         }
         else 
         {
+            $count++
             write-host "." -NoNewline    
         }
         
         Start-Sleep -Seconds 1
  
     }
-
-    if((test-path $tempScript))
-    {
-        remove-item $tempScript -Force
-    }
-
-    write-host "finished. output stored in `$global:joboutputs"
-
-    if ($error)
-    {
-        return 1
-    }
-
-    
 }
 
 function node-psTestNetScript()
