@@ -12,6 +12,9 @@ param(
 )
 
 $ErrorActionPreference = "silentlycontinue"
+$global:jobs = @{}
+$global:joboutputs = @{}
+$tempScript = ".\tempscript.ps1"
 
 function main()
 {
@@ -69,7 +72,7 @@ function main()
 
     if ($instanceId -lt 0)
     {
-        $scaleset = get-azurermvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmss
+        $scaleset = get-azurermvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
         $maxInstanceId = $scaleset.Sku.Capacity
         $instanceId = 0
     }
@@ -78,10 +81,16 @@ function main()
         $maxInstanceId = $instanceId + 1
     }
 
+    if (!(test-path $script))
+    {
+        out-file -InputObject $script -filepath $tempscript -Force
+        $script = $tempScript
+    }
+
+
     $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $instanceId -maxInstanceId $maxInstanceId -script $script -parameters $parameters
     write-host $result
     $count = 0
-    $global:jobs = [collections.arraylist]@()
 
     while (get-job)
     {
@@ -90,7 +99,7 @@ function main()
             if ($job.State -ine "Running")
             {
                 write-host ($job | fl * | out-string)
-                $global:jobs.Add(($job.output | ConvertTo-Json))
+                $global:joboutputs.Add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
                 write-host ($job.output | ConvertTo-Json)
                 $job.output
                 Remove-Job -Id $job.Id -Force  
@@ -120,12 +129,19 @@ function main()
  
     }
 
+    if((test-path $tempScript))
+    {
+        remove-item $tempScript -Force
+    }
+
+    write-host "finished. output stored in `$global:joboutputs"
+
     if ($error)
     {
         return 1
     }
 
-    write-host "finished. output stored in `$global:jobs"
+    
 }
 
 function node-psTestNetScript()
@@ -138,24 +154,7 @@ function node-psTestNetScript()
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstanceId, [string]$script, [collections.arraylist]$parameters)
 {
-    if (!$script)
-    {
-        return $false
-    }
-
-    if ((test-path $script))
-    {
-        write-host "reading file $script"
-        $scriptList = Get-Content -Raw -Path $script
-    }
-    else
-    {
-        $tempScriptName = ".\script.ps1"
-        $scriptList = [collections.arraylist]@($script.split("`r`n", [stringsplitoptions]::removeEmptyEntries))
-        [io.file]::WriteAllText($tempScriptName, $script)
-        $script = $tempScriptName
-    }
-    
+   
     for ($i = $instanceId; $i -lt $maxInstanceId; $i++)
     {
         if ($parameters)
@@ -193,9 +192,9 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
                 -AsJob
         }
         
+        $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$i")
         write-host ($response | fl * | out-string)
     }
-
 }
 
 main
