@@ -6,9 +6,10 @@
 param(
     [string]$resourceGroup,
     [string]$vmssName,
-    [int]$instanceId = -1,
+    [object]$instanceId,
     [string]$script, # script string content or file path to script
-    [hashtable]$parameters = @{} # hashtable @{"name" = "value";}
+    [hashtable]$parameters = @{}, # hashtable @{"name" = "value";}
+    [string]$jsonOutputFile
 )
 
 $ErrorActionPreference = "silentlycontinue"
@@ -58,13 +59,12 @@ function main()
     if (!$script)
     {
         Write-Warning "using test script. use -script and -parameters arguments to supply script and parameters"
-        $script = (node-psTestNetScript)
-        [void]$parameters.Add(@{"remoteHost" = "time.windows.com"})
-        [void]$parameters.Add(@{"port" = "80"})
+        $script = node-psTestScript
     }
 
     if (!$resourceGroup -or !$vmssName)
     {
+        $nodePrompt = $true
         $count = 1
         $resourceGroups = Get-AzureRmResourceGroup
         
@@ -96,16 +96,30 @@ function main()
         }
     }
 
-    if ($instanceId -lt 0)
+    $scaleset = get-azurermvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
+    $maxInstanceId = $scaleset.Sku.Capacity
+    write-host "$vmssName capacity: $maxInstanceId (0 - $($maxInstanceId - 1))"
+
+    if (!$instanceId)
     {
-        $scaleset = get-azurermvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-        $maxInstanceId = $scaleset.Sku.Capacity
-        $instanceId = 0
+        $instanceIds = generate-list "0-$($maxInstanceId - 1)"
+
+        if($nodePrompt)
+        {
+            $numbers = read-host "enter 0 based, comma separated list of number(s), or number range of the nodes to invoke script:"
+
+            if($numbers)
+            {
+                $instanceIds = generate-list $numbers
+            }
+        }
     }
     else
     {
-        $maxInstanceId = $instanceId + 1
+        $instanceIds = generate-list $instanceId
     }
+
+    write-host $instanceIds
 
     if (!(test-path $script))
     {
@@ -113,8 +127,12 @@ function main()
         $script = $tempScript
     }
 
+    $result = run-vmssPsCommand -resourceGroup $resourceGroup `
+        -vmssName $vmssName `
+        -instanceIds $instanceIds `
+        -script $script `
+        -parameters $parameters
 
-    $result = run-vmssPsCommand -resourceGroup $resourceGroup -vmssName $vmssName -instanceId $instanceId -maxInstanceId $maxInstanceId -script $script -parameters $parameters
     write-host $result
     $count = 0
 
@@ -123,6 +141,12 @@ function main()
     if((test-path $tempScript))
     {
         remove-item $tempScript -Force
+    }
+
+    if($jsonOutputFile)
+    {
+        write-host "saving json to file $jsonOutputFile"
+        out-file -InputObject ($global:joboutputs | ConvertTo-Json) -filepath $jsonOutputFile -force
     }
 
     write-host "finished. output stored in `$global:joboutputs"
@@ -166,6 +190,8 @@ function monitor-jobs()
     {
         foreach ($job in get-job)
         {
+            write-verbose ($job | fl * | out-string)
+
             if ($job.State -ine "Running")
             {
                 write-host ($job | fl * | out-string)
@@ -197,24 +223,23 @@ function monitor-jobs()
     }
 }
 
-function node-psTestNetScript()
+function node-psTestScript()
 {
-    return @'
-    ipconfig;
-    hostname;
-'@
+    return "# $(get-date)
+        wmic qfe;
+        ipconfig;
+        hostname;"
 }
 
-function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstanceId, [string]$script, [collections.arraylist]$parameters)
+function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters)
 {
-   
-    for ($i = $instanceId; $i -lt $maxInstanceId; $i++)
+    foreach ($instanceId in $instanceIds)
     {
         if ($parameters)
         {
             write-host "Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
             -VMScaleSetName $vmssName `
-            -InstanceId $i `
+            -InstanceId $instanceId `
             -ScriptPath $script `
             -Parameter $parameters `
             -CommandId RunPowerShellScript `
@@ -222,7 +247,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
     
             $response = Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
-                -InstanceId $i `
+                -InstanceId $instanceId `
                 -ScriptPath $script `
                 -Parameter $parameters `
                 -CommandId RunPowerShellScript `
@@ -232,14 +257,14 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
         {
             write-host "Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
             -VMScaleSetName $vmssName `
-            -InstanceId $i `
+            -InstanceId $instanceId `
             -ScriptPath $script `
             -CommandId RunPowerShellScript `
             -AsJob"
     
             $response = Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
-                -InstanceId $i `
+                -InstanceId $instanceId `
                 -ScriptPath $script `
                 -CommandId RunPowerShellScript `
                 -AsJob
@@ -247,7 +272,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceId, $maxInstance
 
         if($response)
         {
-        
             $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$i")
             write-host ($response | fl * | out-string)
         }
