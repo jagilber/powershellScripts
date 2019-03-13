@@ -198,8 +198,8 @@ function generate-list([string]$strList)
 
 function monitor-jobs()
 {
-    write-host "first time only can take up to 45 minutes if the run command extension is not
-     installed. subsequent executions take around a minute but can take up to 15..." -foregroundcolor green
+    write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
+        subsequent executions take around a minute but can take up to 30..." -foregroundcolor yellow
     write-host "use -removeExtension to remove extension or reset"
 
     $minCount = 0
@@ -253,10 +253,16 @@ function node-psTestScript()
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters)
 {
-
-
     foreach ($instanceId in $instanceIds)
     {
+        $instance = get-azurermvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
+        write-host "instance id: $($instanceId)`r`n$($instance.VmAgent.ExtensionHandlers | convertto-json)" -ForegroundColor Cyan
+        
+        if(!($instance.VmAgent.ExtensionHandlers.Type -imatch "RunCommandWindows"))
+        {
+            Write-Warning "run command extension not installed. this will install extension automatically but will be slow..."
+        }
+
         if($removeExtension)
         {
             $commandId = $removeCommandId
@@ -312,7 +318,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
 
         if($response)
         {
-            $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$i")
+            $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$instanceId")
             write-host ($response | fl * | out-string)
         }
         else
