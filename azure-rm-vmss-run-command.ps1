@@ -2,11 +2,24 @@
     script to invoke powershell script with output on azure vm scaleset vms
     Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId $commandId
     Get-AzureRmVMRunCommandDocument -Location westus | select ID, OSType, Label
+
+    .\azure-rm-vmss-run-command.ps1
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -instanceId 0
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -instanceId 0-3
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -instanceId "0-3,5"
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -script "ipconfig"
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -script "ipconfig;hostname"
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -script c:\temp\somescript.ps1
+    
+    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -removeExtension
+    .\azure-rm-vmss-run-command.ps1 -removeExtension
 #>
 param(
     [string]$resourceGroup,
     [string]$vmssName,
-    [object]$instanceId,
+    [string]$instanceId,
     [string]$script, # script string content or file path to script
     [hashtable]$parameters = @{}, # hashtable @{"name" = "value";}
     [string]$jsonOutputFile,
@@ -130,7 +143,8 @@ function main()
     if($jsonOutputFile)
     {
         write-host "saving json to file $jsonOutputFile"
-        out-file -InputObject ($global:joboutputs | ConvertTo-Json) -filepath $jsonOutputFile -force
+        #out-file -InputObject ($global:joboutputs | ConvertTo-Json) -filepath $jsonOutputFile -force
+        ($global:joboutputs | convertto-json).replace("\r\n","").replace("\`"","`"").replace("`"{","{").replace("}`"","}") | out-file $jsonOutputFile -Force
     }
 
     write-host "finished. output stored in `$global:joboutputs"
@@ -202,7 +216,7 @@ function monitor-jobs()
         subsequent executions take around a minute but can take up to 30..." -foregroundcolor yellow
     write-host "use -removeExtension to remove extension or reset"
 
-    $minCount = 0
+    $minCount = 1
     $count = 0
 
     while (get-job)
@@ -214,7 +228,7 @@ function monitor-jobs()
             if ($job.state -ine "running")
             {
                 write-host ($job | fl * | out-string)
-                $global:joboutputs.add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
+                [void]$global:joboutputs.add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
                 write-host ($job.output | ConvertTo-Json)
                 $job.output
                 Remove-Job -Id $job.Id -Force  
