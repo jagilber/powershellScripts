@@ -1,7 +1,7 @@
 <#
-    script to invoke powershell script with output to azure vm scaleset vms
-
-    Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId RunPowerShellScript
+    script to invoke powershell script with output on azure vm scaleset vms
+    Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId $commandId
+    Get-AzureRmVMRunCommandDocument -Location westus | select ID, OSType, Label
 #>
 param(
     [string]$resourceGroup,
@@ -9,41 +9,25 @@ param(
     [object]$instanceId,
     [string]$script, # script string content or file path to script
     [hashtable]$parameters = @{}, # hashtable @{"name" = "value";}
-    [string]$jsonOutputFile
+    [string]$jsonOutputFile,
+    [string]$commandId = "RunPowerShellScript",
+    [switch]$removeExtension
 )
 
 $ErrorActionPreference = "silentlycontinue"
 $global:jobs = @{}
 $global:joboutputs = @{}
 $tempScript = ".\tempscript.ps1"
+$removeCommandId = "RemoveRunCommandWindowsExtension"
 
 function main()
 {
     $error.Clear()
     get-job | remove-job -Force
 
-    get-command Invoke-AzureRmVmssVMRunCommand -ErrorAction SilentlyContinue
-    
-    if($error)
+    if(!(check-module))
     {
-        write-warning "Invoke-AzureRmVmssVMRunCommand not installed."
-
-        if((read-host "is it ok to install latest azurerm?[y|n]") -imatch "y")
-        {
-            $error.clear()
-            remove-module azurerm
-            install-module azurerm -AllowClobber -force
-            import-module azurerm
-        }
-        else
-        {
-            return
-        }
-
-        if($error)
-        {
-            return
-        }
+        return
     }
 
     if (!(Get-AzureRmResourceGroup))
@@ -158,6 +142,34 @@ function main()
     }
 }
 
+function check-module()
+{
+    get-command Invoke-AzureRmVmssVMRunCommand -ErrorAction SilentlyContinue
+    
+    if($error)
+    {
+        $error.clear()
+        write-warning "Invoke-AzureRmVmssVMRunCommand not installed."
+
+        if((read-host "is it ok to install latest azurerm?[y|n]") -imatch "y")
+        {
+            $error.clear()
+            remove-module azurerm
+            install-module azurerm -AllowClobber -force
+            import-module azurerm
+        }
+        else
+        {
+            return $false
+        }
+
+        if($error)
+        {
+            return $false
+        }
+    }
+}
+
 function generate-list([string]$strList)
 {
     $list = [collections.arraylist]@()
@@ -186,16 +198,23 @@ function generate-list([string]$strList)
 
 function monitor-jobs()
 {
+    write-host "first time only can take up to 45 minutes if the run command extension is not
+     installed. subsequent executions take around a minute but can take up to 15..." -foregroundcolor green
+    write-host "use -removeExtension to remove extension or reset"
+
+    $minCount = 0
+    $count = 0
+
     while (get-job)
     {
         foreach ($job in get-job)
         {
             write-verbose ($job | fl * | out-string)
 
-            if ($job.State -ine "Running")
+            if ($job.state -ine "running")
             {
                 write-host ($job | fl * | out-string)
-                $global:joboutputs.Add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
+                $global:joboutputs.add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
                 write-host ($job.output | ConvertTo-Json)
                 $job.output
                 Remove-Job -Id $job.Id -Force  
@@ -213,7 +232,8 @@ function monitor-jobs()
 
         if($count -ge 60)
         {
-            write-host
+            write-host $minCount
+            $minCount++
             $count = 0
         }
 
@@ -233,16 +253,36 @@ function node-psTestScript()
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters)
 {
+
+
     foreach ($instanceId in $instanceIds)
     {
-        if ($parameters)
+        if($removeExtension)
+        {
+            $commandId = $removeCommandId
+            $script = $null
+            $parameters = $null
+
+            write-host "Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
+            -VMScaleSetName $vmssName `
+            -InstanceId $instanceId `
+            -CommandId $commandId `
+            -AsJob"
+    
+            $response = Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
+                -VMScaleSetName $vmssName `
+                -InstanceId $instanceId `
+                -CommandId $commandId `
+                -AsJob
+        }
+        elseif ($parameters)
         {
             write-host "Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
             -VMScaleSetName $vmssName `
             -InstanceId $instanceId `
             -ScriptPath $script `
             -Parameter $parameters `
-            -CommandId RunPowerShellScript `
+            -CommandId $commandId `
             -AsJob"
     
             $response = Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -250,7 +290,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -InstanceId $instanceId `
                 -ScriptPath $script `
                 -Parameter $parameters `
-                -CommandId RunPowerShellScript `
+                -CommandId $commandId `
                 -AsJob
         }
         else 
@@ -259,14 +299,14 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             -VMScaleSetName $vmssName `
             -InstanceId $instanceId `
             -ScriptPath $script `
-            -CommandId RunPowerShellScript `
+            -CommandId $commandId `
             -AsJob"
     
             $response = Invoke-AzureRmVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
                 -InstanceId $instanceId `
                 -ScriptPath $script `
-                -CommandId RunPowerShellScript `
+                -CommandId $commandId `
                 -AsJob
         }
 
