@@ -32,6 +32,9 @@ $global:jobs = @{}
 $global:joboutputs = @{}
 $tempScript = ".\tempscript.ps1"
 $removeCommandId = "RemoveRunCommandWindowsExtension"
+$global:startTime = get-date
+$global:success = 0
+$global:fail = 0
 
 function main()
 {
@@ -213,9 +216,9 @@ function generate-list([string]$strList)
 function monitor-jobs()
 {
     write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
-        subsequent executions take around a minute but can take up to 30..." -foregroundcolor yellow
+        subsequent executions take between a 1 and 30 minutes..." -foregroundcolor yellow
     write-host "use -removeExtension to remove extension or reset"
-
+    $originalJobsCount = (get-job).count
     $minCount = 1
     $count = 0
 
@@ -228,7 +231,16 @@ function monitor-jobs()
             if ($job.state -ine "running")
             {
                 write-host ($job | fl * | out-string)
-                [void]$global:joboutputs.add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
+                if($job.state -imatch "fail" -or $job.statusmessage -imatch "fail")
+                {
+                    [void]$global:joboutputs.add(($global:jobs[$job.id]),($job | ConvertTo-Json))
+                    $global:fail++
+                }
+                else 
+                {
+                    [void]$global:joboutputs.add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
+                    $global:success++
+                }
                 write-host ($job.output | ConvertTo-Json)
                 $job.output
                 Remove-Job -Id $job.Id -Force  
@@ -252,6 +264,15 @@ function monitor-jobs()
         }
 
         write-host "." -NoNewline    
+
+        $currentJobsCount = (get-job).count
+        $activity = "$($commandId) $($originalJobsCount) vm jobs completion status (use -removeExtension to remove extension or reset):"
+        $status = "$($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed. " `
+            + "fail:$($global:fail) success:$($global:success) " `
+            + "time elapsed: $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+        $percentComplete = ((($originalJobsCount - $currentJobsCount) / $originalJobsCount) * 100)
+
+        Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
         Start-Sleep -Seconds 1
         $count++ 
     }
