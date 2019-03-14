@@ -41,7 +41,7 @@ function main()
     $error.Clear()
     get-job | remove-job -Force
 
-    if(!(check-module))
+    if (!(check-module))
     {
         return
     }
@@ -104,11 +104,11 @@ function main()
     {
         $instanceIds = generate-list "0-$($maxInstanceId - 1)"
 
-        if($nodePrompt)
+        if ($nodePrompt)
         {
             $numbers = read-host "enter 0 based, comma separated list of number(s), or number range of the nodes to invoke script:"
 
-            if($numbers)
+            if ($numbers)
             {
                 $instanceIds = generate-list $numbers
             }
@@ -127,6 +127,11 @@ function main()
         $script = $tempScript
     }
 
+    if ($removeExtension)
+    {
+        $commandId = $removeCommandId
+    }
+
     $result = run-vmssPsCommand -resourceGroup $resourceGroup `
         -vmssName $vmssName `
         -instanceIds $instanceIds `
@@ -138,20 +143,21 @@ function main()
 
     monitor-jobs
 
-    if((test-path $tempScript))
+    if ((test-path $tempScript))
     {
         remove-item $tempScript -Force
     }
 
-    if($jsonOutputFile)
+    if ($jsonOutputFile)
     {
         write-host "saving json to file $jsonOutputFile"
         #out-file -InputObject ($global:joboutputs | ConvertTo-Json) -filepath $jsonOutputFile -force
-        ($global:joboutputs | convertto-json).replace("\r\n","").replace("\`"","`"").replace("`"{","{").replace("}`"","}") | out-file $jsonOutputFile -Force
+        ($global:joboutputs | convertto-json).replace("\r\n", "").replace("\`"", "`"").replace("`"{", "{").replace("}`"", "}") | out-file $jsonOutputFile -Force
     }
 
-    write-host "finished. output stored in `$global:joboutputs"
     $global:joboutputs | fl *
+    write-host "finished. output stored in `$global:joboutputs"
+    write-host "total fail:$($global:fail) total success:$($global:success)"
 
     if ($error)
     {
@@ -163,12 +169,12 @@ function check-module()
 {
     get-command Invoke-AzureRmVmssVMRunCommand -ErrorAction SilentlyContinue
     
-    if($error)
+    if ($error)
     {
         $error.clear()
         write-warning "Invoke-AzureRmVmssVMRunCommand not installed."
 
-        if((read-host "is it ok to install latest azurerm?[y|n]") -imatch "y")
+        if ((read-host "is it ok to install latest azurerm?[y|n]") -imatch "y")
         {
             $error.clear()
             remove-module azurerm
@@ -180,7 +186,7 @@ function check-module()
             return $false
         }
 
-        if($error)
+        if ($error)
         {
             return $false
         }
@@ -191,14 +197,14 @@ function generate-list([string]$strList)
 {
     $list = [collections.arraylist]@()
 
-    foreach($split in $strList.Replace(" ","").Split(","))
+    foreach ($split in $strList.Replace(" ", "").Split(","))
     {
-        if($split.contains("-"))
+        if ($split.contains("-"))
         {
-            [int]$lbound = [int][regex]::match($split,".+?-").value.trimend("-")
-            [int]$ubound = [int][regex]::match($split,"-.+").value.trimstart("-")
+            [int]$lbound = [int][regex]::match($split, ".+?-").value.trimend("-")
+            [int]$ubound = [int][regex]::match($split, "-.+").value.trimstart("-")
 
-            while($lbound -le $ubound)
+            while ($lbound -le $ubound)
             {
                 [void]$list.add($lbound)
                 $lbound++
@@ -231,14 +237,14 @@ function monitor-jobs()
             if ($job.state -ine "running")
             {
                 write-host ($job | fl * | out-string)
-                if($job.state -imatch "fail" -or $job.statusmessage -imatch "fail")
+                if ($job.state -imatch "fail" -or $job.statusmessage -imatch "fail")
                 {
-                    [void]$global:joboutputs.add(($global:jobs[$job.id]),($job | ConvertTo-Json))
+                    [void]$global:joboutputs.add(($global:jobs[$job.id]), ($job | ConvertTo-Json))
                     $global:fail++
                 }
                 else 
                 {
-                    [void]$global:joboutputs.add(($global:jobs[$job.id]),($job.output | ConvertTo-Json))
+                    [void]$global:joboutputs.add(($global:jobs[$job.id]), ($job.output | ConvertTo-Json))
                     $global:success++
                 }
                 write-host ($job.output | ConvertTo-Json)
@@ -249,14 +255,14 @@ function monitor-jobs()
             {
                 $jobInfo = Receive-Job -Job $job
                 
-                if($jobInfo)
+                if ($jobInfo)
                 {
                     write-host ($jobInfo | fl * | out-string)
                 }
             }
         }
 
-        if($count -ge 60)
+        if ($count -ge 60)
         {
             write-host $minCount
             $minCount++
@@ -293,14 +299,20 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
         $instance = get-azurermvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
         write-host "instance id: $($instanceId)`r`n$($instance.VmAgent.ExtensionHandlers | convertto-json)" -ForegroundColor Cyan
         
-        if(!($instance.VmAgent.ExtensionHandlers.Type -imatch "RunCommandWindows"))
+        if (!($instance.VmAgent.ExtensionHandlers.Type -imatch "RunCommandWindows"))
         {
-            Write-Warning "run command extension not installed. this will install extension automatically but will be slow..."
+            Write-Warning "run command extension not installed."
+            
+            if ($removeExtension)
+            {
+                continue
+            }
+
+            Write-Warning "this will install extension automatically which will take additional time."
         }
 
-        if($removeExtension)
+        if ($removeExtension)
         {
-            $commandId = $removeCommandId
             $script = $null
             $parameters = $null
 
@@ -351,9 +363,9 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -AsJob
         }
 
-        if($response)
+        if ($response)
         {
-            $global:jobs.Add($response.Id,"$resourceGroup`:$vmssName`:$instanceId")
+            $global:jobs.Add($response.Id, "$resourceGroup`:$vmssName`:$instanceId")
             write-host ($response | fl * | out-string)
         }
         else
