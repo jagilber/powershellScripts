@@ -35,6 +35,8 @@ $removeCommandId = "RemoveRunCommandWindowsExtension"
 $global:startTime = get-date
 $global:success = 0
 $global:fail = 0
+$global:extensionInstalled = 0
+$global:extensionNotInstalled = 0
 
 function main()
 {
@@ -272,10 +274,9 @@ function monitor-jobs()
         write-host "." -NoNewline    
 
         $currentJobsCount = (get-job).count
-        $activity = "$($commandId) $($originalJobsCount) vm jobs completion status (use -removeExtension to remove extension or reset):"
-        $status = "$($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed. " `
-            + "fail:$($global:fail) success:$($global:success) " `
-            + "time elapsed: $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+        $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed. (use -removeExtension to remove extension):"
+        $status = "extension installed:$($global:extensionInstalled)    not installed:$($global:extensionNotInstalled)    fail results:$($global:fail)" `
+            + "    success results:$($global:success)    time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
         $percentComplete = ((($originalJobsCount - $currentJobsCount) / $originalJobsCount) * 100)
 
         Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
@@ -302,13 +303,18 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
         if (!($instance.VmAgent.ExtensionHandlers.Type -imatch "RunCommandWindows"))
         {
             Write-Warning "run command extension not installed."
-            
+            $global:extensionNotInstalled++
+
             if ($removeExtension)
             {
                 continue
             }
 
             Write-Warning "this will install extension automatically which will take additional time."
+        }
+        else 
+        {
+            $global:extensionInstalled++
         }
 
         if ($removeExtension)
@@ -371,6 +377,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
         else
         {
             write-warning "no response from command!"
+            $global:fail++
         }
     }
 }
