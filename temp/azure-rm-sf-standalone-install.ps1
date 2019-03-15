@@ -18,23 +18,29 @@ param(
     [switch]$remove,
     [switch]$force,
     [string]$configurationFile = ".\ClusterConfig.X509.OneNode.json", # ".\ClusterConfig.X509.MultiMachine.json", #".\ClusterConfig.Unsecure.DevCluster.json",
-    $packageUrl = "https://go.microsoft.com/fwlink/?LinkId=730690",
-    $packageName = "Microsoft.Azure.ServiceFabric.WindowsServer.latest.zip",
-    $timeout = 1200,
-    $appId,
-    $appPassword,
-    $tenantId,
-    $vaultName,
-    $secretName
+    [string]$packageUrl = "https://go.microsoft.com/fwlink/?LinkId=730690",
+    [string]$packageName = "Microsoft.Azure.ServiceFabric.WindowsServer.latest.zip",
+    [int]$timeout = 1200,
+    #[string]$appId,
+    #[string]$appPassword,
+    #[string]$tenantId,
+    #[string]$vaultName,
+    #[string]$secretName,
+    [string]$thumbprint,
+    [string[]]$nodes
 )
 
 function main()
 {
+    $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
-    $downloadPath = "$scriptPath\download"
+    $packagePath = "$(get-location)\$([io.path]::GetFileNameWithoutExtension($packageName))"
+    #$downloadPath = "$packagePath\Download"
+    $certPath = "$packagePath\Certificates"
     Start-Transcript -Path "$scriptPath\install.log"
     $currentLocation = (get-location).Path
+    $configurationFileMod = "$([io.path]::GetFileNameWithoutExtension($configurationFile)).mod.json"
 
     if ($appId -and $appPassword -and $tenantId -and $vaultName -and $secretName)
     {
@@ -43,14 +49,6 @@ function main()
             return 1
         }
     }
-
-    if (!(test-path $downloadPath))
-    {
-        [io.directory]::CreateDirectory($downloadPath)
-    }
-
-    set-location $downloadPath
-    $packagePath = "$(get-location)\$([io.path]::GetFileNameWithoutExtension($packageName))"
 
     if ($force -and (test-path $packagePath))
     {
@@ -65,22 +63,52 @@ function main()
 
     Set-Location $packagePath
 
+    if(!(test-path $configurationFile))
+    {
+        Write-Error "$configurationFile does not exist"
+        return
+    }
+
+    $json = Get-Content -Raw $configurationFile
+    $json = $json.Replace("[Thumbprint]",$thumbprint)
+    Out-File -InputObject $json -FilePath $configurationFileMod -Force
+    # add nodes to json
+    $json = Get-Content -Raw $configurationFile | convertfrom-json
+       
+
     if ($remove)
     {
-        .\RemoveServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFile -Force
+        .\RemoveServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod -Force
         .\CleanFabric.ps1
     }
     else
     {
-        .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFile
-        .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFile -AcceptEULA -NoCleanupOnFailure -GenerateX509Cert -Force -TimeoutInSeconds $timeout -MaxPercentFailedNodes 100
+        $error.Clear()
+        $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
+        $result
+
+        if($result -imatch "false|fail|exception")
+        {
+            Write-Error "failed test: $($error | out-string)"
+            return 1
+        }
+
+        .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
+        -AcceptEULA `
+        -NoCleanupOnFailure `
+        -TimeoutInSeconds $timeout `
+        -MaxPercentFailedNodes 0
+        #-GeneratedX509CertClusterConfigPath $certPath
+        #-Force
+
+        Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
+        Get-ServiceFabricNode |Format-Table
     }
 
-    Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
-    Get-ServiceFabricNode |Format-Table
 
     Set-Location $currentLocation
     Stop-Transcript
+    $VerbosePreference = $DebugPreference = "silentlycontinue"
 }
 
 function download-cert()
