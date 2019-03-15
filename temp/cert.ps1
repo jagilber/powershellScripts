@@ -1,4 +1,17 @@
 
+<#
+Set-AzureRmVMCustomScriptExtension `
+    -ResourceGroupName $resourceGroupName `
+    -Location $location `
+    -VMName $vmName `
+    -Name $extensionName `
+    -FileUri "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/cert.ps1" `
+    -Run ".\cert.ps1" `
+    -Argument "-appId $clientId -appPassword $clientSecret -tenantId $tenantId -vaultname $vault -secretname $certUrl" `
+    -ForceRerun $(new-guid).Guid
+
+#>
+
 [cmdletbinding()]
 param(
     [parameter(mandatory = $true)]
@@ -46,7 +59,7 @@ log "logging onto azure account with app id = $appId ..."
 
 $creds = new-object Management.Automation.PSCredential ($appId, (convertto-securestring $appPassword -asplaintext -force))
 ## todo remove after test
-login-azurermaccount -credential $creds -serviceprincipal -tenantid $tenantId -confirm:$false
+#login-azurermaccount -credential $creds -serviceprincipal -tenantid $tenantId -confirm:$false
 
 #  get the secret from key vault
 #
