@@ -65,6 +65,10 @@ $creds = new-object Management.Automation.PSCredential ($appId, (convertto-secur
 #
 log "getting secret '$secretName' from keyvault '$vaultName'..."
 $secret = get-azurekeyvaultsecret -vaultname $vaultName -name $secretName
+log "secret: $secret"
+
+$cert = get-azurekeyvaultcertificate -vaultname $vaultName -name $secretName
+log "cert: $cert"
 
 $certCollection = New-Object Security.Cryptography.X509Certificates.X509Certificate2Collection
 
