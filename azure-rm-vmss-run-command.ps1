@@ -24,7 +24,8 @@ param(
     [hashtable]$parameters = @{}, # hashtable @{"name" = "value";}
     [string]$jsonOutputFile,
     [string]$commandId = "RunPowerShellScript",
-    [switch]$removeExtension
+    [switch]$removeExtension,
+    [switch]$listCommandIds
 )
 
 $ErrorActionPreference = "silentlycontinue"
@@ -56,6 +57,12 @@ function main()
         {
             return
         }
+    }
+
+    if($listCommandIds)
+    {
+        Get-AzureRmVMRunCommandDocument -Location westus | Select-Object ID, OSType, Label
+        return
     }
 
     if (!$script)
