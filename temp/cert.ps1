@@ -59,7 +59,9 @@ log "logging onto azure account with app id = $appId ..."
 
 $creds = new-object Management.Automation.PSCredential ($appId, (convertto-securestring $appPassword -asplaintext -force))
 ## todo remove after test
-#login-azurermaccount -credential $creds -serviceprincipal -tenantid $tenantId -confirm:$false
+login-azurermaccount -credential $creds -serviceprincipal -tenantid $tenantId -confirm:$false
+
+log "rg: $(get-azurermresourcegroup)"
 
 #  get the secret from key vault
 #
