@@ -10,7 +10,7 @@
 param(
     [switch]$remove,
     [switch]$force,
-    [string]$configurationFile = ".\ClusterConfig.X509.MultiNode.json", # ".\ClusterConfig.X509.MultiMachine.json", #".\ClusterConfig.Unsecure.DevCluster.json",
+    [string]$configurationFile = ".\ClusterConfig.X509.MultiMachine.json", # ".\ClusterConfig.X509.MultiMachine.json", #".\ClusterConfig.Unsecure.DevCluster.json",
     [string]$packageUrl = "https://go.microsoft.com/fwlink/?LinkId=730690",
     [string]$packageName = "Microsoft.Azure.ServiceFabric.WindowsServer.latest.zip",
     [int]$timeout = 1200,
