@@ -16,7 +16,7 @@ param(
     [int]$timeout = 1200,
     [string]$diagnosticShare,
     [string]$thumbprint,
-    [string[]]$nodes,
+    [string]$nodes,
     [string]$commonname
 )
 
@@ -92,12 +92,7 @@ function main()
     winrm set winrm/config/client '@{TrustedHosts="*"}'
 
     # read and modify config with thumb and nodes if first node
-    $nodes = @($nodes)
-    
-    if($nodes.contains(','))
-    {
-        $nodes = $nodes.split(',')
-    }
+    $nodes = $nodes.split(',')
 
     write-host "nodes count: $($nodes.count)"
     write-host "nodes: $($nodes)"
