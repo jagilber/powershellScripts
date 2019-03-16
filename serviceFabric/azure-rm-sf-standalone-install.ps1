@@ -89,6 +89,7 @@ function main()
     $nodes = $nodes.split(",")
     write-host "nodes count $(@($nodes).count)"
     write-host "nodes: $($nodes)"
+
     if(@($nodes)[0] -inotmatch $env:COMPUTERNAME)
     {
         Write-Warning "$env:COMPUTERNAME is not first node. exiting..."
@@ -118,6 +119,17 @@ function main()
     }
 
     $json.nodes = $nodeList.toarray()
+    write-host "json before: $($json.properties.security.CertificateInformation)"
+
+    $json.properties.security.CertificateInformation.ClientCertificateCommonNames.Clear()
+    $json.properties.security.CertificateInformation.ClientCertificateIssuerStores.Clear()
+    $json.properties.security.CertificateInformation.ReverseProxyCertificateCommonNames.CommonNames.Clear()
+    $json.properties.security.CertificateInformation.ServerCertificateCommonNames.CommonNames.Clear()
+    $json.properties.security.CertificateInformation.ServerCertificateIssuerStores.Clear()
+    $json.properties.security.CertificateInformation.ClusterCertificateCommonNames.CommonNames.Clear()
+    $json.properties.security.CertificateInformation.ClusterCertificateIssuerStores.Clear()
+
+    write-host "json after: $($json.properties.security.CertificateInformation)"
     Out-File -InputObject ($json | convertto-json -Depth 99) -FilePath $configurationFileMod -Force
 
     if ($remove)
