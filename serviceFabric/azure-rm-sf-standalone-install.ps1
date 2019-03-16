@@ -22,6 +22,9 @@ param(
 
 function main()
 {
+    write-host "start sleeping $($timeout / 2) seconds"
+    start-sleep -seconds ($timeout / 2)
+    write-host "resuming"
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
