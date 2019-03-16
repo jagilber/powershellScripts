@@ -16,7 +16,7 @@ param(
     [int]$timeout = 1200,
     [string]$diagnosticShare,
     [string]$thumbprint,
-    [string[]]$nodes
+    [string]$nodes
 )
 
 function main()
