@@ -87,10 +87,10 @@ function main()
 
     # read and modify config with thumb and nodes if first node
     $nodes = $nodes.split(",")
-    write-host "nodes count $(@($nodes).count)"
+    write-host "nodes count $($nodes.count)"
     write-host "nodes: $($nodes)"
 
-    if(@($nodes)[0] -inotmatch $env:COMPUTERNAME)
+    if($nodes[0] -inotmatch $env:COMPUTERNAME)
     {
         Write-Warning "$env:COMPUTERNAME is not first node. exiting..."
         finish-script
@@ -99,6 +99,9 @@ function main()
 
     $json = Get-Content -Raw $configurationFile
     $json = $json.Replace("[Thumbprint]",$thumbprint)
+    #$json = $json.Replace("[IssuerCommonName]","")
+    #$json = $json.Replace("[CertificateCommonName]","")
+    
     Out-File -InputObject $json -FilePath $configurationFileMod -Force
     # add nodes to json
     $json = Get-Content -Raw $configurationFileMod | convertfrom-json
@@ -109,7 +112,7 @@ function main()
     {
         $nodeList.Add(@{
             nodeName      = $node
-            iPAddress     = $node
+            iPAddress     = (Resolve-DnsName $node).ipaddress
             nodeTypeRef   = "NodeType0"
             faultDomain   = "fd:/dc1/r$count"
             upgradeDomain = "UD$count"
@@ -119,17 +122,7 @@ function main()
     }
 
     $json.nodes = $nodeList.toarray()
-    write-host "json before: $($json.properties.security.CertificateInformation)"
-
-    $json.properties.security.CertificateInformation.ClientCertificateCommonNames.Clear()
-    $json.properties.security.CertificateInformation.ClientCertificateIssuerStores.Clear()
-    $json.properties.security.CertificateInformation.ReverseProxyCertificateCommonNames.CommonNames.Clear()
-    $json.properties.security.CertificateInformation.ServerCertificateCommonNames.CommonNames.Clear()
-    $json.properties.security.CertificateInformation.ServerCertificateIssuerStores.Clear()
-    $json.properties.security.CertificateInformation.ClusterCertificateCommonNames.CommonNames.Clear()
-    $json.properties.security.CertificateInformation.ClusterCertificateIssuerStores.Clear()
-
-    write-host "json after: $($json.properties.security.CertificateInformation)"
+    
     Out-File -InputObject ($json | convertto-json -Depth 99) -FilePath $configurationFileMod -Force
 
     if ($remove)
