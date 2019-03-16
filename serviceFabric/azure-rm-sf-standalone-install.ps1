@@ -16,7 +16,8 @@ param(
     [int]$timeout = 1200,
     [string]$diagnosticShare,
     [string]$thumbprint,
-    [string]$nodes
+    [string[]]$nodes,
+    [string]$commonname
 )
 
 function main()
@@ -85,13 +86,13 @@ function main()
     }
 
     # enable remoting
-    set-netFirewallProfile -Profile Domain,Private -Enabled False
+    set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
     enable-psremoting
     winrm quickconfig -force -q
     winrm set winrm/config/client '@{TrustedHosts="*"}'
 
     # read and modify config with thumb and nodes if first node
-    $nodes = $nodes.split(",")
+    #$nodes = $nodes.split(",")
     write-host "nodes count $($nodes.count)"
     write-host "nodes: $($nodes)"
 
@@ -104,8 +105,8 @@ function main()
 
     $json = Get-Content -Raw $configurationFile
     $json = $json.Replace("[Thumbprint]",$thumbprint)
-    $json = $json.Replace("[IssuerCommonName]","")
-    $json = $json.Replace("[CertificateCommonName]","")
+    $json = $json.Replace("[IssuerCommonName]",$commonname)
+    $json = $json.Replace("[CertificateCommonName]",$commonname)
     
     Out-File -InputObject $json -FilePath $configurationFileMod -Force
     # add nodes to json
