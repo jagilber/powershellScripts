@@ -84,6 +84,11 @@ function main()
         return 1
     }
 
+    # enable remoting
+    set-netFirewallProfile -Profile Domain,Private -Enabled False
+    enable-psremoting
+    winrm quickconfig -force -q
+    winrm set winrm/config/client '@{TrustedHosts="*"}'
 
     # read and modify config with thumb and nodes if first node
     $nodes = $nodes.split(",")
@@ -112,7 +117,7 @@ function main()
     {
         $nodeList.Add(@{
             nodeName      = $node
-            iPAddress     = (Resolve-DnsName $node).ipaddress
+            iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch ".+\..+\..+\.")[0]
             nodeTypeRef   = "NodeType0"
             faultDomain   = "fd:/dc1/r$count"
             upgradeDomain = "UD$count"
