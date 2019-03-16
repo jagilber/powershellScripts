@@ -92,12 +92,14 @@ function main()
     winrm set winrm/config/client '@{TrustedHosts="*"}'
 
     # read and modify config with thumb and nodes if first node
-    if($nodes.contains(","))
-    {
-        $nodes = $nodes.split(",")
-    }
+    $nodes = @($nodes)
     
-    write-host "nodes count $($nodes.count)"
+    if($nodes.contains(','))
+    {
+        $nodes = $nodes.split(',')
+    }
+
+    write-host "nodes count: $($nodes.count)"
     write-host "nodes: $($nodes)"
 
     if($nodes[0] -inotmatch $env:COMPUTERNAME)
