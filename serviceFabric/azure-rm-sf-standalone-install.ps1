@@ -1,21 +1,12 @@
 <#
-https://serverfault.com/questions/642253/how-are-windows-machinekey-container-file-names-derived
  script to install service fabric standalone in azure arm
  # https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-creation-for-windows-server
 
- <#
     The CleanCluster.ps1 will clean these certificates or you can clean them up using script 'CertSetup.ps1 -Clean -CertSubjectName CN=ServiceFabricClientCert'.
     Server certificate is exported to C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\Certificates\server.pfx with the password 1230909376
     Client certificate is exported to C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\Certificates\client.pfx with the password 940188492
     Modify thumbprint in C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\ClusterConfig.X509.OneNode.json
 #>
-# https://github.com/Azure/AzureStack-QuickStart-Templates/blob/master/201-vm-windows-pushcertificate/azuredeploy.json
-# query keyvault during deployment
-# https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-manager-keyvault-parameter
-#-a--s-        3/15/2019   3:39 PM           1484 fa79c1fffdece54198063e1594c2913e_5cb78751-8a89-4086-8f76-ac082a5aced6 
-#>
-
-
 param(
     [switch]$remove,
     [switch]$force,
