@@ -104,10 +104,9 @@ function main()
         return
     }
 
-    write-host "start sleeping $($timeout / 2) seconds"
-    start-sleep -seconds ($timeout / 2)
+    write-host "start sleeping $($timeout / 4) seconds"
+    start-sleep -seconds ($timeout / 4)
     write-host "resuming"
-
 
     $json = Get-Content -Raw $configurationFile
     $json = $json.Replace("[Thumbprint]",$thumbprint)
@@ -119,6 +118,7 @@ function main()
     $json = Get-Content -Raw $configurationFileMod | convertfrom-json
     $nodeList = [collections.arraylist]@()
     $count = 0
+    $toggle = $true
 
     foreach($node in $nodes)
     {
@@ -126,7 +126,7 @@ function main()
             nodeName      = $node
             iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch "10\..+\..+\.")[0]
             nodeTypeRef   = "NodeType0"
-            faultDomain   = "fd:/dc1/r$count"
+            faultDomain   = "fd:/dc1/r$([int]$toggle = !$toggle)"
             upgradeDomain = "UD$count"
         })
         
