@@ -104,8 +104,8 @@ function main()
 
     $json = Get-Content -Raw $configurationFile
     $json = $json.Replace("[Thumbprint]",$thumbprint)
-    #$json = $json.Replace("[IssuerCommonName]","")
-    #$json = $json.Replace("[CertificateCommonName]","")
+    $json = $json.Replace("[IssuerCommonName]","")
+    $json = $json.Replace("[CertificateCommonName]","")
     
     Out-File -InputObject $json -FilePath $configurationFileMod -Force
     # add nodes to json
