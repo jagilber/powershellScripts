@@ -8,8 +8,8 @@
     Modify thumbprint in C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\ClusterConfig.X509.OneNode.json
 #>
 param(
-    [parameter(DontShow)]
-    [switch]$runningAsJob,
+    [bool]$runningAsJob = $false,
+    [string]$workingDir = (get-location),
     [string]$thumbprint,
     [string]$nodes,
     [string]$commonname,
@@ -26,18 +26,22 @@ param(
 
 $erroractionpreference = "continue"
 $logFile = $null
+$jobName = "sa"
 
 function main()
 {
-    log-info "starting"
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
-    $packagePath = "$(get-location)\$([io.path]::GetFileNameWithoutExtension($packageName))"
+    $packagePath = "$scriptPath\$([io.path]::GetFileNameWithoutExtension($packageName))"
     $logFile = "$scriptPath\install.log"
     $certPath = "$packagePath\Certificates"
     $currentLocation = (get-location).Path
     $configurationFileMod = "$([io.path]::GetFileNameWithoutExtension($configurationFile)).mod.json"
+    log-info "-------------------------------"
+    log-info "starting"
+    log-info "script path: $scriptPath"
+    log-info "log file: $logFile"
     log-info "current location: $currentLocation"
     log-info "configuration file: $configurationFileMod"
 
@@ -51,7 +55,7 @@ function main()
     {
         log-info "downloading package $packagePath"
         (new-object net.webclient).DownloadFile($packageUrl, "$(get-location)\$packageName")
-        Expand-Archive $packageName
+        Expand-Archive $packageName -Force
     }
 
     Set-Location $packagePath
@@ -124,16 +128,18 @@ function main()
     if(!$runningAsJob)
     {
         log-info "on primary node. scheduling job"
+        log-info "creating initialization script"
+        (get-scheduledjob -name $jobName).Remove($true)
         $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
         $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
     
         $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
-        -Name sa `
+        -Name $jobName `
         -Credential $global:credential `
         -RunNow `
         -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
-        -ArgumentList @($true, $thumbprint, $nodes, $commonname)
-    
+        -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname, $adminUsername, $adminPassword)
+
         $job.StartJob()
         
         log-info "job scheduled and running. exiting."
@@ -143,7 +149,7 @@ function main()
     else
     {
         log-info "running as job. removing job"
-        (get-scheduledjob -name sa).Remove($true)
+        (get-scheduledjob -name $jobName).Remove($true)
     }
 
     #log-info "start sleeping $($timeout / 2) seconds"
