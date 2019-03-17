@@ -8,6 +8,8 @@
     Modify thumbprint in C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\ClusterConfig.X509.OneNode.json
 #>
 param(
+    [bool]$runningAsJob = $false,
+    [string]$workingDir = (get-location),
     [string]$thumbprint,
     [string[]]$nodes,
     [string]$commonname,
@@ -31,6 +33,12 @@ function main()
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
+
+    if(!$scriptPath)
+    {
+        $scriptPath = $workingDir
+    }
+
     $packagePath = "$scriptPath\$([io.path]::GetFileNameWithoutExtension($packageName))"
     $logFile = "$scriptPath\install.log"
     $certPath = "$packagePath\Certificates"
@@ -64,52 +72,54 @@ function main()
         log-info "error: $configurationFile does not exist"
         return
     }
-
-    # verify and acl cert
-    $cert = get-item Cert:\LocalMachine\My\$thumbprint
-
-    if($cert)
+    if(!$runningAsJob)
     {
-        log-info "found cert: $cert"
-        $machineKeyFileName = [regex]::Match((certutil -store my $thumbprint),"Unique container name: (.+?)\s").groups[1].value
+        # verify and acl cert
+        $cert = get-item Cert:\LocalMachine\My\$thumbprint
 
-        if(!$machineKeyFileName)
+        if($cert)
         {
-            log-info "error: unable to find file for cert: $machineKeyFileName"
+            log-info "found cert: $cert"
+            $machineKeyFileName = [regex]::Match((certutil -store my $thumbprint),"Unique container name: (.+?)\s").groups[1].value
+
+            if(!$machineKeyFileName)
+            {
+                log-info "error: unable to find file for cert: $machineKeyFileName"
+                finish-script
+                return 1
+            }
+
+            #$certFile = "c:\programdata\microsoft\crypto\rsa\machinekeys\$machineKeyFileName"
+            $certFile = "c:\programdata\microsoft\crypto\keys\$machineKeyFileName"
+            log-info "cert file: $certFile"
+            log-info "cert file: $(cacls $certFile)"
+
+            log-info "setting acl on cert"
+            $acl = get-acl $certFile
+            $rule = new-object security.accesscontrol.filesystemaccessrule "NT AUTHORITY\NETWORK SERVICE", "Read", allow
+            log-info "setting acl: $rule"
+            $acl.AddAccessRule($rule)
+            set-acl $certFile $acl
+            log-info "acl set"
+            log-info "cert file: $(cacls $certFile)"
+
+        }
+        else
+        {
+            log-info "error: unable to find cert: $thumbprint. exiting"
             finish-script
             return 1
         }
 
-        #$certFile = "c:\programdata\microsoft\crypto\rsa\machinekeys\$machineKeyFileName"
-        $certFile = "c:\programdata\microsoft\crypto\keys\$machineKeyFileName"
-        log-info "cert file: $certFile"
-        log-info "cert file: $(cacls $certFile)"
 
-        log-info "setting acl on cert"
-        $acl = get-acl $certFile
-        $rule = new-object security.accesscontrol.filesystemaccessrule "NT AUTHORITY\NETWORK SERVICE", "Read", allow
-        log-info "setting acl: $rule"
-        $acl.AddAccessRule($rule)
-        set-acl $certFile $acl
-        log-info "acl set"
-        log-info "cert file: $(cacls $certFile)"
-
+        # enable remoting
+        log-info "disable firewall"
+        set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
+        log-info "enable remoting"
+        enable-psremoting
+        winrm quickconfig -force -q
+        winrm set winrm/config/client '@{TrustedHosts="*"}'
     }
-    else
-    {
-        log-info "error: unable to find cert: $thumbprint. exiting"
-        finish-script
-        return 1
-    }
-
-
-    # enable remoting
-    log-info "disable firewall"
-    set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
-    log-info "enable remoting"
-    enable-psremoting
-    winrm quickconfig -force -q
-    winrm set winrm/config/client '@{TrustedHosts="*"}'
 
     # read and modify config with thumb and nodes if first node
     $nodes = $nodes.split(',')
@@ -123,6 +133,81 @@ function main()
         finish-script
         return
     }
+<#
+    if(!$runningAsJob)
+    {
+        log-info "start sleeping $($timeout / 4) seconds"
+        start-sleep -seconds ($timeout / 4)
+        log-info "resuming"
+
+        log-info "on primary node. scheduling job"
+
+        if(get-scheduledjob -name $jobName)
+        {
+            log-info "removing old job"
+            (get-scheduledjob -name $jobName).Remove($true)
+        }
+
+        log-info "user: $adminUsername"
+        log-info "pass: $adminPassword"
+        $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
+        $credential = new-object Management.Automation.PSCredential -ArgumentList "$($env:computername)\$adminUsername", $SecurePassword
+        log-info "cred: $credential"
+
+        $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
+            -Name $jobName `
+            -RunNow `
+            -Credential $credential `
+            -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
+            -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
+
+        #$job.StartJob()
+        
+        log-info "job scheduled: $(get-scheduledjob). status:$($job | fl *)"
+        log-info "exiting"
+        finish-script
+        return
+    }
+    else
+    {
+        #log-info "running as job. removing job"
+        #(get-scheduledjob -name $jobName).Remove($true)
+    }
+#>
+
+#  impersonate as admin 
+#  from .\New-ImpersonateUser.ps1 in gallery https://gallery.technet.microsoft.com/scriptcenter/Impersonate-a-User-9bfeff82
+#
+    $ImpersonatedUser = @{}
+    log-info "impersonating as '$adminUsername'..."
+    Add-Type -Namespace Import -Name Win32 -MemberDefinition @'
+            [DllImport("advapi32.dll", SetLastError = true)]
+            public static extern bool LogonUser(string user, string domain, string password, int logonType, int logonProvider, out IntPtr token);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool CloseHandle(IntPtr handle);
+'@
+    $adDomainName = $env:computername
+    $tokenHandle = 0
+    $returnValue = [Import.Win32]::LogonUser($adminUserName, $adDomainName, $adminPassword, 2, 0, [ref]$tokenHandle)
+
+    if (!$returnValue)
+    {
+        $errCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
+        log-info "failed a call to LogonUser with error code: $errCode"
+        throw [System.ComponentModel.Win32Exception]$errCode
+    }
+    else
+    {
+        $ImpersonatedUser.ImpersonationContext = [System.Security.Principal.WindowsIdentity]::Impersonate($tokenHandle)
+        [void][Import.Win32]::CloseHandle($tokenHandle)
+        log-info "impersonating user $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) returnValue: '$returnValue'"
+    }
+
+    log-info "$(whoami)"
+
+    #  running as admin
+    #
 
     log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
@@ -178,17 +263,23 @@ function main()
         }
 
         log-info "creating cluster"
-        .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
+        $result = .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
             -AcceptEULA `
             -NoCleanupOnFailure `
             -TimeoutInSeconds $timeout `
             -MaxPercentFailedNodes 0 `
             -Verbose
-
+        
+        log-info $result
         log-info "connecting to cluster"
         Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
         Get-ServiceFabricNode |Format-Table
     }
+
+    log-info "remove impersonation..."
+    $ImpersonatedUser.ImpersonationContext.Undo()
+
+    log-info "$(whoami)"
 
     finish-script
 }
