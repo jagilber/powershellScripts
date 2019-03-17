@@ -179,11 +179,12 @@ function main()
 
     foreach($node in $nodes)
     {
+        [int]$toggle = !$toggle
         $nodeList.Add(@{
             nodeName      = $node
             iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch "10\..+\..+\.")[0]
             nodeTypeRef   = "NodeType0"
-            faultDomain   = "fd:/dc1/r$count"
+            faultDomain   = "fd:/dc1/r$toggle"
             upgradeDomain = "UD$count"
         })
         
