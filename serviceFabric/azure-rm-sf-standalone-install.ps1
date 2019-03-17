@@ -143,7 +143,7 @@ function main()
     else
     {
         log-info "running as job. removing job"
-        (get-scheduledjob).Remove($true)
+        (get-scheduledjob -name sa).Remove($true)
     }
 
     #log-info "start sleeping $($timeout / 2) seconds"
