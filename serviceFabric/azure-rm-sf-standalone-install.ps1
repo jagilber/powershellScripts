@@ -127,7 +127,7 @@ function main()
         $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
         $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
     
-        $job = Register-ScheduledJob -FilePath ([io.path]::GetDirectoryName($MyInvocation.ScriptName)) `
+        $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
         -Name sa `
         -Credential $global:credential `
         -RunNow `
