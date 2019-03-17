@@ -24,6 +24,7 @@ param(
     [int]$timeout = 1200
 )
 
+$erroractionpreference = "continue"
 $logFile = $null
 
 function main()
@@ -35,7 +36,6 @@ function main()
     $packagePath = "$(get-location)\$([io.path]::GetFileNameWithoutExtension($packageName))"
     $logFile = "$scriptPath\install.log"
     $certPath = "$packagePath\Certificates"
-    Start-Transcript -Path $logFile
     $currentLocation = (get-location).Path
     $configurationFileMod = "$([io.path]::GetFileNameWithoutExtension($configurationFile)).mod.json"
     log-info "current location: $currentLocation"
@@ -140,6 +140,11 @@ function main()
         finish-script
         return
     }
+    else
+    {
+        log-info "running as job. removing job"
+        (get-scheduledjob).Remove($true)
+    }
 
     #log-info "start sleeping $($timeout / 2) seconds"
     #start-sleep -seconds ($timeout / 2)
@@ -222,7 +227,6 @@ function log-info($data)
 function finish-script()
 {
     Set-Location $currentLocation
-    Stop-Transcript
     $VerbosePreference = $DebugPreference = "silentlycontinue"
 }
 
