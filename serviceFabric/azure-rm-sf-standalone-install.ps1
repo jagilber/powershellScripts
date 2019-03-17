@@ -11,7 +11,7 @@ param(
     [bool]$runningAsJob = $false,
     [string]$workingDir = (get-location),
     [string]$thumbprint,
-    [string]$nodes,
+    [string[]]$nodes,
     [string]$commonname,
     [string]$adminUsername,
     [string]$adminPassword,
@@ -33,6 +33,12 @@ function main()
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
+
+    if(!$scriptPath)
+    {
+        $scriptPath = $workingDir
+    }
+
     $packagePath = "$scriptPath\$([io.path]::GetFileNameWithoutExtension($packageName))"
     $logFile = "$scriptPath\install.log"
     $certPath = "$packagePath\Certificates"
@@ -149,7 +155,7 @@ function main()
     else
     {
         log-info "running as job. removing job"
-        (get-scheduledjob -name $jobName).Remove($true)
+        #(get-scheduledjob -name $jobName).Remove($true)
     }
 
     #log-info "start sleeping $($timeout / 2) seconds"
