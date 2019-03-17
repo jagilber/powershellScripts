@@ -74,46 +74,46 @@ function main()
         log-info "error: $configurationFile does not exist"
         return
     }
-
-    # verify and acl cert
-    $cert = get-item Cert:\LocalMachine\My\$thumbprint
-
-    if($cert)
+    if(!$runningAsJob)
     {
-        log-info "found cert: $cert"
-        $machineKeyFileName = [regex]::Match((certutil -store my $thumbprint),"Unique container name: (.+?)\s").groups[1].value
+        # verify and acl cert
+        $cert = get-item Cert:\LocalMachine\My\$thumbprint
 
-        if(!$machineKeyFileName)
+        if($cert)
         {
-            log-info "error: unable to find file for cert: $machineKeyFileName"
+            log-info "found cert: $cert"
+            $machineKeyFileName = [regex]::Match((certutil -store my $thumbprint),"Unique container name: (.+?)\s").groups[1].value
+
+            if(!$machineKeyFileName)
+            {
+                log-info "error: unable to find file for cert: $machineKeyFileName"
+                finish-script
+                return 1
+            }
+
+            #$certFile = "c:\programdata\microsoft\crypto\rsa\machinekeys\$machineKeyFileName"
+            $certFile = "c:\programdata\microsoft\crypto\keys\$machineKeyFileName"
+            log-info "cert file: $certFile"
+            log-info "cert file: $(cacls $certFile)"
+
+            log-info "setting acl on cert"
+            $acl = get-acl $certFile
+            $rule = new-object security.accesscontrol.filesystemaccessrule "NT AUTHORITY\NETWORK SERVICE", "Read", allow
+            log-info "setting acl: $rule"
+            $acl.AddAccessRule($rule)
+            set-acl $certFile $acl
+            log-info "acl set"
+            log-info "cert file: $(cacls $certFile)"
+
+        }
+        else
+        {
+            log-info "error: unable to find cert: $thumbprint. exiting"
             finish-script
             return 1
         }
 
-        #$certFile = "c:\programdata\microsoft\crypto\rsa\machinekeys\$machineKeyFileName"
-        $certFile = "c:\programdata\microsoft\crypto\keys\$machineKeyFileName"
-        log-info "cert file: $certFile"
-        log-info "cert file: $(cacls $certFile)"
 
-        log-info "setting acl on cert"
-        $acl = get-acl $certFile
-        $rule = new-object security.accesscontrol.filesystemaccessrule "NT AUTHORITY\NETWORK SERVICE", "Read", allow
-        log-info "setting acl: $rule"
-        $acl.AddAccessRule($rule)
-        set-acl $certFile $acl
-        log-info "acl set"
-        log-info "cert file: $(cacls $certFile)"
-
-    }
-    else
-    {
-        log-info "error: unable to find cert: $thumbprint. exiting"
-        finish-script
-        return 1
-    }
-
-    if(!$runningAsJob)
-    {
         # enable remoting
         log-info "disable firewall"
         set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
