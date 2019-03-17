@@ -8,85 +8,98 @@
     Modify thumbprint in C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\ClusterConfig.X509.OneNode.json
 #>
 param(
+    [string]$thumbprint,
+    [string]$nodes,
+    [string]$commonname,
+    [string]$diagnosticShare,
     [switch]$remove,
     [switch]$force,
     [string]$configurationFile = ".\ClusterConfig.X509.MultiMachine.json", # ".\ClusterConfig.X509.MultiMachine.json", #".\ClusterConfig.Unsecure.DevCluster.json",
     [string]$packageUrl = "https://go.microsoft.com/fwlink/?LinkId=730690",
     [string]$packageName = "Microsoft.Azure.ServiceFabric.WindowsServer.latest.zip",
-    [int]$timeout = 1200,
-    [string]$diagnosticShare,
-    [string]$thumbprint,
-    [string]$nodes,
-    [string]$commonname
+    [int]$timeout = 1200
 )
+
+$logFile = $null
 
 function main()
 {
+    log-info "starting"
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
     $packagePath = "$(get-location)\$([io.path]::GetFileNameWithoutExtension($packageName))"
-    #$downloadPath = "$packagePath\Download"
+    $logFile = "$scriptPath\install.log"
     $certPath = "$packagePath\Certificates"
-    Start-Transcript -Path "$scriptPath\install.log"
+    Start-Transcript -Path $logFile
     $currentLocation = (get-location).Path
     $configurationFileMod = "$([io.path]::GetFileNameWithoutExtension($configurationFile)).mod.json"
+    log-info "current location: $currentLocation"
+    log-info "configuration file: $configurationFileMod"
 
     if ($force -and (test-path $packagePath))
     {
+        log-info "deleting package"
         [io.directory]::Delete($packagePath, $true)
     }
 
     if (!(test-path $packagePath))
     {
+        log-info "downloading package $packagePath"
         (new-object net.webclient).DownloadFile($packageUrl, "$(get-location)\$packageName")
         Expand-Archive $packageName
     }
 
     Set-Location $packagePath
+    log-info "current location: $packagePath"
 
     if(!(test-path $configurationFile))
     {
-        Write-Error "$configurationFile does not exist"
+        log-info "error: $configurationFile does not exist"
         return
     }
 
     # verify and acl cert
     $cert = get-item Cert:\LocalMachine\My\$thumbprint
+
     if($cert)
     {
-        write-host "found cert: $cert"
+        log-info "found cert: $cert"
         $machineKeyFileName = [regex]::Match((certutil -store my $thumbprint),"Unique container name: (.+?)\s").groups[1].value
 
         if(!$machineKeyFileName)
         {
+            log-info "error: unable to find file for cert: $machineKeyFileName"
             finish-script
             return 1
         }
 
         #$certFile = "c:\programdata\microsoft\crypto\rsa\machinekeys\$machineKeyFileName"
         $certFile = "c:\programdata\microsoft\crypto\keys\$machineKeyFileName"
-        write-host "cert file: $certFile"
-        write-host "cert file: $(cacls $certFile)"
+        log-info "cert file: $certFile"
+        log-info "cert file: $(cacls $certFile)"
 
+        log-info "setting acl on cert"
         $acl = get-acl $certFile
         $rule = new-object security.accesscontrol.filesystemaccessrule "NT AUTHORITY\NETWORK SERVICE", "Read", allow
-        write-host "setting acl: $rule"
+        log-info "setting acl: $rule"
         $acl.AddAccessRule($rule)
         set-acl $certFile $acl
-        write-host "acl set"
-        write-host "cert file: $(cacls $certFile)"
+        log-info "acl set"
+        log-info "cert file: $(cacls $certFile)"
 
     }
     else
     {
-        write-error "unable to find cert: $thumbprint. exiting"
+        log-info "error: unable to find cert: $thumbprint. exiting"
         finish-script
         return 1
     }
 
     # enable remoting
+    log-info "disable firewall"
     set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
+    log-info "enable remoting"
     enable-psremoting
     winrm quickconfig -force -q
     winrm set winrm/config/client '@{TrustedHosts="*"}'
@@ -94,31 +107,34 @@ function main()
     # read and modify config with thumb and nodes if first node
     $nodes = $nodes.split(',')
 
-    write-host "nodes count: $($nodes.count)"
-    write-host "nodes: $($nodes)"
+    log-info "nodes count: $($nodes.count)"
+    log-info "nodes: $($nodes)"
 
     if($nodes[0] -inotmatch $env:COMPUTERNAME)
     {
-        Write-Warning "$env:COMPUTERNAME is not first node. exiting..."
+        log-info "$env:COMPUTERNAME is not first node. exiting..."
         finish-script
         return
     }
 
-    write-host "start sleeping $($timeout / 4) seconds"
-    start-sleep -seconds ($timeout / 4)
-    write-host "resuming"
+    #log-info "start sleeping $($timeout / 2) seconds"
+    #start-sleep -seconds ($timeout / 2)
+    #log-info "resuming"
 
+    log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
     $json = $json.Replace("[Thumbprint]",$thumbprint)
     $json = $json.Replace("[IssuerCommonName]",$commonname)
     $json = $json.Replace("[CertificateCommonName]",$commonname)
     
+    log-info "saving json: $configurationFileMod"
     Out-File -InputObject $json -FilePath $configurationFileMod -Force
     # add nodes to json
     $json = Get-Content -Raw $configurationFileMod | convertfrom-json
     $nodeList = [collections.arraylist]@()
     $count = 0
-    $toggle = $true
+
+    log-info "adding nodes"
 
     foreach($node in $nodes)
     {
@@ -126,7 +142,7 @@ function main()
             nodeName      = $node
             iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch "10\..+\..+\.")[0]
             nodeTypeRef   = "NodeType0"
-            faultDomain   = "fd:/dc1/r$([int]$toggle = !$toggle)"
+            faultDomain   = "fd:/dc1/r$count"
             upgradeDomain = "UD$count"
         })
         
@@ -134,37 +150,49 @@ function main()
     }
 
     $json.nodes = $nodeList.toarray()
-    
+    log-info "saving json with nodes"
     Out-File -InputObject ($json | convertto-json -Depth 99) -FilePath $configurationFileMod -Force
 
     if ($remove)
     {
+        log-info "removing cluster"
         .\RemoveServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod -Force
         .\CleanFabric.ps1
     }
     else
     {
+        log-info "testing cluster"
         $error.Clear()
         $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
         $result
 
         if($result -imatch "false|fail|exception")
         {
-            Write-Error "failed test: $($error | out-string)"
+            log-info "error: failed test: $($error | out-string)"
             return 1
         }
 
+        log-info "creating cluster"
         .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
             -AcceptEULA `
             -NoCleanupOnFailure `
             -TimeoutInSeconds $timeout `
             -MaxPercentFailedNodes 0
 
+        log-info "connecting to cluster"
         Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
         Get-ServiceFabricNode |Format-Table
     }
 
     finish-script
+}
+
+function log-info($data)
+{
+    $data = "$(get-date)::$data"
+    write-host $data
+    out-file -InputObject $data -FilePath $logFile
+
 }
 
 function finish-script()
