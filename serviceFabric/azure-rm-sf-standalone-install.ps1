@@ -153,10 +153,11 @@ function main()
         log-info "cred: $credential"
 
         $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
-        -Name $jobName `
-        -Credential $credential `
-        -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
-        -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
+            -Name $jobName `
+            -RunNow `
+            -Credential $credential `
+            -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
+            -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
 
         $job.StartJob()
         
@@ -167,7 +168,7 @@ function main()
     }
     else
     {
-        log-info "running as job. removing job"
+        #log-info "running as job. removing job"
         #(get-scheduledjob -name $jobName).Remove($true)
     }
 
