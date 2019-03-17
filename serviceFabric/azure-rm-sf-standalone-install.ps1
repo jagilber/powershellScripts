@@ -8,10 +8,14 @@
     Modify thumbprint in C:\temp\Microsoft.Azure.ServiceFabric.WindowsServer.latest\ClusterConfig.X509.OneNode.json
 #>
 param(
+    [parameter(DontShow)]
+    [switch]$runningAsJob,
     [string]$thumbprint,
     [string]$nodes,
     [string]$commonname,
     [string]$diagnosticShare,
+    [string]$adminUsername,
+    [string]$adminPassword,
     [switch]$remove,
     [switch]$force,
     [string]$configurationFile = ".\ClusterConfig.X509.MultiMachine.json", # ".\ClusterConfig.X509.MultiMachine.json", #".\ClusterConfig.Unsecure.DevCluster.json",
@@ -113,6 +117,26 @@ function main()
     if($nodes[0] -inotmatch $env:COMPUTERNAME)
     {
         log-info "$env:COMPUTERNAME is not first node. exiting..."
+        finish-script
+        return
+    }
+
+    if(!$runningAsJob)
+    {
+        log-info "on primary node. scheduling job"
+        $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
+        $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
+    
+        $job = Register-ScheduledJob -FilePath ([io.path]::GetDirectoryName($MyInvocation.ScriptName)) `
+        -Name sa `
+        -Credential $global:credential `
+        -RunNow `
+        -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
+        -ArgumentList @($true, $thumbprint, $nodes, $commonname)
+    
+        $job.StartJob()
+        
+        log-info "job scheduled and running. exiting."
         finish-script
         return
     }
