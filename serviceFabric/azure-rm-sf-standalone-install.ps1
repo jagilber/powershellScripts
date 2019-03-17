@@ -144,11 +144,11 @@ function main()
         -Credential $global:credential `
         -RunNow `
         -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
-        -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname, $adminUsername, $adminPassword)
+        -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
 
         $job.StartJob()
         
-        log-info "job scheduled and running. exiting."
+        log-info "job scheduled and running. exiting. $($job | fl *)"
         finish-script
         return
     }
@@ -179,12 +179,12 @@ function main()
 
     foreach($node in $nodes)
     {
-        [int]$toggle = !$toggle
+        #[int]$toggle = !$toggle
         $nodeList.Add(@{
             nodeName      = $node
             iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch "10\..+\..+\.")[0]
             nodeTypeRef   = "NodeType0"
-            faultDomain   = "fd:/dc1/r$toggle"
+            faultDomain   = "fd:/dc1/r$count"
             upgradeDomain = "UD$count"
         })
         
@@ -219,7 +219,8 @@ function main()
             -AcceptEULA `
             -NoCleanupOnFailure `
             -TimeoutInSeconds $timeout `
-            -MaxPercentFailedNodes 0
+            -MaxPercentFailedNodes 0 `
+            -Verbose
 
         log-info "connecting to cluster"
         Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
