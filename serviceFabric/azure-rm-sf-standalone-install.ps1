@@ -179,7 +179,7 @@ function main()
 #  from .\New-ImpersonateUser.ps1 in gallery https://gallery.technet.microsoft.com/scriptcenter/Impersonate-a-User-9bfeff82
 #
     $ImpersonatedUser = @{}
-    log "impersonating as '$adminUsername'..."
+    log-info "impersonating as '$adminUsername'..."
     Add-Type -Namespace Import -Name Win32 -MemberDefinition @'
             [DllImport("advapi32.dll", SetLastError = true)]
             public static extern bool LogonUser(string user, string domain, string password, int logonType, int logonProvider, out IntPtr token);
@@ -194,14 +194,14 @@ function main()
     if (!$returnValue)
     {
         $errCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
-        log "failed a call to LogonUser with error code: $errCode"
+        log-info "failed a call to LogonUser with error code: $errCode"
         throw [System.ComponentModel.Win32Exception]$errCode
     }
     else
     {
         $ImpersonatedUser.ImpersonationContext = [System.Security.Principal.WindowsIdentity]::Impersonate($tokenHandle)
         [void][Import.Win32]::CloseHandle($tokenHandle)
-        log "impersonating user $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) returnValue: '$returnValue'"
+        log-info "impersonating user $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) returnValue: '$returnValue'"
     }
 
     log-info "$(whoami)"
@@ -253,11 +253,12 @@ function main()
         log-info "testing cluster"
         $error.Clear()
         $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
-        $result
+        log-info $result
 
         if($result -imatch "false|fail|exception")
         {
             log-info "error: failed test: $($error | out-string)"
+            finish-script
             return 1
         }
 
@@ -274,7 +275,7 @@ function main()
         Get-ServiceFabricNode |Format-Table
     }
 
-    log "remove impersonation..."
+    log-info "remove impersonation..."
     $ImpersonatedUser.ImpersonationContext.Undo()
 
     log-info "$(whoami)"
