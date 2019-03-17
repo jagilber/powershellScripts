@@ -112,13 +112,16 @@ function main()
         return 1
     }
 
-    # enable remoting
-    log-info "disable firewall"
-    set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
-    log-info "enable remoting"
-    enable-psremoting
-    winrm quickconfig -force -q
-    winrm set winrm/config/client '@{TrustedHosts="*"}'
+    if(!$runningAsJob)
+    {
+        # enable remoting
+        log-info "disable firewall"
+        set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
+        log-info "enable remoting"
+        enable-psremoting
+        winrm quickconfig -force -q
+        winrm set winrm/config/client '@{TrustedHosts="*"}'
+    }
 
     # read and modify config with thumb and nodes if first node
     $nodes = $nodes.split(',')
