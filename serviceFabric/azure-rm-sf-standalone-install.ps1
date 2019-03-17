@@ -220,7 +220,7 @@ function log-info($data)
 {
     $data = "$(get-date)::$data"
     write-host $data
-    out-file -InputObject $data -FilePath $logFile
+    out-file -InputObject $data -FilePath $logFile -append
 
 }
 
