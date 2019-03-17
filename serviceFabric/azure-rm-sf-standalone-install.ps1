@@ -146,12 +146,15 @@ function main()
             (get-scheduledjob -name $jobName).Remove($true)
         }
 
+        log-info "user: $adminUsername"
+        log-info "pass: $adminPassword"
         $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-        $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
-    
+        $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
+        log-info "cred: $credential"
+        
         $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
         -Name $jobName `
-        -Credential $global:credential `
+        -Credential $credential `
         -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
         -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
 
