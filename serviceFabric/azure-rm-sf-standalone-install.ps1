@@ -41,10 +41,8 @@ function main()
 
     $packagePath = "$scriptPath\$([io.path]::GetFileNameWithoutExtension($packageName))"
     $logFile = "$scriptPath\install.log"
-    $transcript = "$logfile.debug"
     $certPath = "$packagePath\Certificates"
     $currentLocation = (get-location).Path
-    start-transcript $transcript
     $configurationFileMod = "$([io.path]::GetFileNameWithoutExtension($configurationFile)).mod.json"
     log-info "-------------------------------"
     log-info "starting"
@@ -159,7 +157,7 @@ function main()
             -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
             -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
 
-        $job.StartJob()
+        #$job.StartJob()
         
         log-info "job scheduled: $(get-scheduledjob). status:$($job | fl *)"
         log-info "exiting"
@@ -249,7 +247,6 @@ function log-info($data)
     $data = "$(get-date)::$data"
     write-host $data
     out-file -InputObject $data -FilePath $logFile -append
-    stop-transcript
 }
 
 function finish-script()
