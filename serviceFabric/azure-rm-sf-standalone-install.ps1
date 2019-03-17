@@ -152,7 +152,6 @@ function main()
         $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
         -Name $jobName `
         -Credential $global:credential `
-        -RunNow `
         -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
         -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
 
