@@ -136,6 +136,10 @@ function main()
 
     if(!$runningAsJob)
     {
+        log-info "start sleeping $($timeout / 4) seconds"
+        start-sleep -seconds ($timeout / 4)
+        log-info "resuming"
+
         log-info "on primary node. scheduling job"
 
         if(get-scheduledjob -name $jobName)
@@ -169,10 +173,6 @@ function main()
         #log-info "running as job. removing job"
         #(get-scheduledjob -name $jobName).Remove($true)
     }
-
-    #log-info "start sleeping $($timeout / 2) seconds"
-    #start-sleep -seconds ($timeout / 2)
-    #log-info "resuming"
 
     log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
