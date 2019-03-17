@@ -134,8 +134,13 @@ function main()
     if(!$runningAsJob)
     {
         log-info "on primary node. scheduling job"
-        log-info "creating initialization script"
-        (get-scheduledjob -name $jobName).Remove($true)
+
+        if(get-scheduledjob -name $jobName)
+        {
+            log-info "removing old job"
+            (get-scheduledjob -name $jobName).Remove($true)
+        }
+
         $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
         $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
     
@@ -242,6 +247,7 @@ function finish-script()
 {
     Set-Location $currentLocation
     $VerbosePreference = $DebugPreference = "silentlycontinue"
+    log-info "all errors: $($error | out-string)"
 }
 
 main
