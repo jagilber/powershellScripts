@@ -149,9 +149,9 @@ function main()
         log-info "user: $adminUsername"
         log-info "pass: $adminPassword"
         $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-        $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
+        $credential = new-object Management.Automation.PSCredential -ArgumentList "$($env:computername)\$adminUsername", $SecurePassword
         log-info "cred: $credential"
-        
+
         $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
         -Name $jobName `
         -Credential $credential `
