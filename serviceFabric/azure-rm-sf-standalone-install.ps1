@@ -133,7 +133,7 @@ function main()
         finish-script
         return
     }
-
+<#
     if(!$runningAsJob)
     {
         log-info "start sleeping $($timeout / 4) seconds"
@@ -173,6 +173,41 @@ function main()
         #log-info "running as job. removing job"
         #(get-scheduledjob -name $jobName).Remove($true)
     }
+#>
+
+#  impersonate as admin 
+#  from .\New-ImpersonateUser.ps1 in gallery https://gallery.technet.microsoft.com/scriptcenter/Impersonate-a-User-9bfeff82
+#
+    $ImpersonatedUser = @{}
+    log "impersonating as '$adminUsername'..."
+    Add-Type -Namespace Import -Name Win32 -MemberDefinition @'
+            [DllImport("advapi32.dll", SetLastError = true)]
+            public static extern bool LogonUser(string user, string domain, string password, int logonType, int logonProvider, out IntPtr token);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool CloseHandle(IntPtr handle);
+'@
+    $adDomainName = $env:computername
+    $tokenHandle = 0
+    $returnValue = [Import.Win32]::LogonUser($adminUserName, $adDomainName, $adminPassword, 2, 0, [ref]$tokenHandle)
+
+    if (!$returnValue)
+    {
+        $errCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
+        log "failed a call to LogonUser with error code: $errCode"
+        throw [System.ComponentModel.Win32Exception]$errCode
+    }
+    else
+    {
+        $ImpersonatedUser.ImpersonationContext = [System.Security.Principal.WindowsIdentity]::Impersonate($tokenHandle)
+        [void][Import.Win32]::CloseHandle($tokenHandle)
+        log "impersonating user $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) returnValue: '$returnValue'"
+    }
+
+    log-info "$(whoami)"
+
+    #  running as admin
+    #
 
     log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
@@ -238,6 +273,11 @@ function main()
         Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
         Get-ServiceFabricNode |Format-Table
     }
+
+    log "remove impersonation..."
+    $ImpersonatedUser.ImpersonationContext.Undo()
+
+    log-info "$(whoami)"
 
     finish-script
 }
