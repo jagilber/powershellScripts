@@ -226,7 +226,7 @@ function main()
         log-info "testing cluster"
         $error.Clear()
         $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
-        $result
+        log-info $result
 
         if($result -imatch "false|fail|exception")
         {
@@ -235,13 +235,14 @@ function main()
         }
 
         log-info "creating cluster"
-        .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
+        $result = .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
             -AcceptEULA `
             -NoCleanupOnFailure `
             -TimeoutInSeconds $timeout `
             -MaxPercentFailedNodes 0 `
             -Verbose
-
+        
+        log-info $result
         log-info "connecting to cluster"
         Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
         Get-ServiceFabricNode |Format-Table
