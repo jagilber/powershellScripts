@@ -147,13 +147,9 @@ function main()
             start-sleep -seconds 60
         }
 
-        log-info "on primary node. scheduling job"
-
-        if(get-scheduledjob -name $jobName)
-        {
-            log-info "removing old job"
-            (get-scheduledjob -name $jobName).Remove($true)
-        }
+        $jobps1 = ("$scriptPath\job.ps1")
+        log-info "on primary node. writing $jobps1"
+        out-file -InputObject ". $($MyInvocation.ScriptName) -runningAsJob `$true -thumbprint $thumbprint -nodes `"$nodes`";" -FilePath $jobps1 -force
 
         log-info "user: $adminUsername"
         log-info "pass: $adminPassword"
@@ -162,16 +158,9 @@ function main()
         $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
         log-info "cred: $credential"
 
-        $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
-            -Name $jobName `
-            -RunNow `
-            -Credential $credential `
-            -ScheduledJobOption (New-ScheduledJobOption -RunElevated -RequireNetwork -Debug -Verbose) `
-            -ArgumentList @($true, $scriptPath, $thumbprint, $nodes, $commonname)
+        $job = invoke-command -computername $env:COMPUTERNAME -EnableNetworkAccess -FilePath $jobps1 -Credential $credential 
 
-        #$job.StartJob()
-        
-        log-info "job scheduled: $(get-scheduledjob). status:$($job | fl *)"
+        log-info "job scheduled: status:$($job | fl *)"
         log-info "exiting"
         finish-script
         return
