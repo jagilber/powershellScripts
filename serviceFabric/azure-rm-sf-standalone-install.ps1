@@ -251,7 +251,7 @@ function main()
     else
     {
         $count = 0
-        while($count < 3)
+        while($count -lt 3)
         {
             log-info "start sleeping $($timeout / 4) seconds"
             start-sleep -seconds ($timeout / 4)
@@ -267,6 +267,7 @@ function main()
                 log-info "error: failed test: $($error | out-string)"
                 #finish-script
                 #return 1
+                $count++
             }
             else
             {
