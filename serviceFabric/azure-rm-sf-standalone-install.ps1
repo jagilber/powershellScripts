@@ -149,7 +149,7 @@ function main()
 
         $jobps1 = ("$scriptPath\job.ps1")
         log-info "on primary node. writing $jobps1"
-        out-file -InputObject ". $($MyInvocation.ScriptName) -runningAsJob `$true -thumbprint $thumbprint -nodes `"$nodes`";" -FilePath $jobps1 -force
+        out-file -InputObject ". $($MyInvocation.ScriptName) -runningAsJob `$true -thumbprint $thumbprint -nodes `"$($nodes -join ',')`";" -FilePath $jobps1 -force
 
         log-info "user: $adminUsername"
         log-info "pass: $adminPassword"
@@ -158,9 +158,10 @@ function main()
         $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
         log-info "cred: $credential"
 
-        $job = invoke-command -computername $env:COMPUTERNAME -EnableNetworkAccess -FilePath $jobps1 -Credential $credential 
-
-        log-info "job scheduled: status:$($job | fl *)"
+        #$job = invoke-command -computername $env:COMPUTERNAME -EnableNetworkAccess -FilePath "powershell" -ArgumentList $jobps1 -Credential $credential 
+        $result = start-process -FilePath "powershell" -Credential $credential -ArgumentList $jobps1 -loaduserprofile -nonewwindow -wait -verbose -debug
+        log-info "process results: $result"
+        #log-info "job scheduled: status:$($job | fl *)"
         log-info "exiting"
         finish-script
         return
