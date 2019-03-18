@@ -250,16 +250,28 @@ function main()
     }
     else
     {
-        log-info "testing cluster"
-        $error.Clear()
-        $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
-        log-info $result
-
-        if($result -imatch "false|fail|exception")
+        $count = 0
+        while($count < 3)
         {
-            log-info "error: failed test: $($error | out-string)"
-            #finish-script
-            #return 1
+            log-info "start sleeping $($timeout / 4) seconds"
+            start-sleep -seconds ($timeout / 4)
+            log-info "resuming"
+
+            log-info "testing cluster"
+            $error.Clear()
+            $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
+            log-info $result
+
+            if($result -imatch "false|fail|exception")
+            {
+                log-info "error: failed test: $($error | out-string)"
+                #finish-script
+                #return 1
+            }
+            else
+            {
+                $count = 4
+            }
         }
 
         log-info "creating cluster"
