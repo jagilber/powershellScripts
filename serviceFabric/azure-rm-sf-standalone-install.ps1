@@ -26,7 +26,8 @@ param(
 
 $erroractionpreference = "continue"
 $logFile = $null
-$jobName = "sa"
+#$jobName = "sa"
+$retry = 4
 
 function main()
 {
@@ -136,8 +137,8 @@ function main()
 <#
     if(!$runningAsJob)
     {
-        log-info "start sleeping $($timeout / 4) seconds"
-        start-sleep -seconds ($timeout / 4)
+        log-info "start sleeping $($timeout / $retry) seconds"
+        start-sleep -seconds ($timeout / $retry)
         log-info "resuming"
 
         log-info "on primary node. scheduling job"
@@ -251,10 +252,10 @@ function main()
     else
     {
         $count = 0
-        while($count -lt 3)
+        while($count -lt $retry)
         {
-            log-info "start sleeping $($timeout / 4) seconds"
-            start-sleep -seconds ($timeout / 4)
+            log-info "start sleeping $($timeout / $retry) seconds"
+            start-sleep -seconds ($timeout / $retry)
             log-info "resuming"
 
             log-info "testing cluster"
@@ -271,7 +272,7 @@ function main()
             }
             else
             {
-                $count = 4
+                $count = $retry
             }
         }
 
@@ -280,8 +281,9 @@ function main()
             -AcceptEULA `
             -NoCleanupOnFailure `
             -TimeoutInSeconds $timeout `
-            -MaxPercentFailedNodes 0 `
-            -Verbose
+            -MaxPercentFailedNodes 100 `
+            -Verbose `
+            -Force
         
         log-info $result
         log-info "connecting to cluster"
