@@ -26,8 +26,7 @@ param(
 
 $erroractionpreference = "continue"
 $logFile = $null
-#$jobName = "sa"
-$retry = 4
+$jobName = "sa"
 
 function main()
 {
@@ -134,12 +133,19 @@ function main()
         finish-script
         return
     }
-<#
+
     if(!$runningAsJob)
     {
-        log-info "start sleeping $($timeout / $retry) seconds"
-        start-sleep -seconds ($timeout / $retry)
+        log-info "start sleeping $($timeout / 4) seconds"
+        start-sleep -seconds ($timeout / 4)
         log-info "resuming"
+
+        while((test-path "$scriptPath\debug.ps1"))
+        {
+            log-info "debug"
+            . "$scriptPath\debug.ps1"
+            start-sleep -seconds 60
+        }
 
         log-info "on primary node. scheduling job"
 
@@ -152,7 +158,8 @@ function main()
         log-info "user: $adminUsername"
         log-info "pass: $adminPassword"
         $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-        $credential = new-object Management.Automation.PSCredential -ArgumentList "$($env:computername)\$adminUsername", $SecurePassword
+        #$credential = new-object Management.Automation.PSCredential -ArgumentList "$($env:computername)\$adminUsername", $SecurePassword
+        $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
         log-info "cred: $credential"
 
         $job = Register-ScheduledJob -FilePath ($MyInvocation.ScriptName) `
@@ -174,41 +181,6 @@ function main()
         #log-info "running as job. removing job"
         #(get-scheduledjob -name $jobName).Remove($true)
     }
-#>
-
-#  impersonate as admin 
-#  from .\New-ImpersonateUser.ps1 in gallery https://gallery.technet.microsoft.com/scriptcenter/Impersonate-a-User-9bfeff82
-#
-    $ImpersonatedUser = @{}
-    log-info "impersonating as '$adminUsername'..."
-    Add-Type -Namespace Import -Name Win32 -MemberDefinition @'
-            [DllImport("advapi32.dll", SetLastError = true)]
-            public static extern bool LogonUser(string user, string domain, string password, int logonType, int logonProvider, out IntPtr token);
-
-            [DllImport("kernel32.dll", SetLastError = true)]
-            public static extern bool CloseHandle(IntPtr handle);
-'@
-    $adDomainName = $env:computername
-    $tokenHandle = 0
-    $returnValue = [Import.Win32]::LogonUser($adminUserName, $adDomainName, $adminPassword, 2, 0, [ref]$tokenHandle)
-
-    if (!$returnValue)
-    {
-        $errCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
-        log-info "failed a call to LogonUser with error code: $errCode"
-        throw [System.ComponentModel.Win32Exception]$errCode
-    }
-    else
-    {
-        $ImpersonatedUser.ImpersonationContext = [System.Security.Principal.WindowsIdentity]::Impersonate($tokenHandle)
-        [void][Import.Win32]::CloseHandle($tokenHandle)
-        log-info "impersonating user $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) returnValue: '$returnValue'"
-    }
-
-    log-info "$(whoami)"
-
-    #  running as admin
-    #
 
     log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
@@ -251,50 +223,29 @@ function main()
     }
     else
     {
-        $count = 0
-        while($count -lt $retry)
+        log-info "testing cluster"
+        $error.Clear()
+        $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
+        $result
+
+        if($result -imatch "false|fail|exception")
         {
-            log-info "start sleeping $($timeout / $retry) seconds"
-            start-sleep -seconds ($timeout / $retry)
-            log-info "resuming"
-
-            log-info "testing cluster"
-            $error.Clear()
-            $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
-            log-info $result
-
-            if($result -imatch "false|fail|exception")
-            {
-                log-info "error: failed test: $($error | out-string)"
-                #finish-script
-                #return 1
-                $count++
-            }
-            else
-            {
-                $count = $retry
-            }
+            log-info "error: failed test: $($error | out-string)"
+            return 1
         }
 
         log-info "creating cluster"
-        $result = .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
+        .\CreateServiceFabricCluster.ps1 -ClusterConfigFilePath $configurationFileMod `
             -AcceptEULA `
             -NoCleanupOnFailure `
             -TimeoutInSeconds $timeout `
-            -MaxPercentFailedNodes 100 `
-            -Verbose `
-            -Force
-        
-        log-info $result
+            -MaxPercentFailedNodes 0 `
+            -Verbose
+
         log-info "connecting to cluster"
         Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
         Get-ServiceFabricNode |Format-Table
     }
-
-    log-info "remove impersonation..."
-    $ImpersonatedUser.ImpersonationContext.Undo()
-
-    log-info "$(whoami)"
 
     finish-script
 }
