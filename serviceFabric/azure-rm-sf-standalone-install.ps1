@@ -244,8 +244,10 @@ function main()
         
         log-info $result
         log-info "connecting to cluster"
-        Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
-        Get-ServiceFabricNode |Format-Table
+        $result = Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
+        log-info $result 
+        $result = Get-ServiceFabricNode |Format-Table
+        log-info $result 
     }
 
     finish-script
