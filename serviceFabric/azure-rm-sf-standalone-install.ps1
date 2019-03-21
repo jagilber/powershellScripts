@@ -114,6 +114,7 @@ function main()
     log-info "enable remoting"
     enable-psremoting
     winrm quickconfig -force -q
+    #winrm id -r:%machinename%
     #winrm set winrm/config/client '@{TrustedHosts="*"}'
     winrm set winrm/config/client '@{TrustedHosts="<local>"}'
 
