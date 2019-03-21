@@ -114,7 +114,8 @@ function main()
     log-info "enable remoting"
     enable-psremoting
     winrm quickconfig -force -q
-    winrm set winrm/config/client '@{TrustedHosts="*"}'
+    #winrm set winrm/config/client '@{TrustedHosts="*"}'
+    winrm set winrm/config/client '@{TrustedHosts="<local>"}'
 
     # read and modify config with thumb and nodes if first node
     $nodes = $nodes.split(',')
