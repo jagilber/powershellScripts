@@ -1,18 +1,20 @@
 param(
     [PSCredential]$UserAccount,
-    [string]$adminUserName,
-    [string]$adminPassword,
-    [string]$installScript = "$($psscriptroot)\azure-rm-dsc-sf-standalone-install.ps1",
+    [string]$installScript = "$PSScriptRoot\azure-rm-dsc-sf-standalone-install.ps1",
     [string]$thumbprint,
     [string[]]$nodes,
     [string]$commonName,
-    [string]$transcript = ".\transcript.log"
+    [string]$transcript
 )
 
-configuration SFStandalone
-{
-    Node localhost {
-    }
+$configurationData = @{
+    AllNodes = @(
+        @{
+            NodeName = 'localhost'
+            PSDscAllowPlainTextPassword = $true
+            PSDscAllowDomainUser = $true
+        }
+    )
 }
 
 configuration SFStandaloneInstall
@@ -21,18 +23,25 @@ configuration SFStandaloneInstall
         #[Parameter(Mandatory=$true)]
         #[ValidateNotNullorEmpty()]
         [PSCredential]$UserAccount,
-        [string]$adminUserName,
-        [string]$adminPassword,
-        [string]$installScript,
+        [string]$installScript = "$PSScriptRoot\azure-rm-dsc-sf-standalone-install.ps1",
         [string]$thumbprint,
         [string[]]$nodes,
-        [string]$commonname
-
+        [string]$commonname,
+        [string]$transcript = ".\transcript.log"
     )
-
+    
+    $ErrorActionPreference = "silentlycontinue"
+    set-location $PSScriptRoot
+    Start-Transcript -Path $transcript
+        
+    foreach ($key in $MyInvocation.BoundParameters.keys)
+    {
+        $value = (get-variable $key).Value 
+        write-host "$key -> $value"
+    }
+    
     Import-DscResource -ModuleName PSDesiredStateConfiguration
-    $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-    $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
+    write-host "current location: $((get-location).path)"
     write-host "useraccount: $($useraccount.username)"
     Write-host "install script:$installScript"
 
@@ -40,8 +49,8 @@ configuration SFStandaloneInstall
 
         User LocalUserAccount
         {
-            Username = $credential.UserName
-            Password = $credential
+            Username = $UserAccount.UserName
+            Password = $UserAccount
             Disabled = $false
             Ensure = "Present"
             FullName = "Local User Account"
@@ -49,14 +58,16 @@ configuration SFStandaloneInstall
             PasswordNeverExpires = $true
         }
 
-        $credential = new-object Management.Automation.PSCredential -ArgumentList ".\$adminUsername", $SecurePassword
+        $credential = new-object Management.Automation.PSCredential -ArgumentList ".\$($userAccount.Username)", $userAccount.Password
 
         Script Install-Standalone
         {
             GetScript = { @{ Result = ((get-itemproperty "HKLM:\SOFTWARE\Microsoft\Service Fabric").FabricVersion)}}
             SetScript = { 
                     write-host "setscript: $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname"
-                    Invoke-Expression -Command ("$using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname")
+                    $result = Invoke-Expression -Command ("powershell.exe -file $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname") -Verbose -Debug
+                    write-host "invoke result: $result"
+
                 }
             TestScript = { 
                     if((get-itemproperty "HKLM:\SOFTWARE\Microsoft\Service Fabric" -ErrorAction SilentlyContinue).FabricVersion)
@@ -70,45 +81,24 @@ configuration SFStandaloneInstall
             #[ DependsOn = [string[]] ]
         }
     }
+
+    stop-transcript
 }
 
-$configurationData = @{
-    AllNodes = @(
-        @{
-            NodeName = 'localhost'
-            PSDscAllowPlainTextPassword = $true
-            PSDscAllowDomainUser = $true
-        }
-    )
-}
-
-$ErrorActionPreference = "silentlycontinue"
-Start-Transcript -Path $transcript
-
-foreach ($key in $MyInvocation.BoundParameters.keys)
-{
-    $value = (get-variable $key).Value 
-    write-host "$key -> $value"
-}
-
-if($adminUserName -and $adminPassword)
+if($thumbprint -and $nodes -and $commonName)
 {
     write-host "sfstandaloneinstall"
     SFStandaloneInstall -useraccount $UserAccount `
-        -adminUserName $adminUserName `
-        -adminPassword $adminPassword `
         -installScript $installScript `
         -thumbprint $thumbprint `
         -nodes $nodes `
         -commonname $commonName `
         -ConfigurationData $configurationData
 
+
     # Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
 }
 else
 {
-    write-host "sfstandalone"
-    SFStandalone
+    write-host "configuration.ps1: no args! exiting"
 }
-Stop-Transcript
-
