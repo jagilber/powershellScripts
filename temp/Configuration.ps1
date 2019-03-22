@@ -92,6 +92,6 @@ SFStandaloneInstall -adminUserName $adminUserName `
     -commonname $commonName `
     -ConfigurationData $configurationData
 
-Start-DscConfiguration .\SFStandaloneInstall
+Start-DscConfiguration .\SFStandaloneInstall -wait -force
 Stop-Transcript
 
