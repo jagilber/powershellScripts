@@ -151,11 +151,11 @@ function main()
     #$SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
     #$credential = new-object Management.Automation.PSCredential -ArgumentList "$($env:computername)\$adminUsername", $SecurePassword
     #$credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
-    log-info "cred: $credential"
+    #log-info "cred: $credential"
 
     #$job = invoke-command -computername $env:COMPUTERNAME -EnableNetworkAccess -FilePath "powershell" -ArgumentList $jobps1 -Credential $credential 
     #$result = start-process -FilePath "powershell" -Credential $credential -ArgumentList $jobps1 -loaduserprofile -nonewwindow -wait -verbose -debug
-    log-info "process results: $result"
+    #log-info "process results: $result"
 
     log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
