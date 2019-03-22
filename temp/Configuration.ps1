@@ -90,14 +90,21 @@ foreach ($key in $MyInvocation.BoundParameters.keys)
     write-host "$key -> $value"
 }
 
-SFStandaloneInstall -adminUserName $adminUserName `
-    -adminPassword $adminPassword `
-    -installScript $installScript `
-    -thumbprint $thumbPrint `
-    -nodes $nodes `
-    -commonname $commonName `
-    -ConfigurationData $configurationData
+if($adminUserName -and $adminPassword)
+{
+    SFStandaloneInstall -adminUserName $adminUserName `
+        -adminPassword $adminPassword `
+        -installScript $installScript `
+        -thumbprint $thumbPrint `
+        -nodes $nodes `
+        -commonname $commonName `
+        -ConfigurationData $configurationData
 
-Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
+    Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
+}
+else
+{
+    SFStandalone
+}
 Stop-Transcript
 
