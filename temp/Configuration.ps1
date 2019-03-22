@@ -1,4 +1,5 @@
 param(
+    [PSCredential]$UserAccount,
     [string]$adminUserName,
     [string]$adminPassword,
     [string]$installScript = ".\azure-rm-dsc-sf-standalone-install.ps1",
@@ -19,7 +20,7 @@ configuration SFStandaloneInstall
     param(
         #[Parameter(Mandatory=$true)]
         #[ValidateNotNullorEmpty()]
-        #[PSCredential]
+        [PSCredential]$UserAccount,
         [string]$adminUserName,
         [string]$adminPassword,
         [string]$installScript,
@@ -32,7 +33,7 @@ configuration SFStandaloneInstall
     Import-DscResource -ModuleName PSDesiredStateConfiguration
     $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
     $credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
-    Write-Debug $installScript
+    write-host "useraccount: $($useraccount.username)"
     Write-host "install script:$installScript"
 
     Node localhost {
@@ -92,7 +93,9 @@ foreach ($key in $MyInvocation.BoundParameters.keys)
 
 if($adminUserName -and $adminPassword)
 {
-    SFStandaloneInstall -adminUserName $adminUserName `
+    write-host "sfstandaloneinstall"
+    SFStandaloneInstall -useraccount $UserAccount `
+        -adminUserName $adminUserName `
         -adminPassword $adminPassword `
         -installScript $installScript `
         -thumbprint $thumbprint `
@@ -100,10 +103,11 @@ if($adminUserName -and $adminPassword)
         -commonname $commonName `
         -ConfigurationData $configurationData
 
-    Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
+    # Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
 }
 else
 {
+    write-host "sfstandalone"
     SFStandalone
 }
 Stop-Transcript
