@@ -2,7 +2,7 @@ param(
     [PSCredential]$UserAccount,
     [string]$adminUserName,
     [string]$adminPassword,
-    [string]$installScript = ".\azure-rm-dsc-sf-standalone-install.ps1",
+    [string]$installScript = "$($psscriptroot)\azure-rm-dsc-sf-standalone-install.ps1",
     [string]$thumbprint,
     [string[]]$nodes,
     [string]$commonName,
