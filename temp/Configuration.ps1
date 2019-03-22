@@ -8,6 +8,12 @@ param(
     $transcript = ".\transcript.log"
 )
 
+configuration SFStandalone
+{
+    Node localhost {
+    }
+}
+
 configuration SFStandaloneInstall
 {
     param(
@@ -42,7 +48,7 @@ configuration SFStandaloneInstall
             PasswordNeverExpires = $true
         }
 
-    $credential = new-object Management.Automation.PSCredential -ArgumentList ".\$adminUsername", $SecurePassword
+        $credential = new-object Management.Automation.PSCredential -ArgumentList ".\$adminUsername", $SecurePassword
 
         Script Install-Standalone
         {
@@ -92,6 +98,6 @@ SFStandaloneInstall -adminUserName $adminUserName `
     -commonname $commonName `
     -ConfigurationData $configurationData
 
-Start-DscConfiguration .\SFStandaloneInstall -wait -force
+Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
 Stop-Transcript
 

@@ -31,12 +31,6 @@ function main()
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
     $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
-
-    if(!$scriptPath)
-    {
-        $scriptPath = $workingDir
-    }
-
     $packagePath = "$scriptPath\$([io.path]::GetFileNameWithoutExtension($packageName))"
     $logFile = "$scriptPath\install.log"
     $certPath = "$packagePath\Certificates"
