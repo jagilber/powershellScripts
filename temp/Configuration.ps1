@@ -2,7 +2,7 @@ param(
     [string]$adminUserName,
     [string]$adminPassword,
     [string]$installScript = ".\azure-rm-dsc-sf-standalone-install.ps1",
-    [string]$thumbPrint,
+    [string]$thumbprint,
     [string[]]$nodes,
     [string]$commonName,
     [string]$transcript = ".\transcript.log"
@@ -20,12 +20,12 @@ configuration SFStandaloneInstall
         #[Parameter(Mandatory=$true)]
         #[ValidateNotNullorEmpty()]
         #[PSCredential]
-        $adminUserName,
-        $adminPassword,
-        $installScript,
-        $thumbPrint,
-        $nodes,
-        $commonname
+        [string]$adminUserName,
+        [string]$adminPassword,
+        [string]$installScript,
+        [string]$thumbprint,
+        [string[]]$nodes,
+        [string]$commonname
 
     )
 
@@ -95,7 +95,7 @@ if($adminUserName -and $adminPassword)
     SFStandaloneInstall -adminUserName $adminUserName `
         -adminPassword $adminPassword `
         -installScript $installScript `
-        -thumbprint $thumbPrint `
+        -thumbprint $thumbprint `
         -nodes $nodes `
         -commonname $commonName `
         -ConfigurationData $configurationData

@@ -30,16 +30,15 @@ function main()
 {
     $VerbosePreference = $DebugPreference = "continue"
     $Error.Clear()
-    $scriptPath = ([io.path]::GetDirectoryName($MyInvocation.ScriptName))
-    $packagePath = "$scriptPath\$([io.path]::GetFileNameWithoutExtension($packageName))"
-    $packageZip = "$scriptPath\$packageName"
-    $logFile = "$scriptPath\install.log"
+    $packagePath = "$psscriptroot\$([io.path]::GetFileNameWithoutExtension($packageName))"
+    $packageZip = "$psscriptroot\$packageName"
+    $logFile = "$psscriptroot\install.log"
     $certPath = "$packagePath\Certificates"
     $currentLocation = (get-location).Path
     $configurationFileMod = "$([io.path]::GetFileNameWithoutExtension($configurationFile)).mod.json"
     log-info "-------------------------------"
     log-info "starting"
-    log-info "script path: $scriptPath"
+    log-info "script path: $psscriptroot"
     log-info "log file: $logFile"
     log-info "current location: $currentLocation"
     log-info "configuration file: $configurationFileMod"
@@ -135,14 +134,14 @@ function main()
     start-sleep -seconds ($timeout / 4)
     log-info "resuming"
 
-    while((test-path "$scriptPath\debug.ps1"))
+    while((test-path "$psscriptroot\debug.ps1"))
     {
         log-info "debug"
-        . "$scriptPath\debug.ps1"
+        . "$psscriptroot\debug.ps1"
         start-sleep -seconds 60
     }
 
-    $jobps1 = ("$scriptPath\job.ps1")
+    $jobps1 = ("$psscriptroot\job.ps1")
     log-info "on primary node. writing $jobps1"
     out-file -InputObject ". $($MyInvocation.ScriptName) -runningAsJob `$true -thumbprint $thumbprint -nodes `"$($nodes -join ',')`";" -FilePath $jobps1 -force
 #>
