@@ -133,7 +133,7 @@ function main()
     </Window>
 "@
 
-    get-workingDirectory
+    set-location $psscriptroot
     authenticate-azureRm
 
     # set sub if passed as argument. requires auth
@@ -969,34 +969,6 @@ function get-time($item)
         $error.Clear()
         return $retVal
     }
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function get-workingDirectory()
-{
-    $retVal = [string]::Empty
-
-    if (Test-Path variable:\hostinvocation)
-    {
-        $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
-  
-    if (Test-Path $retVal)
-    {
-        $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-        $retVal = (Get-Location).path
-        write-host "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-    } 
- 
-    Set-Location $retVal | out-null
-    return $retVal
 }
 
 # ----------------------------------------------------------------------------------------------------------------

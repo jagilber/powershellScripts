@@ -15,7 +15,8 @@ function main()
 {
     runas-admin
 
-    $workingDir = get-workingDirectory
+    set-location $psscriptroot
+    $workingDir = (get-location).path
     $umdhExe = "$($workingDir)\umdh.exe"
 
     if(![System.IO.File]::Exists($umdhExe))
@@ -116,39 +117,6 @@ function log-info($data)
     $data = "$([System.DateTime]::Now):$($data)`n"
     #Write-Host $data
     out-file -Append -InputObject $data -FilePath ([Environment]::ExpandEnvironmentVariables($logFile))
-}
-
-
-# ----------------------------------------------------------------------------------------------------------------
-function get-workingDirectory()
-{
-    [string] $retVal = ""
-
-    if (Test-Path variable:\hostinvocation)
-    {
-    $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
- 
-if (Test-Path $retVal)
-    {
-    $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-    $retVal = (Get-Location).path
-    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-    
-} 
-
-    
-Set-Location $retVal
-
-    return $retVal
-
 }
 
 # ----------------------------------------------------------------------------------------------------------------
