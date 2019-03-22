@@ -43,31 +43,6 @@ function main()
     log-info "current location: $currentLocation"
     log-info "configuration file: $configurationFileMod"
 
-    if ($force -and (test-path $packagePath))
-    {
-        log-info "deleting package"
-        [io.directory]::Delete($packagePath, $true)
-    }
-
-    if (!(test-path $packagePath))
-    {
-        log-info "downloading package $packageUrl"
-        log-info "(new-object net.webclient).DownloadFile($packageUrl, $packageZip)"
-        $result = (new-object net.webclient).DownloadFile($packageUrl, $packageZip)
-        log-info $result
-        log-info ($error | out-string)
-        log-info "Expand-Archive $packageZip -DestinationPath $packagePath -Force"
-        Expand-Archive -path $packageZip -DestinationPath $packagePath -Force
-    }
-    
-    Set-Location $packagePath
-    log-info "current location: $packagePath"
-
-    if(!(test-path $configurationFile))
-    {
-        log-info "error: $configurationFile does not exist"
-        return
-    }
     # verify and acl cert
     $cert = get-item Cert:\LocalMachine\My\$thumbprint
 
@@ -108,10 +83,12 @@ function main()
 
     # enable remoting
     log-info "disable firewall"
+    # todo disaable only sf ports?
     set-netFirewallProfile -Profile Domain,Public,Private -Enabled False
     log-info "enable remoting"
     enable-psremoting
     winrm quickconfig -force -q
+    # todo remove?
     winrm set winrm/config/client/Auth '@{CredSSP="true"}'
     #winrm id -r:%machinename%
     #winrm set winrm/config/client '@{TrustedHosts="*"}'
@@ -133,28 +110,32 @@ function main()
     log-info "start sleeping $($timeout / 4) seconds"
     start-sleep -seconds ($timeout / 4)
     log-info "resuming"
-
-    while((test-path "$psscriptroot\debug.ps1"))
+#>
+    if ($force -and (test-path $packagePath))
     {
-        log-info "debug"
-        . "$psscriptroot\debug.ps1"
-        start-sleep -seconds 60
+        log-info "deleting package"
+        [io.directory]::Delete($packagePath, $true)
     }
 
-    $jobps1 = ("$psscriptroot\job.ps1")
-    log-info "on primary node. writing $jobps1"
-    out-file -InputObject ". $($MyInvocation.ScriptName) -runningAsJob `$true -thumbprint $thumbprint -nodes `"$($nodes -join ',')`";" -FilePath $jobps1 -force
-#>
-    #log-info "user: $adminUsername"
-    #log-info "pass: $adminPassword"
-    #$SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
-    #$credential = new-object Management.Automation.PSCredential -ArgumentList "$($env:computername)\$adminUsername", $SecurePassword
-    #$credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
-    #log-info "cred: $credential"
+    if (!(test-path $packagePath))
+    {
+        log-info "downloading package $packageUrl"
+        log-info "(new-object net.webclient).DownloadFile($packageUrl, $packageZip)"
+        $result = (new-object net.webclient).DownloadFile($packageUrl, $packageZip)
+        log-info $result
+        log-info ($error | out-string)
+        log-info "Expand-Archive $packageZip -DestinationPath $packagePath -Force"
+        Expand-Archive -path $packageZip -DestinationPath $packagePath -Force
+    }
 
-    #$job = invoke-command -computername $env:COMPUTERNAME -EnableNetworkAccess -FilePath "powershell" -ArgumentList $jobps1 -Credential $credential 
-    #$result = start-process -FilePath "powershell" -Credential $credential -ArgumentList $jobps1 -loaduserprofile -nonewwindow -wait -verbose -debug
-    #log-info "process results: $result"
+    Set-Location $packagePath
+    log-info "current location: $packagePath"
+
+    if(!(test-path $configurationFile))
+    {
+        log-info "error: $configurationFile does not exist"
+        return
+    }
 
     log-info "modifying json"
     $json = Get-Content -Raw $configurationFile
@@ -217,7 +198,7 @@ function main()
             -Verbose
         
         log-info $result
-        log-info "connecting to cluster"
+        log-info "connecting to cluster (not currently working)"
         $result = Connect-ServiceFabricCluster -ConnectionEndpoint localhost:19000
         log-info $result 
         $result = Get-ServiceFabricNode |Format-Table
@@ -225,6 +206,15 @@ function main()
     }
 
     finish-script
+    # todo remove
+    $error.Clear()
+
+    if(!$error)
+    {
+        return $true
+    }
+
+    return $false
 }
 
 function log-info($data)
