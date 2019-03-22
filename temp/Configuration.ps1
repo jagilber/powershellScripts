@@ -1,11 +1,11 @@
 param(
-    $adminUserName,
-    $adminPassword,
-    $installScript = ".\azure-rm-dsc-sf-standalone-install.ps1",
-    $thumbPrint,
+    [string]$adminUserName,
+    [string]$adminPassword,
+    [string]$installScript = ".\azure-rm-dsc-sf-standalone-install.ps1",
+    [string]$thumbPrint,
     [string[]]$nodes,
-    $commonName,
-    $transcript = ".\transcript.log"
+    [string]$commonName,
+    [string]$transcript = ".\transcript.log"
 )
 
 configuration SFStandalone
