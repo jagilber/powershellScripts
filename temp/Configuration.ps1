@@ -59,22 +59,52 @@ configuration SFStandaloneInstall
         }
 
         $credential = new-object Management.Automation.PSCredential -ArgumentList ".\$($userAccount.Username)", $userAccount.Password
+        $firstNode = $false
+
+        if($nodes[0] -imatch $env:COMPUTERNAME)
+        {
+            write-host "$env:COMPUTERNAME is first node."
+            $firstNode = $true
+        }
+        else 
+        {
+            write-host "$env:COMPUTERNAME is not first node."
+        }
 
         Script Install-Standalone
         {
-            GetScript = { @{ Result = ((get-itemproperty "HKLM:\SOFTWARE\Microsoft\Service Fabric").FabricVersion)}}
+            GetScript = { 
+                    $result = $false
+
+                    if($firstNode)
+                    {
+                        $result = winrm g winrm/config/client
+                    }
+                    else 
+                    {
+                        $result = ((get-itemproperty "HKLM:\SOFTWARE\Microsoft\Service Fabric").FabricVersion)
+                    }
+                    
+                    @{ Result = $result}
+            }
             SetScript = { 
                     write-host "setscript: $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname"
                     $result = Invoke-Expression -Command ("powershell.exe -file $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname") -Verbose -Debug
                     write-host "invoke result: $result"
-
                 }
             TestScript = { 
-                    if((get-itemproperty "HKLM:\SOFTWARE\Microsoft\Service Fabric" -ErrorAction SilentlyContinue).FabricVersion)
+                
+                    if($firstNode)
                     {
-                        return $true
+                        if((get-itemproperty "HKLM:\SOFTWARE\Microsoft\Service Fabric" -ErrorAction SilentlyContinue).FabricVersion)
+                        {
+                            return $true
+                        }
                     }
-
+                    else 
+                    {
+                        return [bool](winrm g winrm/config/client) -imatch "trustedhosts = ."
+                    }
                     return $false
                 }
             PsDscRunAsCredential = $credential
@@ -94,7 +124,6 @@ if($thumbprint -and $nodes -and $commonName)
         -nodes $nodes `
         -commonname $commonName `
         -ConfigurationData $configurationData
-
 
     # Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose
 }
