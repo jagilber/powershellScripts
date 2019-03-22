@@ -76,7 +76,7 @@ function main()
     write-host "----------------------------------------"
     write-host "$(get-date) starting"
     
-    get-workingDirectory
+    set-location $psscriptroot
     
     if(!(Import-Module RemoteDesktop))
     {
@@ -409,34 +409,6 @@ function get-update($updateUrl, $destinationFile)
         $error.Clear()
         return $false    
     }
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function get-workingDirectory()
-{
-    $retVal = [string]::Empty
- 
-    if (Test-Path variable:\hostinvocation)
-    {
-        $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-        $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
-  
-    if (Test-Path $retVal)
-    {
-        $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-        $retVal = (Get-Location).path
-        write-host "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-    } 
- 
-    Set-Location $retVal | out-null
-    return $retVal
 }
 
 #----------------------------------------------------------------------------

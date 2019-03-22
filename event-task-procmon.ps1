@@ -109,16 +109,17 @@ function main()
 
         if($useCreds)
         {
-       set-credentials
+            set-credentials
         }
 
 
         if([string]::IsNullOrEmpty($workingDir))
         {
-        $workingDir = get-workingDirectory
+            set-location $psscriptroot
+            $workingDir = (get-location).path
         }
 
-      if($install)
+        if($install)
         {
             install-task
             exit
@@ -216,7 +217,8 @@ function check-files()
     }
 
     # check file count first 
-    $directoryInfo = new-object IO.DirectoryInfo (get-workingDirectory)
+    set-location $psscriptroot
+    $directoryInfo = new-object IO.DirectoryInfo $psscriptroot
 
     while ($true)
     {
@@ -604,37 +606,6 @@ function manage-scheduledTask([bool] $enable, [string] $machine, $taskInfo, [boo
         return $true
     }
 
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function get-workingDirectory()
-{
-    $retVal = $null
-
-    if (Test-Path variable:\hostinvocation)
-    {
-    $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
- 
-if (Test-Path $retVal)
-    {
-    $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-    $retVal = (Get-Location).path
-    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-    
-} 
-
-    
-Set-Location $retVal
-
-    return $retVal
 }
 
 # ----------------------------------------------------------------------------------------------------------------

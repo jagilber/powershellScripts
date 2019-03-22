@@ -206,9 +206,9 @@ function main()
         return
     }
 
-   # no arguments so do task
-
-    $workingDir = get-workingDirectory
+    # no arguments so do task
+    set-location $psscriptroot
+    $workingDir = (get-location).path
     $umdhExe = "$($workingDir)\umdh.exe"
 
     if(![System.IO.File]::Exists($umdhExe))
@@ -441,38 +441,6 @@ function manage-scheduledTask([bool] $enable, [string] $machine)
     {
         return $true
     }
-
-}
-
-# ----------------------------------------------------------------------------------------------------------------
-function get-workingDirectory()
-{
-    [string] $retVal = ""
-
-    if (Test-Path variable:\hostinvocation)
-    {
-    $retVal = $hostinvocation.MyCommand.Path
-    }
-    else
-    {
-    $retVal = (get-variable myinvocation -scope script).Value.Mycommand.Definition
-    }
- 
-if (Test-Path $retVal)
-    {
-    $retVal = (Split-Path $retVal)
-    }
-    else
-    {
-    $retVal = (Get-Location).path
-    log-info "get-workingDirectory: Powershell Host $($Host.name) may not be compatible with this function, the current directory $retVal will be used."
-    
-} 
-
-    
-Set-Location $retVal
-
-    return $retVal
 
 }
 
