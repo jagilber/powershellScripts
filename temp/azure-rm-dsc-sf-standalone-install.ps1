@@ -198,13 +198,6 @@ function main()
     }
     else
     {
-        #test
-        log-info "5 $(dir \\10.0.0.5\c$)"
-        log-info "5 $(winrm id -r:10.0.0.5)"
-        log-info "5 $(winrm id -r:nt0000001)"
-        log-info "6 $(dir \\10.0.0.6\c$)"
-        log-info "6 $(winrm id -r:10.0.0.6)"
-        log-info "6 $(winrm id -r:nt0000000)"
         log-info "testing cluster"
         $error.Clear()
         $result = .\TestConfiguration.ps1 -ClusterConfigFilePath $configurationFileMod
