@@ -46,7 +46,7 @@ $error.clear()
 remove-item $clientFile -force -erroraction silentlycontinue
 $destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
 remove-item $destPath -force -recurse -erroraction silentlycontinue
-$newPath = "$($destPath)\cmd"
+$newPath = "$($destPath)\gitminclient"
 $path = [environment]::GetEnvironmentVariable("Path")
 
 if($clean)

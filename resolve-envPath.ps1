@@ -29,7 +29,7 @@ function resolve-envPath($item)
     }
 
     Write-Warning "unable to find $item"
-    return $item
+    return $null
 }
 
 $result = resolve-envPath $item
