@@ -4,7 +4,8 @@ param(
     [string]$thumbprint,
     [string[]]$nodes,
     [string]$commonName,
-    [string]$transcript
+    [string]$transcript,
+    [string]$sfPackageUrl
 )
 
 $configurationData = @{
@@ -27,7 +28,8 @@ configuration SFStandaloneInstall
         [string]$thumbprint,
         [string[]]$nodes,
         [string]$commonname,
-        [string]$transcript = ".\transcript.log"
+        [string]$transcript = ".\transcript.log",
+        [string]$sfPackageUrl
     )
     
     $ErrorActionPreference = "silentlycontinue"
@@ -88,9 +90,11 @@ configuration SFStandaloneInstall
                     @{ Result = $result}
             }
             SetScript = { 
-                    write-host "setscript: $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname"
-                    $result = Invoke-Expression -Command ("powershell.exe -file $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname") -Verbose -Debug
+                    write-host "powershell.exe -file $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname -sfpackageurl $using:sfPackageUrl"
+                    $result = Invoke-Expression -Command ("powershell.exe -file $using:installScript -thumbprint $using:thumbprint -nodes $using:nodes -commonname $using:commonname -sfpackageurl $using:sfPackageUrl") -Verbose -Debug
                     write-host "invoke result: $result"
+                    
+                    @{ Result = $result}
                 }
             TestScript = { 
                 
@@ -123,6 +127,7 @@ if($thumbprint -and $nodes -and $commonName)
         -thumbprint $thumbprint `
         -nodes $nodes `
         -commonname $commonName `
+        -sfpackageurl $sfPackageUrl `
         -ConfigurationData $configurationData
 
     # Start-DscConfiguration .\SFStandaloneInstall -wait -force -debug -verbose

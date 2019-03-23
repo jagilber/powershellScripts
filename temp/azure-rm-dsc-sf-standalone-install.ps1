@@ -17,9 +17,10 @@ param(
     [switch]$remove,
     [switch]$force,
     [string]$configurationFile = ".\ClusterConfig.X509.OneNode.json", # ".\ClusterConfig.X509.MultiMachine.json", #".\ClusterConfig.Unsecure.DevCluster.json",
-    [string]$packageUrl = "https://go.microsoft.com/fwlink/?LinkId=730690",
+    [string]$sfPackageUrl = "https://go.microsoft.com/fwlink/?LinkId=730690",
     [string]$packageName = "Microsoft.Azure.ServiceFabric.WindowsServer.latest.zip",
-    [int]$timeout = 1200
+    [int]$timeout = 1200,
+    [int]$subnetPrefix = "10"
 )
 
 $erroractionpreference = "continue"
@@ -119,9 +120,9 @@ function main()
 
     if (!(test-path $packagePath))
     {
-        log-info "downloading package $packageUrl"
-        log-info "(new-object net.webclient).DownloadFile($packageUrl, $packageZip)"
-        $result = (new-object net.webclient).DownloadFile($packageUrl, $packageZip)
+        log-info "downloading package $sfPackageUrl"
+        log-info "(new-object net.webclient).DownloadFile($sfPackageUrl, $packageZip)"
+        $result = (new-object net.webclient).DownloadFile($sfPackageUrl, $packageZip)
         log-info $result
         log-info ($error | out-string)
         log-info "Expand-Archive $packageZip -DestinationPath $packagePath -Force"
@@ -157,7 +158,7 @@ function main()
         #[int]$toggle = !$toggle
         $nodeList.Add(@{
             nodeName      = $node
-            iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch "10\..+\..+\.")[0]
+            iPAddress     = (@((Resolve-DnsName $node).ipaddress) -imatch "$subnetPrefix\..+\..+\.")[0]
             nodeTypeRef   = "NodeType0"
             faultDomain   = "fd:/dc1/r$count"
             upgradeDomain = "UD$count"
