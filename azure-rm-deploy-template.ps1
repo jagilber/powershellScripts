@@ -147,13 +147,27 @@ function main()
         return 1
     }
 
+    # checking json format
+    $error.clear()
     write-host "reading template file $($templateFile)"
     $ujson = ConvertFrom-Json (get-content -Raw -Path $templateFile)
     $ujson | ConvertTo-Json
+    
+    if($error)
+    {
+        write-error "error json format: $templateFile"
+        return 1
+    }
 
-    write-host "reading parameter file $($templateparameterFile)"
-    $ujson = ConvertFrom-Json (get-content -Raw -Path $templateparameterFile)
+    write-host "reading parameter file $($templateParameterFile)"
+    $ujson = ConvertFrom-Json (get-content -Raw -Path $templateParameterFile)
     $ujson | ConvertTo-Json
+
+    if($error)
+    {
+        write-error "error json format: $templateParameterFile"
+        return 1
+    }
 
     if ($ujson.parameters.adminUserName -and $ujson.parameters.adminPassword -and !$test)
     {
