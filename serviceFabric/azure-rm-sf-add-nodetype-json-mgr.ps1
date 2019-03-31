@@ -2,6 +2,7 @@ param(
     [string]$jsonInputTemplateFile,
     [int]$numberOfAdditionalNodeTypes = 1,
     [string]$jsonOutputTemplateFile = "$($env:TEMP)\template.json",
+    [string]$jsonTemplateParameterFile = "$($jsonOutputTemplateFile.tolower().trimend('.json')).Parameters.json",
     [bool]$displayFile = $true,
     [switch]$validate
 )
@@ -291,7 +292,7 @@ function main()
         
         $DebugPreference = "continue"
         write-host "validating template"
-        Test-AzureRmResourceGroupDeployment -Verbose -ResourceGroupName $rg -TemplateFile $jsonOutputTemplateFile
+        Test-AzureRmResourceGroupDeployment -Verbose -ResourceGroupName $rg -TemplateFile $jsonOutputTemplateFile -TemplateParameterFile $jsonTemplateParameterFile
 
         # write-host "deploying template with -whatif"
         # new-AzureRmResourceGroupDeployment -Verbose -ResourceGroupName $rg -TemplateFile $jsonOutputTemplateFile -WhatIf
