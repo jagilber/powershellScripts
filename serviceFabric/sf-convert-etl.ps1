@@ -2,17 +2,27 @@
 script to convert service fabric .etl trace files to .csv text format
 script must be run from node
 #>
+param(
+    $sfLogDir = "d:\svcfab\log\traces",
+    $outputDir = "d:\temp",
+    $fileFilter = "*.etl"
+)
 
 $ErrorActionPreference = "silentlycontinue"
-$dir = "d:\svcfab\log\traces"
-$output = "d:\temp"
-new-item -ItemType Directory -Path $output
 
-foreach($file in [io.directory]::GetFiles($dir,"*.etl"))
+New-Item -ItemType Directory -Path $outputDir
+$inputFiles = @([io.directory]::GetFiles($sfLogDir, $fileFilter))
+$totalFiles = $inputFiles.count
+Write-Host "input files count: $totalFiles"
+$count = 0
+
+foreach ($inputFile in $inputFiles)
 {
-    $outputFile = "$($file.Replace($dir, $output))!FMT.txt"
-    write-host "netsh.exe trace convert input=$file output=$outputFile"
-    netsh.exe trace convert input=$file output=$outputFile report=no
+    $count++
+    write-host "file $count of $totalFiles"
+    $outputFile = "$($inputFile.Replace($sfLogDir, $outputDir))!FMT.txt"
+    Write-Host "netsh.exe trace convert input=$inputFile output=$outputFile"
+    netsh.exe trace convert input=$inputFile output=$outputFile report=no
 }
 
-write-host "complete"
+Write-Host "complete"
