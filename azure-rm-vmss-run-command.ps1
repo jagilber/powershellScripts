@@ -1,21 +1,85 @@
-<#
-    script to invoke powershell script with output on azure vm scaleset vms
+<#  
+.SYNOPSIS  
+    powershell script to invoke azure rm invoke-azurermvmssvmruncommand command with output on azure vm scaleset vms
+    
+.DESCRIPTION  
+    powershell script to invoke azure rm invoke-azurermvmssvmruncommand command with output on azure vm scaleset vms
     Invoke-AzureRmVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId $commandId
     Get-AzureRmVMRunCommandDocument -Location westus | select ID, OSType, Label
 
-    .\azure-rm-vmss-run-command.ps1
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -instanceId 0
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -instanceId 0-3
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -instanceId "0-3,5"
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -script "ipconfig"
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -script "ipconfig;hostname"
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -script c:\temp\somescript.ps1
-    
-    .\azure-rm-vmss-run-command.ps1 -resourcegroup testrg -vmssname nt0 -removeExtension
+.NOTES  
+   File Name  : azure-rm-vmss-run-command.ps1
+   Author     : jagilber
+   Version    : 190403
+   History    : 
+
+.EXAMPLE  
+    .\azure-rm-vmss-run-command.ps1 -script c:\temp\test.ps1
+    will prompt for resource group, vm scaleset name, and instance ids to run powershell script c:\temp\test.ps1 on
+
+.EXAMPLE  
+    .\azure-rm-vmss-run-command.ps1 -script c:\temp\test.ps1 -resourceGroup testrg
+    will prompt for vm scaleset name, and instance ids to run powershell script c:\temp\test.ps1 on
+
+.EXAMPLE  
+    .\azure-rm-vmss-run-command.ps1 -script c:\temp\test.ps1 -resourceGroup testrg -vmssname nt0
+    will prompt for instance ids to run powershell script c:\temp\test.ps1 on
+
+.EXAMPLE  
+    .\azure-rm-vmss-run-command.ps1 -script c:\temp\test.ps1 -resourceGroup testrg -vmssname nt0 -instanceid 0
+    will run powershell script c:\temp\test.ps1 on instance id 0
+
+.EXAMPLE  
+    .\azure-rm-vmss-run-command.ps1 -resourceGroup testrg -vmssname nt0 -instanceid 0
+    will run test powershell script on instance id 0
+
+.EXAMPLE  
+    .\azure-rm-vmss-run-command.ps1 -listCommandIds
+    will list all possible commandIds available for command
+
+.EXAMPLE  
     .\azure-rm-vmss-run-command.ps1 -removeExtension
-#>
+    will remove the invoke run command extension that is required for running commands.
+    it is *not* required to remove extension
+
+.PARAMETER resourceGroup
+    name of reource group containing vm scale set. if not provided, script will prompt for input.
+
+.PARAMETER vmssName
+    name of vm scale set. if not provided, script will prompt for input.
+
+.PARAMETER instanceId
+    string array of instance id(s). if not provided, script will prompt for input. 
+    examples: 0 or 0-2 or 0,1,2
+
+.PARAMETER script
+    path and file name to script to invoke on vm scale set nodes
+
+.PARAMETER parameters
+    hashtable of script arguments in format of @{"name" = "value"}
+    exmaple: @{"adminUserName" = "cloudadmin"}
+
+.PARAMETER jsonOutputFile
+    path and file name of json output file to populate with results.
+
+.PARAMETER commandId
+    optional commandId to invoke other than the default of RunCommand. use -listCommandIds argument for list of commandIds available.
+
+.PARAMETER removeExtension
+    switch to invoke run command, an extension is dynamically installed. this may or may not be already present and causes no harm.
+    after completing all commands, the extension can be removed with -removeExtension switch
+
+.PARAMETER listCommandIds
+    swtich to list optional commandIds and return
+
+.PARAMETER force
+    switch to force invocation of command on vm scaleset node regardless of provisioningstate. Any state other than 'successful' may fail.
+
+.LINK
+https://github.com/jagilber/powershellScripts/blob/master/azure-rm-vmss-run-command.ps1
+
+#>  
+
 param(
     [string]$resourceGroup,
     [string]$vmssName,
