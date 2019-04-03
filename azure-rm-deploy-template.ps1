@@ -147,6 +147,9 @@ function main()
         return 1
     }
 
+    $VerbosePreference = "continue"
+    $DebugPreference = "continue"
+
     # checking json format
     $error.clear()
     write-host "reading template file $($templateFile)"
@@ -364,9 +367,6 @@ function main()
         }
     }
 }
-
-$VerbosePreference = "continue"
-$DebugPreference = "continue"
 
 main
 
