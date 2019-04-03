@@ -25,7 +25,8 @@ param(
     [string]$jsonOutputFile,
     [string]$commandId = "RunPowerShellScript",
     [switch]$removeExtension,
-    [switch]$listCommandIds
+    [switch]$listCommandIds,
+    [switch]$force
 )
 
 $ErrorActionPreference = "silentlycontinue"
@@ -129,6 +130,16 @@ function main()
     }
 
     write-host $instanceIds
+
+    write-host "checking provisioning states"
+    $instances = Get-AzureRmVmssVM -ResourceGroupName sfjagilber1nt3 -VMScaleSetName nt0 -InstanceView
+    write-host "$($instances | convertto-json)"
+
+    if($instances.ProvisioningState -inotmatch "succeeded" -and !$force)
+    {
+        Write-Warning "not all nodes are in 'succeeded' provisioning state so command may fail. returning. use -force to attempt command regardless of provisioning state."
+        return
+    }
 
     if (!(test-path $script))
     {
@@ -279,6 +290,8 @@ function monitor-jobs()
         }
 
         write-host "." -NoNewline    
+        $instances = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -vmscalesetname $vmssName -InstanceView
+        write-verbose "$($instances | convertto-json)"
 
         $currentJobsCount = (get-job).count
         $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed. (use -removeExtension to remove extension):"
