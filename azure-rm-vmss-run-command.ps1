@@ -133,7 +133,7 @@ function main()
 
     write-host "checking provisioning states"
     $instances = Get-AzureRmVmssVM -ResourceGroupName sfjagilber1nt3 -VMScaleSetName nt0 -InstanceView
-    write-host "$($instances | convertto-json)"
+    write-host "$($instances | out-string)"
 
     if($instances.ProvisioningState -inotmatch "succeeded" -and !$force)
     {
