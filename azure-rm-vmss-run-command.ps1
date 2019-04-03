@@ -76,10 +76,10 @@
     switch to force invocation of command on vm scaleset node regardless of provisioningstate. Any state other than 'successful' may fail.
 
 .LINK
-https://github.com/jagilber/powershellScripts/blob/master/azure-rm-vmss-run-command.ps1
-
+    https://github.com/jagilber/powershellScripts/blob/master/azure-rm-vmss-run-command.ps1
 #>  
 
+[CmdletBinding()]
 param(
     [string]$resourceGroup,
     [string]$vmssName,
