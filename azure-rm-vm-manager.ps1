@@ -59,8 +59,8 @@
 .PARAMETER getUpdate
     compare the current script against the location in github and will update if different.
 
-.PARAMETER noLog
-    disable writing log file
+.PARAMETER logFile
+    string path and file for log file
 
 .PARAMETER resourceGroupName
     string array of resource group names of the resource groups containg the vm's to manage
@@ -89,7 +89,7 @@ param(
     [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
     [switch]$getUpdate,
-    [switch]$noLog,
+    [string]$logFile,
     [int]$throttle = 20,
     [float]$timerHours = 0,
     [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list', 'deallocate')]
@@ -98,7 +98,6 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$logFile = "azure-rm-vm-manager.log.txt"
 $profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
@@ -659,7 +658,7 @@ function log-info($data)
         $foregroundColor = "cyan"
     }
 
-    while (!$noLog -and !$dataWritten -and $counter -lt 1000)
+    while ($logFile -and !$dataWritten -and $counter -lt 1000)
     {
         try
         {
