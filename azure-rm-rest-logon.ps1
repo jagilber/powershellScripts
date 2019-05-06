@@ -15,13 +15,15 @@ param(
     [string]$tenantId,
     [switch]$force,
     [ValidateSet('arm', 'asm', 'graph')]
-    [string]$logonType = "arm"
+    [string]$logonType = "arm",
+    [string]$resource
 )
 
 $ErrorActionPreference = "continue"
 $error.Clear()
 $aadDisplayName = "azure-rm-rest-logon/$($env:Computername)"
 $cert = $null
+$resourceArg = $resource
 
 function main ()
 {
@@ -93,6 +95,11 @@ function main ()
 
 function acquire-token($resource)
 {
+    if($resourceArg)
+    {
+        $resource = $resourceArg
+    }
+
     $error.clear()
     $Body = @{
         'resource'      = $resource
