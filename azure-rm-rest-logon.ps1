@@ -16,7 +16,8 @@ param(
     [switch]$force,
     [ValidateSet('arm', 'asm', 'graph')]
     [string]$logonType = "arm",
-    [string]$resource
+    [string]$resource,
+    [string]$endpoint
 )
 
 $ErrorActionPreference = "continue"
@@ -24,6 +25,7 @@ $error.Clear()
 $aadDisplayName = "azure-rm-rest-logon/$($env:Computername)"
 $cert = $null
 $resourceArg = $resource
+$endpointArg = $endpoint
 
 function main ()
 {
@@ -93,11 +95,16 @@ function main ()
     }
 }
 
-function acquire-token($resource)
+function acquire-token($resource, $endpoint)
 {
     if($resourceArg)
     {
         $resource = $resourceArg
+    }
+
+    if($endpointArg)
+    {
+        $endpoint = $endpointArg
     }
 
     $error.clear()
@@ -109,11 +116,11 @@ function acquire-token($resource)
     }
     
     $params = @{
-        ContentType = 'application/x-www-form-urlencoded' #'application/json'
-        Headers     = @{'accept' = '*/*'}#'application/json'}
+        ContentType = 'application/x-www-form-urlencoded'
+        Headers     = @{'accept' = '*/*'}
         Body        = $Body
         Method      = 'Post'
-        URI         = $tokenEndpoint
+        URI         = $endpoint
     }
 
     write-host $body
@@ -156,7 +163,7 @@ function check-azurerm()
         connect-azurermaccount -ServicePrincipal `
             -CertificateThumbprint $thumbPrint `
             -ApplicationId $clientId 
-        #-TenantId $tenantId
+            #-TenantId $tenantId
     }
     else
     {
@@ -201,7 +208,7 @@ function logon-rest($cert)
 
     if ($cert)
     {
-        write-host ($cert | fl *)
+        write-host ($cert | format-list *)
         # works if using thumbprint only
         $ClientSecret = [convert]::ToBase64String($cert.GetCertHash())
         write-host "clientsecret set to: $($clientSecret)"
@@ -219,16 +226,16 @@ function logon-rest($cert)
 
     if ($logonType -eq "arm")
     {
-        $token = acquire-token -resource $armResource    
+        $token = acquire-token -resource $armResource -endpoint $tokenEndpoint
     }
     elseif ($logontype -eq "graph")
     {
         $tokenEndpoint = "https://login.microsoftonline.com/$($tenantId)/oauth2/token"
-        $token = acquire-token -resource $graphResource    
+        $token = acquire-token -resource $graphResource -endpoint $tokenEndpoint
     }
     else
     {
-        $token = acquire-token -resource $asmResource    
+        $token = acquire-token -resource $asmResource -endpoint $tokenEndpoint
     }
 
     if (!$error)
@@ -289,13 +296,8 @@ function show-tokenInfo()
 
         if (!$isExpired -and (($tokenLifetimeMinutes / $minutesLeft) -lt 2) -and !$force)
         {
-            #Write-Warning "token has over 1/2 life left. use -force to force new token. returning"
             return $false
         }
-        #else
-        #{
-        #    Write-Host "refreshing token..." -ForegroundColor Yellow
-        #}
     }
 
     return $true
