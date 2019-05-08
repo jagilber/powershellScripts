@@ -17,7 +17,8 @@ param(
     [ValidateSet('arm', 'asm', 'graph')]
     [string]$logonType = "arm",
     [string]$resource,
-    [string]$endpoint
+    [string]$endpoint,
+    [switch]$interactive
 )
 
 $ErrorActionPreference = "continue"
@@ -48,6 +49,7 @@ function main ()
         {
             return $false
         }
+
         $tenantId = (Get-AzureRmContext).Tenant.Id
     }
 
@@ -107,6 +109,12 @@ function acquire-token($resource, $endpoint)
         $endpoint = $endpointArg
     }
 
+    if($interactive)
+    {
+       $result = authorize-user -resource $resource -endpoint $endpoint
+    }
+
+    $result
     $error.clear()
     $Body = @{
         'resource'      = $resource
@@ -120,15 +128,31 @@ function acquire-token($resource, $endpoint)
         Headers     = @{'accept' = '*/*'}
         Body        = $Body
         Method      = 'Post'
-        URI         = $endpoint
+        URI         = $endpoint + "/token"
     }
 
-    write-host $body
-    write-host $params
+    write-host ($body | convertto-json)
+    write-host ($params | convertto-json)
     write-host $clientSecret
     $error.Clear()
 
     return Invoke-RestMethod @params -Verbose -Debug
+}
+
+function authorize-user($resource, $endpoint)
+{
+    $error.clear()
+    $uri = $endpoint + "/authorize?&tenant=$tenantId&response_type=code&client_id=$clientId&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient"
+    $params = @{
+        Method      = 'Get'
+        URI         = $uri
+    }
+
+    write-host ($params | convertto-json)
+    #write-host $clientSecret
+    $error.Clear()
+
+    return Invoke-WebRequest @params -Verbose -Debug
 }
 
 function check-azurerm()
@@ -219,7 +243,7 @@ function logon-rest($cert)
         }
     }
 
-    $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
+    $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2" 
     $armResource = "https://management.azure.com/"
     $asmResource = "https://management.core.windows.net/"
     $graphResource = "https://graph.microsoft.com/"
@@ -230,7 +254,7 @@ function logon-rest($cert)
     }
     elseif ($logontype -eq "graph")
     {
-        $tokenEndpoint = "https://login.microsoftonline.com/$($tenantId)/oauth2/token"
+        $tokenEndpoint = "https://login.microsoftonline.com/$($tenantId)/oauth2"
         $token = acquire-token -resource $graphResource -endpoint $tokenEndpoint
     }
     else
