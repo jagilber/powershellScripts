@@ -74,9 +74,16 @@ IF %operation%==stop (
 	
 	Echo Logman.exe stop PerfLog-Long%machine%
 	Logman.exe stop PerfLog-Long%machine%
-	
+
+	Echo Logman.exe delete PerfLog-Long%machine%
+	Logman.exe delete PerfLog-Long%machine%
+
 	Echo Logman.exe stop PerfLog-Short%machine%
 	Logman.exe stop PerfLog-Short%machine%
+
+	Echo Logman.exe delete PerfLog-Short%machine%
+	Logman.exe delete PerfLog-Short%machine%
+
 	
 	IF NOT "%2" == "" (
 		echo moving logs
