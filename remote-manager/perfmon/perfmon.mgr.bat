@@ -86,8 +86,9 @@ IF %operation%==stop (
 		move \\%2\%remoteoutputDir%\%2perflog-Short*.blg %outputdir%
 	)
 	Echo Gather the following logs:
-		dir %outputDir%\%2perflog-Long*.blg /b
-		dir %outputDir%\%2perflog-Short*.blg /b
+	Echo %outputDir%
+		dir %outputDir%\%2perflog-Long*.blg
+		dir %outputDir%\%2perflog-Short*.blg
 	)
 	Goto finish
 )
