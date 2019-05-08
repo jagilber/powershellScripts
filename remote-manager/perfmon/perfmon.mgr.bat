@@ -74,16 +74,9 @@ IF %operation%==stop (
 	
 	Echo Logman.exe stop PerfLog-Long%machine%
 	Logman.exe stop PerfLog-Long%machine%
-
-	Echo Logman.exe delete PerfLog-Long%machine%
-	Logman.exe delete PerfLog-Long%machine%
-
+	
 	Echo Logman.exe stop PerfLog-Short%machine%
 	Logman.exe stop PerfLog-Short%machine%
-
-	Echo Logman.exe delete PerfLog-Short%machine%
-	Logman.exe delete PerfLog-Short%machine%
-
 	
 	IF NOT "%2" == "" (
 		echo moving logs
@@ -92,11 +85,12 @@ IF %operation%==stop (
 		Echo move \\%2\%remoteoutputDir%\%2perflog-Long*.blg %outputdir%
 		move \\%2\%remoteoutputDir%\%2perflog-Short*.blg %outputdir%
 	)
-	Echo Gather the following logs:
-	Echo %outputDir%
-		dir %outputDir%\%2perflog-Long*.blg
-		dir %outputDir%\%2perflog-Short*.blg
-	)
+
+	Echo -------------------------------------
+	Echo Gather the following logs from: %outputDir%
+	Echo -------------------------------------
+		dir %outputDir%\%2perflog-*.blg /b
+	Echo -------------------------------------
 	Goto finish
 )
 
