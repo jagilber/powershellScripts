@@ -39,12 +39,12 @@ IF %operation%==start (
 	Echo starting Perfmon
 	
 	rem long perf
-	Echo Logman.exe create counter PerfLog-Long%machine% -o "%outputDir%\%2PerfLog-Long.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Redirector\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:05:00
-	Logman.exe create counter PerfLog-Long%machine% -o "%outputDir%\%2PerfLog-Long.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Redirector\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:05:00
+	Echo Logman.exe create counter PerfLog-Long%machine% -o "%outputDir%\%2PerfLog-Long.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:05:00
+	Logman.exe create counter PerfLog-Long%machine% -o "%outputDir%\%2PerfLog-Long.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:05:00
 
 	rem short perf
-	Echo Logman.exe create counter PerfLog-Short%machine% -o "%outputDir%\%2PerfLog-Short.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Thread(*)\*" "\Redirector\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:00:03
-	Logman.exe create counter PerfLog-Short%machine% -o "%outputDir%\%2PerfLog-Short.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Thread(*)\*" "\Redirector\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:00:03
+	Echo Logman.exe create counter PerfLog-Short%machine% -o "%outputDir%\%2PerfLog-Short.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:00:03
+	Logman.exe create counter PerfLog-Short%machine% -o "%outputDir%\%2PerfLog-Short.blg" -f bincirc -v mmddhhmm -max 300 -c "\LogicalDisk(*)\*" "\Memory\*" "\.NET CLR Exceptions(*)\*" "\.NET CLR Memory(*)\*" "\Cache\*" "\Network Interface(*)\*" "\Netlogon(*)\*" "\Paging File(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Processor Information(*)\*" "\Process(*)\*" "\Server\*" "\System\*" "\Server Work Queues(*)\*" -si 00:00:03
 
 	
 	Echo Logman.exe start PerfLog-Long%machine%
@@ -85,10 +85,12 @@ IF %operation%==stop (
 		Echo move \\%2\%remoteoutputDir%\%2perflog-Long*.blg %outputdir%
 		move \\%2\%remoteoutputDir%\%2perflog-Short*.blg %outputdir%
 	)
-	Echo Gather the following logs:
-		dir %outputDir%\%2perflog-Long*.blg /b
-		dir %outputDir%\%2perflog-Short*.blg /b
-	)
+
+	Echo -------------------------------------
+	Echo Gather the following logs from: %outputDir%
+	Echo -------------------------------------
+		dir %outputDir%\%2perflog-*.blg /b
+	Echo -------------------------------------
 	Goto finish
 )
 

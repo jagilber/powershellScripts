@@ -15,13 +15,18 @@ param(
     [string]$tenantId,
     [switch]$force,
     [ValidateSet('arm', 'asm', 'graph')]
-    [string]$logonType = "arm"
+    [string]$logonType = "arm",
+    [string]$resource,
+    [string]$endpoint,
+    [switch]$interactive
 )
 
 $ErrorActionPreference = "continue"
 $error.Clear()
 $aadDisplayName = "azure-rm-rest-logon/$($env:Computername)"
 $cert = $null
+$resourceArg = $resource
+$endpointArg = $endpoint
 
 function main ()
 {
@@ -44,6 +49,7 @@ function main ()
         {
             return $false
         }
+
         $tenantId = (Get-AzureRmContext).Tenant.Id
     }
 
@@ -91,8 +97,24 @@ function main ()
     }
 }
 
-function acquire-token($resource)
+function acquire-token($resource, $endpoint)
 {
+    if($resourceArg)
+    {
+        $resource = $resourceArg
+    }
+
+    if($endpointArg)
+    {
+        $endpoint = $endpointArg
+    }
+
+    if($interactive)
+    {
+       $result = authorize-user -resource $resource -endpoint $endpoint
+    }
+
+    $result
     $error.clear()
     $Body = @{
         'resource'      = $resource
@@ -102,19 +124,35 @@ function acquire-token($resource)
     }
     
     $params = @{
-        ContentType = 'application/x-www-form-urlencoded' #'application/json'
-        Headers     = @{'accept' = '*/*'}#'application/json'}
+        ContentType = 'application/x-www-form-urlencoded'
+        Headers     = @{'accept' = '*/*'}
         Body        = $Body
         Method      = 'Post'
-        URI         = $tokenEndpoint
+        URI         = $endpoint + "/token"
     }
 
-    write-host $body
-    write-host $params
+    write-host ($body | convertto-json)
+    write-host ($params | convertto-json)
     write-host $clientSecret
     $error.Clear()
 
     return Invoke-RestMethod @params -Verbose -Debug
+}
+
+function authorize-user($resource, $endpoint)
+{
+    $error.clear()
+    $uri = $endpoint + "/authorize?&tenant=$tenantId&response_type=code&client_id=$clientId&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient"
+    $params = @{
+        Method      = 'Get'
+        URI         = $uri
+    }
+
+    write-host ($params | convertto-json)
+    #write-host $clientSecret
+    $error.Clear()
+
+    return Invoke-WebRequest @params -Verbose -Debug
 }
 
 function check-azurerm()
@@ -149,7 +187,7 @@ function check-azurerm()
         connect-azurermaccount -ServicePrincipal `
             -CertificateThumbprint $thumbPrint `
             -ApplicationId $clientId 
-        #-TenantId $tenantId
+            #-TenantId $tenantId
     }
     else
     {
@@ -194,7 +232,7 @@ function logon-rest($cert)
 
     if ($cert)
     {
-        write-host ($cert | fl *)
+        write-host ($cert | format-list *)
         # works if using thumbprint only
         $ClientSecret = [convert]::ToBase64String($cert.GetCertHash())
         write-host "clientsecret set to: $($clientSecret)"
@@ -205,23 +243,23 @@ function logon-rest($cert)
         }
     }
 
-    $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2/token" 
+    $tokenEndpoint = "https://login.windows.net/$($tenantId)/oauth2" 
     $armResource = "https://management.azure.com/"
     $asmResource = "https://management.core.windows.net/"
     $graphResource = "https://graph.microsoft.com/"
 
     if ($logonType -eq "arm")
     {
-        $token = acquire-token -resource $armResource    
+        $token = acquire-token -resource $armResource -endpoint $tokenEndpoint
     }
     elseif ($logontype -eq "graph")
     {
-        $tokenEndpoint = "https://login.microsoftonline.com/$($tenantId)/oauth2/token"
-        $token = acquire-token -resource $graphResource    
+        $tokenEndpoint = "https://login.microsoftonline.com/$($tenantId)/oauth2"
+        $token = acquire-token -resource $graphResource -endpoint $tokenEndpoint
     }
     else
     {
-        $token = acquire-token -resource $asmResource    
+        $token = acquire-token -resource $asmResource -endpoint $tokenEndpoint
     }
 
     if (!$error)
@@ -282,13 +320,8 @@ function show-tokenInfo()
 
         if (!$isExpired -and (($tokenLifetimeMinutes / $minutesLeft) -lt 2) -and !$force)
         {
-            #Write-Warning "token has over 1/2 life left. use -force to force new token. returning"
             return $false
         }
-        #else
-        #{
-        #    Write-Host "refreshing token..." -ForegroundColor Yellow
-        #}
     }
 
     return $true
