@@ -20,7 +20,7 @@
     See the License for the specific language governing permissions and
     limitations under the License.
     
-    requires azure powershell sdk (install-module azurerm)
+    requires azure powershell sdk (install-module Az)
     script does the following:
         logs into azure rm
         checks location for validity and for availability of Azure SQL
@@ -32,7 +32,7 @@
         creates sql server and database with firewall rules
         on success displays connection string info
     
-    https://aka.ms/azure-rm-sql-create.ps1
+    https://aka.ms/azure-az-sql-create.ps1
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-get-started-powershell
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-performance-guidance
     https://docs.microsoft.com/en-us/azure/sql-database/sql-database-managed-instance-create-manage
@@ -40,28 +40,28 @@
     minimum parameters : resource group, location, databaseName, adminPassword
  
 .NOTES  
-   File Name  : azure-rm-sql-create.ps1
+   File Name  : azure-az-sql-create.ps1
    Author     : jagilber
    History    : 190127 add sql managed instances
                 180730 add all editions as validation set
 .EXAMPLE  
-    .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
+    .\azure-az-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -adminPassword myNewP@ssw0rd
     create a new sql database on an existing or new sql server
 
 .EXAMPLE  
-    .\azure-rm-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -credentials (get-credential) -generateUniqueName
+    .\azure-az-sql-create.ps1 -resourceGroupName newResourceGroup -location eastus -databaseName myNewDatabase -credentials (get-credential) -generateUniqueName
     create a new sql database on a new random named sql server using prompted credentials
 
 .EXAMPLE  
-    .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -listAvailable
+    .\azure-az-sql-create.ps1 -resourceGroupName existingResourceGroup -listAvailable
     list available sql servers and databases in resource group existingResourceGroup
 
 .EXAMPLE  
-    .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -listAvailable
+    .\azure-az-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -listAvailable
     list existing databases on sql-server-01 in resource group existingResourceGroup
 
 .EXAMPLE  
-    .\azure-rm-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -serviceTier Basic -databaseName TestDB
+    .\azure-az-sql-create.ps1 -resourceGroupName existingResourceGroup -server sql-server-01 -serviceTier Basic -databaseName TestDB
     create a new sql database TestDB on sql-server-01 using service tier Basic
 
 .PARAMETER resourceGroupName
@@ -151,12 +151,12 @@ function main()
 {
     log-info "$([System.DateTime]::Now):starting"
 
-    if (!(Get-Module AzureRM -ListAvailable))
+    if (!(Get-Module Azure -ListAvailable))
     {
-        if ((read-host "powershell module azure rm sdk (azurerm) is required for this script. is it ok to install?[y|n]") -imatch "y")
+        if ((read-host "powershell module azure az sdk (Az) is required for this script. is it ok to install?[y|n]") -imatch "y")
         {
-            Install-Module AzureRM
-            Import-Module AzureRM
+            Install-Module Azure
+            Import-Module Azure
         }
         else
         {
@@ -165,7 +165,7 @@ function main()
     }
 
     # see if we need to auth
-    authenticate-azureRm
+    authenticate-Az
 
     if ($listAvailable)
     {
@@ -177,9 +177,9 @@ function main()
     {
         log-info "checking location $($location)"
 
-        if (!(Get-AzureRmLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location))
+        if (!(Get-AzLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location))
         {
-            (Get-AzureRmLocation).Location
+            (Get-AzLocation).Location
             write-warning "location: $($location) not found. supply -location using one of the above locations and restart script."
             exit 1
         }
@@ -188,14 +188,14 @@ function main()
     log-info "checking for existing resource group $($resourceGroupName)"
 
     # create resource group if it does not exist
-    $resourceGroupInfo = Get-AzureRmResourceGroup -Name $resourceGroupName -ErrorAction SilentlyContinue
+    $resourceGroupInfo = Get-AzResourceGroup -Name $resourceGroupName -ErrorAction SilentlyContinue
 
     if (!$resourceGroupInfo)
     {
         if ($location)
         {
             log-info "creating resource group $($resourceGroupName) in location $($location)"   
-            New-AzureRmResourceGroup -Name $resourceGroupName -Location $location
+            New-AzResourceGroup -Name $resourceGroupName -Location $location
         }
         else
         {
@@ -214,7 +214,7 @@ function main()
     }
 
     # make sure sql available in region
-    $sqlAvailable = Get-AzureRmSqlCapability -LocationName $location
+    $sqlAvailable = Get-AzSqlCapability -LocationName $location
     log-info "sql server capability in $($location) : $($sqlAvailable.Status)"
 
     if (!$sqlAvailable)
@@ -271,7 +271,7 @@ function main()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function authenticate-azureRm()
+function authenticate-Az()
 {
     # make sure at least wmf 5.0 installed
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
@@ -292,50 +292,50 @@ function authenticate-azureRm()
     }
 
     $allModules = (get-module azure* -ListAvailable).Name
-    #  install AzureRM module
-    if ($allModules -inotcontains "AzureRM")
+    #  install Az module
+    if ($allModules -inotcontains "Az")
     {
         # at least need profile, resources, sql
-        if ($allModules -inotcontains "AzureRM.profile")
+        if ($allModules -inotcontains "Az.profile")
         {
-            log-info "installing AzureRm.profile powershell module..."
-            install-module AzureRM.profile -force
+            log-info "installing Az.profile powershell module..."
+            install-module Az.profile -force
         }
-        if ($allModules -inotcontains "AzureRM.resources")
+        if ($allModules -inotcontains "Az.resources")
         {
-            log-info "installing AzureRm.resources powershell module..."
-            install-module AzureRM.resources -force
+            log-info "installing Az.resources powershell module..."
+            install-module Az.resources -force
         }
-        if ($allModules -inotcontains "AzureRM.compute")
+        if ($allModules -inotcontains "Az.compute")
         {
-            log-info "installing AzureRm.compute powershell module..."
-            install-module AzureRM.sql -force
+            log-info "installing Az.compute powershell module..."
+            install-module Az.sql -force
         }
             
-        Import-Module azurerm.profile        
-        Import-Module azurerm.resources        
-        Import-Module azurerm.sql            
+        Import-Module Az.profile        
+        Import-Module Az.resources        
+        Import-Module Az.sql            
     }
     else
     {
-        Import-Module azurerm
+        Import-Module Az
     }
 
     # authenticate
     try
     {
-        Get-AzureRmResourceGroup | Out-Null
+        Get-AzResourceGroup | Out-Null
     }
     catch
     {
-        if(!(connect-azurermaccount))
+        if(!(connect-Azaccount))
         {
            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
 
-    #Save-AzureRmContext -Path $profileContext -Force
+    #Save-AzContext -Path $profileContext -Force
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -484,7 +484,7 @@ function create-database()
                 return $false
             }
 
-            $ret = New-AzureRmSqlServer -ResourceGroupName $resourceGroupName `
+            $ret = New-AzSqlServer -ResourceGroupName $resourceGroupName `
                 -ServerName $script:servername `
                 -Location $location `
                 -SqlAdministratorCredentials $script:credential `
@@ -501,7 +501,7 @@ function create-database()
             log-info $ret
 
             log-info "configure a server firewall rule"
-            $ret = New-AzureRmSqlServerFirewallRule -ResourceGroupName $resourcegroupname `
+            $ret = New-AzSqlServerFirewallRule -ResourceGroupName $resourcegroupname `
                 -ServerName $script:servername `
                 -FirewallRuleName "AllowSome" -StartIpAddress $nsgStartIpAllow -EndIpAddress $nsgEndIpAllow
 
@@ -520,7 +520,7 @@ function create-database()
         {
             log-info "creating empty database $($script:databasename)"
 
-            $ret = New-AzureRmSqlDatabase  -ResourceGroupName $resourceGroupName `
+            $ret = New-AzSqlDatabase  -ResourceGroupName $resourceGroupName `
                 -ServerName $script:servername `
                 -DatabaseName $script:databaseName `
                 -RequestedServiceObjectiveName $serviceTier
@@ -558,11 +558,11 @@ function enum-sqlDatabases($sqlServer, $resourceGroup)
 
     if (!$script:databasename)
     {
-        $sqlDatabasesAvaliable = @(Get-AzureRmSqlDatabase -ServerName $sqlServer -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
+        $sqlDatabasesAvaliable = @(Get-AzSqlDatabase -ServerName $sqlServer -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
     }
     else
     {
-        $sqlDatabasesAvaliable = @(Get-AzureRmSqlDatabase -ServerName $sqlServer -ResourceGroupName $resourceGroup -DatabaseName $script:databasename -ErrorAction SilentlyContinue)
+        $sqlDatabasesAvaliable = @(Get-AzSqlDatabase -ServerName $sqlServer -ResourceGroupName $resourceGroup -DatabaseName $script:databasename -ErrorAction SilentlyContinue)
     }
     return $sqlDatabasesAvaliable
 }
@@ -575,12 +575,12 @@ function enum-sqlServers($resourceGroup, $sqlServer)
 
     if (!$sqlServer)
     {
-        $serverInfo = @(Get-AzureRmSqlServer -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
+        $serverInfo = @(Get-AzSqlServer -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
         
     }
     else
     {
-        $serverInfo = @(Get-AzureRmSqlServer -ServerName $sqlServer -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
+        $serverInfo = @(Get-AzSqlServer -ServerName $sqlServer -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
     }
     
     return $serverInfo        
@@ -593,7 +593,7 @@ function list-availableSqlServers()
 
     if ($resourceGroupName -eq "*")
     {
-        $resourceGroups = @((Get-AzureRmResourceGroup).ResourceGroupName)
+        $resourceGroups = @((Get-AzResourceGroup).ResourceGroupName)
     }
     else
     {
