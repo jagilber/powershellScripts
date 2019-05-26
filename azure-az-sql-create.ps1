@@ -644,7 +644,7 @@ function log-info($data)
         write-host $data
     }
 
-    if (!$logFile)
+    if ($logFile)
     {
         out-file -Append -InputObject $data -FilePath $logFile
     }
