@@ -149,6 +149,7 @@ $script:createSqlDatabase = $false
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
+    Write-Warning("this script is deprecated, use https://github.com/jagilber/powershellScripts/blob/master/azure-az-sql-create.ps1")
     log-info "$([System.DateTime]::Now):starting"
 
     if (!(Get-Module AzureRM -ListAvailable))
@@ -213,6 +214,9 @@ function main()
 
     }
 
+    <#
+    fixed in azure az but no plans to backport to azure rm
+
     # make sure sql available in region
     $sqlAvailable = Get-AzureRmSqlCapability -LocationName $location
     log-info "sql server capability in $($location) : $($sqlAvailable.Status)"
@@ -242,6 +246,7 @@ function main()
         log-info $versions
         return
     }
+    #>
 
     $created = create-database
    
@@ -644,7 +649,7 @@ function log-info($data)
         write-host $data
     }
 
-    if (!$logFile)
+    if ($logFile)
     {
         out-file -Append -InputObject $data -FilePath $logFile
     }
