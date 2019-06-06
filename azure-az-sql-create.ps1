@@ -151,12 +151,12 @@ function main()
 {
     log-info "$([System.DateTime]::Now):starting"
 
-    if (!(Get-Module Azure -ListAvailable))
+    if (!(Get-Module Az -ListAvailable))
     {
         if ((read-host "powershell module azure az sdk (Az) is required for this script. is it ok to install?[y|n]") -imatch "y")
         {
-            Install-Module Azure
-            Import-Module Azure
+            Install-Module Az
+            Import-Module Az
         }
         else
         {
@@ -291,7 +291,7 @@ function authenticate-Az()
         install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
     }
 
-    $allModules = (get-module azure* -ListAvailable).Name
+    $allModules = (get-module Az* -ListAvailable).Name
     #  install Az module
     if ($allModules -inotcontains "Az")
     {
@@ -644,7 +644,7 @@ function log-info($data)
         write-host $data
     }
 
-    if (!$logFile)
+    if ($logFile)
     {
         out-file -Append -InputObject $data -FilePath $logFile
     }
