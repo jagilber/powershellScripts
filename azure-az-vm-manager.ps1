@@ -4,7 +4,7 @@
     
 .DESCRIPTION  
     powershell script to manage IaaS virtual machines in Azure Resource Manager
-    requires azure powershell sdk (install-module Az)
+    requires azure powershell sdk (install-module azurerm)
     
     Copyright 2017 Microsoft Corporation
 
@@ -23,8 +23,13 @@
 .NOTES  
    File Name  : azure-az-vm-manager.ps1
    Author     : jagilber
-   Version    : 180929 conver to az
+   Version    : 180909 fix WARNING: Get-azResource: This cmdlet will be deprecated in an upcoming breaking change release. 
+                    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+                    #Disable-azContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
    History    : 
+                170909 add support for virtual machine scale sets -vmss
+                170902 added 'deallocate' action
+                
 
 .EXAMPLE  
     .\azure-az-vm-manager.ps1 -action stop
@@ -54,8 +59,8 @@
 .PARAMETER getUpdate
     compare the current script against the location in github and will update if different.
 
-.PARAMETER noLog
-    disable writing log file
+.PARAMETER logFile
+    string path and file for log file
 
 .PARAMETER resourceGroupName
     string array of resource group names of the resource groups containg the vm's to manage
@@ -84,7 +89,7 @@ param(
     [string[]]$excludeResourceGroupNames = @(),
     [string[]]$excludeVms = @(),
     [switch]$getUpdate,
-    [switch]$noLog,
+    [string]$logFile,
     [int]$throttle = 20,
     [float]$timerHours = 0,
     [ValidateSet('start', 'stop', 'restart', 'listRunning', 'listDeallocated', 'list', 'deallocate')]
@@ -93,8 +98,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$logFile = "azure-az-vm-manager.log.txt"
-$profileContext = "$(get-location)/ProfileContext.ctx"
+$profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vm-manager.ps1"
@@ -125,25 +129,23 @@ function main()
         remove-backgroundJobs
 
         # see if we need to auth
-        authenticate-Az
-        $global:allVms = [collections.ArrayList]@(Get-AzResource -ResourceType Microsoft.Compute/virtualMachines)
+        authenticate-az
+        $allResources = Get-azResource
+        $global:allVms = [collections.ArrayList]@($allResources `
+            | Where-Object ResourceType -eq Microsoft.Compute/virtualMachines `
+            | Sort-Object -Property ResourceGroupName,Name -Unique)
 
         if (!$novmss)
         {
-            #log-info "checking virtual machine scale sets"
-            $global:allVmssSets = [collections.ArrayList]@(Get-AzResource -ResourceType Microsoft.Compute/virtualMachineScaleSets)
+            log-info "checking virtual machine scale sets"
+            $global:allVmssSets = [collections.ArrayList]@($allResources `
+                    | Where-Object ResourceType -eq Microsoft.Compute/virtualMachineScaleSets `
+                    | Sort-Object -Property ResourceGroupName,Name -Unique)
+
             foreach ($vmssSet in $global:allVmssSets)
             {
-                $global:allVmss = Get-AzVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
-           
-                if ($global:allVmss.Count -gt 1)
-                {
-                    $global:allVms.AddRange($global:allVmss)
-                }
-                elseif ($global:allVmss.Count -eq 1)
-                {
-                    $global:allVms.Add($global:allVmss)
-                }
+                $global:allVmss = Get-azVmssVM -ResourceGroupName $vmssSet.ResourceGroupName -VMScaleSetName $vmssSet.Name
+                [void]$global:allVms.AddRange(@($global:allVmss))
             }
         }
 
@@ -161,7 +163,7 @@ function main()
 
         if (!$resourceGroupNames)
         {
-            $resourceGroupNames = (Get-AzResourceGroup).ResourceGroupName
+            $resourceGroupNames = (Get-azResourceGroup).ResourceGroupName
         }
 
         # check passed in resource group names
@@ -192,7 +194,7 @@ function main()
         if ($vms -and $filteredVms)
         {
             # remove vm's not matching $vms list
-            foreach ($filteredVm in ([collections.ArrayList]($filteredVms)))
+            foreach ($filteredVm in ([collections.ArrayList]@($filteredVms)))
             {
                 if (!($vms -imatch $filteredVm.Name))
                 {
@@ -302,7 +304,7 @@ function main()
 }
 
 # ----------------------------------------------------------------------------------------------------------------
-function authenticate-Az()
+function authenticate-az()
 {
     # make sure at least wmf 5.0 installed
     if ($PSVersionTable.PSVersion -lt [version]"5.0.0.0")
@@ -322,49 +324,52 @@ function authenticate-Az()
         install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
     }
 
-    $allModules = (get-module "Az*" -ListAvailable).Name
-    #  install Az module
-    if ($allModules -inotmatch "^Az")
+    $allModules = (get-module azure* -ListAvailable).Name
+    #  install AzureRM module
+    if ($allModules -inotcontains "AzureRM")
     {
         # at least need profile, resources, compute, network
-        if ($allModules -inotcontains "Az.profile")
+        if ($allModules -inotcontains "AzureRM.profile")
         {
-            log-info "installing Az.profile powershell module..."
-            install-module Az.profile -force
+            log-info "installing AzureRm.profile powershell module..."
+            install-module AzureRM.profile -force
         }
-        if ($allModules -inotcontains "Az.resources")
+        if ($allModules -inotcontains "AzureRM.resources")
         {
-            log-info "installing Az.resources powershell module..."
-            install-module Az.resources -force
+            log-info "installing AzureRm.resources powershell module..."
+            install-module AzureRM.resources -force
         }
-        if ($allModules -inotcontains "Az.compute")
+        if ($allModules -inotcontains "AzureRM.compute")
         {
-            log-info "installing Az.compute powershell module..."
-            install-module Az.compute -force
+            log-info "installing AzureRm.compute powershell module..."
+            install-module AzureRM.compute -force
         }
             
-        Import-Module Az.profile        
-        Import-Module Az.resources        
-        Import-Module Az.compute            
+        Import-Module azurerm.profile        
+        Import-Module azurerm.resources        
+        Import-Module azurerm.compute            
     }
     else
     {
-        Import-Module Az
+        Import-Module azurerm
     }
 
+    #background job for bug https://github.com/Azure/azure-powershell/issues/7110
+    #Disable-azContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
+
     # authenticate
-    if(!(Get-AzResource -ErrorAction SilentlyContinue))
+    if(!(Get-azResourceGroup))
     {
         $error.Clear()
 
-        if(!(Add-AzAccount))
+        if(!(connect-azaccount))
         {
-            log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
+           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
 
-    Save-AzContext -Path $profileContext -Force
+    Save-azContext -Path $profileContext -Force
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -420,11 +425,11 @@ function check-vmRunning($jobInfo)
 
     if($jobInfo.vm.InstanceId)
     {
-        $statuses = (Get-AzVmssVM -ResourceGroupName $jobInfo.vm.resourcegroupname -vmscalesetname "$($jobInfo.vm.Name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -InstanceView).statuses
+        $statuses = (Get-azVmssVM -ResourceGroupName $jobInfo.vm.resourcegroupname -vmscalesetname "$($jobInfo.vm.Name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -InstanceView).statuses
     }
     else
     {
-        $statuses = (get-Azvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses
+        $statuses = (get-azvm -resourceGroupName $jobInfo.vm.resourceGroupName -Name $jobInfo.vm.Name -status).Statuses
     }
 
     foreach ($status in $statuses)
@@ -483,11 +488,11 @@ function do-backgroundJob($jobInfo)
 
                     if($jobInfo.vm.InstanceId)
                     {
-                        Stop-AzVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force 
+                        Stop-azVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force 
                     }
                     else
                     {
-                        Stop-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                        Stop-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
                     }
 
                     log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
@@ -500,11 +505,11 @@ function do-backgroundJob($jobInfo)
                     
                     if($jobInfo.vm.InstanceId)
                     {
-                        Stop-AzVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force -StayProvisioned
+                        Stop-azVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force -StayProvisioned
                     }
                     else
                     {
-                        Stop-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force -StayProvisioned
+                        Stop-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force -StayProvisioned
                     }
 
                     log-info "verbose:`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
@@ -513,21 +518,21 @@ function do-backgroundJob($jobInfo)
                 "restart" 
                 {
                     log-info "`trestarting vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                    #Restart-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                    #Restart-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
 
                     
                     if($jobInfo.vm.InstanceId)
                     {
-                        Stop-AzVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
+                        Stop-azVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
                         log-info "`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                        Start-AzVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId
+                        Start-azVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId
                         log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     }
                     else
                     {
-                        Stop-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                        Stop-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
                         log-info "`tvm stopped $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
-                        Start-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                        Start-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                         log-info "verbose:`tvm restarted $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     }
                 }
@@ -545,11 +550,11 @@ function do-backgroundJob($jobInfo)
                     log-info "`tdeallocating vm $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                     if($jobInfo.vm.InstanceId)
                     {
-                        Stop-AzVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
+                        Stop-azVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId -Force
                     }
                     else
                     {
-                        Stop-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
+                        Stop-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName -Force
                     }
 
                     log-info "verbose:`tvm deallocated $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
@@ -561,11 +566,11 @@ function do-backgroundJob($jobInfo)
 
                     if($jobInfo.vm.InstanceId)
                     {
-                        Start-AzVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId
+                        Start-azVmss -ResourceGroupName $jobInfo.vm.resourceGroupName -VMScaleSetName "$($jobInfo.vm.name.Replace("_$($jobInfo.vm.InstanceId)",''))" -InstanceId $jobInfo.vm.InstanceId
                     }
                     else
                     {
-                        Start-Azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
+                        Start-azvm -Name $jobInfo.vm.Name -ResourceGroupName $jobInfo.vm.resourceGroupName
                     }
 
                     log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
@@ -653,7 +658,7 @@ function log-info($data)
         $foregroundColor = "cyan"
     }
 
-    while (!$noLog -and !$dataWritten -and $counter -lt 1000)
+    while ($logFile -and !$dataWritten -and $counter -lt 1000)
     {
         try
         {
@@ -775,10 +780,10 @@ function start-backgroundJob($jobInfo)
         param($jobInfo)
         $ctx = $null
         #background job for bug https://github.com/Azure/azure-powershell/issues/7110
-        Disable-AzureAzContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
+        Disable-azContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
         . $($jobInfo.invocation.scriptname)
-        $ctx = Import-AzContext -Path $jobInfo.profileContext
+        $ctx = Import-azContext -Path $jobInfo.profileContext
         # bug to be fixed 8/2017
         # From <https://github.com/Azure/azure-powershell/issues/3954> 
         [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
@@ -847,3 +852,4 @@ if ($host.Name -ine "ServerRemoteHost")
 {
     main
 }
+
