@@ -1,14 +1,12 @@
-#script to scan other scripts for azure commands to list needed azure modules
-# 190127
+#script to scan other scripts for azure rm commands to list needed azure modules
 
 [CMDLETBINDING()]
 param(
-[string]$scriptFile,
-[string]$scriptDir,
-[ValidateSet('azurerm', 'az')]
-[string[]]$module = "azurerm"
+    [string]$scriptFile,
+    [string]$scriptDir
 )
 
+$module = "azurerm"
 function main()
 {
 

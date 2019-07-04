@@ -1,5 +1,4 @@
-#script to scan other scripts for azure commands to list needed azure modules
-# 190127
+#script to scan other scripts for azure az commands to list needed azure modules
 
 [CMDLETBINDING()]
 param(
