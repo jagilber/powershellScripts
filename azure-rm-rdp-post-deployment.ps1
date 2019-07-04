@@ -730,7 +730,7 @@ function authenticate-azureRm()
     {
         if(!(connect-azurermaccount))
         {
-           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
+           write-host "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -1219,13 +1219,13 @@ function get-update($updateUrl, $destinationFile)
 
         if (([string]::Compare($git, $file) -ne 0))
         {
-            log-info "copying script $($destinationFile)"
+            write-host "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
             return $true
         }
         else
         {
-            log-info "script is up to date"
+            write-host "script is up to date"
         }
         
         return $false
