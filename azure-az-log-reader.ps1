@@ -498,10 +498,10 @@ function authenticate-az($context = $Null)
     if ($allModules -inotcontains "az")
     {
         # at least need profile, resources, insights, logicapp
-        if ($allModules -inotcontains "az.profile")
+        if ($allModules -inotcontains "az.accounts")
         {
-            write-host "installing az.profile powershell module..."
-            install-module az.profile -force
+            write-host "installing az.accounts powershell module..."
+            install-module az.accounts -force
         }
         if ($allModules -inotcontains "az.resources")
         {
@@ -520,7 +520,7 @@ function authenticate-az($context = $Null)
 
         }
             
-        Import-Module az.profile        
+        Import-Module az.accounts       
         Import-Module az.resources        
         Import-Module az.insights
         Import-Module az.logicapp

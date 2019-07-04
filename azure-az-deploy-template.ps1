@@ -94,9 +94,9 @@ function main()
         if ((read-host "az not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
         {
             write-host "installing minimum required az modules..."
-            install-module az.profile
+            install-module az.accounts
             install-module az.resources
-            import-module az.profile
+            import-module az.accounts
             import-module az.resources
         }
         else

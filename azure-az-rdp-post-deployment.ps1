@@ -675,11 +675,11 @@ function authenticate-az()
         # https://raw.githubusercontent.com/jagilber/powershellScripts/master/script-az-module-enumerator.ps1
         # this will parse scripts in given directory and output which azure modules are needed to populate the below
 
-        # at least need profile, resources, insights, logicapp for this script
-        if ($allModules -inotcontains "az.profile")
+        # at least need accounts, resources, insights, logicapp for this script
+        if ($allModules -inotcontains "az.accounts")
         {
-            write-host "installing az.profile powershell module..."
-            install-module az.profile -force
+            write-host "installing az.accounts powershell module..."
+            install-module az.accounts -force
         }
         if ($allModules -inotcontains "az.resources")
         {
@@ -698,7 +698,7 @@ function authenticate-az()
 
         }
             
-        Import-Module az.profile        
+        Import-Module az.accounts     
         Import-Module az.resources        
         Import-Module az.compute
         Import-Module az.network
@@ -730,7 +730,7 @@ function authenticate-az()
     {
         if(!(connect-azaccount))
         {
-           log-info "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
+           write-host "exception authenticating. exiting $($error | out-string)" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -1219,13 +1219,13 @@ function get-update($updateUrl, $destinationFile)
 
         if (([string]::Compare($git, $file) -ne 0))
         {
-            log-info "copying script $($destinationFile)"
+            write-host "copying script $($destinationFile)"
             [IO.File]::WriteAllText($destinationFile, $git)
             return $true
         }
         else
         {
-            log-info "script is up to date"
+            write-host "script is up to date"
         }
         
         return $false

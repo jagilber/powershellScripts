@@ -328,11 +328,11 @@ function authenticate-az()
     #  install az module
     if ($allModules -inotcontains "az")
     {
-        # at least need profile, resources, compute, network
-        if ($allModules -inotcontains "az.profile")
+        # at least need accounts, resources, compute
+        if ($allModules -inotcontains "az.accounts")
         {
-            log-info "installing az.profile powershell module..."
-            install-module az.profile -force
+            log-info "installing az.accounts powershell module..."
+            install-module az.accounts -force
         }
         if ($allModules -inotcontains "az.resources")
         {
@@ -345,7 +345,7 @@ function authenticate-az()
             install-module az.compute -force
         }
             
-        Import-Module az.profile        
+        Import-Module az.accounts        
         Import-Module az.resources        
         Import-Module az.compute            
     }

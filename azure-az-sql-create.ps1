@@ -296,10 +296,10 @@ function authenticate-Az()
     if ($allModules -inotcontains "Az")
     {
         # at least need profile, resources, sql
-        if ($allModules -inotcontains "Az.profile")
+        if ($allModules -inotcontains "Az.accounts")
         {
-            log-info "installing Az.profile powershell module..."
-            install-module Az.profile -force
+            log-info "installing az.accounts powershell module..."
+            install-module Az.accounts -force
         }
         if ($allModules -inotcontains "Az.resources")
         {
@@ -312,7 +312,7 @@ function authenticate-Az()
             install-module Az.sql -force
         }
             
-        Import-Module Az.profile        
+        Import-Module Az.accounts   
         Import-Module Az.resources        
         Import-Module Az.sql            
     }
