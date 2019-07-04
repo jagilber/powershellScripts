@@ -5,7 +5,7 @@
 .DESCRIPTION  
     https://gallery.technet.microsoft.com/Azure-Resource-Manager-4ea7e328
     
-    ** REQUIRES AT LEAST WMF 5.0 AND AZURERM SDK **
+    ** REQUIRES AT LEAST WMF 5.0 AND az SDK **
     script authenticates to azure rm 
     queries all resource groups for public ip name
     gives list of resource groups
@@ -664,51 +664,51 @@ function authenticate-az()
 		install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
 	}
 
-    $allModules = (get-module azure* -ListAvailable).Name
+    $allModules = (get-module az* -ListAvailable).Name
 
-	#  install AzureRM module
-	if ($allModules -inotcontains "AzureRM")
+	#  install az module
+	if ($allModules -inotcontains "Az")
 	{
-        # each has different azurerm module requirements
-        # installing azurerm slowest but complete method
+        # each has different az module requirements
+        # installing az slowest but complete method
         # if wanting to do minimum install, run the following script against script being deployed
         # https://raw.githubusercontent.com/jagilber/powershellScripts/master/script-az-module-enumerator.ps1
         # this will parse scripts in given directory and output which azure modules are needed to populate the below
 
         # at least need profile, resources, insights, logicapp for this script
-        if ($allModules -inotcontains "AzureRM.profile")
+        if ($allModules -inotcontains "az.profile")
         {
-            write-host "installing AzureRm.profile powershell module..."
-            install-module AzureRM.profile -force
+            write-host "installing az.profile powershell module..."
+            install-module az.profile -force
         }
-        if ($allModules -inotcontains "AzureRM.resources")
+        if ($allModules -inotcontains "az.resources")
         {
-            write-host "installing AzureRm.resources powershell module..."
-            install-module AzureRM.resources -force
+            write-host "installing az.resources powershell module..."
+            install-module az.resources -force
         }
-        if ($allModules -inotcontains "AzureRM.compute")
+        if ($allModules -inotcontains "az.compute")
         {
-            write-host "installing AzureRm.compute powershell module..."
-            install-module AzureRM.compute -force
+            write-host "installing az.compute powershell module..."
+            install-module az.compute -force
         }
-        if ($allModules -inotcontains "AzureRM.network")
+        if ($allModules -inotcontains "az.network")
         {
-            write-host "installing AzureRm.network powershell module..."
-            install-module AzureRM.network -force
+            write-host "installing az.network powershell module..."
+            install-module az.network -force
 
         }
             
-        Import-Module azurerm.profile        
-        Import-Module azurerm.resources        
-        Import-Module azurerm.compute
-        Import-Module azurerm.network
-		#write-host "installing AzureRm powershell module..."
-		#install-module AzureRM -force
+        Import-Module az.profile        
+        Import-Module az.resources        
+        Import-Module az.compute
+        Import-Module az.network
+		#write-host "installing az powershell module..."
+		#install-module az -force
         
 	}
     else
     {
-        Import-Module azurerm
+        Import-Module az
     }
 
     # authenticate
