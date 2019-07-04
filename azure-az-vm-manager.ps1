@@ -4,7 +4,7 @@
     
 .DESCRIPTION  
     powershell script to manage IaaS virtual machines in Azure Resource Manager
-    requires azure powershell sdk (install-module azurerm)
+    requires azure powershell sdk (install-module az)
     
     Copyright 2017 Microsoft Corporation
 
@@ -98,7 +98,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$profileContext = "$($env:TEMP)\ProfileContext.ctx"
+#$profileContext = "$($env:TEMP)\ProfileContext.ctx"
 $global:jobs = New-Object Collections.ArrayList
 $action = $action.ToLower()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vm-manager.ps1"
@@ -236,7 +236,7 @@ function main()
             log-info "verbose:adding vm $($vm.resourceGroupName)\$($vm.name)"
             $jobInfo = @{}
             $jobInfo.vm = ""
-            $jobInfo.profileContext = $profileContext
+            #$jobInfo.profileContext = $profileContext
             $jobInfo.action = $action
             $jobInfo.invocation = $MyInvocation
             $JobInfo.backgroundJobFunction = (get-item function:do-backgroundJob)
@@ -294,10 +294,10 @@ function main()
     {
         remove-backgroundJobs
 
-        if (test-path $profileContext)
-        {
-            Remove-Item -Path $profileContext -Force
-        }
+        #if (test-path $profileContext)
+        #{
+        #    Remove-Item -Path $profileContext -Force
+        #}
 
         log-info "$(get-date) finished script. total minutes: $(((get-date) - $global:startTime).totalminutes.ToString("0.00"))"
     }
@@ -324,34 +324,34 @@ function authenticate-az()
         install-packageprovider -name NuGet -minimumversion ([version]::New("2.8.5.201")) -force
     }
 
-    $allModules = (get-module azure* -ListAvailable).Name
-    #  install AzureRM module
-    if ($allModules -inotcontains "AzureRM")
+    $allModules = (get-module az* -ListAvailable).Name
+    #  install az module
+    if ($allModules -inotcontains "az")
     {
         # at least need profile, resources, compute, network
-        if ($allModules -inotcontains "AzureRM.profile")
+        if ($allModules -inotcontains "az.profile")
         {
-            log-info "installing AzureRm.profile powershell module..."
-            install-module AzureRM.profile -force
+            log-info "installing az.profile powershell module..."
+            install-module az.profile -force
         }
-        if ($allModules -inotcontains "AzureRM.resources")
+        if ($allModules -inotcontains "az.resources")
         {
-            log-info "installing AzureRm.resources powershell module..."
-            install-module AzureRM.resources -force
+            log-info "installing az.resources powershell module..."
+            install-module az.resources -force
         }
-        if ($allModules -inotcontains "AzureRM.compute")
+        if ($allModules -inotcontains "az.compute")
         {
-            log-info "installing AzureRm.compute powershell module..."
-            install-module AzureRM.compute -force
+            log-info "installing az.compute powershell module..."
+            install-module az.compute -force
         }
             
-        Import-Module azurerm.profile        
-        Import-Module azurerm.resources        
-        Import-Module azurerm.compute            
+        Import-Module az.profile        
+        Import-Module az.resources        
+        Import-Module az.compute            
     }
     else
     {
-        Import-Module azurerm
+        Import-Module az
     }
 
     #background job for bug https://github.com/Azure/azure-powershell/issues/7110
@@ -369,7 +369,7 @@ function authenticate-az()
         }
     }
 
-    Save-azContext -Path $profileContext -Force
+    #Save-azContext -Path $profileContext -Force
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -780,13 +780,13 @@ function start-backgroundJob($jobInfo)
         param($jobInfo)
         $ctx = $null
         #background job for bug https://github.com/Azure/azure-powershell/issues/7110
-        Disable-azContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
+        #Disable-azContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
         . $($jobInfo.invocation.scriptname)
-        $ctx = Import-azContext -Path $jobInfo.profileContext
+        #$ctx = Import-azContext -Path $jobInfo.profileContext
         # bug to be fixed 8/2017
         # From <https://github.com/Azure/azure-powershell/issues/3954> 
-        [void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
+        #[void]$ctx.Context.TokenCache.Deserialize($ctx.Context.TokenCache.CacheData)
 
         & $jobInfo.backgroundJobFunction $jobInfo
 
