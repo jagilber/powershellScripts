@@ -3,12 +3,11 @@
 
 [CMDLETBINDING()]
 param(
-[string]$scriptFile,
-[string]$scriptDir,
-[ValidateSet('azurerm', 'az')]
-[string[]]$module = "az"
+    [string]$scriptFile,
+    [string]$scriptDir
 )
 
+$module = "az"
 function main()
 {
 
@@ -33,13 +32,19 @@ function main()
     {
         write-host "checking file: $($file)"
         $scriptSource = Get-Content -Raw -Path $file
-        $matches = ([regex]::Matches($scriptSource, '\W([a-z]+-az[a-z]+)\W',[Text.RegularExpressions.RegexOptions]::IgnoreCase))
+        
+        if([regex]::Match($scriptSource, "-azurerm", [Text.RegularExpressions.RegexOptions]::IgnoreCase))
+        {
+            Write-Warning("$file contains -azurerm commands! use script-azure-rm-module-enumerator.ps1")
+        }
+
+        $matches = ([regex]::Matches($scriptSource, "\W([a-z]+-$module[a-z]+)\W",[Text.RegularExpressions.RegexOptions]::IgnoreCase))
         
         foreach($match in ($matches| Sort-Object -Unique))
         {
             $matchedValue = $match.Captures[0].Groups[1].Value 
             
-            write-host "`t`taz command: $($matchedValue)"
+            write-host "`t`t$module command: $($matchedValue)"
             $module = $null
             foreach($availableModule in $availableModules)
             {
