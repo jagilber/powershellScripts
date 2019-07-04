@@ -32,7 +32,7 @@ function main()
         write-host "checking file: $($file)"
         $scriptSource = Get-Content -Raw -Path $file
         
-        if([regex]::Match($scriptSource, "-azurerm", [Text.RegularExpressions.RegexOptions]::IgnoreCase))
+        if([regex]::IsMatch($scriptSource, "-azurerm", [Text.RegularExpressions.RegexOptions]::IgnoreCase))
         {
             Write-Warning("$file contains -azurerm commands! use script-azure-rm-module-enumerator.ps1")
         }
