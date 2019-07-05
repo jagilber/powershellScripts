@@ -113,7 +113,7 @@ if (!$certPassword)
     $certPassword = (get-credential).Password
 }
 
-$pwd = ConvertTo-SecureString -String $certPassword -Force -AsPlainText
+$securePassword = ConvertTo-SecureString -String $certPassword -Force -AsPlainText
 
 if (!$uri)
 {
@@ -157,9 +157,9 @@ if (![IO.File]::Exists($pfxPath))
     $cert = New-SelfSignedCertificate -CertStoreLocation "cert:\currentuser\My" -Subject "CN=$($certSubject)" -KeyExportPolicy Exportable #-Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
     $cert
     
-    Export-PfxCertificate -cert $cert -FilePath $pfxPath -Password $pwd
+    Export-PfxCertificate -cert $cert -FilePath $pfxPath -Password $securePassword
     write-host "installing new self signed cert to cert:\currentuser\root"
-    Import-PfxCertificate -Exportable -Password $pwd -CertStoreLocation Cert:\CurrentUser\Root -FilePath $pfxPath
+    Import-PfxCertificate -Exportable -Password $securePassword -CertStoreLocation Cert:\CurrentUser\Root -FilePath $pfxPath
 }
 
 if (!$adApplicationOnly)
@@ -172,7 +172,7 @@ if (!$adApplicationOnly)
         start-sleep -Seconds 30
         ping "$($vaultName).vault.azure.net"
         $error.Clear()
-        $azurecert = Import-azKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $pwd
+        $azurecert = Import-azKeyVaultCertificate -vaultname $vaultName -name $certNameInVault -filepath $pfxpath -password $securePassword
 
         if (!$error)
         {
@@ -208,7 +208,7 @@ if ($oldapp = Get-azADApplication -IdentifierUri $uri -ErrorAction SilentlyConti
 
 if ($adApplicationName)
 {
-    $app = New-azADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $pwd
+    $app = New-azADApplication -DisplayName $adApplicationName -HomePage $uri -IdentifierUris $uri -password $securePassword
     $sp = New-azADServicePrincipal -ApplicationId $app.ApplicationId
     Set-azKeyVaultAccessPolicy -vaultname $vaultName -serviceprincipalname $sp.ApplicationId -permissionstosecrets get
 }

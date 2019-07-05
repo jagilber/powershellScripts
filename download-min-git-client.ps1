@@ -5,7 +5,7 @@ to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$pwd/download-min-git-client.ps1");
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$PSScriptRoot/download-min-git-client.ps1");
 .\download-min-git-client.ps1
 
 git has to be pathed .\git.exe 
