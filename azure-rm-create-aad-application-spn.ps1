@@ -135,15 +135,15 @@ function main()
                 $credentials = (get-credential)
             }
 
-            $pwd = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
+            $securePassword = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
 
             if([io.file]::Exists($pfxPath))
             {
                 [io.file]::Delete($pfxPath)
             }
 
-            Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $pwd
-            $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $pwd)
+            Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $securePassword
+            $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $securePassword)
             $thumbprint = $cert509.thumbprint
             $keyValue = [System.Convert]::ToBase64String($cert509.GetCertHash())
             write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $keyValue -EndDate $cert.NotAfter -StartDate $cert.NotBefore"
@@ -179,12 +179,12 @@ function main()
             $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
             $thumbprint = $cert.Thumbprint
             $ClientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
-            $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
-            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate $($cert.NotAfter)"
+            $securePassword = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
+            write-host "New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $securePassword -EndDate $($cert.NotAfter)"
 
             if(!$app)
             {
-                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $pwd -EndDate ($cert.NotAfter)
+                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $securePassword -EndDate ($cert.NotAfter)
             }
         }
         elseif ($logontype -ieq 'key')
@@ -194,12 +194,12 @@ function main()
             $rand.GetBytes($bytes)
 
             $ClientSecret = [System.Convert]::ToBase64String($bytes)
-            $pwd = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
+            $securePassword = ConvertTo-SecureString -String $ClientSecret -Force -AsPlainText
             $endDate = [System.DateTime]::Now.AddYears(2)
 
             if(!$app)
             {
-                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $pwd -EndDate $endDate
+                $app = New-AzureRmADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $securePassword -EndDate $endDate
             }
 
             write-host "client secret: $($ClientSecret)" -ForegroundColor Yellow
