@@ -6,7 +6,7 @@ to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-nuget.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.nugethubusercontent.com/jagilber/powershellScripts/master/download-nuget.ps1","$pwd/download-nuget.ps1");
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-nuget.ps1","$pwd/download-nuget.ps1");
 .\download-nuget.ps1
 
 nuget has to be pathed .\nuget.exe 
@@ -50,7 +50,7 @@ function main()
 
     Write-Host "downloading $exeFile from $exeDownload" -ForegroundColor Green
     $error.clear()
-    
+
     remove-item $clientFile -force -erroraction silentlycontinue
     $destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
     remove-item $destPath -force -recurse -erroraction silentlycontinue
