@@ -17,16 +17,17 @@ by default it is added to 'path' for session
 #>
 param(
     [string]$destPath = $pwd,
-    [string]$nugetDownload = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe",
+    [string]$exeDownload = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe",
     [switch]$setPath,
     [switch]$force,
-    [switch]$clean
+    [switch]$clean,
+    [string]$exeFile = "nuget.exe"
 )
 
 [System.Net.ServicePointManager]::Expect100Continue = $true;
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 $erroractionpreference = "silentlycontinue"
-$exeFile = "nuget.exe"
+
 
 function main()
 {
@@ -36,19 +37,20 @@ function main()
 
     if (!$result -and $clean)
     {
-        write-warning "nuget already removed"
+        write-warning "$exeFile already removed"
         return
     }
 
     if ($result -and !$force -and !$clean)
     {
         . $clientFile
-        write-warning "nuget already installed. use -force"
+        write-warning "$exeFile already installed. use -force"
         return
     }
 
-    Write-Host "downloading nuget from $nugetDownload" -ForegroundColor Green
+    Write-Host "downloading $exeFile from $exeDownload" -ForegroundColor Green
     $error.clear()
+    
     remove-item $clientFile -force -erroraction silentlycontinue
     $destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
     remove-item $destPath -force -recurse -erroraction silentlycontinue
@@ -66,8 +68,8 @@ function main()
         return
     }
 
-    $nugetDownload
-    (new-object net.webclient).DownloadFile($nugetDownload, $clientFile)
+    $exeDownload
+    (new-object net.webclient).DownloadFile($exeDownload, $clientFile)
     Expand-Archive $clientFile $destPath
     $env:Path = $env:Path + ";$($newPath)"
 
