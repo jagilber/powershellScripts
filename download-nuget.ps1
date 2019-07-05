@@ -6,7 +6,7 @@ to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-nuget.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-nuget.ps1","$PSScriptRoot/download-nuget.ps1");
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-nuget.ps1","$pwd/download-nuget.ps1");
 .\download-nuget.ps1
 
 nuget has to be pathed .\nuget.exe 
@@ -16,7 +16,7 @@ by default it is added to 'path' for session
 -clean to remove
 #>
 param(
-    [string]$destPath = $PSScriptRoot,
+    [string]$destPath = $pwd,
     [string]$fileDownload = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe",
     [switch]$setPath,
     [switch]$force,
