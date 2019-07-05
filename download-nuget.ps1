@@ -28,18 +28,20 @@ param(
 $erroractionpreference = "silentlycontinue"
 $exeFile = "nuget.exe"
 
-function main() 
+function main()
 {
     $error.clear()
     $clientFile = "$destPath\$exeFile"
     $result = resolve-envPath -item $exeFile
 
-    if (!$result -and $clean) {
+    if (!$result -and $clean)
+    {
         write-warning "nuget already removed"
         return
     }
 
-    if ($result -and !$force -and !$clean) {
+    if ($result -and !$force -and !$clean)
+    {
         . $clientFile
         write-warning "nuget already installed. use -force"
         return
@@ -53,9 +55,10 @@ function main()
     $newPath = "$($destPath)\cmd"
     $path = [environment]::GetEnvironmentVariable("Path")
 
-    if ($clean) 
+    if ($clean)
     {
-        if ($path.tolower().contains($destPath)) {
+        if ($path.tolower().contains($destPath))
+        {
             [environment]::SetEnvironmentVariable("Path", $($path.replace(";$($newPath)", "")), "Machine")
         }
     
@@ -68,7 +71,7 @@ function main()
     Expand-Archive $clientFile $destPath
     $env:Path = $env:Path + ";$($newPath)"
 
-    if ($setPath -and !$path.tolower().contains($newPath)) 
+    if ($setPath -and !$path.tolower().contains($newPath))
     {
         # permanent
         [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
@@ -78,13 +81,13 @@ function main()
     write-host "finished"
 }
 
-function resolve-envPath($item) 
+function resolve-envPath($item)
 {
     write-host "resolving $item"
     $item = [environment]::ExpandEnvironmentVariables($item)
     $sepChar = [io.path]::DirectorySeparatorChar
 
-    if ($result = Get-Item $item -ErrorAction SilentlyContinue) 
+    if ($result = Get-Item $item -ErrorAction SilentlyContinue)
     {
         return $result.FullName
     }
@@ -92,9 +95,9 @@ function resolve-envPath($item)
     $paths = [collections.arraylist]@($env:Path.Split(";"))
     [void]$paths.Add([io.path]::GetDirectoryName($MyInvocation.ScriptName))
 
-    foreach ($path in $paths) 
+    foreach ($path in $paths)
     {
-        if ($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue) 
+        if ($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue)
         {
             return $result.FullName
         }
