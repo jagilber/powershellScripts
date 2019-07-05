@@ -1,0 +1,4 @@
+[
+    {"name":"DiskFull","query":"| where Text matches regex @'(i:disk.+full)'","description":"test query to find disk full traces","link":"http://sometsg"},
+    {"name":"CertExpired","query":"| where Text matches regex @'(i:cert.+expired)'","description":"test query to find cert expired","link":"http://sometsg"}
+]
