@@ -12,7 +12,7 @@
   "properties": {
     "AzureClientId": {
       "$id": "#/properties/AzureClientId",
-      "type": "null",
+      "type": "string",
       "title": "The Azureclientid Schema",
       "default": null,
       "examples": [
@@ -21,7 +21,7 @@
     },
     "AzureClientSecret": {
       "$id": "#/properties/AzureClientSecret",
-      "type": "null",
+      "type": "string",
       "title": "The Azureclientsecret Schema",
       "default": null,
       "examples": [
@@ -30,7 +30,7 @@
     },
     "AzureResourceGroup": {
       "$id": "#/properties/AzureResourceGroup",
-      "type": "null",
+      "type": "string",
       "title": "The Azureresourcegroup Schema",
       "default": null,
       "examples": [
@@ -39,7 +39,7 @@
     },
     "AzureResourceGroupLocation": {
       "$id": "#/properties/AzureResourceGroupLocation",
-      "type": "null",
+      "type": "string",
       "title": "The Azureresourcegrouplocation Schema",
       "default": null,
       "examples": [
@@ -48,7 +48,7 @@
     },
     "AzureSubscriptionId": {
       "$id": "#/properties/AzureSubscriptionId",
-      "type": "null",
+      "type": "string",
       "title": "The Azuresubscriptionid Schema",
       "default": null,
       "examples": [
@@ -57,7 +57,7 @@
     },
     "AzureTenantId": {
       "$id": "#/properties/AzureTenantId",
-      "type": "null",
+      "type": "string",
       "title": "The Azuretenantid Schema",
       "default": null,
       "examples": [
@@ -68,7 +68,7 @@
       "$id": "#/properties/CacheLocation",
       "type": "string",
       "title": "The Cachelocation Schema",
-      "default": "",
+      "default": null,
       "examples": [
         "C:/Users/cloudadmin/AppData/Local/Temp"
       ],
@@ -76,7 +76,7 @@
     },
     "ContainerFilter": {
       "$id": "#/properties/ContainerFilter",
-      "type": "null",
+      "type": "string",
       "title": "The Containerfilter Schema",
       "default": null,
       "examples": [
@@ -87,7 +87,7 @@
       "$id": "#/properties/DefaultOptionsFile",
       "type": "string",
       "title": "The Defaultoptionsfile Schema",
-      "default": "",
+      "default": "CollectSFData.options.json",
       "examples": [
         "CollectSFData.options.json"
       ],
@@ -116,11 +116,16 @@
       "$id": "#/properties/GatherType",
       "type": "string",
       "title": "The Gathertype Schema",
-      "default": "",
+      "default": "trace",
       "examples": [
-        "trace"
+        "trace",
+        "counter",
+        "setup",
+        "table",
+        "exception",
+        "any"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(\\w+)$"
     },
     "KustoCluster": {
       "$id": "#/properties/KustoCluster",
@@ -128,9 +133,9 @@
       "title": "The Kustocluster Schema",
       "default": "",
       "examples": [
-        "https://ingest-sflogs.kusto.windows.net/incidentlogs"
+        "https://kustocluster.eastus.kusto.windows.net/supportlogs"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(http://.*)$"
     },
     "KustoCompressed": {
       "$id": "#/properties/KustoCompressed",
@@ -138,7 +143,8 @@
       "title": "The Kustocompressed Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "KustoRecreateTable": {
@@ -147,6 +153,7 @@
       "title": "The Kustorecreatetable Schema",
       "default": false,
       "examples": [
+        false,
         true
       ]
     },
@@ -154,7 +161,7 @@
       "$id": "#/properties/KustoTable",
       "type": "string",
       "title": "The Kustotable Schema",
-      "default": "",
+      "default": null,
       "examples": [
         "trace_jagilber_119070722000125"
       ],
@@ -166,7 +173,8 @@
       "title": "The Kustouseblobassource Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "List": {
@@ -175,7 +183,8 @@
       "title": "The List Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogAnalyticsCreate": {
@@ -184,43 +193,46 @@
       "title": "The Loganalyticscreate Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogAnalyticsId": {
       "$id": "#/properties/LogAnalyticsId",
-      "type": "null",
+      "type": "string",
       "title": "The Loganalyticsid Schema",
       "default": null,
       "examples": [
-        null
+        "0754e191-ccbf-4094-adb9-0653164fb424"
       ]
     },
     "LogAnalyticsKey": {
       "$id": "#/properties/LogAnalyticsKey",
-      "type": "null",
+      "type": "string",
       "title": "The Loganalyticskey Schema",
       "default": null,
       "examples": [
-        null
+        "UFx2MbN23M9p2o8PYPQweSzhgo+8uBPDEt1cSwCKDwtmIpbwOz8rx5U6hlO7bkfuNyGXfFYr5XTGdI5VSk2NBA=="
       ]
     },
     "LogAnalyticsName": {
       "$id": "#/properties/LogAnalyticsName",
-      "type": "null",
+      "type": "string",
       "title": "The Loganalyticsname Schema",
       "default": null,
       "examples": [
-        null
+        "sf-support-cluster1"
       ]
     },
     "LogAnalyticsPurge": {
       "$id": "#/properties/LogAnalyticsPurge",
-      "type": "null",
+      "type": "string",
       "title": "The Loganalyticspurge Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "true",
+        "https://management.azure.com/subscriptions/eecba3e4-edd3-4265-9067-7d13fb9405dd/resourceGroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/cases/sf-support-logs/purge-8c775874-0d75-40f9-823c-6be28f3ff98e?api-version=2017-01-01-preview"
       ]
     },
     "LogAnalyticsRecreate": {
@@ -229,16 +241,17 @@
       "title": "The Loganalyticsrecreate Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogAnalyticsWorkspaceName": {
       "$id": "#/properties/LogAnalyticsWorkspaceName",
-      "type": "null",
+      "type": "string",
       "title": "The Loganalyticsworkspacename Schema",
       "default": null,
       "examples": [
-        null
+        "sf-support-logs"
       ]
     },
     "LogAnalyticsWorkspaceSku": {
@@ -247,7 +260,8 @@
       "title": "The Loganalyticsworkspacesku Schema",
       "default": "",
       "examples": [
-        "PerGB2018"
+        "PerGB2018",
+        "free"
       ],
       "pattern": "^(.*)$"
     },
@@ -257,7 +271,8 @@
       "title": "The Logdebug Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogFile": {
@@ -266,17 +281,20 @@
       "title": "The Logfile Schema",
       "default": "",
       "examples": [
-        "c:\\temp\\0125.log"
+        "collectsfdata.log"
       ],
       "pattern": "^(.*)$"
     },
     "NodeFilter": {
       "$id": "#/properties/NodeFilter",
-      "type": "null",
+      "type": "string",
       "title": "The Nodefilter Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "fabric_",
+        "lease",
+        "_nt0_0"
       ]
     },
     "SasKey": {
@@ -285,7 +303,7 @@
       "title": "The Saskey Schema",
       "default": "",
       "examples": [
-        "https://nemdcoreprodsuplog.blob.core.windows.net/fabriclogs-96d8ab60-c4e0-41c7-8daf-ab7ffc0a38c8?sv=2015-04-05&ss=bt&srt=sco&sp=rl&se=2019-07-07T21:44:47.3243149Z&sig=0oZbqyODcORlIPZKlyGqaaa%2FHBJxVZ69qXllurQAxKQ%3D"
+        "BlobEndpoint=https://sflogsfaliaw40gvaw433.blob.core.windows.net/;QueueEndpoint=https://sflogsfaliaw40gvaw433.queue.core.windows.net/;FileEndpoint=https://sflogsfaliaw40gvaw433.file.core.windows.net/;TableEndpoint=https://sflogsfaliaw40gvaw433.table.core.windows.net/;SharedAccessSignature=sv=2018-03-28&ss=bfqt&srt=sco&sp=rwdlacup&se=2019-07-25T21:47:24Z&st=2019-06-25T13:47:24Z&spr=https&sig=BGUU%2BRSWV6G9ohk814EGl3wIiQL3ozYgb2mhIRkm%2F7w%3D"
       ],
       "pattern": "^(.*)$"
     },
@@ -305,7 +323,7 @@
       "title": "The Threads Schema",
       "default": 0,
       "examples": [
-        16
+        8
       ]
     },
     "Unique": {
@@ -319,7 +337,7 @@
     },
     "UriPrefix": {
       "$id": "#/properties/UriPrefix",
-      "type": "null",
+      "type": "string",
       "title": "The Uriprefix Schema",
       "default": null,
       "examples": [
@@ -332,6 +350,7 @@
       "title": "The Usememorystream Schema",
       "default": false,
       "examples": [
+        false,
         true
       ]
     }
