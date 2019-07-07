@@ -1,0 +1,339 @@
+{
+  "definitions": {},
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/collectsfdata.schema.json",
+  "type": "object",
+  "title": "CollectSFData Schema",
+  "required": [
+    "EndTimeStamp",
+    "GatherType",
+    "StartTimeStamp"
+  ],
+  "properties": {
+    "AzureClientId": {
+      "$id": "#/properties/AzureClientId",
+      "type": "null",
+      "title": "The Azureclientid Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "AzureClientSecret": {
+      "$id": "#/properties/AzureClientSecret",
+      "type": "null",
+      "title": "The Azureclientsecret Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "AzureResourceGroup": {
+      "$id": "#/properties/AzureResourceGroup",
+      "type": "null",
+      "title": "The Azureresourcegroup Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "AzureResourceGroupLocation": {
+      "$id": "#/properties/AzureResourceGroupLocation",
+      "type": "null",
+      "title": "The Azureresourcegrouplocation Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "AzureSubscriptionId": {
+      "$id": "#/properties/AzureSubscriptionId",
+      "type": "null",
+      "title": "The Azuresubscriptionid Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "AzureTenantId": {
+      "$id": "#/properties/AzureTenantId",
+      "type": "null",
+      "title": "The Azuretenantid Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "CacheLocation": {
+      "$id": "#/properties/CacheLocation",
+      "type": "string",
+      "title": "The Cachelocation Schema",
+      "default": "",
+      "examples": [
+        "C:/Users/cloudadmin/AppData/Local/Temp"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "ContainerFilter": {
+      "$id": "#/properties/ContainerFilter",
+      "type": "null",
+      "title": "The Containerfilter Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "DefaultOptionsFile": {
+      "$id": "#/properties/DefaultOptionsFile",
+      "type": "string",
+      "title": "The Defaultoptionsfile Schema",
+      "default": "",
+      "examples": [
+        "CollectSFData.options.json"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "DeleteCache": {
+      "$id": "#/properties/DeleteCache",
+      "type": "boolean",
+      "title": "The Deletecache Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "EndTimeStamp": {
+      "$id": "#/properties/EndTimeStamp",
+      "type": "string",
+      "title": "The Endtimestamp Schema",
+      "default": "",
+      "examples": [
+        "07/06/2019 23:30:00 +00:00"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "GatherType": {
+      "$id": "#/properties/GatherType",
+      "type": "string",
+      "title": "The Gathertype Schema",
+      "default": "",
+      "examples": [
+        "trace"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "KustoCluster": {
+      "$id": "#/properties/KustoCluster",
+      "type": "string",
+      "title": "The Kustocluster Schema",
+      "default": "",
+      "examples": [
+        "https://ingest-sflogs.kusto.windows.net/incidentlogs"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "KustoCompressed": {
+      "$id": "#/properties/KustoCompressed",
+      "type": "boolean",
+      "title": "The Kustocompressed Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "KustoRecreateTable": {
+      "$id": "#/properties/KustoRecreateTable",
+      "type": "boolean",
+      "title": "The Kustorecreatetable Schema",
+      "default": false,
+      "examples": [
+        true
+      ]
+    },
+    "KustoTable": {
+      "$id": "#/properties/KustoTable",
+      "type": "string",
+      "title": "The Kustotable Schema",
+      "default": "",
+      "examples": [
+        "trace_jagilber_119070722000125"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "KustoUseBlobAsSource": {
+      "$id": "#/properties/KustoUseBlobAsSource",
+      "type": "boolean",
+      "title": "The Kustouseblobassource Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "List": {
+      "$id": "#/properties/List",
+      "type": "boolean",
+      "title": "The List Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "LogAnalyticsCreate": {
+      "$id": "#/properties/LogAnalyticsCreate",
+      "type": "boolean",
+      "title": "The Loganalyticscreate Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "LogAnalyticsId": {
+      "$id": "#/properties/LogAnalyticsId",
+      "type": "null",
+      "title": "The Loganalyticsid Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "LogAnalyticsKey": {
+      "$id": "#/properties/LogAnalyticsKey",
+      "type": "null",
+      "title": "The Loganalyticskey Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "LogAnalyticsName": {
+      "$id": "#/properties/LogAnalyticsName",
+      "type": "null",
+      "title": "The Loganalyticsname Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "LogAnalyticsPurge": {
+      "$id": "#/properties/LogAnalyticsPurge",
+      "type": "null",
+      "title": "The Loganalyticspurge Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "LogAnalyticsRecreate": {
+      "$id": "#/properties/LogAnalyticsRecreate",
+      "type": "boolean",
+      "title": "The Loganalyticsrecreate Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "LogAnalyticsWorkspaceName": {
+      "$id": "#/properties/LogAnalyticsWorkspaceName",
+      "type": "null",
+      "title": "The Loganalyticsworkspacename Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "LogAnalyticsWorkspaceSku": {
+      "$id": "#/properties/LogAnalyticsWorkspaceSku",
+      "type": "string",
+      "title": "The Loganalyticsworkspacesku Schema",
+      "default": "",
+      "examples": [
+        "PerGB2018"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "LogDebug": {
+      "$id": "#/properties/LogDebug",
+      "type": "boolean",
+      "title": "The Logdebug Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "LogFile": {
+      "$id": "#/properties/LogFile",
+      "type": "string",
+      "title": "The Logfile Schema",
+      "default": "",
+      "examples": [
+        "c:\\temp\\0125.log"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "NodeFilter": {
+      "$id": "#/properties/NodeFilter",
+      "type": "null",
+      "title": "The Nodefilter Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "SasKey": {
+      "$id": "#/properties/SasKey",
+      "type": "string",
+      "title": "The Saskey Schema",
+      "default": "",
+      "examples": [
+        "https://nemdcoreprodsuplog.blob.core.windows.net/fabriclogs-96d8ab60-c4e0-41c7-8daf-ab7ffc0a38c8?sv=2015-04-05&ss=bt&srt=sco&sp=rl&se=2019-07-07T21:44:47.3243149Z&sig=0oZbqyODcORlIPZKlyGqaaa%2FHBJxVZ69qXllurQAxKQ%3D"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "StartTimeStamp": {
+      "$id": "#/properties/StartTimeStamp",
+      "type": "string",
+      "title": "The Starttimestamp Schema",
+      "default": "",
+      "examples": [
+        "07/06/2019 20:30:00 +00:00"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "Threads": {
+      "$id": "#/properties/Threads",
+      "type": "integer",
+      "title": "The Threads Schema",
+      "default": 0,
+      "examples": [
+        16
+      ]
+    },
+    "Unique": {
+      "$id": "#/properties/Unique",
+      "type": "boolean",
+      "title": "The Unique Schema",
+      "default": false,
+      "examples": [
+        false
+      ]
+    },
+    "UriPrefix": {
+      "$id": "#/properties/UriPrefix",
+      "type": "null",
+      "title": "The Uriprefix Schema",
+      "default": null,
+      "examples": [
+        null
+      ]
+    },
+    "UseMemoryStream": {
+      "$id": "#/properties/UseMemoryStream",
+      "type": "boolean",
+      "title": "The Usememorystream Schema",
+      "default": false,
+      "examples": [
+        true
+      ]
+    }
+  }
+}
