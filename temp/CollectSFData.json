@@ -7,7 +7,7 @@
     "required": [
       "EndTimeStamp",
       "GatherType",
-      "StartTimeStamp",
+      "StartTimeStamp"
     ],
     "properties": {
       "AzureClientId": {
