@@ -16,7 +16,8 @@
       "title": "The Azureclientid Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "4c09d2a3-aed8-494a-8804-6ebfd5e3a022"
       ]
     },
     "AzureClientSecret": {
@@ -34,7 +35,8 @@
       "title": "The Azureresourcegroup Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "clusterResourceGroup"
       ]
     },
     "AzureResourceGroupLocation": {
@@ -43,7 +45,8 @@
       "title": "The Azureresourcegrouplocation Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "eastus"
       ]
     },
     "AzureSubscriptionId": {
@@ -52,7 +55,8 @@
       "title": "The Azuresubscriptionid Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "eecba3e4-edd3-4265-9067-7d13fb9405dd"
       ]
     },
     "AzureTenantId": {
@@ -61,7 +65,8 @@
       "title": "The Azuretenantid Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "d2378f24-eaf6-49bc-96f6-ff46fed1391a"
       ]
     },
     "CacheLocation": {
@@ -80,7 +85,8 @@
       "title": "The Containerfilter Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        "fabriclogs-e5106617-a3aa-4211-a802-e2729597d5fe"
       ]
     },
     "DefaultOptionsFile": {
@@ -99,7 +105,8 @@
       "title": "The Deletecache Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "EndTimeStamp": {
@@ -163,7 +170,7 @@
       "title": "The Kustotable Schema",
       "default": null,
       "examples": [
-        "trace_jagilber_119070722000125"
+        "cluster1_190707"
       ],
       "pattern": "^(.*)$"
     },
@@ -221,7 +228,7 @@
       "title": "The Loganalyticsname Schema",
       "default": null,
       "examples": [
-        "sf-support-cluster1"
+        "cluster1_190707"
       ]
     },
     "LogAnalyticsPurge": {
@@ -332,7 +339,8 @@
       "title": "The Unique Schema",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "UriPrefix": {
@@ -341,14 +349,15 @@
       "title": "The Uriprefix Schema",
       "default": null,
       "examples": [
-        null
+        null,
+        ""
       ]
     },
     "UseMemoryStream": {
       "$id": "#/properties/UseMemoryStream",
       "type": "boolean",
       "title": "The Usememorystream Schema",
-      "default": false,
+      "default": true,
       "examples": [
         false,
         true
