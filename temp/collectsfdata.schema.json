@@ -14,11 +14,15 @@
       "$id": "#/properties/AzureClientId",
       "type": "string",
       "title": "AzureClientId azure application id used for headless / silent execution.",
+      "required": [
+        "AzureClientSecret"
+      ],
       "default": null,
       "examples": [
         null,
         "4c09d2a3-aed8-494a-8804-6ebfd5e3a022"
-      ]
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "AzureClientSecret": {
       "$id": "#/properties/AzureClientSecret",
@@ -27,17 +31,22 @@
       "default": null,
       "examples": [
         null
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "AzureResourceGroup": {
       "$id": "#/properties/AzureResourceGroup",
       "type": "string",
       "title": "AzureResourceGroup used for creation / recreation of Log Analytics Workspace",
+      "required": [
+        "AzureResourceGroupLocation"
+      ],
       "default": null,
       "examples": [
         null,
         "laResourceGroup"
-      ]
+      ],
+      "pattern": "^(\\w+)$"
     },
     "AzureResourceGroupLocation": {
       "$id": "#/properties/AzureResourceGroupLocation",
@@ -47,7 +56,8 @@
       "examples": [
         null,
         "eastus"
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "AzureSubscriptionId": {
       "$id": "#/properties/AzureSubscriptionId",
@@ -57,7 +67,8 @@
       "examples": [
         null,
         "eecba3e4-edd3-4265-9067-7d13fb9405dd"
-      ]
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "AzureTenantId": {
       "$id": "#/properties/AzureTenantId",
@@ -67,7 +78,8 @@
       "examples": [
         null,
         "d2378f24-eaf6-49bc-96f6-ff46fed1391a"
-      ]
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "CacheLocation": {
       "$id": "#/properties/CacheLocation",
@@ -78,7 +90,7 @@
         null,
         "c:\\temp\\csfd.log"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "ContainerFilter": {
       "$id": "#/properties/ContainerFilter",
@@ -88,7 +100,8 @@
       "examples": [
         null,
         "fabriclogs-e5106617-a3aa-4211-a802-e2729597d5fe"
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "DeleteCache": {
       "$id": "#/properties/DeleteCache",
@@ -133,17 +146,20 @@
         "exception",
         "any"
       ],
-      "pattern": "^(\\w+)$"
+      "pattern": "^(trace|counter|setup|table|exception)$"
     },
     "KustoCluster": {
       "$id": "#/properties/KustoCluster",
       "type": "string",
       "title": "KustoCluster ingest url see example",
+      "required": [
+        "KustoTable"
+      ],
       "default": "",
       "examples": [
         "https://ingest-kustocluster.eastus.kusto.windows.net/supportlogs"
       ],
-      "pattern": "^(https*?://.*)$"
+      "pattern": "^(https://.+?/kusto.windows.net)$"
     },
     "KustoCompressed": {
       "$id": "#/properties/KustoCompressed",
@@ -173,7 +189,7 @@
       "examples": [
         "cluster1_190707"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "KustoUseBlobAsSource": {
       "$id": "#/properties/KustoUseBlobAsSource",
@@ -200,6 +216,15 @@
       "type": "boolean",
       "title": "LogAnalyticsCreate true to create a new log analytics workspace. requires additional options.",
       "default": false,
+      "required": [
+        "AzureResourceGroup",
+        "AzureResourceGroupLocation",
+        "AzureSubscriptionId",
+        "AzureTenantId",
+        "LogAnalyticsName",
+        "LogAnalyticsWorkspaceName",
+        "LogAnalyticsWorkspaceSku"
+      ],
       "examples": [
         false,
         true
@@ -209,10 +234,15 @@
       "$id": "#/properties/LogAnalyticsId",
       "type": "string",
       "title": "The Loganalyticsid Schema",
+      "required": [
+        "LogAnalyticsKey",
+        "LogAnalyticsName"
+      ],
       "default": null,
       "examples": [
         "0754e191-ccbf-4094-adb9-0653164fb424"
-      ]
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "LogAnalyticsKey": {
       "$id": "#/properties/LogAnalyticsKey",
@@ -221,7 +251,8 @@
       "default": null,
       "examples": [
         "UFx2MbN23M9p2o8PYPQweSzhgo+8uBPDEt1cSwCKDwtmIpbwOz8rx5U6hlO7bkfuNyGXfFYr5XTGdI5VSk2NBA=="
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "LogAnalyticsName": {
       "$id": "#/properties/LogAnalyticsName",
@@ -230,7 +261,8 @@
       "default": null,
       "examples": [
         "cluster1_190707"
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "LogAnalyticsPurge": {
       "$id": "#/properties/LogAnalyticsPurge",
@@ -247,6 +279,13 @@
       "$id": "#/properties/LogAnalyticsRecreate",
       "type": "boolean",
       "title": "LogAnalyticsRecreate true to recreate an existing log analytics workspace. requires additional options.",
+      "required": [
+        "AzureResourceGroup",
+        "AzureResourceGroupLocation",
+        "AzureSubscriptionId",
+        "AzureTenantId",
+        "LogAnalyticsName"
+      ],
       "default": false,
       "examples": [
         false,
@@ -260,7 +299,8 @@
       "default": null,
       "examples": [
         "sf-support-logs"
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "LogAnalyticsWorkspaceSku": {
       "$id": "#/properties/LogAnalyticsWorkspaceSku",
@@ -271,7 +311,7 @@
         "PerGB2018",
         "free"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(PerGB2018|free)$"
     },
     "LogDebug": {
       "$id": "#/properties/LogDebug",
@@ -291,7 +331,7 @@
       "examples": [
         "collectsfdata.log"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "NodeFilter": {
       "$id": "#/properties/NodeFilter",
@@ -303,7 +343,8 @@
         "fabric_",
         "lease",
         "_nt0_0"
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "SasKey": {
       "$id": "#/properties/SasKey",
@@ -318,7 +359,7 @@
     "StartTimeStamp": {
       "$id": "#/properties/StartTimeStamp",
       "type": "string",
-      "title": "The Starttimestamp Schema",
+      "title": "StartTimeStamp required in specified format",
       "default": "",
       "examples": [
         "07/06/2019 20:30:00 +00:00",
@@ -363,7 +404,8 @@
       "default": null,
       "examples": [
         null
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "UseMemoryStream": {
       "$id": "#/properties/UseMemoryStream",
