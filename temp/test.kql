@@ -1,0 +1,3 @@
+select * | count
+//declare query_parameters (UserName:string, Password:string);
+//print n=UserName, p=hash(Password)
