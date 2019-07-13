@@ -1,3 +1,5 @@
-select * | count
+declare query_parameters (TableName:string, Query:string);
+print n=TableName, p=Query
+//search * | count
 //declare query_parameters (UserName:string, Password:string);
 //print n=UserName, p=hash(Password)
