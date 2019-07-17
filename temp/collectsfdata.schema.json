@@ -66,7 +66,7 @@
       "default": null,
       "examples": [
         null,
-        "eecba3e4-edd3-4265-9067-7d13fb9405dd"
+        "{{subscriptionId}}"
       ],
       "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
@@ -171,6 +171,19 @@
         true
       ]
     },
+    "KustoPurge": {
+      "$id": "#/properties/KustoPurge",
+      "type": "string",
+      "title": "KustoPurge 'true' to delete data from existing table in 'KustoTable', 'list' to list current kusto tables, or table name to purge/drop.",
+      "default": null,
+      "examples": [
+        null,
+        "true",
+        "list",
+        "trace_jagilber_00000000000001"
+      ],
+      "pattern": "^(true|list.*)$"
+    },
     "KustoRecreateTable": {
       "$id": "#/properties/KustoRecreateTable",
       "type": "boolean",
@@ -272,8 +285,9 @@
       "examples": [
         null,
         "true",
-        "https://management.azure.com/subscriptions/eecba3e4-edd3-4265-9067-7d13fb9405dd/resourceGroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/cases/sf-support-logs/purge-8c775874-0d75-40f9-823c-6be28f3ff98e?api-version=2017-01-01-preview"
-      ]
+        "https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/cases/sf-support-logs/{{purgeId}}?api-version=2017-01-01-preview"
+      ],
+      "pattern": "^(true|https://management.azure.com/subscriptions.+)$"
     },
     "LogAnalyticsRecreate": {
       "$id": "#/properties/LogAnalyticsRecreate",
@@ -352,9 +366,11 @@
       "title": "SasKey required for Azure clusters",
       "default": "",
       "examples": [
-        "BlobEndpoint=https://sflogsfaliaw40gvaw433.blob.core.windows.net/;QueueEndpoint=https://sflogsfaliaw40gvaw433.queue.core.windows.net/;FileEndpoint=https://sflogsfaliaw40gvaw433.file.core.windows.net/;TableEndpoint=https://sflogsfaliaw40gvaw433.table.core.windows.net/;SharedAccessSignature=sv=2018-03-28&ss=bfqt&srt=sco&sp=rwdlacup&se=2019-07-25T21:47:24Z&st=2019-06-25T13:47:24Z&spr=https&sig=BGUU%2BRSWV6G9ohk814EGl3wIiQL3ozYgb2mhIRkm%2F7w%3D"
+        "{{blobServiceSasUrl}}",
+        "{{connectionString}}",
+        "BlobEndpoint=https://{{storageAccount}}.blob.core.windows.net/;QueueEndpoint=https://{{storageAccount}}.queue.core.windows.net/;FileEndpoint=https://{{storageAccount}}.file.core.windows.net/;TableEndpoint=https://{{storageAccount}}.table.core.windows.net/;SharedAccessSignature={{sasToken}}"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(https://.+SharedAccessSignature|sig=.+)$"
     },
     "StartTimeStamp": {
       "$id": "#/properties/StartTimeStamp",
