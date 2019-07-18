@@ -180,7 +180,8 @@
         null,
         "true",
         "list",
-        "trace_jagilber_00000000000001"
+        "trace_jagilber_00000000000001",
+        "'list jagilber'"
       ],
       "pattern": "^(true|list.*)$"
     },
@@ -285,7 +286,7 @@
       "examples": [
         null,
         "true",
-        "https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/cases/sf-support-logs/{{purgeId}}?api-version=2017-01-01-preview"
+        "https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/microsoft.operationalinsights/workspaces/{{workspaceId}}/{{logAnalyticsName}}/{{purgeId}}?api-version=2017-01-01-preview"
       ],
       "pattern": "^(true|https://management.azure.com/subscriptions.+)$"
     },
@@ -360,6 +361,17 @@
       ],
       "pattern": "^(.+)$"
     },
+    "ResourceId": {
+      "$id": "#/properties/ResourceId",
+      "type": "string",
+      "title": "ResourceId azure service fabric resourceId used by microsoft internally for tracking",
+      "default": null,
+      "examples": [
+        null,
+        "/subscriptions/{{subscriptionId}}}/resourceGroups/{{resourceGroup}}/Microsoft.ServiceFabric/clusters/{{clusterName}}"
+      ],
+      "pattern": "^(/subscriptions/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}/resourceGroups/\\w+providers/Microsoft.ServiceFabric/clusters/.+)$"
+    },
     "SasKey": {
       "$id": "#/properties/SasKey",
       "type": "string",
@@ -406,8 +418,8 @@
     "Unique": {
       "$id": "#/properties/Unique",
       "type": "boolean",
-      "title": "Unique true to check for prior ingest of same uri in same table to prevent duplicate records.",
-      "default": false,
+      "title": "Unique default true to check for prior ingest of same uri in same table to prevent duplicate records.",
+      "default": true,
       "examples": [
         false,
         true
