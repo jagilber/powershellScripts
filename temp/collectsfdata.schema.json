@@ -361,10 +361,10 @@
       ],
       "pattern": "^(.+)$"
     },
-    "ResourceId": {
-      "$id": "#/properties/ResourceId",
+    "ResourceUri": {
+      "$id": "#/properties/ResourceUri",
       "type": "string",
-      "title": "ResourceId azure service fabric resourceId used by microsoft internally for tracking",
+      "title": "ResourceUri azure service fabric resource uri / resource Id used by microsoft internally for tracking",
       "default": null,
       "examples": [
         null,
