@@ -12,326 +12,436 @@
   "properties": {
     "AzureClientId": {
       "$id": "#/properties/AzureClientId",
-      "type": "null",
-      "title": "The Azureclientid Schema",
+      "type": "string",
+      "title": "AzureClientId azure application id used for headless / silent execution.",
+      "required": [
+        "AzureClientSecret"
+      ],
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "4c09d2a3-aed8-494a-8804-6ebfd5e3a022"
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "AzureClientSecret": {
       "$id": "#/properties/AzureClientSecret",
-      "type": "null",
-      "title": "The Azureclientsecret Schema",
+      "type": "string",
+      "title": "AzureClientSecret azure application id secret used for headless / silent execution.",
       "default": null,
       "examples": [
         null
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "AzureResourceGroup": {
       "$id": "#/properties/AzureResourceGroup",
-      "type": "null",
-      "title": "The Azureresourcegroup Schema",
+      "type": "string",
+      "title": "AzureResourceGroup used for creation / recreation of Log Analytics Workspace",
+      "required": [
+        "AzureResourceGroupLocation"
+      ],
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "laResourceGroup"
+      ],
+      "pattern": "^(\\w+)$"
     },
     "AzureResourceGroupLocation": {
       "$id": "#/properties/AzureResourceGroupLocation",
-      "type": "null",
-      "title": "The Azureresourcegrouplocation Schema",
+      "type": "string",
+      "title": "AzureResourceGroupLocation azure region for creation / recreation of Log Analytics Workspace",
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "eastus"
+      ],
+      "pattern": "^(.+)$"
     },
     "AzureSubscriptionId": {
       "$id": "#/properties/AzureSubscriptionId",
-      "type": "null",
-      "title": "The Azuresubscriptionid Schema",
+      "type": "string",
+      "title": "AzureSubscriptionId azure subscription id for certain non-default azure operations",
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "{{subscriptionId}}"
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "AzureTenantId": {
       "$id": "#/properties/AzureTenantId",
-      "type": "null",
-      "title": "The Azuretenantid Schema",
+      "type": "string",
+      "title": "AzureTenantId azure tenant id for certain non-default azure operations",
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "d2378f24-eaf6-49bc-96f6-ff46fed1391a"
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "CacheLocation": {
       "$id": "#/properties/CacheLocation",
       "type": "string",
-      "title": "The Cachelocation Schema",
-      "default": "",
+      "title": "CacheLocation local device cache source / destination if UseMemoryStream = false",
+      "default": null,
       "examples": [
-        "C:/Users/cloudadmin/AppData/Local/Temp"
+        null,
+        "c:\\temp\\csfd.log"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "ContainerFilter": {
       "$id": "#/properties/ContainerFilter",
-      "type": "null",
-      "title": "The Containerfilter Schema",
+      "type": "string",
+      "title": "ContainerFilter optional container name needed in non-default deployments with multiple clusters using same storage account",
       "default": null,
       "examples": [
-        null
-      ]
-    },
-    "DefaultOptionsFile": {
-      "$id": "#/properties/DefaultOptionsFile",
-      "type": "string",
-      "title": "The Defaultoptionsfile Schema",
-      "default": "",
-      "examples": [
-        "CollectSFData.options.json"
+        null,
+        "fabriclogs-e5106617-a3aa-4211-a802-e2729597d5fe"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "DeleteCache": {
       "$id": "#/properties/DeleteCache",
       "type": "boolean",
-      "title": "The Deletecache Schema",
+      "title": "DeleteCache true to clean CacheLocation at utility exit.",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "EndTimeStamp": {
       "$id": "#/properties/EndTimeStamp",
       "type": "string",
-      "title": "The Endtimestamp Schema",
+      "title": "EndTimeStamp required in specified format",
       "default": "",
       "examples": [
-        "07/06/2019 23:30:00 +00:00"
+        "07/06/2019 23:30:00 +00:00",
+        "M/d/yy H:mm:ss zzz",
+        "M/d/yyyy H:mm:ss zzz",
+        "yy/M/d H:mm:ss zzz",
+        "yyyy/M/d H:mm:ss zzz",
+        "M-d-yy H:mm:ss zzz",
+        "M-d-yyyy H:mm:ss zzz",
+        "yy-M-d H:mm:ss zzz",
+        "yyyy-M-d H:mm:ss zzz",
+        "d-M-yy H:mm:ss zzz",
+        "d-M-yyyy H:mm:ss zzz"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^([0-9]{1,4}(\\/|-)[0-9]{1,2}(\\/|-)[0-9]{1,4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} (-|\\+)[0-9]{1,2}:[0-9]{1,2})$"
     },
     "GatherType": {
       "$id": "#/properties/GatherType",
       "type": "string",
-      "title": "The Gathertype Schema",
-      "default": "",
+      "title": "GatherType required value. see examples",
+      "default": "trace",
       "examples": [
-        "trace"
+        "trace",
+        "counter",
+        "setup",
+        "table",
+        "exception",
+        "any"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(trace|counter|setup|table|exception)$"
     },
     "KustoCluster": {
       "$id": "#/properties/KustoCluster",
       "type": "string",
-      "title": "The Kustocluster Schema",
+      "title": "KustoCluster ingest url see example",
+      "required": [
+        "KustoTable"
+      ],
       "default": "",
       "examples": [
-        "https://ingest-sflogs.kusto.windows.net/incidentlogs"
+        "https://ingest-kustocluster.eastus.kusto.windows.net/supportlogs"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(https://.+?/kusto.windows.net)$"
     },
     "KustoCompressed": {
       "$id": "#/properties/KustoCompressed",
       "type": "boolean",
-      "title": "The Kustocompressed Schema",
+      "title": "KustoCompressed true to compress file before posting to kusto ingest to save network bandwidth",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
+    },
+    "KustoPurge": {
+      "$id": "#/properties/KustoPurge",
+      "type": "string",
+      "title": "KustoPurge 'true' to delete data from existing table in 'KustoTable', 'list' to list current kusto tables, or table name to purge/drop.",
+      "default": null,
+      "examples": [
+        null,
+        "true",
+        "list",
+        "trace_jagilber_00000000000001",
+        "'list jagilber'"
+      ],
+      "pattern": "^(true|list.*)$"
     },
     "KustoRecreateTable": {
       "$id": "#/properties/KustoRecreateTable",
       "type": "boolean",
-      "title": "The Kustorecreatetable Schema",
+      "title": "KustoRecreateTable true to recreate / drop kusto table before ingest.",
       "default": false,
       "examples": [
+        false,
         true
       ]
     },
     "KustoTable": {
       "$id": "#/properties/KustoTable",
       "type": "string",
-      "title": "The Kustotable Schema",
-      "default": "",
+      "title": "KustoTable name of kusto table for ingestion. table name will be prepended with GatherType",
+      "default": null,
       "examples": [
-        "trace_jagilber_119070722000125"
+        "cluster1_190707"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "KustoUseBlobAsSource": {
       "$id": "#/properties/KustoUseBlobAsSource",
       "type": "boolean",
-      "title": "The Kustouseblobassource Schema",
+      "title": "KustoUseBlobAsSource true to ingest dtr.zip logs directly from cluster storage account. available in service fabric 6.5",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "List": {
       "$id": "#/properties/List",
       "type": "boolean",
-      "title": "The List Schema",
+      "title": "List true to enumerate blobs from storage account but not download",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogAnalyticsCreate": {
       "$id": "#/properties/LogAnalyticsCreate",
       "type": "boolean",
-      "title": "The Loganalyticscreate Schema",
+      "title": "LogAnalyticsCreate true to create a new log analytics workspace. requires additional options.",
       "default": false,
+      "required": [
+        "AzureResourceGroup",
+        "AzureResourceGroupLocation",
+        "AzureSubscriptionId",
+        "AzureTenantId",
+        "LogAnalyticsName",
+        "LogAnalyticsWorkspaceName",
+        "LogAnalyticsWorkspaceSku"
+      ],
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogAnalyticsId": {
       "$id": "#/properties/LogAnalyticsId",
-      "type": "null",
+      "type": "string",
       "title": "The Loganalyticsid Schema",
+      "required": [
+        "LogAnalyticsKey",
+        "LogAnalyticsName"
+      ],
       "default": null,
       "examples": [
-        null
-      ]
+        "0754e191-ccbf-4094-adb9-0653164fb424"
+      ],
+      "pattern": "^([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
     },
     "LogAnalyticsKey": {
       "$id": "#/properties/LogAnalyticsKey",
-      "type": "null",
-      "title": "The Loganalyticskey Schema",
+      "type": "string",
+      "title": "LogAnalyticsKey key from 'advanced settings' for workspace for ingest",
       "default": null,
       "examples": [
-        null
-      ]
+        "UFx2MbN23M9p2o8PYPQweSzhgo+8uBPDEt1cSwCKDwtmIpbwOz8rx5U6hlO7bkfuNyGXfFYr5XTGdI5VSk2NBA=="
+      ],
+      "pattern": "^(.+)$"
     },
     "LogAnalyticsName": {
       "$id": "#/properties/LogAnalyticsName",
-      "type": "null",
-      "title": "The Loganalyticsname Schema",
+      "type": "string",
+      "title": "LogAnalyticsName name of ingest for log analytics similar to a table name. name will be prepended with GatherType",
       "default": null,
       "examples": [
-        null
-      ]
+        "cluster1_190707"
+      ],
+      "pattern": "^(.+)$"
     },
     "LogAnalyticsPurge": {
       "$id": "#/properties/LogAnalyticsPurge",
-      "type": "null",
-      "title": "The Loganalyticspurge Schema",
+      "type": "string",
+      "title": "LogAnalyticsPurge true to delete data from existing workspace or the purge request id of oustanding purge. see example",
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "true",
+        "https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/microsoft.operationalinsights/workspaces/{{workspaceId}}/{{logAnalyticsName}}/{{purgeId}}?api-version=2017-01-01-preview"
+      ],
+      "pattern": "^(true|https://management.azure.com/subscriptions.+)$"
     },
     "LogAnalyticsRecreate": {
       "$id": "#/properties/LogAnalyticsRecreate",
       "type": "boolean",
-      "title": "The Loganalyticsrecreate Schema",
+      "title": "LogAnalyticsRecreate true to recreate an existing log analytics workspace. requires additional options.",
+      "required": [
+        "AzureResourceGroup",
+        "AzureResourceGroupLocation",
+        "AzureSubscriptionId",
+        "AzureTenantId",
+        "LogAnalyticsName"
+      ],
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogAnalyticsWorkspaceName": {
       "$id": "#/properties/LogAnalyticsWorkspaceName",
-      "type": "null",
-      "title": "The Loganalyticsworkspacename Schema",
+      "type": "string",
+      "title": "The LogAnalyticsWorkspaceName name to use when creating new log analytics workspace. requires additional options.",
       "default": null,
       "examples": [
-        null
-      ]
+        "sf-support-logs"
+      ],
+      "pattern": "^(.+)$"
     },
     "LogAnalyticsWorkspaceSku": {
       "$id": "#/properties/LogAnalyticsWorkspaceSku",
       "type": "string",
-      "title": "The Loganalyticsworkspacesku Schema",
-      "default": "",
+      "title": "The LogAnalyticsWorkspaceSku name to use when creating new log analytics workspace. requires additional options. 'free' option only available for log analytics workspaces created before change in policy.",
+      "default": "PerGB2018",
       "examples": [
-        "PerGB2018"
+        "PerGB2018",
+        "free"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(PerGB2018|free)$"
     },
     "LogDebug": {
       "$id": "#/properties/LogDebug",
       "type": "boolean",
-      "title": "The Logdebug Schema",
+      "title": "LogDebug true to display and log additional logging for troubleshooting utility",
       "default": false,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "LogFile": {
       "$id": "#/properties/LogFile",
       "type": "string",
-      "title": "The Logfile Schema",
+      "title": "LogFile path and file name to log output",
       "default": "",
       "examples": [
-        "c:\\temp\\0125.log"
+        "collectsfdata.log"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(.+)$"
     },
     "NodeFilter": {
       "$id": "#/properties/NodeFilter",
-      "type": "null",
-      "title": "The Nodefilter Schema",
+      "type": "string",
+      "title": "NodeFilter used to filter by uri name which files to process from storage account",
       "default": null,
       "examples": [
-        null
-      ]
+        null,
+        "fabric_",
+        "lease",
+        "_nt0_0"
+      ],
+      "pattern": "^(.+)$"
+    },
+    "ResourceUri": {
+      "$id": "#/properties/ResourceUri",
+      "type": "string",
+      "title": "ResourceUri azure service fabric resource uri / resource Id used by microsoft internally for tracking",
+      "default": null,
+      "examples": [
+        null,
+        "/subscriptions/{{subscriptionId}}}/resourceGroups/{{resourceGroup}}/Microsoft.ServiceFabric/clusters/{{clusterName}}"
+      ],
+      "pattern": "^(/subscriptions/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}/resourceGroups/\\w+providers/Microsoft.ServiceFabric/clusters/.+)$"
     },
     "SasKey": {
       "$id": "#/properties/SasKey",
       "type": "string",
-      "title": "The Saskey Schema",
+      "title": "SasKey required for Azure clusters",
       "default": "",
       "examples": [
-        "https://nemdcoreprodsuplog.blob.core.windows.net/fabriclogs-96d8ab60-c4e0-41c7-8daf-ab7ffc0a38c8?sv=2015-04-05&ss=bt&srt=sco&sp=rl&se=2019-07-07T21:44:47.3243149Z&sig=0oZbqyODcORlIPZKlyGqaaa%2FHBJxVZ69qXllurQAxKQ%3D"
+        "{{blobServiceSasUrl}}",
+        "{{connectionString}}",
+        "BlobEndpoint=https://{{storageAccount}}.blob.core.windows.net/;QueueEndpoint=https://{{storageAccount}}.queue.core.windows.net/;FileEndpoint=https://{{storageAccount}}.file.core.windows.net/;TableEndpoint=https://{{storageAccount}}.table.core.windows.net/;SharedAccessSignature={{sasToken}}"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^(https://.+SharedAccessSignature|sig=.+)$"
     },
     "StartTimeStamp": {
       "$id": "#/properties/StartTimeStamp",
       "type": "string",
-      "title": "The Starttimestamp Schema",
+      "title": "StartTimeStamp required in specified format",
       "default": "",
       "examples": [
-        "07/06/2019 20:30:00 +00:00"
+        "07/06/2019 20:30:00 +00:00",
+        "M/d/yy H:mm:ss zzz",
+        "M/d/yyyy H:mm:ss zzz",
+        "yy/M/d H:mm:ss zzz",
+        "yyyy/M/d H:mm:ss zzz",
+        "M-d-yy H:mm:ss zzz",
+        "M-d-yyyy H:mm:ss zzz",
+        "yy-M-d H:mm:ss zzz",
+        "yyyy-M-d H:mm:ss zzz",
+        "d-M-yy H:mm:ss zzz",
+        "d-M-yyyy H:mm:ss zzz"
       ],
-      "pattern": "^(.*)$"
+      "pattern": "^([0-9]{1,4}(\\/|-)[0-9]{1,2}(\\/|-)[0-9]{1,4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} (-|\\+)[0-9]{1,2}:[0-9]{1,2})$"
     },
     "Threads": {
       "$id": "#/properties/Threads",
       "type": "integer",
-      "title": "The Threads Schema",
+      "title": "Threads default is cpu core count. can be used to govern resources used by utility",
       "default": 0,
       "examples": [
+        null,
+        8,
         16
       ]
     },
     "Unique": {
       "$id": "#/properties/Unique",
       "type": "boolean",
-      "title": "The Unique Schema",
-      "default": false,
+      "title": "Unique default true to check for prior ingest of same uri in same table to prevent duplicate records.",
+      "default": true,
       "examples": [
-        false
+        false,
+        true
       ]
     },
     "UriPrefix": {
       "$id": "#/properties/UriPrefix",
-      "type": "null",
-      "title": "The Uriprefix Schema",
+      "type": "string",
+      "title": "UriPrefix prefix of blob uri used for filtering of blob downloads",
       "default": null,
       "examples": [
         null
-      ]
+      ],
+      "pattern": "^(.+)$"
     },
     "UseMemoryStream": {
       "$id": "#/properties/UseMemoryStream",
       "type": "boolean",
-      "title": "The Usememorystream Schema",
-      "default": false,
+      "title": "UseMemoryStream true to use memory stream instead of local disk for processing of files. (default)",
+      "default": true,
       "examples": [
+        false,
         true
       ]
     }
