@@ -4,6 +4,7 @@ param(
     $thumbprint,
     $resourceGroup,
     $clustername = $resourceGroup,
+    [ValidateSet('LocalMachine', 'CurrentUser')]
     $storeLocation = "LocalMachine"
 )
 
