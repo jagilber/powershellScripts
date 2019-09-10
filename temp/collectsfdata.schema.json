@@ -131,7 +131,7 @@
         "d-M-yy H:mm:ss zzz",
         "d-M-yyyy H:mm:ss zzz"
       ],
-      "pattern": "^([0-9]{1,4}(\\/|-)[0-9]{1,2}(\\/|-)[0-9]{1,4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} (-|\\+)[0-9]{1,2}:[0-9]{1,2})$"
+      "pattern": "^([0-9]{1,4}(\\/|-)[0-9]{1,2}(\\/|-)[0-9]{1,4} [0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2}|) (-|\\+)[0-9]{1,2}:[0-9]{1,2})$"
     },
     "GatherType": {
       "$id": "#/properties/GatherType",
@@ -281,7 +281,7 @@
     "LogAnalyticsPurge": {
       "$id": "#/properties/LogAnalyticsPurge",
       "type": "string",
-      "title": "LogAnalyticsPurge true to delete data from existing workspace or the purge request id of oustanding purge. see example",
+      "title": "LogAnalyticsPurge true to delete data from existing workspace or the purge request id of outstanding purge. see example",
       "default": null,
       "examples": [
         null,
@@ -382,7 +382,7 @@
         "{{connectionString}}",
         "BlobEndpoint=https://{{storageAccount}}.blob.core.windows.net/;QueueEndpoint=https://{{storageAccount}}.queue.core.windows.net/;FileEndpoint=https://{{storageAccount}}.file.core.windows.net/;TableEndpoint=https://{{storageAccount}}.table.core.windows.net/;SharedAccessSignature={{sasToken}}"
       ],
-      "pattern": "^(https://.+SharedAccessSignature|sig=.+)$"
+      "pattern": "^(https://.+(SharedAccessSignature|sig=).+)$"
     },
     "StartTimeStamp": {
       "$id": "#/properties/StartTimeStamp",
@@ -402,7 +402,7 @@
         "d-M-yy H:mm:ss zzz",
         "d-M-yyyy H:mm:ss zzz"
       ],
-      "pattern": "^([0-9]{1,4}(\\/|-)[0-9]{1,2}(\\/|-)[0-9]{1,4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} (-|\\+)[0-9]{1,2}:[0-9]{1,2})$"
+      "pattern": "^([0-9]{1,4}(\\/|-)[0-9]{1,2}(\\/|-)[0-9]{1,4} [0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2}|) (-|\\+)[0-9]{1,2}:[0-9]{1,2})$"
     },
     "Threads": {
       "$id": "#/properties/Threads",
