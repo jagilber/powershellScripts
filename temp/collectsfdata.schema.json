@@ -159,7 +159,7 @@
       "examples": [
         "https://ingest-kustocluster.eastus.kusto.windows.net/supportlogs"
       ],
-      "pattern": "^(https://.+?/kusto.windows.net)$"
+      "pattern": "^(https://.+?.kusto.windows.net).*$"
     },
     "KustoCompressed": {
       "$id": "#/properties/KustoCompressed",
