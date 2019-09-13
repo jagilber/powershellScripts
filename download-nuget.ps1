@@ -24,8 +24,8 @@ param(
     [string]$file = "nuget.exe"
 )
 
-[System.Net.ServicePointManager]::Expect100Continue = $true;
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true;
+[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
 $erroractionpreference = "silentlycontinue"
 
 function main()
@@ -33,6 +33,12 @@ function main()
     $error.clear()
     $clientFile = "$destPath\$file"
     $result = resolve-envPath -item $file
+
+    if($result)
+    {
+        Write-host "found $result" -ForegroundColor Green
+        $clientFile = $result
+    }
 
     if (!$result -and $clean)
     {
