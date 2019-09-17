@@ -1,4 +1,4 @@
-﻿<#
+<#
     script to enumerate rdp port mapping from cluster load balancer for service fabric scaleset
 #>
 
