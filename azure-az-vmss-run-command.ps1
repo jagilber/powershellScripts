@@ -7,6 +7,8 @@
     Invoke-azVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId $commandId
     Get-azVMRunCommandDocument -Location westus | select ID, OSType, Label
 
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vmss-run-command.ps1","$pwd\azure-az-vmss-run-command.ps1")
+
 .NOTES  
    File Name  : azure-az-vmss-run-command.ps1
    Author     : jagilber
@@ -196,7 +198,7 @@ function main()
     write-host $instanceIds
 
     write-host "checking provisioning states"
-    $instances = Get-azVmssVM -ResourceGroupName sfjagilber1nt3 -VMScaleSetName nt0 -InstanceView
+    $instances = Get-azVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView
     write-host "$($instances | out-string)"
 
     if($instances.ProvisioningState -inotmatch "succeeded" -and !$force)
