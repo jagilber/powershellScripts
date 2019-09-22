@@ -24,88 +24,52 @@ param(
     [string]$file = "nuget.exe"
 )
 
-[System.Net.ServicePointManager]::Expect100Continue = $true;
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
-$erroractionpreference = "silentlycontinue"
+$erroractionpreference = "continue"
+$error.clear()
+$clientFile = "$destpath\$file"
+$env:path += ";$pwd;$psscriptroot"
 
-function main()
+if(!($result = test-path nuget))
 {
-    $error.clear()
-    $clientFile = "$destPath\$file"
-    $result = resolve-envPath -item $file
+    (new-object net.webclient).downloadFile($fileDownload, $clientFile)
+    $result = [bool](nuget)
+}
 
-    if (!$result -and $clean)
-    {
-        write-warning "$file already removed"
-        return
-    }
+if (!$result -and $clean) {
+    write-warning "$file already removed"
+    exit
+}
 
-    if ($result -and !$force -and !$clean)
-    {
-        . $clientFile
-        write-warning "$file already installed. use -force"
-        return
-    }
-
-    Write-Host "downloading $file from $fileDownload" -ForegroundColor Green
-    $error.clear()
-
-    remove-item $clientFile -force -erroraction silentlycontinue
-    $destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
-    remove-item $destPath -force -recurse -erroraction silentlycontinue
-    $newPath = "$($destPath)\cmd"
-    $path = [environment]::GetEnvironmentVariable("Path")
-
-    if ($clean)
-    {
-        if ($path.tolower().contains($destPath))
-        {
-            [environment]::SetEnvironmentVariable("Path", $($path.replace(";$($newPath)", "")), "Machine")
-        }
-    
-        write-host "cleaned..."
-        return
-    }
-
-    $fileDownload
-    (new-object net.webclient).DownloadFile($fileDownload, $clientFile)
-    Expand-Archive $clientFile $destPath
-    $env:Path = $env:Path + ";$($newPath)"
-
-    if ($setPath -and !$path.tolower().contains($newPath))
-    {
-        # permanent
-        [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
-    }
-
+if ($result -and !$force -and !$clean) {
     . $clientFile
-    write-host "finished"
+    write-warning "$file already installed. use -force"
+    exit
 }
 
-function resolve-envPath($item)
-{
-    write-host "resolving $item"
-    $item = [environment]::ExpandEnvironmentVariables($item)
-    $sepChar = [io.path]::DirectorySeparatorChar
+Write-Host "downloading $file from $fileDownload" -ForegroundColor Green
+$error.clear()
+$destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
+remove-item $destPath -force -recurse -erroraction silentlycontinue
+$path = [environment]::GetEnvironmentVariable("Path")
 
-    if ($result = Get-Item $item -ErrorAction SilentlyContinue)
-    {
-        return $result.FullName
+if ($clean) {
+    if ($path.tolower().contains($destPath)) {
+        [environment]::SetEnvironmentVariable("Path", $($path.replace(";$destPath", "")), "Machine")
     }
-
-    $paths = [collections.arraylist]@($env:Path.Split(";"))
-    [void]$paths.Add([io.path]::GetDirectoryName($MyInvocation.ScriptName))
-
-    foreach ($path in $paths)
-    {
-        if ($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue)
-        {
-            return $result.FullName
-        }
-    }
-
-    Write-host "unable to find $item"
-    return $null
+    
+    write-host "cleaned..."
+    exit
 }
 
-main
+$fileDownload
+mkdir $destPath
+(new-object net.webclient).DownloadFile($fileDownload, "$destPath\$clientFile")
+$env:Path += ";$destPath"
+
+if ($setPath -and !$path.tolower().contains($destPath)) {
+    # permanent
+    [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$destPath", "Machine")
+}
+
+. $clientFile
+write-host "finished"
