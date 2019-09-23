@@ -196,7 +196,7 @@ function main()
     write-host $instanceIds
 
     write-host "checking provisioning states"
-    $instances = Get-AzureRmVmssVM -ResourceGroupName sfjagilber1nt3 -VMScaleSetName nt0 -InstanceView
+    $instances = Get-AzureRmVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView
     write-host "$($instances | out-string)"
 
     if($instances.ProvisioningState -inotmatch "succeeded" -and !$force)
