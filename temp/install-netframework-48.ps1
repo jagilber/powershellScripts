@@ -17,4 +17,4 @@ $client.DownloadFile($url, $path)
       
 $path
 
-Invoke-Command -ScriptBlock { Start-Process -FilePath $path -ArgumentList "/log c:\temp\net_framework_48\net48.log /norestart "  -Wait -PassThru} 
+Invoke-Command -ScriptBlock { Start-Process -FilePath $path -ArgumentList "/q /log c:\temp\net_framework_48\net48.log /norestart "  -Wait -PassThru} 
