@@ -41,6 +41,14 @@ function main()
     $error.Clear()
     $app = $null
 
+    write-host "checking for admin"
+    
+    if(!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) 
+    {
+        write-warning "script requires powershell admin sesion. restart as admin. exiting"
+        return
+    }
+
     # authenticate
     try
     {
