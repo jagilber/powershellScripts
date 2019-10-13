@@ -12,8 +12,29 @@
 .NOTES  
    File Name  : azure-az-vmss-run-command.ps1
    Author     : jagilber
-   Version    : 190403
+   Version    : 191012
    History    : 
+
+.EXAMPLE 
+    .\azure-az-vmss-run-command.ps1 -script 'reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\CrashControl'
+    will query memory dump settings 
+
+.EXAMPLE 
+    .\azure-az-vmss-run-command.ps1 -script 'reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\CrashControl /v CrashDumpEnabled /t REG_DWORD /d 1 /f'
+    will set memory dump settings to complete memory dump (requires reboot) on specified nodes
+
+.EXAMPLE 
+    .\azure-az-vmss-run-command.ps1 -script 'shutdown /r /t 0'
+    will restart specified nodes
+
+.EXAMPLE
+    .\azure-az-vmss-run-command.ps1 -script '& {
+        if(((get-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled).CrashDumpEnabled) -ne 1) {
+            set-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled 1
+            shutdown /r /t 0
+        }
+    }'
+    will set memory dump settings to complete memory dump and reboot nodes specified if required
 
 .EXAMPLE  
     .\azure-az-vmss-run-command.ps1 -script c:\temp\test.ps1
@@ -92,6 +113,7 @@ param(
     [string]$commandId = "RunPowerShellScript",
     [switch]$removeExtension,
     [switch]$listCommandIds,
+    [string]$location = "westus",
     [switch]$force
 )
 
@@ -128,7 +150,7 @@ function main()
 
     if($listCommandIds)
     {
-        Get-azVMRunCommandDocument -Location westus | Select-Object ID, OSType, Label
+        Get-azVMRunCommandDocument -Location $location | Select-Object ID, OSType, Label
         return
     }
 
