@@ -66,7 +66,7 @@
     it is *not* required to remove extension
 
 .PARAMETER resourceGroup
-    name of reource group containing vm scale set. if not provided, script will prompt for input.
+    name of resource group containing vm scale set. if not provided, script will prompt for input.
 
 .PARAMETER vmssName
     name of vm scale set. if not provided, script will prompt for input.
@@ -80,7 +80,7 @@
 
 .PARAMETER parameters
     hashtable of script arguments in format of @{"name" = "value"}
-    exmaple: @{"adminUserName" = "cloudadmin"}
+    example: @{"adminUserName" = "cloudadmin"}
 
 .PARAMETER jsonOutputFile
     path and file name of json output file to populate with results.
@@ -93,7 +93,7 @@
     after completing all commands, the extension can be removed with -removeExtension switch
 
 .PARAMETER listCommandIds
-    swtich to list optional commandIds and return
+    switch to list optional commandIds and return
 
 .PARAMETER force
     switch to force invocation of command on vm scaleset node regardless of provisioningstate. Any state other than 'successful' may fail.
