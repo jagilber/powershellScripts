@@ -225,8 +225,8 @@ function main()
 
     foreach($instance in $instances)
     {
-        if($instance.InstanceView.Statuses.DisplayStatus -inotcontains "provisioning succeeded" `
-            $instance.InstanceView.Statuses.DisplayStatus -inotcontains "vm running" `
+        if(($instance.InstanceView.Statuses.DisplayStatus -inotcontains "provisioning succeeded" `
+            -or $instance.InstanceView.Statuses.DisplayStatus -inotcontains "vm running") `
             -and !$force)
         {
             Write-Warning "not all nodes are in 'succeeded' provisioning state or 'vm running' so command may fail. returning. use -force to attempt command regardless of provisioning state."
