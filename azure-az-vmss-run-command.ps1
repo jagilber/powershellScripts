@@ -31,7 +31,7 @@
     .\azure-az-vmss-run-command.ps1 -script '& {
         if(((get-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled).CrashDumpEnabled) -ne 1) {
             set-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled 1
-            shutdown /r /t 0
+            shutdown /d p:4:2 /c 'enable complete dump' /r /t 1
         }
     }'
     will set memory dump settings to complete memory dump and reboot nodes specified if required
@@ -66,7 +66,7 @@
     it is *not* required to remove extension
 
 .PARAMETER resourceGroup
-    name of reource group containing vm scale set. if not provided, script will prompt for input.
+    name of resource group containing vm scale set. if not provided, script will prompt for input.
 
 .PARAMETER vmssName
     name of vm scale set. if not provided, script will prompt for input.
@@ -80,7 +80,7 @@
 
 .PARAMETER parameters
     hashtable of script arguments in format of @{"name" = "value"}
-    exmaple: @{"adminUserName" = "cloudadmin"}
+    example: @{"adminUserName" = "cloudadmin"}
 
 .PARAMETER jsonOutputFile
     path and file name of json output file to populate with results.
@@ -93,7 +93,7 @@
     after completing all commands, the extension can be removed with -removeExtension switch
 
 .PARAMETER listCommandIds
-    swtich to list optional commandIds and return
+    switch to list optional commandIds and return
 
 .PARAMETER force
     switch to force invocation of command on vm scaleset node regardless of provisioningstate. Any state other than 'successful' may fail.
@@ -220,13 +220,18 @@ function main()
     write-host $instanceIds
 
     write-host "checking provisioning states"
-    $instances = Get-azVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView
-    write-host "$($instances | out-string)"
+    $instances = @(Get-azVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView)
+    write-host "$($instances.InstanceView.Statuses | fl * | out-string)"
 
-    if($instances.ProvisioningState -inotmatch "succeeded" -and !$force)
+    foreach($instance in $instances)
     {
-        Write-Warning "not all nodes are in 'succeeded' provisioning state so command may fail. returning. use -force to attempt command regardless of provisioning state."
-        return
+        if(($instance.InstanceView.Statuses.DisplayStatus -inotcontains "provisioning succeeded" `
+            -or $instance.InstanceView.Statuses.DisplayStatus -inotcontains "vm running") `
+            -and !$force)
+        {
+            Write-Warning "not all nodes are in 'succeeded' provisioning state or 'vm running' so command may fail. returning. use -force to attempt command regardless of provisioning state."
+            return
+        }
     }
 
     if (!(test-path $script))
