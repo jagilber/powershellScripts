@@ -30,11 +30,16 @@
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
         if(((get-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled).CrashDumpEnabled) -ne 1) {
+            write-host "set to complete dump. restarting"
             set-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled 1
             shutdown /d p:4:2 /c "enable complete dump" /r /t 1
         }
+        else {
+            write-host "already set to complete dump. returning"
+        }
     }'
-    will set memory dump settings to complete memory dump and reboot nodes specified if required
+
+    will set memory dump settings to complete memory dump and reboot nodes specified if required. do not run concurrently.
 
 .EXAMPLE  
     .\azure-az-vmss-run-command.ps1 -script c:\temp\test.ps1
