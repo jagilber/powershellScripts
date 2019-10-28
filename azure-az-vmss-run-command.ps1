@@ -31,7 +31,7 @@
     .\azure-az-vmss-run-command.ps1 -script '& {
         if(((get-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled).CrashDumpEnabled) -ne 1) {
             set-itemproperty HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl CrashDumpEnabled 1
-            shutdown /d p:4:2 /c 'enable complete dump' /r /t 1
+            shutdown /d p:4:2 /c "enable complete dump" /r /t 1
         }
     }'
     will set memory dump settings to complete memory dump and reboot nodes specified if required
