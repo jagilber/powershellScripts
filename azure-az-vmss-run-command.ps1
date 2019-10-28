@@ -282,6 +282,8 @@ function main()
     $global:joboutputs | fl *
     write-host "finished. output stored in `$global:joboutputs"
     write-host "total fail:$($global:fail) total success:$($global:success)"
+    write-host "total time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+    write-host "optionally use -removeExtension to remove runcommand extension or reset."
 
     if ($error)
     {
@@ -399,7 +401,7 @@ function monitor-jobs()
         write-verbose "$($instances | convertto-json)"
 
         $currentJobsCount = (get-job).count
-        $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed. (use -removeExtension to remove extension):"
+        $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed:"
         $status = "extension installed:$($global:extensionInstalled)    not installed:$($global:extensionNotInstalled)    fail results:$($global:fail)" `
             + "    success results:$($global:success)    time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
         $percentComplete = ((($originalJobsCount - $currentJobsCount) / $originalJobsCount) * 100)
@@ -421,8 +423,7 @@ function node-psTestScript()
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters)
 {
     write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
-    subsequent executions take between a 1 and 30 minutes..." -foregroundcolor yellow
-    write-host "use -removeExtension to remove extension or reset"
+        subsequent executions take between a 2 and 30 minutes..." -foregroundcolor yellow
 
     foreach ($instanceId in $instanceIds)
     {
