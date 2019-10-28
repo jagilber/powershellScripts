@@ -98,6 +98,10 @@
 .PARAMETER force
     switch to force invocation of command on vm scaleset node regardless of provisioningstate. Any state other than 'successful' may fail.
 
+.PARAMETER concurrent
+    switch to run command against multiple nodes concurrently. default is single node at a time.
+    WARNING: running jobs concurrently on scalesets such as service fabric where there are minimum node requirements can cause an outage if the node is restarted.
+
 .LINK
     https://github.com/jagilber/powershellScripts/blob/master/azure-az-vmss-run-command.ps1
 #>  
@@ -114,7 +118,8 @@ param(
     [switch]$removeExtension,
     [switch]$listCommandIds,
     [string]$location = "westus",
-    [switch]$force
+    [switch]$force,
+    [switch]$concurrent
 )
 
 $ErrorActionPreference = "silentlycontinue"
@@ -146,6 +151,12 @@ function main()
         {
             return
         }
+    }
+
+    if($concurrent)
+    {
+        write-warning "running jobs concurrently on scalesets with minimum node requirements such as service fabric, can cause an outage if the node is restarted from command being run!"
+        write-warning "ctrl-c now if this is incorrect"
     }
 
     if($listCommandIds)
@@ -187,7 +198,7 @@ function main()
             $count++
         }
         
-        if (($number = read-host "enter number of the cluster to query or ctrl-c to exit:") -le $count)
+        if (($number = read-host "enter number of the scaleset to query or ctrl-c to exit:") -le $count)
         {
             $vmssName = $scalesets[$number - 1].Name
             write-host $vmssName
@@ -338,9 +349,6 @@ function generate-list([string]$strList)
 
 function monitor-jobs()
 {
-    write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
-        subsequent executions take between a 1 and 30 minutes..." -foregroundcolor yellow
-    write-host "use -removeExtension to remove extension or reset"
     $originalJobsCount = (get-job).count
     $minCount = 1
     $count = 0
@@ -412,6 +420,10 @@ function node-psTestScript()
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters)
 {
+    write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
+    subsequent executions take between a 1 and 30 minutes..." -foregroundcolor yellow
+    write-host "use -removeExtension to remove extension or reset"
+
     foreach ($instanceId in $instanceIds)
     {
         $instance = get-azvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
@@ -484,6 +496,11 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -ScriptPath $script `
                 -CommandId $commandId `
                 -AsJob
+        }
+
+        if(!$concurrent)
+        {
+            monitor-jobs
         }
 
         if ($response)
