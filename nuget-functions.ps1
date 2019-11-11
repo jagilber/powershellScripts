@@ -36,16 +36,16 @@ class NugetObj {
     }
 
     [hashtable] EnumPackages ([string]$packageName) {
-        return $this.EnumPackages($packageName, $null, $null)
+        return $this.EnumPackages($packageName, $null, "packageid:")
     }
 
     [hashtable] EnumPackages ([string]$packageName,[string]$packageSource) {
-        return $this.EnumPackages($packageName, $packageSource, $null)
+        return $this.EnumPackages($packageName, $packageSource, "packageid:")
     }
 
     [hashtable] EnumPackages ([string]$packageName,[string]$packageSource,[string]$searchFilter) {
         $this.packagesource = $packageSource
-        if(!$searchFilter) { $searchFilter = "packageid:" }
+        #if(!$searchFilter) { $searchFilter = "packageid:" }
 
         if($this.sources.Contains($packageSource)) {
             write-host "converting $packageSource to $($this.sources[$packageSource])" -ForegroundColor cyan
@@ -71,6 +71,15 @@ class NugetObj {
 
         foreach($package in $sourcePackages) {
             write-host "checking package: $package"
+            if($package -ilike 'No Packages found.' -and $searchFilter) {
+                write-warning "$package, trying without searchfilter $searchFilter"
+                return $this.EnumPackages($packageName, $packageSource, $null)
+            } 
+            elseif ($package -ilike 'No Packages found.') {
+                write-error $package
+                return $this.packages
+            }
+
             [string[]]$packageProperties = $package -split " "
             try {
                 $this.packages.Add($packageProperties[0], $packageProperties[1])
