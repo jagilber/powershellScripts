@@ -6,7 +6,8 @@ param(
     $sfLogDir = "d:\svcfab\log", # "d:\svcfab\log\traces",
     $outputDir = "d:\temp",
     $fileFilter = "*.etl",
-    $sfDownloadManUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-download-man.ps1"
+    $sfDownloadManUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-download-man.ps1",
+    [string[]]$manFilterList = @("WFPerf.man","KtlLoggerCounters.man")
 )
 
 # D:\SvcFab\Log\work\WFEtwMan
@@ -26,9 +27,9 @@ function main(){
     New-Item -ItemType Directory -Path $outputDir
     $etlFiles = @([io.directory]::GetFiles($sfLogDir, $fileFilter, [IO.SearchOption]::AllDirectories))
     $totalFiles = $etlFiles.count
-    $etlFileVersion = ([regex]::Match($sfevtpublisher, $pattern, [text.regularexpressions.regexoptions]::ignorecase)).Groups[1].Value
+    $etlFileVersion = ([regex]::Match(($etlFiles -join ","), "`_$pattern`_", [text.regularexpressions.regexoptions]::ignorecase)).Groups[1].Value
     Write-Host "etl file version: $etlFileVersion"
-    Write-Host "input files count: $totalFiles"
+    Write-Host "etl files count: $totalFiles"
     
     if($etlFiles.count -lt 1) {
         write-error "no $fileFilter files found in $sflogdir"
@@ -44,10 +45,11 @@ function main(){
 
             if(!(test-path $sfDownloadManScript)) {
                 (new-object net.webclient).DownloadFile($sfDownloadManUrl, $sfDownloadManScript)
-                . $sfDownloadManScript -sfversion $etlFileVersion
-                $manifestFiles = enum-manifests $etlFileVersion
-                $importArgument = "-import $($manifestFiles -join ",")"
             }
+
+            . $sfDownloadManScript -sfversion $etlFileVersion
+            $manifestFiles = enum-manifests "$pwd\$etlFileVersion"
+            $importArgument = " -import `"$($manifestFiles -join '`" `"')`""
         }
     }
 
@@ -55,10 +57,9 @@ function main(){
         $count++
         write-host "file $count of $totalFiles"
         $outputFile = "$outputDir\$([io.path]::GetFileNameWithoutExtension($etlFile)).dtr.csv"
-        #Write-Host "netsh.exe trace convert input=$etlFile output=$outputFile"
-        #netsh.exe trace convert input=$etlFile output=$outputFile report=no
-        write-host "tracerpt $etlFile$importArgument -of CSV -o $outputFile"
-        tracerpt $etlFile$importArgument -of CSV -o $outputFile
+        del $outputFile
+        write-host "tracerpt `"$etlFile`"$importArgument -of CSV -o `"$outputFile`""
+        start-process -wait -FilePath "tracerpt" -ArgumentList "`"$etlFile`"$importArgument -of CSV -o `"$outputFile`""
     }
 
     Write-Host "complete"
@@ -67,12 +68,27 @@ function main(){
 
 function enum-manifests($manifestPath) {
     # sf manifest on disk?
+    $manDir = "c:\man"
     $manifestFiles = @([io.directory]::GetFiles($manifestPath, "*.man", [IO.SearchOption]::AllDirectories))
     $manifestFileVersion = ([regex]::Match(($manifestFiles -join ","), $pattern, [text.regularexpressions.regexoptions]::ignorecase)).Groups[1].Value
     Write-Host "manifest file version: $manifestFileVersion"
     write-host "manifest files"
     write-host ($manifestFiles | out-string)
-    return $manifestFiles
+    $manList = [collections.arraylist]@()
+    remove-item $manDir -recurse -force
+    mkdir $manDir
+    
+    foreach($file in $manifestFiles) {
+        $fileName = [io.path]::GetFileName($file)
+        [void][io.file]::Copy($file, "$manDir\$fileName")
+
+        if(!($manFilterList -contains $fileName))
+        {
+            [void]$manList.Add("$manDir\$fileName")
+        }
+    }
+
+    return $manList
 }
 
 main
