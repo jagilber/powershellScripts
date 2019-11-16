@@ -6,22 +6,36 @@ param(
     $sfLogDir = "d:\svcfab\log", # "d:\svcfab\log\traces",
     $outputDir = "d:\temp",
     $fileFilter = "*.etl",
-    $sfDownloadManUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-download-man.ps1",
-    [string[]]$manFilterList = @("WFPerf.man","KtlLoggerCounters.man")
+    $sfDownloadCabScript = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-download-cab.ps1",
+    [switch]$force,
+    [switch]$clean,
+    [int]$etlMaxProcessorInstance = 4
 )
 
 # D:\SvcFab\Log\work\WFEtwMan
 $ErrorActionPreference = "silentlycontinue"
+$netsh = "netsh"
 
-function main(){
+function main() {
+
+    # run as administrator
+    if(!runas-admin) { return }
 
     $pattern = "([0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4})"
     $count = 0
 
-    # sf manifest installed?
-    $sfevtpublisher = wevtutil gp "Microsoft-ServiceFabric"
-    $sfPublisherVersion = ([regex]::Match($sfevtpublisher, $pattern, [text.regularexpressions.regexoptions]::ignorecase)).Groups[1].Value
-    Write-Host "win event publisher file version: $sfPublisherVersion"
+    # sf installed?
+    $sfInstalledVersion = (get-itemproperty -ErrorAction SilentlyContinue 'HKLM:\SOFTWARE\Microsoft\Service Fabric' FabricVersion).FabricVersion
+    
+    if ($sfInstalledVersion) {
+        Write-Warning "service fabric is installed. file version: $sfInstalledVersion"    
+    }
+    
+    if ((get-process fabric*)) {
+        Write-Warning "fabric is running! will not modify version"
+        $force = $false
+    }
+
 
     # etl files?
     New-Item -ItemType Directory -Path $outputDir
@@ -31,64 +45,73 @@ function main(){
     Write-Host "etl file version: $etlFileVersion"
     Write-Host "etl files count: $totalFiles"
     
-    if($etlFiles.count -lt 1) {
+    if ($etlFiles.count -lt 1) {
         write-error "no $fileFilter files found in $sflogdir"
         return
     }
 
-    $manifestFiles = enum-manifests $sfLogDir
-    $importArgument = ""
+    $sfBinDir = $null
 
-    if($sfPublisherVersion -ne $etlFileVersion) {
-        if($etlFileVersion -ne $manifestFileVersion){
-            $sfDownloadManScript = "$pwd\$([io.path]::GetFileName($sfDownloadManUrl))"
+    if (($sfInstalledVersion -ne $etlFileVersion) -and $force) {
+        $sfCabScript = "$pwd\$([io.path]::GetFileName($sfDownloadCabScript))"
 
-            if(!(test-path $sfDownloadManScript)) {
-                (new-object net.webclient).DownloadFile($sfDownloadManUrl, $sfDownloadManScript)
-            }
-
-            . $sfDownloadManScript -sfversion $etlFileVersion
-            $manifestFiles = enum-manifests "$pwd\$etlFileVersion"
-            $importArgument = " -import `"$($manifestFiles -join '`" `"')`""
+        if (!(test-path $sfCabScript)) {
+            write-host "downloading $sfCabScript"
+            (new-object net.webclient).DownloadFile($sfDownloadCabScript, $sfCabScript)
         }
+
+        . $sfCabScript -sfversion $etlFileVersion -outputfolder $outputDir
+        $sfBinDir = "$outputDir\$etlFileVersion\bin\Fabric\Fabric.Code"
+        start-process -Wait -FilePath "FabricSetup.exe" -ArgumentList "/operation:uninstall" -WorkingDirectory $sfBinDir -NoNewWindow
+        start-process -Wait -FilePath "FabricSetup.exe" -ArgumentList "/operation:install" -WorkingDirectory $sfBinDir -NoNewWindow
+
     }
 
     foreach ($etlFile in $etlFiles) {
+        monitor-processes -maxCount $etlMaxProcessorInstance
         $count++
         write-host "file $count of $totalFiles"
         $outputFile = "$outputDir\$([io.path]::GetFileNameWithoutExtension($etlFile)).dtr.csv"
-        del $outputFile
-        write-host "tracerpt `"$etlFile`"$importArgument -of CSV -o `"$outputFile`""
-        start-process -wait -FilePath "tracerpt" -ArgumentList "`"$etlFile`"$importArgument -of CSV -o `"$outputFile`""
+        write-host "netsh trace convert input=`"$etlFile`" output=`"$outputFile`" report=no overwrite=yes"
+        start-process -FilePath $netsh -ArgumentList "trace convert input=`"$etlFile`" output=`"$outputFile`" report=no overwrite=yes" -NoNewWindow
+    }
+    
+    # wait for all processes to finish
+    monitor-processes -maxCount 0
+
+    if ((!$sfInstalledVersion -and $clean) -or ($clean -and $force)) {
+        start-process -Wait -FilePath "FabricSetup.exe" -ArgumentList "/operation:uninstall" -WorkingDirectory $sfBinDir -NoNewWindow
     }
 
     Write-Host "complete"
 
 }
 
-function enum-manifests($manifestPath) {
-    # sf manifest on disk?
-    $manDir = "c:\man"
-    $manifestFiles = @([io.directory]::GetFiles($manifestPath, "*.man", [IO.SearchOption]::AllDirectories))
-    $manifestFileVersion = ([regex]::Match(($manifestFiles -join ","), $pattern, [text.regularexpressions.regexoptions]::ignorecase)).Groups[1].Value
-    Write-Host "manifest file version: $manifestFileVersion"
-    write-host "manifest files"
-    write-host ($manifestFiles | out-string)
-    $manList = [collections.arraylist]@()
-    remove-item $manDir -recurse -force
-    mkdir $manDir
-    
-    foreach($file in $manifestFiles) {
-        $fileName = [io.path]::GetFileName($file)
-        [void][io.file]::Copy($file, "$manDir\$fileName")
+function monitor-processes($maxCount) {
+    while ($true) {
+        if((get-process) -match $netsh) {
+            $instanceCount = (get-process -Name ($netsh)).Length
+            write-host "instance count:$($instanceCount)"
 
-        if(!($manFilterList -contains $fileName))
-        {
-            [void]$manList.Add("$manDir\$fileName")
+            if($instanceCount -ge $maxCount) {
+                write-host "waiting for $($netsh) instances to finish."
+                write-host " current instance count: $($instanceCount) seconds waiting: $($count++)"
+                start-sleep -Seconds 1
+                continue
+            }
         }
+        break
     }
+}
 
-    return $manList
+function runas-admin() {
+    if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole( `
+        [Security.Principal.WindowsBuiltInRole] "Administrator")) {   
+       write-host "please restart script as administrator. exiting..."
+       return $false
+    }
+    return $true
 }
 
 main
+write-host "finished"
