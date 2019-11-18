@@ -1,12 +1,12 @@
 <#
-downloads git client for use but no install
+downloads git client for use 
 
 to run with no arguments:
-iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1" -UseBasicParsing|iex
+iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-min-git-client.ps1","$pwd/download-min-git-client.ps1");
-.\download-min-git-client.ps1
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1","$pwd/download-git-client.ps1");
+.\download-git-client.ps1
 
 git has to be pathed .\git.exe 
 by default it is added to 'path' for session 
@@ -17,17 +17,23 @@ by default it is added to 'path' for session
 param(
     [string]$destPath = (get-location).Path,
     [string]$gitReleaseApi = "https://api.github.com/repos/git-for-windows/git/releases/latest",
-    [string]$gitClientType = "mingit.+64",
+    [string]$gitClientType = "Git-.+?-64-bit.exe",
     [switch]$setPath,
     [switch]$force,
-    [switch]$clean
+    [switch]$clean,
+    [switch]$min
 )
 
-[System.Net.ServicePointManager]::Expect100Continue = $true;
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+[Net.ServicePointManager]::Expect100Continue = $true;
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
 $erroractionpreference = "silentlycontinue"
-$clientFile = "$($destPath)\gitminclient.zip"
 $error.clear()
+
+if($min)
+{
+    $gitClientType = "mingit.+64"
+}
+
 (git)|out-null
 
 if($error -and $clean)
@@ -72,14 +78,27 @@ if(!$downloadUrl)
 }
 
 $downloadUrl
+#$clientFile = "$($destPath)\gitminclient.zip"
+$clientFile = "$($destPath)\$([io.path]::GetFileName($downloadUrl))"
+mkdir $destPath
 (new-object net.webclient).DownloadFile($downloadUrl,$clientFile)
-Expand-Archive $clientFile $destPath
-$env:Path = $env:Path + ";$($newPath)"
 
-if($setPath -and !$path.tolower().contains($newPath))
+if($clientFile -imatch ".zip")
 {
-    # permanent
-    [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
+    Expand-Archive $clientFile $destPath
+    $env:Path = $env:Path + ";$($newPath)"
+
+    if($setPath -and !$path.tolower().contains($newPath))
+    {
+        # permanent
+        [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
+    }
+}
+else
+{
+    # install
+    write-host "$clientFile /SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS"
+    . $clientFile /SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS
 }
 
 write-host "finished"
