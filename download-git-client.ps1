@@ -15,25 +15,42 @@ by default it is added to 'path' for session
 -clean to remove
 #>
 param(
-    [string]$destPath = (get-location).Path,
+    [string]$destPath = $pwd,
     [string]$gitReleaseApi = "https://api.github.com/repos/git-for-windows/git/releases/latest",
+    [string]$hubReleaseApi = "https://api.github.com/repos/github/hub/releases/latest", 
     [string]$gitClientType = "Git-.+?-64-bit.exe",
+    [string]$hubClientType = "hub-windows-amd64-.+?.zip",
     [switch]$setPath,
     [switch]$force,
     [switch]$clean,
-    [switch]$min
+    [switch]$gitMinClient,
+    [switch]$hub
 )
 
 [Net.ServicePointManager]::Expect100Continue = $true;
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
 $erroractionpreference = "silentlycontinue"
 $error.clear()
+$destPath = "$($destPath)\gitbin"
 
-if($min)
+if($gitMinClient)
 {
     $gitClientType = "mingit.+64"
 }
 
+if($hub)
+{
+    Set-Alias git hub
+    $gitClientType = $hubClientType
+    $gitReleaseApi = $hubReleaseApi
+    $destPath += "\hub"
+}
+else
+{
+    $destPath += "\git"
+}
+
+$binPath = $destPath.ToLower() + "\bin"
 (git)|out-null
 
 if($error -and $clean)
@@ -49,19 +66,19 @@ if(!$error -and !$force -and !$clean)
 }
 
 $error.clear()
-remove-item $clientFile -force -erroraction silentlycontinue
-$destPath = $clientFile.Trim([io.path]::GetExtension($clientFile))
-remove-item $destPath -force -recurse -erroraction silentlycontinue
-$newPath = "$($destPath)\cmd"
 $path = [environment]::GetEnvironmentVariable("Path")
 
 if($clean)
 {
-    if($path.tolower().contains($destPath))
+    if($path.tolower().contains($binPath))
     {
-        [environment]::SetEnvironmentVariable("Path", $($path.replace(";$($newPath)","")), "Machine")
+        [environment]::SetEnvironmentVariable("Path", $($path.replace(";$($binPath)","")), "Machine")
     }
     
+    if((test-path $destPath))
+    {
+        remove-item $destPath -Force -Recurse
+    }
     write-host "cleaned..."
     return
 }
@@ -80,19 +97,46 @@ if(!$downloadUrl)
 $downloadUrl
 #$clientFile = "$($destPath)\gitminclient.zip"
 $clientFile = "$($destPath)\$([io.path]::GetFileName($downloadUrl))"
+
+if($force)
+{
+    remove-item $destPath -Recurse -Force
+}
+
 mkdir $destPath
-(new-object net.webclient).DownloadFile($downloadUrl,$clientFile)
+
+if(!(test-path $clientFile) -or $force)
+{
+    if($force)
+    {
+        remove-item $clientFile
+    }
+
+    write-host "downloading $downloadUrl to $clientFile"
+    (new-object net.webclient).DownloadFile($downloadUrl,$clientFile)
+}
 
 if($clientFile -imatch ".zip")
 {
     Expand-Archive $clientFile $destPath
-    $env:Path = $env:Path + ";$($newPath)"
 
-    if($setPath -and !$path.tolower().contains($newPath))
+    if(!$path.tolower().contains($binPath))
     {
-        # permanent
-        [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($newPath)", "Machine")
+        write-host "setting path"
+        $env:Path = $env:Path + ";$($binPath)"
+
+        if($setPath)
+        {
+            write-host "setting path permanent"
+            [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($binPath)", "Machine")
+        }
     }
+    else
+    {
+        write-host "path contains $binPath"
+    }
+
+    write-host $env:path
 }
 else
 {
