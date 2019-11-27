@@ -15,27 +15,28 @@ by default it is added to 'path' for session
 -clean to remove
 #>
 param(
-    [string]$destPath = $pwd,
+    [string]$destPath = $pwd, # $env:appdata
+    [switch]$setPath,
+    [switch]$gitMinClient,
+    [switch]$hub,
+    [switch]$clean,
+    [switch]$force,
     [string]$gitReleaseApi = "https://api.github.com/repos/git-for-windows/git/releases/latest",
     [string]$hubReleaseApi = "https://api.github.com/repos/github/hub/releases/latest", 
     [string]$gitClientType = "Git-.+?-64-bit.exe",
     [string]$hubClientType = "hub-windows-amd64-.+?.zip",
-    [switch]$setPath,
-    [switch]$force,
-    [switch]$clean,
-    [switch]$gitMinClient,
-    [switch]$hub
+    [string]$minGitClientType = "mingit.+64"
 )
 
-[Net.ServicePointManager]::Expect100Continue = $true;
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true;
+[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
 $erroractionpreference = "silentlycontinue"
 $error.clear()
 $destPath = "$($destPath)\gitbin"
 
 if($gitMinClient)
 {
-    $gitClientType = "mingit.+64"
+    $gitClientType = $minGitClientType
 }
 
 if($hub)
