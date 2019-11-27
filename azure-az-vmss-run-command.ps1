@@ -190,7 +190,7 @@ function main() {
         $script = node-psTestScript
     }
 
-    if (!$resourceGroup -or !$vmssName) {
+    if (!$resourceGroup) {
         $nodePrompt = $true
         $count = 1
         $resourceGroups = Get-azResourceGroup
@@ -204,10 +204,13 @@ function main() {
             $resourceGroup = $resourceGroups[$number - 1].ResourceGroupName
             write-host $resourceGroup
         }
+    }
 
-        $count = 1
-        $scalesets = Get-azVmss -ResourceGroupName $resourceGroup
-        
+    $count = 1
+    $scalesets = Get-azVmss -ResourceGroupName $resourceGroup
+
+    if (!$vmssName) {
+        $nodePrompt = $true
         foreach ($scaleset in $scalesets) {
             write-host "$($count). $($scaleset.Name)"
             $count++
