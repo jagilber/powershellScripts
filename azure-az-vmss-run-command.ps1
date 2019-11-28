@@ -195,7 +195,7 @@ function main() {
         $count = 1
         $resourceGroups = Get-azResourceGroup
         
-        foreach ($rg in $resourceGroups) {
+        foreach ($rg in @($resourceGroups)) {
             write-host "$($count). $($rg.ResourceGroupName)"
             $count++
         }
@@ -211,7 +211,7 @@ function main() {
 
     if (!$vmssName) {
         $nodePrompt = $true
-        foreach ($scaleset in $scalesets) {
+        foreach ($scaleset in @($scalesets)) {
             write-host "$($count). $($scaleset.Name)"
             $count++
         }
