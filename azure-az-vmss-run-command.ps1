@@ -193,6 +193,7 @@ function main() {
     if (!$resourceGroup) {
         $nodePrompt = $true
         $count = 1
+        $number = 0
         $resourceGroups = Get-azResourceGroup
         
         foreach ($rg in @($resourceGroups)) {
@@ -200,23 +201,29 @@ function main() {
             $count++
         }
         
-        if (($number = read-host "enter number of the resource group to query or ctrl-c to exit:") -le $count) {
+        $number = [convert]::ToInt32((read-host "enter number of the resource group to query or ctrl-c to exit:"))
+
+        if ($number -le $count) {
             $resourceGroup = $resourceGroups[$number - 1].ResourceGroupName
             write-host $resourceGroup
         }
     }
 
-    $count = 1
     $scalesets = Get-azVmss -ResourceGroupName $resourceGroup
 
     if (!$vmssName) {
         $nodePrompt = $true
+        $number = 0
+        $count = 1
+        
         foreach ($scaleset in @($scalesets)) {
             write-host "$($count). $($scaleset.Name)"
             $count++
         }
         
-        if (($number = read-host "enter number of the scaleset to query or ctrl-c to exit:") -le $count) {
+        $number = [convert]::ToInt32((read-host "enter number of the scaleset to query or ctrl-c to exit:"))
+
+        if ($number -le $count) {
             $vmssName = $scalesets[$number - 1].Name
             write-host $vmssName
         }
