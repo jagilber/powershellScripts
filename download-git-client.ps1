@@ -17,11 +17,11 @@ by default it is added to 'path' for session
 param(
     [string]$destPath = (get-location).Path,
     [string]$gitReleaseApi = "https://api.github.com/repos/git-for-windows/git/releases/latest",
-    [string]$gitClientType = "Git-.+?-64-bit.exe",
+    [string]$gitClientType = "mingit.+64",
     [switch]$setPath,
     [switch]$force,
     [switch]$clean,
-    [switch]$min
+    [switch]$full
 )
 
 [Net.ServicePointManager]::Expect100Continue = $true;
@@ -29,9 +29,9 @@ param(
 $erroractionpreference = "silentlycontinue"
 $error.clear()
 
-if($min)
+if($full)
 {
-    $gitClientType = "mingit.+64"
+    $gitClientType = "Git-.+?-64-bit.exe"
 }
 
 (git)|out-null
@@ -78,7 +78,7 @@ if(!$downloadUrl)
 }
 
 $downloadUrl
-#$clientFile = "$($destPath)\gitminclient.zip"
+#$clientFile = "$($destPath)\gitfullclient.zip"
 $clientFile = "$($destPath)\$([io.path]::GetFileName($downloadUrl))"
 mkdir $destPath
 (new-object net.webclient).DownloadFile($downloadUrl,$clientFile)
