@@ -9,7 +9,7 @@ https://docs.microsoft.com/en-us/rest/api/compute/virtualmachines
 param(
     $token = $global:token,
     $SubscriptionID = (Get-azContext).Subscription.Id,
-    $apiVersion = "2016-09-01",
+    $apiVersion = "2019-03-01",
     $baseURI = "https://management.azure.com/subscriptions/$($SubscriptionID)/",
     $query,
     $arguments,
@@ -75,6 +75,7 @@ $params = @{
 $params
 $error.Clear()
 $response = Invoke-RestMethod @params -Verbose -Debug
+#$response = Invoke-WebRequest @params -Verbose -Debug
 $global:response = $response
 write-host (ConvertTo-Json -Depth 99 ($global:response))
 Write-Output $global:response
