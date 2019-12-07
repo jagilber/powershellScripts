@@ -90,11 +90,17 @@
 .PARAMETER force
     [bool]enable to force authentication regardless if token is valid
 
-.PARAMETER parameters
-    [hashtable]optional hashtable of parameters to pass to kusto script (.csl|kusto) file
+.PARAMETER serverTimeout
+    [timespan]optional override default 4 minute kusto server side timeout. max 60 minutes.
+
+.PARAMETER clean
+    [switch]optional clean msal logon utility for .net core and nuget for .net
 
 .PARAMETER updateScript
     [switch]optional enable to download latest version of script
+
+.PARAMETER parameters
+    [hashtable]optional hashtable of parameters to pass to kusto script (.csl|kusto) file
 
 .OUTPUTS
     KustoObj
@@ -123,12 +129,12 @@ param(
     [bool]$pipeLine,
     [string]$wellknownClientId = "1950a258-227b-4e31-a9cf-717495945fc2", 
     [string]$redirectUri = "urn:ietf:wg:oauth:2.0:oob",
-    #[string]$resourceUrl, # = "https://{{kusto cluster}}.kusto.windows.net"
     [bool]$force,
     [string]$msalUtility = "https://api.github.com/repos/jagilber/netCore/releases",
     [string]$msalUtilityFileName = "netCoreMsal",
-    [switch]$updateScript,
     [timespan]$serverTimeout = (new-Object timespan (0, 4, 0)),
+    [switch]$updateScript,
+    [switch]$clean,
     [hashtable]$parameters = @{ } #@{'clusterName' = $resourceGroup; 'dnsName' = $resourceGroup;}
 )
       
@@ -136,46 +142,45 @@ $ErrorActionPreference = "continue"
 $global:kusto = $null
       
 class KustoObj {
-    [object]$adalDll = $null
-    [string]$adalDllLocation = $adalDllLocation
-    [object]$authenticationResult
+    hidden [object]$adalDll = $null
+    hidden [string]$adalDllLocation = $adalDllLocation
+    hidden [object]$authenticationResult
     [string]$clientId = $clientID
     hidden [string]$clientSecret = $clientSecret
-    [string]$cluster = $cluster
-    [string]$database = $database
-    [bool]$fixDuplicateColumns = $fixDuplicateColumns
-    [bool]$force = $force
-    [int]$limit = $limit
-    [string]$msalUtility = $msalUtility
-    [string]$msalUtilityFileName = $msalUtilityFileName
+    [string]$Cluster = $cluster
+    [string]$Database = $database
+    [bool]$FixDuplicateColumns = $fixDuplicateColumns
+    [bool]$Force = $force
+    [int]$Limit = $limit
+    hidden [string]$msalUtility = $msalUtility
+    hidden [string]$msalUtilityFileName = $msalUtilityFileName
     [hashtable]$parameters = $parameters
-    [bool]$pipeLine = $null
-    [string]$query = $query
+    [bool]$PipeLine = $null
+    [string]$Query = $query
     hidden [string]$redirectUri = $redirectUri
-    [bool]$removeEmptyColumns = $removeEmptyColumns
-    [object]$result = $null
-    [object]$resultObject = $null
-    [object]$resultTable = $null
-    [string]$resultFile = $resultFile
-    [string]$script = $script
-    [string]$table = $table
+    [bool]$RemoveEmptyColumns = $removeEmptyColumns
+    hidden [object]$Result = $null
+    [object]$ResultObject = $null
+    [object]$ResultTable = $null
+    [string]$ResultFile = $resultFile
+    [string]$Script = $script
+    [string]$Table = $table
     [string]$tenantId = $tenantId
-    [timespan]$serverTimeout = $serverTimeout
-    [string]$token = $token
-    [bool]$viewResults = $viewResults
+    [timespan]$ServerTimeout = $serverTimeout
+    hidden [string]$token = $token
+    [bool]$ViewResults = $viewResults
     hidden [string]$wellknownClientId = $wellknownClientId
           
     KustoObj() { }
     static KustoObj() { }
       
     hidden [bool] CheckAdal() {
-        [object]$kusto = $this
         [string]$packageName = "Microsoft.IdentityModel.Clients.ActiveDirectory"
         [string]$outputDirectory = "$($env:USERPROFILE)\.nuget\packages"
         [string]$nugetSource = "https://api.nuget.org/v3/index.json"
         [string]$nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
       
-        if (!$kusto.force -and $kusto.adalDll) {
+        if (!$this.force -and $this.adalDll) {
             write-warning 'adal already set. use -force to force'
             return $true
         }
@@ -184,52 +189,47 @@ class KustoObj {
         [string]$packageDirectory = "$outputDirectory\$packageName"
         [string]$edition = "net45"
               
-        $kusto.adalDllLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
+        $this.adalDllLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
       
-        if (!$kusto.adalDllLocation) {
-            if (!($env:path.contains(";$pwd;$env:temp"))) { 
-                $env:path += ";$pwd;$env:temp" 
-                      
-                if ($PSScriptRoot -and !($env:path.contains(";$psscriptroot"))) {
-                    $env:path += ";$psscriptroot" 
-                }
-            } 
+        if (!$this.adalDllLocation) {
+            if ($psscriptroot -and !($env:path.contains(";$psscriptroot"))) {
+                $env:path += ";$psscriptroot" 
+            }
           
             if (!(test-path nuget)) {
-                (new-object net.webclient).downloadFile($nugetDownloadUrl, "$pwd\nuget.exe")
+                (new-object net.webclient).downloadFile($nugetDownloadUrl, "$psscriptroot\nuget.exe")
             }
       
             [string]$localPackages = nuget list -Source $outputDirectory
       
-            if ($kusto.force -or !($localPackages -imatch $packageName)) {
+            if ($this.force -or !($localPackages -imatch $packageName)) {
                 write-host "nuget install $packageName -Source $nugetSource -outputdirectory $outputDirectory -verbosity detailed"
                 nuget install $packageName -Source $nugetSource -outputdirectory $outputDirectory -verbosity detailed
-                $kusto.adalDllLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
+                $this.adalDllLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
             }
             else {
                 write-host "$packageName already installed" -ForegroundColor green
             }
         }
       
-        write-host "adalDll: $($kusto.adalDllLocation)" -ForegroundColor Green
-        #import-module $($kusto.adalDll.FullName)
-        $kusto.adalDll = [Reflection.Assembly]::LoadFile($kusto.adalDllLocation) 
-        $kusto.adalDll
-        $kusto.adalDllLocation = $kusto.adalDll.Location
+        write-host "adalDll: $($this.adalDllLocation)" -ForegroundColor Green
+        #import-module $($this.adalDll.FullName)
+        $this.adalDll = [Reflection.Assembly]::LoadFile($this.adalDllLocation) 
+        $this.adalDll
+        $this.adalDllLocation = $this.adalDll.Location
         return $true
     }
       
     [KustoObj] CreateResultTable() {
-        [object]$kusto = $this
-        $kusto.resultTable = [collections.arraylist]@()
+        $this.ResultTable = [collections.arraylist]@()
         $columns = @{ }
       
-        if (!$kusto.resultObject.tables) {
+        if (!$this.ResultObject.tables) {
             write-warning "run query first"
             return $this.Pipe()
         }
       
-        foreach ($column in ($kusto.resultObject.tables[0].columns)) {
+        foreach ($column in ($this.ResultObject.tables[0].columns)) {
             try {
                 [void]$columns.Add($column.ColumnName, $null)                 
             }
@@ -241,11 +241,11 @@ class KustoObj {
         $resultModel = New-Object -TypeName PsObject -Property $columns
         $rowCount = 0
     
-        foreach ($row in ($kusto.resultObject.tables[0].rows)) {
+        foreach ($row in ($this.ResultObject.tables[0].rows)) {
             $count = 0
             $resultCopy = $resultModel.PsObject.Copy()
                 
-            foreach ($column in ($kusto.resultObject.tables[0].columns)) {
+            foreach ($column in ($this.ResultObject.tables[0].columns)) {
                 #write-verbose "createResultTable: procesing column $count"
                 $resultCopy.($column.ColumnName) = $row[$count++]
             }
@@ -253,77 +253,76 @@ class KustoObj {
             write-verbose "createResultTable: processing row $rowCount columns $count"
             $rowCount++
       
-            [void]$kusto.resultTable.add($resultCopy)
+            [void]$this.ResultTable.add($resultCopy)
         }
-        $kusto.resultTable = $this.RemoveEmptyResults($kusto.resultTable)
+        $this.ResultTable = $this.RemoveEmptyResults($this.ResultTable)
         return $this.Pipe()
     }
       
     [KustoObj] Exec([string]$query) {
-        $this.query = $query
+        $this.Query = $query
         $this.Exec()
-        $this.query = $null
+        $this.Query = $null
         return $this.Pipe()
     }
       
     [KustoObj] Exec() {
-        [object]$kusto = $this
         $startTime = get-date
-        $kusto
+        $this
       
-        if (!$kusto.limit) {
-            $kusto.limit = 10000
+        if (!$this.Limit) {
+            $this.Limit = 10000
         }
       
-        if (!$kusto.script -and !$kusto.query) {
+        if (!$this.Script -and !$this.Query) {
             Write-Warning "-script and / or -query should be set. exiting"
             return $this.Pipe()
         }
       
-        if (!$kusto.cluster -or !$kusto.database) {
+        if (!$this.Cluster -or !$this.Database) {
             Write-Warning "-cluster and -database have to be set once. exiting"
             return $this.Pipe()
         }
       
-        if ($kusto.query) {
-            write-host "table:$($kusto.table) query:$($kusto.query.substring(0, [math]::min($kusto.query.length,512)))" -ForegroundColor Cyan
+        if ($this.Query) {
+            write-host "table:$($this.Table) query:$($this.Query.substring(0, [math]::min($this.Query.length,512)))" -ForegroundColor Cyan
         }
       
-        if ($kusto.script) {
-            write-host "script:$($kusto.script)" -ForegroundColor Cyan
+        if ($this.Script) {
+            write-host "script:$($this.Script)" -ForegroundColor Cyan
         }
       
-        if ($kusto.table -and $kusto.query.startswith("|")) {
-            $kusto.query = $kusto.table + $kusto.query
+        if ($this.Table -and $this.Query.startswith("|")) {
+            $this.Query = $this.Table + $this.Query
         }
      
-        $kusto.resultObject = $this.Post($null)
+        $this.ResultObject = $this.Post($null)
      
-        if ($kusto.resultObject.Exceptions) {
-            write-warning ($kusto.resultObject.Exceptions | out-string)
-            $kusto.resultObject.Exceptions = $null
+        if ($this.ResultObject.Exceptions) {
+            write-warning ($this.ResultObject.Exceptions | out-string)
+            $this.ResultObject.Exceptions = $null
         }
       
-        if ($kusto.viewResults) {
+        if ($this.ViewResults) {
             $this.CreateResultTable()
-            write-host ($kusto.resultTable | out-string)
+            write-host ($this.ResultTable | out-string)
         }
       
-        if ($kusto.resultFile) {
-            out-file -FilePath $kusto.resultFile -InputObject  ($kusto.resultObject | convertto-json -Depth 99)
+        if ($this.ResultFile) {
+            out-file -FilePath $this.ResultFile -InputObject  ($this.ResultObject | convertto-json -Depth 99)
         }
       
-        $primaryResult = $kusto.resultObject | where-object TableKind -eq PrimaryResult
+        $primaryResult = $this.ResultObject | where-object TableKind -eq PrimaryResult
           
         if ($primaryResult) {
             write-host ($primaryResult.columns | out-string)
             write-host ($primaryResult.Rows | out-string)
         }
       
-        if ($kusto.resultObject.tables) {
-            write-host "results: $($kusto.resultObject.tables[0].rows.count) / $(((get-date) - $startTime).TotalSeconds) seconds to execute" -ForegroundColor DarkCyan
-            if ($kusto.resultObject.tables[0].rows.count -eq $kusto.limit) {
-                write-warning "results count equals limit $($kusto.limit). results may be incomplete"
+        if ($this.ResultObject.tables) {
+            write-host "results: $($this.ResultObject.tables[0].rows.count) / $(((get-date) - $startTime).TotalSeconds) seconds to execute" -ForegroundColor DarkCyan
+            if ($this.ResultObject.tables[0].rows.count -eq $this.limit) {
+                write-warning "results count equals limit $($this.limit). results may be incomplete"
             }
         }
         else {
@@ -333,41 +332,40 @@ class KustoObj {
     }
       
     [KustoObj] ExecScript([string]$script, [hashtable]$parameters) {
-        $this.script = $script
+        $this.Script = $script
         $this.parameters = $parameters
         $this.ExecScript()
-        $this.script = $null
+        $this.Script = $null
         return $this.Pipe()
     }
       
     [KustoObj] ExecScript([string]$script) {
-        $this.script = $script
+        $this.Script = $script
         $this.ExecScript()
-        $this.script = $null
+        $this.Script = $null
         return $this.Pipe()
     }
       
     [KustoObj] ExecScript() {
-        [object]$kusto = $this
-        if ($kusto.script.startswith('http')) {
-            $destFile = "$pwd\$([io.path]::GetFileName($kusto.script))" -replace '\?.*', ''
+        if ($this.Script.startswith('http')) {
+            $destFile = "$pwd\$([io.path]::GetFileName($this.Script))" -replace '\?.*', ''
               
             if (!(test-path $destFile)) {
-                Write-host "downloading $($kusto.script)" -foregroundcolor green
-                (new-object net.webclient).DownloadFile($kusto.script, $destFile)
+                Write-host "downloading $($this.Script)" -foregroundcolor green
+                (new-object net.webclient).DownloadFile($this.Script, $destFile)
             }
             else {
-                Write-host "using cached script $($kusto.script)"
+                Write-host "using cached script $($this.Script)"
             }
       
-            $kusto.script = $destFile
+            $this.Script = $destFile
         }
           
-        if ((test-path $kusto.script)) {
-            $kusto.query = (Get-Content -raw -Path $kusto.script)
+        if ((test-path $this.Script)) {
+            $this.Query = (Get-Content -raw -Path $this.Script)
         }
         else {
-            write-error "unknown script:$($kusto.script)"
+            write-error "unknown script:$($this.Script)"
             return $this.Pipe()
         }
       
@@ -378,13 +376,13 @@ class KustoObj {
     [void] ExportCsv([string]$exportFile) {
         $this.CreateResultTable()
         [io.directory]::createDirectory([io.path]::getDirectoryName($exportFile))
-        $this.resultTable | export-csv -notypeinformation $exportFile
+        $this.ResultTable | export-csv -notypeinformation $exportFile
     }
       
     [void] ExportJson([string]$exportFile) {
         $this.CreateResultTable()
         [io.directory]::createDirectory([io.path]::getDirectoryName($exportFile))
-        $this.resultTable | convertto-json -depth 99 | out-file $exportFile
+        $this.ResultTable | convertto-json -depth 99 | out-file $exportFile
     }
       
     [string] FixColumns([string]$sourceContent) {
@@ -426,8 +424,8 @@ class KustoObj {
     }
      
     [void] Import() {
-        if ($this.table) {
-            $this.Import($this.table)
+        if ($this.Table) {
+            $this.Import($this.Table)
         }
         else {
             write-warning "set table name first"
@@ -436,12 +434,12 @@ class KustoObj {
     }
       
     [KustoObj] Import([string]$table) {
-        if (!$this.resultObject.Tables) {
+        if (!$this.ResultObject.Tables) {
             write-warning 'no results to import'
             return $this.Pipe()
         }
       
-        [object]$results = $this.resultObject.Tables[0]
+        [object]$results = $this.ResultObject.Tables[0]
         [string]$formattedHeaders = "("
       
         foreach ($column in ($results.Columns)) {
@@ -463,25 +461,24 @@ class KustoObj {
         return $this.Pipe()
     }
       
-    [KustoObj] ImportCsv([string]$importFile, [string]$table) {
-        [object]$kusto = $this
-        $kusto.table = $table
-        $this.ImportCsv($importFile)
+    [KustoObj] ImportCsv([string]$csvFile, [string]$table) {
+        $this.Table = $table
+        $this.ImportCsv($csvFile)
         return $this.Pipe()
     }
       
-    [KustoObj] ImportCsv([string]$importFile) {
-        if (!(test-path $importFile) -or !$this.table) {
-            write-warning "verify importfile: $importFile and import table: $($this.table)"
+    [KustoObj] ImportCsv([string]$csvFile) {
+        if (!(test-path $csvFile) -or !$this.Table) {
+            write-warning "verify importfile: $csvFile and import table: $($this.Table)"
             return $this.Pipe()
         }
               
         # not working
         #POST https://help.kusto.windows.net/v1/rest/ingest/Test/Logs?streamFormat=Csv HTTP/1.1
-        #[string]$csv = Get-Content -Raw $importFile -encoding utf8
+        #[string]$csv = Get-Content -Raw $csvFile -encoding utf8
         #$this.Post($csv)
       
-        $sr = new-object io.streamreader($importFile) 
+        $sr = new-object io.streamreader($csvFile) 
         [string]$headers = $sr.ReadLine()
         [text.StringBuilder]$csv = New-Object text.StringBuilder
       
@@ -510,24 +507,48 @@ class KustoObj {
         $formattedHeaders = $formattedHeaders.trimend(', ')
         $formattedHeaders += ")"
       
-        #$this.Exec(".drop table ['$($this.table)'] ifexists")
-        $this.Exec(".create table ['$($this.table)'] $formattedHeaders") 
-        $this.Exec(".ingest inline into table ['$($this.table)'] <| $($csv.tostring())")
+        #$this.Exec(".drop table ['$($this.Table)'] ifexists")
+        $this.Exec(".create table ['$($this.Table)'] $formattedHeaders") 
+        $this.Exec(".ingest inline into table ['$($this.Table)'] <| $($csv.tostring())")
         return $this.Pipe()
     }
-      
+    
+    [KustoObj] ImportJson([string]$jsonFile) {
+        [string]$csvFile = [io.path]::GetTempFileName()
+        try {
+            ((Get-Content -Path $jsonFile) | ConvertFrom-Json) | Export-CSV $csvFile -NoTypeInformation
+            write-host "using $csvFile"
+
+            if (!(test-path $jsonFile) -or !$this.Table) {
+                write-warning "verify importfile: $csvFile and import table: $($this.Table)"
+                return $this.Pipe()
+            }
+            $this.ImportCsv($csvFile)
+            return $this.Pipe()
+        }
+        finally {
+            write-host "deleting $csvFile"
+            [io.file]::Delete($csvFile)
+        }
+    }
+
+    [KustoObj] ImportJson([string]$jsonFile, [string]$table) {
+        $this.Table = $table
+        $this.ImportJson($jsonFile)
+        return $this.Pipe()
+    }
+
     [bool] Logon($resourceUrl) {
-        [object]$kusto = $this
         [object]$authenticationContext = $Null
-        [string]$ADauthorityURL = "https://login.microsoftonline.com/$($kusto.tenantId)"
+        [string]$ADauthorityURL = "https://login.microsoftonline.com/$($this.TenantId)"
       
         if (!$resourceUrl) {
             write-warning "-resourceUrl required. example: https://{{ kusto cluster }}.kusto.windows.net"
             return $false
         }
       
-        if (!$kusto.force -and $kusto.AuthenticationResult.expireson -gt (get-date)) {
-            write-verbose "token valid: $($kusto.AuthenticationResult.expireson). use -force to force logon"
+        if (!$this.force -and $this.AuthenticationResult.expireson -gt (get-date)) {
+            write-verbose "token valid: $($this.AuthenticationResult.expireson). use -force to force logon"
             return $true
         }
     
@@ -538,7 +559,8 @@ class KustoObj {
             write-warning ".net core microsoft.identity requires form/webui. checking for $filePath"
                
             if (!(test-path $filePath)) {
-                if ((read-host "is it ok to download .net core Msal utility $utility/$utilityFileName to generate token?`r`n if not, for .net core, you will need to generate and pass token to script.[y|n]") -ilike "y") {
+                if ((read-host "is it ok to download .net core Msal utility $utility/$utilityFileName to generate token?[y|n]`r`n" `
+                        "(if not, for .net core, you will need to generate and pass token to script.)") -ilike "y") {
                     write-warning "downloading .net core $utilityFileName from $utility to $filePath"
                     [psobject]$apiResults = convertfrom-json (Invoke-WebRequest $utility -UseBasicParsing)
                     [string]$downloadUrl = @($apiResults.assets.browser_download_url -imatch "/$utilityFileName-")[0]
@@ -551,54 +573,56 @@ class KustoObj {
                 }
             }
     
-            [string]$resultJsonText = (. "$filePath\$utilityFileName.exe" --resource "https://$($kusto.cluster).kusto.windows.net")
+            [string]$resultJsonText = (. "$filePath\$utilityFileName.exe" --resource "https://$($this.cluster).kusto.windows.net")
             write-host "preauth: $resultJsonText" -foregroundcolor green
-            $resultJsonText = (. "$filePath\$utilityFileName.exe" --resource "https://$($kusto.cluster).kusto.windows.net" --scope "https://$($kusto.cluster).kusto.windows.net/kusto.read,https://$($kusto.cluster).kusto.windows.net/kusto.write")
-            $kusto.authenticationResult = $resultJsonText | convertfrom-json
-            $kusto.token = $kusto.authenticationResult.AccessToken
-            write-host ($kusto.authenticationResult | convertto-json)
+            $resultJsonText = (. "$filePath\$utilityFileName.exe" --resource "https://$($this.cluster).kusto.windows.net" --scope "https://$($this.cluster).kusto.windows.net/kusto.read,https://$($this.cluster).kusto.windows.net/kusto.write")
+            $this.authenticationResult = $resultJsonText | convertfrom-json
+            $this.Token = $this.authenticationResult.AccessToken
+            write-host ($this.authenticationResult | convertto-json)
     
-            if ($kusto.token) {
+            if ($this.Token) {
                 return $true
             }
             return $false
         }
-        elseif (!($this.CheckAdal())) { return $false }
+        elseif (!($this.CheckAdal())) { 
+            return $false 
+        }
      
         $authenticationContext = New-Object Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext($ADAuthorityURL)
       
-        if ($kusto.clientid -and $kusto.clientSecret) {
+        if ($this.clientid -and $this.clientSecret) {
             # client id / secret
-            $kusto.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential($kusto.clientId, $kusto.clientSecret))).Result
+            $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
+                (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential($this.clientId, $this.clientSecret))).Result
         }
         else {
             # user / pass
             $error.Clear()
-            $kusto.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                $kusto.wellknownClientId,
-                (new-object Uri($kusto.redirectUri)),
+            $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
+                $this.wellknownClientId,
+                (new-object Uri($this.RedirectUri)),
                 (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters(0))).Result # auto
               
             if ($error) {
                 # MFA
-                $kusto.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                    $kusto.wellknownClientId,
-                    (new-object Uri($kusto.redirectUri)),
+                $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
+                    $this.wellknownClientId,
+                    (new-object Uri($this.RedirectUri)),
                     (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters(1))).Result # [promptbehavior]::always
             }
         }
       
-        if (!($kusto.authenticationResult)) {
+        if (!($this.authenticationResult)) {
             write-error "error authenticating"
             #write-host (Microsoft.IdentityModel.Clients.ActiveDirectory.AdalError)
             return $false
         }
-        write-verbose (convertto-json $kusto.authenticationResult -Depth 99)
-        $kusto.token = $kusto.authenticationResult.AccessToken;
-        $kusto.token
-        $kusto.AuthenticationResult
-        write-verbose "results saved in `$kusto.authenticationResult and `$kusto.token"
+        write-verbose (convertto-json $this.authenticationResult -Depth 99)
+        $this.Token = $this.authenticationResult.AccessToken;
+        $this.Token
+        $this.AuthenticationResult
+        write-verbose "results saved in `$this.authenticationResult and `$this.Token"
         return $true
     }
 
@@ -611,26 +635,27 @@ class KustoObj {
 
     hidden [object] Post([string]$body = "") {
         # authorize aad to get token
-        [object]$kusto = $this
-        [string]$kustoHost = "$($kusto.cluster).kusto.windows.net"
+        [string]$kustoHost = "$($this.cluster).kusto.windows.net"
         [string]$kustoResource = "https://$kustoHost"
-        [string]$csl = "$($kusto.query)"
+        [string]$csl = "$($this.Query)"
           
-        $kusto.resultObject = $null
-        $kusto.query = $kusto.query.trim()
+        $this.Result = $null
+        $this.ResultObject = $null
+        $this.ResultTable = $null
+        $this.Query = $this.Query.trim()
      
-        if ($body -and ($kusto.table)) {
-            $uri = "$kustoResource/v1/rest/ingest/$($kusto.database)/$($kusto.table)?streamFormat=Csv&mappingName=CsvMapping"
+        if ($body -and ($this.Table)) {
+            $uri = "$kustoResource/v1/rest/ingest/$($this.Database)/$($this.Table)?streamFormat=Csv&mappingName=CsvMapping"
         }
-        elseif ($kusto.query.startswith('.show') -or !$kusto.query.startswith('.')) {
+        elseif ($this.Query.startswith('.show') -or !$this.Query.startswith('.')) {
             $uri = "$kustoResource/v1/rest/query"
-            $csl = "$($kusto.query) | limit $($kusto.limit)"
+            $csl = "$($this.Query) | limit $($this.Limit)"
         }
         else {
             $uri = "$kustoResource/v1/rest/mgmt"
         }
       
-        if (!$kusto.token) {
+        if (!$this.Token) {
             if (!($this.Logon($kustoResource))) {
                 write-error "unable to acquire token. exiting"
                 return $error
@@ -642,7 +667,7 @@ class KustoObj {
       
         $header = @{
             'accept'                 = 'application/json'
-            'authorization'          = "Bearer $($kusto.token)"
+            'authorization'          = "Bearer $($this.Token)"
             'content-type'           = 'application/json'
             'host'                   = $kustoHost
             'x-ms-app'               = 'kusto-rest.ps1' 
@@ -655,14 +680,14 @@ class KustoObj {
         }
         else {
             $body = @{
-                db         = $kusto.database
+                db         = $this.database
                 csl        = $csl
                 properties = @{
                     Options    = @{
                         queryconsistency = "strongconsistency"
-                        servertimeout    = $this.serverTimeout.ToString()
+                        servertimeout    = $this.ServerTimeout.ToString()
                     }
-                    Parameters = $kusto.parameters
+                    Parameters = $this.parameters
                 }
             } | ConvertTo-Json
         }
@@ -671,43 +696,28 @@ class KustoObj {
         write-verbose $body
       
         $error.clear()
-        $kusto.result = Invoke-WebRequest -Method Post -Uri $uri -Headers $header -Body $body
-        write-verbose $kusto.result
+        $this.Result = Invoke-WebRequest -Method Post -Uri $uri -Headers $header -Body $body
+        write-verbose $this.Result
           
         if ($error) {
             return $error
         }
      
         try {
-            return ($this.FixColumns($kusto.result.content) | convertfrom-json)
+            return ($this.FixColumns($this.Result.content) | convertfrom-json)
         }
         catch {
-            write-warning "error converting json result to object. unparsed results in `$kusto.result`r`n$error"
+            write-warning "error converting json result to object. unparsed results in `$this.Result`r`n$error"
                   
-            if (!$this.fixDuplicateColumns) {
-                write-warning "$kusto.fixDuplicateColumns = $true may resolve."
+            if (!$this.FixDuplicateColumns) {
+                write-warning "$this.fixDuplicateColumns = $true may resolve."
             }
-            return ($kusto.result.content)
+            return ($this.Result.content)
         }
     }
     
-    [collections.arrayList] PrimaryResults() {
-        try {
-            if (!$this.resultTable) {
-                $this.CreateResultTable()
-            }
-            #return @($this.resultObject.Tables[0].Rows)
-            return [collections.arrayList]@($this.resultTable)
-        }
-        catch {
-            write-warning "PrimaryResults: $error"
-            $error.Clear()
-            return $null
-        }
-    }
-
     [collections.arrayList] RemoveEmptyResults([collections.arrayList]$sourceContent) {
-        if (!$this.removeEmptyColumns -or !$sourceContent -or $sourceContent.count -eq 0) {
+        if (!$this.RemoveEmptyColumns -or !$sourceContent -or $sourceContent.count -eq 0) {
             return $sourceContent
         }
         $columnList = (Get-Member -InputObject $sourceContent[0] -View Extended).Name
@@ -723,22 +733,22 @@ class KustoObj {
     }
      
     [KustoObj] SetCluster([string]$cluster) {
-        $this.cluster = $cluster
+        $this.Cluster = $cluster
         return $this.Pipe()
     }
       
     [KustoObj] SetDatabase([string]$database) {
-        $this.database = $database
+        $this.Database = $database
         return $this.Pipe()
     }
       
     [KustoObj] SetPipe([bool]$enable) {
-        $this.pipeLine = $enable
+        $this.PipeLine = $enable
         return $this.Pipe()
     }
       
     [KustoObj] SetTable([string]$table) {
-        $this.table = $table
+        $this.Table = $table
         return $this.Pipe()
     }
 }
@@ -750,7 +760,22 @@ if ($updateScript) {
     write-warning "script updated. restart script"
     return
 }
-   
+
+if($clean) {
+    [string]$msalPath = "$env:temp\$msalUtilityFileName"
+    if((test-path $msalPath)) {
+        Write-Warning "deleting $msalPath"
+        [io.directory]::Delete($msalPath,$true)
+    }
+
+    [string]$nugetPath = "$psscriptroot\nuget.exe"
+    if((test-path $nugetPath)) {
+        Write-Warning "deleting $nugetPath"
+        [io.file]::Delete($nugetPath)
+    }
+    return
+}
+
 $global:kusto = [KustoObj]::new()
 $kusto.Exec()
      
@@ -759,5 +784,5 @@ if ($error) {
 }
 else {
     $kusto | Get-Member
-    write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
+    write-host "use `$kusto object to set properties and run queries. example: `$this.Exec('.show operations')" -ForegroundColor Green
 }
