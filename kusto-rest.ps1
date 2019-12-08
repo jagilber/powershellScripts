@@ -560,13 +560,14 @@ class KustoObj {
             write-warning ".net core microsoft.identity requires form/webui. checking for $filePath"
                
             if (!(test-path $filePath)) {
-                # .net core 3.0 singleexe may clean up
-                if(!(test-path $fileName)) {
+                # .net core 3.0 singleexe may clean up extracted dir
+                if (!(test-path $fileName)) {
                     if ((read-host "is it ok to download .net core Msal utility $utility/$utilityFileName to generate token?[y|n]`r`n" `
-                            "(if not, for .net core, you will need to generate and pass token to script.)") -ilike "y") {
+                                "(if not, for .net core, you will need to generate and pass token to script.)") -ilike "y") {
                         write-warning "downloading .net core $utilityFileName from $utility to $filePath"
                         [psobject]$apiResults = convertfrom-json (Invoke-WebRequest $utility -UseBasicParsing)
                         [string]$downloadUrl = @($apiResults.assets.browser_download_url -imatch "/$utilityFileName-")[0]
+                        
                         (new-object net.webclient).downloadFile($downloadUrl, $fileName)
                         Expand-Archive $fileName $filePath
                     }
@@ -768,24 +769,13 @@ if ($updateScript) {
     return
 }
 
-if($clean) {
-    [string]$msalPath = "$env:temp\$msalUtilityFileName"
-    if((test-path $msalPath)) {
-        Write-Warning "deleting $msalPath"
-        [io.directory]::Delete($msalPath,$true)
-    }
-
-    # bundled exe default extraction path
-    $msalPath = "$env:temp\.net\$msalUtilityFileName"
-    if((test-path $msalPath)) {
-        Write-Warning "deleting $msalPath"
-        [io.directory]::Delete($msalPath,$true)
-    }
-
-    [string]$nugetPath = "$psscriptroot\nuget.exe"
-    if((test-path $nugetPath)) {
-        Write-Warning "deleting $nugetPath"
-        [io.file]::Delete($nugetPath)
+if ($clean) {
+    $paths = @("$env:temp\$msalUtilityFileName", "$env:temp\.net\$msalUtilityFileName", "$env:temp\$msalUtilityFileName.zip", "$psscriptroot\nuget.exe")
+    foreach ($path in $paths) {    
+        if ((test-path $path)) {
+            Write-Warning "deleting $path"
+            remove-item -Path $path -Recurse -Force
+        }
     }
     return
 }
