@@ -3,7 +3,7 @@ param(
     [dateTime]$endTime = (get-date).addHours(2),
     [decimal]$intervalMinutes = 1,
     [string]$logPath = $psscriptroot,
-    [switch]$smartsleep
+    [switch]$onSchedule
 )
 
 $startTimer = get-date
@@ -56,7 +56,7 @@ while($endTime -ge $startTime)
 
     write-host ($netshResults | Group-Object State | out-string)
    
-    if($smartsleep)
+    if($onSchedule)
     {
         # $random = (Get-Random -Maximum 10)
         # write-host "working $iteration $random seconds"
