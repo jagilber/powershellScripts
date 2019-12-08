@@ -556,20 +556,27 @@ class KustoObj {
             [string]$utilityFileName = $this.msalUtilityFileName
             [string]$utility = $this.msalUtility
             [string]$filePath = "$env:TEMP\$utilityFileName"
+            [string]$fileName = "$filePath.zip"
             write-warning ".net core microsoft.identity requires form/webui. checking for $filePath"
                
             if (!(test-path $filePath)) {
-                if ((read-host "is it ok to download .net core Msal utility $utility/$utilityFileName to generate token?[y|n]`r`n" `
-                        "(if not, for .net core, you will need to generate and pass token to script.)") -ilike "y") {
-                    write-warning "downloading .net core $utilityFileName from $utility to $filePath"
-                    [psobject]$apiResults = convertfrom-json (Invoke-WebRequest $utility -UseBasicParsing)
-                    [string]$downloadUrl = @($apiResults.assets.browser_download_url -imatch "/$utilityFileName-")[0]
-                    (new-object net.webclient).downloadFile($downloadUrl, "$filePath.zip")
-                    Expand-Archive "$filePath.zip" $filePath
+                # .net core 3.0 singleexe may clean up
+                if(!(test-path $fileName)) {
+                    if ((read-host "is it ok to download .net core Msal utility $utility/$utilityFileName to generate token?[y|n]`r`n" `
+                            "(if not, for .net core, you will need to generate and pass token to script.)") -ilike "y") {
+                        write-warning "downloading .net core $utilityFileName from $utility to $filePath"
+                        [psobject]$apiResults = convertfrom-json (Invoke-WebRequest $utility -UseBasicParsing)
+                        [string]$downloadUrl = @($apiResults.assets.browser_download_url -imatch "/$utilityFileName-")[0]
+                        (new-object net.webclient).downloadFile($downloadUrl, $fileName)
+                        Expand-Archive $fileName $filePath
+                    }
+                    else {
+                        write-warning "returning"
+                        return $false
+                    }
                 }
                 else {
-                    write-warning "returning"
-                    return $false
+                    Expand-Archive $fileName $filePath
                 }
             }
     
