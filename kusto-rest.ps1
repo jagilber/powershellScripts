@@ -768,6 +768,13 @@ if($clean) {
         [io.directory]::Delete($msalPath,$true)
     }
 
+    # bundled exe default extraction path
+    $msalPath = "$env:temp\.net\$msalUtilityFileName"
+    if((test-path $msalPath)) {
+        Write-Warning "deleting $msalPath"
+        [io.directory]::Delete($msalPath,$true)
+    }
+
     [string]$nugetPath = "$psscriptroot\nuget.exe"
     if((test-path $nugetPath)) {
         Write-Warning "deleting $nugetPath"
