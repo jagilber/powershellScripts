@@ -655,7 +655,7 @@ class KustoObj {
             $uri = "$kustoResource/v1/rest/mgmt"
         }
       
-        if (!$this.Token) {
+        if (!$this.Token -or $this.authenticationResult) {
             if (!($this.Logon($kustoResource))) {
                 write-error "unable to acquire token. exiting"
                 return $error
