@@ -120,30 +120,37 @@ if(!(test-path $clientFile) -or $force)
 if($clientFile -imatch ".zip")
 {
     Expand-Archive $clientFile $destPath
-
-    if(!$path.tolower().contains($binPath))
-    {
-        write-host "setting path"
-        $env:Path = $env:Path + ";$($binPath)"
-
-        if($setPath)
-        {
-            write-host "setting path permanent"
-            [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($binPath)", "Machine")
-        }
-    }
-    else
-    {
-        write-host "path contains $binPath"
-    }
-
-    write-host $env:path
 }
 else
 {
     # install
     write-host "$clientFile /SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS"
     start-process -FilePath $clientFile -ArgumentList "/SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS" -Wait
+    $binPath = "C:\Program Files\Git\bin\git.exe"
+    
+    if(!(test-path $binPath))
+    {
+        $binPath = $null
+    }
 }
+
+if($binPath -and !$path.tolower().contains($binPath))
+{
+    write-host "setting path"
+    $env:Path = $env:Path + ";$($binPath)"
+
+    if($setPath)
+    {
+        write-host "setting path permanent"
+        [environment]::SetEnvironmentVariable("Path", $path.trimend(";") + ";$($binPath)", "Machine")
+    }
+}
+else
+{
+    write-host "path contains $binPath"
+}
+
+write-host $env:path
+
 
 write-host "finished"
