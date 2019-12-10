@@ -143,7 +143,7 @@ else
 {
     # install
     write-host "$clientFile /SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS"
-    . $clientFile /SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS
+    start-process -FilePath $clientFile -ArgumentList "/SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS" -Wait
 }
 
 write-host "finished"
