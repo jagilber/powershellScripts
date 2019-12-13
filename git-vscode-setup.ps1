@@ -17,6 +17,10 @@ param(
 )
 
 [io.directory]::CreateDirectory($gitHubDir)
+if(!(test-path "$pwd\download-git-client.ps1")) {
+    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1", "$pwd/download-git-client.ps1");
+}
+
 $error.Clear()
 
 if(!$user){
@@ -41,8 +45,7 @@ if($error){
 $error.clear()
 (git)|out-null
 
-if($error) {
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1", "$pwd/download-git-client.ps1");
+if($error) {    
     .\download-git-client.ps1
 }
 
