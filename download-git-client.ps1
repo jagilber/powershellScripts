@@ -124,8 +124,9 @@ if($clientFile -imatch ".zip")
 else
 {
     # install
-    write-host "$clientFile /SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS"
-    start-process -FilePath $clientFile -ArgumentList "/SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS" -Wait
+    $argumentList = "/SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS"
+    write-host "$clientFile $argumentList"
+    start-process -FilePath $clientFile -ArgumentList $argumentList -Wait
     $binPath = "C:\Program Files\Git\bin\git.exe"
     
     if(!(test-path $binPath))
