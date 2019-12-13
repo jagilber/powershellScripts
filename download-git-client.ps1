@@ -127,7 +127,7 @@ else
     $argumentList = "/SP- /SILENT /SUPPRESSMSGBOXES /LOG=git-install.log /NORESTART /CLOSEAPPLICATIONS"
     write-host "$clientFile $argumentList"
     start-process -FilePath $clientFile -ArgumentList $argumentList -Wait
-    $binPath = "C:\Program Files\Git\bin\git.exe"
+    $binPath = "C:\Program Files\Git\bin"
     
     if(!(test-path $binPath))
     {
@@ -138,7 +138,7 @@ else
 if($binPath -and !$path.tolower().contains($binPath))
 {
     write-host "setting path"
-    $env:Path = $env:Path + ";$($binPath)"
+    $env:Path = $env:Path.TrimEnd(";") + ";$($binPath)"
 
     if($setPath)
     {
