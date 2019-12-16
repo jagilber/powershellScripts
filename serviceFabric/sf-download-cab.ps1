@@ -10,13 +10,19 @@ param(
     [bool]$extract = $true
 )
 
-$packages = @(invoke-restmethod $sfPackageUrl).Packages
+$allPackages = @(invoke-restmethod $sfPackageUrl).Packages
 
 if ($sfversion) {
-    $packages = @($packages -imatch $sfversion)
+    $packages = @($allPackages -imatch $sfversion)
 }
 elseif (!$all) {
-    $packages = @($packages[-1])
+    $packages = @($allPackages[-1])
+}
+
+if(!$packages) {
+    write-host ($allPackages | out-string)
+    write-warning "no packages found for $sfversion"
+    return
 }
 
 $packages
