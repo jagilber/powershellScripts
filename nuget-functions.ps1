@@ -9,7 +9,7 @@ class NugetObj {
     [string]$packageSource = $null
     [string]$globalPackages = "$($env:USERPROFILE)\.nuget\packages"
     [bool]$allVersions = $false
-    [string]$verbose = "normal" # detailed, quiet
+    [string]$verbose = "detailed" #"normal" # detailed, quiet
 
     NugetObj() {
         $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
@@ -181,20 +181,87 @@ class NugetObj {
         return $this.sources
     }
 
-    [string[]] InstallPackage([string]$packageName) {
-        return $this.InstallPackage($packageName, $null, $null, $null)
+    [string[]] GetDirectories([string]$sourcePath, [string]$sourcePattern) {
+        write-host "getdirectories: $sourcePath $sourcePattern"
+         return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern + "*", [io.searchOption]::TopDirectoryOnly))
     }
 
-    [string[]] InstallPackage([string]$packageName, [string]$packagesDirectory, [string]$packageSource, [switch]$prerelease) {
+    [string[]] InstallPackage([string]$packageName, [string]$packageSource = $null) {
+        return $this.InstallPackage($packageName, $packageSource, $null, $null)
+    }
+
+    [string[]] InstallPackage([string]$packageName, [string]$packageSource, [string]$packagesDirectory = $null, [bool]$prerelease) {
         $pre = $null
         $source = $null
-        if(!$packagesDirectory) { $packagesDirectory = $this.globalPackages}
+        $outputDirectory = $null
+        if($packagesDirectory) { $outputDirectory = " -directdownload -outputdirectory $packagesDirectory"}
         if($prerelease) { $pre = " -prerelease"}
         if($packageSource) {$source = " -source $packageSource" }
 
-        write-host "nuget install $packageName$source -outputdirectory $packagesDirectory -verbosity ($this.verbose)$pre"
-        write-host (nuget install $packageName$source -outputdirectory $packagesDirectory -verbosity ($this.verbose)$pre)
-        return $this.EnumPackages($packageName, $packageSource)
+        write-host "nuget install $packageName$source$outputDirectory -nocache -verbosity $($this.verbose)$pre" -ForegroundColor magenta
+        $this.ExecuteNuget("install $packageName$source$outputDirectory -nocache -verbosity $($this.verbose)$pre")
+
+        if($packagesDirectory) {
+            write-host "install finished. checking $packagesDirectory" -ForegroundColor darkmagenta    
+            return $this.GetDirectories($packagesDirectory, $packageName)
+        }
+        else {
+            write-host "install finished. checking working dir $pwd" -ForegroundColor darkmagenta
+            return $this.GetDirectories($pwd, $packageName)
+        }
+
+        write-host "install finished. checking cache." -ForegroundColor darkmagenta
+        return $this.EnumPackages($packageName, $this.globalPackages)
+    }
+
+    [void] hidden ExecuteNuget([string]$arguments) {
+        # issues when trying to convert some nuget calls in script to this function
+        $error.clear()
+        write-host "executing:nuget.exe $arguments" -ForegroundColor Green
+        start-process -filepath nuget -argumentlist $arguments -wait -nonewwindow
+        if($error) {
+            write-warning ($error | out-string)
+            $error.clear()
+        }
+    }
+
+    [bool] RemoveLocalPackage([string]$packageName, [string]$packageVersion = $null, [string]$packageSource = $null) {
+        if(!$packageSource) { $this.packageSource = $this.globalPackages }
+        $folders = @()
+        $versionFolders = @()
+
+        if($this.locals.contains($packageSource)) {
+            $folders = $this.GetDirectories($this.locals[$packageSource], $packageName)
+
+            if($packageVersion) {
+                foreach($folder in $folders) {
+                    $versionFolders += $this.GetDirectories($folder, $packageVersion)
+                }
+
+                $folders = $versionFolders
+            }
+
+            foreach($folder in $folders) {
+                write-warning "deleting folder $folder"
+                #[io.directory]::Delete($folder, $true)
+            }
+
+            return $true
+        }
+
+        write-warning "locals does not contain $packageSource cache name"
+        return $false
+    }
+
+    [bool] RemoveLocalPackagesCache([string]$packageSource) {
+        if($this.locals.contains($packageSource)) {
+            write-host "nuget locals $packageSource -clear -verbosity $($this.verbose)"
+            write-host (nuget locals $packageSource -clear -verbosity ($this.verbose))
+            return $true
+        }
+
+        write-warning "locals does not contain $packageSource cache name"
+        return $false
     }
 
     [string[]] RemoveSource([string]$nugetSourceName) {
