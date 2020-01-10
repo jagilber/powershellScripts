@@ -322,7 +322,8 @@ class KustoObj {
             write-error "unknown script:$($this.Script)"
             return $this.Pipe()
         }
-      
+
+        $this.Query = [regex]::Replace($this.Query,"//.+\n","") 
         $this.Exec()
         return $this.Pipe()
     }
