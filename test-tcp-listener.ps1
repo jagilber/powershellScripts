@@ -12,6 +12,8 @@ try {
     write-host "use following client commands to test:" -ForegroundColor Green
     write-host "`$client = new-object net.sockets.tcpClient"
     write-host "`$client.Connect('$hostName', $port)"
+    #write-host "`$sendBytes = [text.encoding]::ASCII.GetBytes('client connection');"
+    #write-host "`$client.Client.Send(`$sendBytes)"
     $iteration = 0
 
     while ($iteration -lt $count -or $count -eq 0) {
