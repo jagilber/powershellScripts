@@ -446,9 +446,10 @@ class KustoObj {
         [string]$formattedHeaders = "("
       
         foreach ($header in ($headers.Split(',').trim())) {
-            $normalizedHeader = $header.trim('`"').Replace(" ", "_")
-            $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
             $columnCount = 0
+            if(!$header) { $header = 'column'}
+            [string]$normalizedHeader = $header.trim('`"').Replace(" ", "_")
+            $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
             $uniqueHeader = $normalizedHeader
     
             while ($formattedHeaderList.ContainsKey($uniqueHeader)) {
@@ -662,7 +663,7 @@ class KustoObj {
       
         if (!$this.Token -or $this.authenticationResult) {
             if (!($this.Logon($kustoResource))) {
-                write-error "unable to acquire token. exiting"
+                write-error "unable to acquire token.`r`ntry .\kusto-rest.ps1 -clean if there are errors."
                 return $error
             }
         }
