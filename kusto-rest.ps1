@@ -786,5 +786,5 @@ if ($error) {
 }
 else {
     $kusto | Get-Member
-    write-host "use `$kusto object to set properties and run queries. example: `$this.Exec('.show operations')" -ForegroundColor Green
+    write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
 }
