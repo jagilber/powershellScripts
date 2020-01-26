@@ -127,11 +127,8 @@ param(
     [string]$clientId ="1950a258-227b-4e31-a9cf-717495945fc2",
     [string]$tenantId = "common",
     [bool]$pipeLine,
-    [string]$wellknownClientId = "1950a258-227b-4e31-a9cf-717495945fc2", 
     [string]$redirectUri = "urn:ietf:wg:oauth:2.0:oob",
     [bool]$force,
-    [string]$msalUtility = "https://api.github.com/repos/jagilber/netCore/releases",
-    [string]$msalUtilityFileName = "netCoreMsal",
     [timespan]$serverTimeout = (new-Object timespan (0, 4, 0)),
     [switch]$updateScript,
     [switch]$clean,
@@ -182,6 +179,14 @@ if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "
     return $false
 }
 
+#$tobject = @'{ class test {[void] function test(){}}}#New-Object PSObject'@
+#Add a custom typename to the object
+#$tobject.pstypenames.insert(0,'Microsoft.Identity.Client')
+#$tobject.pstypenames.insert(0,'Microsoft.Identity.Client.LogLevel')
+#add-type -Namespace "Microsoft.Identity.Client.LogLevel" -memberdefinition $tobject -name 'loglevel'  # -TypeDefinition {$test = "this"} #$tobject
+
+# comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
+invoke-expression @'
 
 class KustoObj {
     hidden [object]$identityDll = $null
@@ -212,7 +217,6 @@ class KustoObj {
     [timespan]$ServerTimeout = $serverTimeout
     hidden [string]$token = $token
     [bool]$ViewResults = $viewResults
-    hidden [string]$wellknownClientId = $wellknownClientId
           
     KustoObj() { }
     static KustoObj() { }
@@ -599,62 +603,7 @@ class KustoObj {
     [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
         Write-Host "MSAL: $level $containsPII $message"
     }
-    
-    hidden [bool] LogonAdal([string]$resourceUrl) {
-        [object]$authenticationContext = $Null
-        [string]$ADauthorityURL = "https://login.microsoftonline.com/$($this.TenantId)"
-      
-        if (!$this.AddIdentityPackageType("Microsoft.IdentityModel.Clients.ActiveDirectory", "net45")) {
-            return $false
-        }
 
-        if (!$this.force -and $this.identityDll) {
-            write-warning 'identity dll already set. use -force to force'
-            return $true
-        }
-
-        write-host "identityDll: $($this.identityPackageLocation)" -ForegroundColor Green
-        #import-module $($this.identityDll.FullName)
-        $this.identityDll = [Reflection.Assembly]::LoadFile($this.identityPackageLocation) 
-        $this.identityDll
-        $this.identityPackageLocation = $this.identityDll.Location
-        $authenticationContext = New-Object Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext($ADAuthorityURL)
-      
-        if ($this.clientid -and $this.clientSecret) {
-            # client id / secret
-            $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential($this.clientId, $this.clientSecret))).Result
-        }
-        else {
-            # user / pass
-            $error.Clear()
-            $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                $this.wellknownClientId,
-                (new-object Uri($this.RedirectUri)),
-                (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters(0))).Result # auto
-              
-            if ($error) {
-                # MFA
-                $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                    $this.wellknownClientId,
-                    (new-object Uri($this.RedirectUri)),
-                    (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters(1))).Result # [promptbehavior]::always
-            }
-        }
-      
-        if (!($this.authenticationResult)) {
-            write-error "error authenticating"
-            #write-host (Microsoft.IdentityModel.Clients.ActiveDirectory.AdalError)
-            return $false
-        }
-        write-verbose (convertto-json $this.authenticationResult -Depth 99)
-        $this.Token = $this.authenticationResult.AccessToken;
-        $this.Token
-        $this.AuthenticationResult
-        write-verbose "results saved in `$this.authenticationResult and `$this.Token"
-        return $true
-    }
-     
     hidden [bool] LogonMsal([string]$resourceUrl,[collections.generic.IEnumerable[string]]$scopes) {
         try {
             $error.Clear()
@@ -678,7 +627,7 @@ class KustoObj {
             [Microsoft.Identity.Client.PublicClientApplication] $publicClientApplication = $null
             #[Microsoft.Identity.Client.PublicClientApplicationOptions] $publicClientApplicationOptions = $null
             #[Microsoft.Identity.Client.AuthenticationResult]$authenticationResult = $null
-            #[Microsoft.Identity.Client.PublicClientApplicationBuilder]$publicClientApplicationBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
+            [Microsoft.Identity.Client.PublicClientApplicationBuilder]$publicClientApplicationBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
             
             # user creds
             if ($this.clientId -and $this.clientSecret) {
@@ -693,12 +642,27 @@ class KustoObj {
                 #$authenticationResult = $publicClientApplication.AcquireTokenSilent($scopes, $publicClientApplication.GetAccountsAsync().Result[0]).ExecuteAsync().Result
             }
             else {
-                $publicClientApplication = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId).WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId).WithDefaultRedirectUri().WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true ).Build()
-                $this.authenticationResult = $publicClientApplication.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                #$publicClientApplication = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId).WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId).WithDefaultRedirectUri().WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true ).Build()
+                $publicClientApplicationBuilder = $publicClientApplicationBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
+                $publicClientApplicationBuilder = $publicClientApplicationBuilder.WithDefaultRedirectUri()
+                $publicClientApplicationBuilder = $publicClientApplicationBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                $publicClientApplication = $publicClientApplicationBuilder.Build()
+
+                try {
+                    write-host "acquire token silent" -foregroundcolor green
+                    $this.authenticationResult = $publicClientApplication.AcquireTokenSilent($scopes, $publicClientApplication.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                }
+                catch {
+                    write-error "$($error | out-string)"
+                    $error.clear()
+                    write-host "acquire token interactive" -foregroundcolor yellow
+                    $this.authenticationResult = $publicClientApplication.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                }
             }
 
             if ($this.authenticationResult) {
                 $this.Token = $this.authenticationResult.Token
+                write-host ($this.authenticationResult | convertto-json -depth 5)
                 return $true
             }
             return $false
@@ -835,7 +799,10 @@ class KustoObj {
         return $this.Pipe()
     }
 }
-      
+
+# comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
+'@ 
+
 $error.Clear()
   
 if ($updateScript) {
