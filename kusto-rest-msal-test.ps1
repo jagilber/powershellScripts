@@ -127,7 +127,7 @@ param(
     [string]$clientId ="1950a258-227b-4e31-a9cf-717495945fc2",
     [string]$tenantId = "common",
     [bool]$pipeLine,
-    [string]$redirectUri = "urn:ietf:wg:oauth:2.0:oob",
+    [string]$redirectUri = $null, # "urn:ietf:wg:oauth:2.0:oob",
     [bool]$force,
     [timespan]$serverTimeout = (new-Object timespan (0, 4, 0)),
     [switch]$updateScript,
@@ -186,7 +186,7 @@ if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "
 #add-type -Namespace "Microsoft.Identity.Client.LogLevel" -memberdefinition $tobject -name 'loglevel'  # -TypeDefinition {$test = "this"} #$tobject
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
-invoke-expression @'
+#invoke-expression @'
 
 class KustoObj {
     hidden [object]$identityDll = $null
@@ -555,9 +555,9 @@ class KustoObj {
         if ($global:PSVersionTable.PSEdition -eq "Core") {
 
             $this.LogonMsal($resourceUrl, $null)
-            [collections.generic.IEnumerable[string]]$scopes = new-object collections.generic.list[string]
+            [system.collections.generic.IEnumerable[string]]$scopes = new-object system.collections.generic.list[string]
             $scopes.Add("$resourceUrl/kusto.read")
-            $scopes.Add("$resourceUrl/kusto.write")
+            #$scopes.Add("$resourceUrl/kusto.write")
 
             return $this.LogonMsal($resourceUrl, $scopes)
         }
@@ -604,11 +604,11 @@ class KustoObj {
         Write-Host "MSAL: $level $containsPII $message"
     }
 
-    hidden [bool] LogonMsal([string]$resourceUrl,[collections.generic.IEnumerable[string]]$scopes) {
+    hidden [bool] LogonMsal([string]$resourceUrl,[system.collections.generic.IEnumerable[string]]$scopes) {
         try {
             $error.Clear()
             if($scopes -eq $null) {
-                [collections.generic.IEnumerable[string]]$scopes = new-object collections.generic.list[string]
+                [system.collections.generic.IEnumerable[string]]$scopes = new-object system.collections.generic.list[string]
                 $scopes.Add(".default")
                 #$scopes.Add("$resourceUrl/kusto.read")
                 #$scopes.Add("$resourceUrl/kusto.write")
@@ -622,41 +622,52 @@ class KustoObj {
                 write-warning 'identity dll already set. use -force to force'
                 return $true
             }
-
-            #[collections.generic.list[Microsoft.Identity.Client.IPublicClientApplication]] $PublicClientApplication = new-object 'collections.generic.list[Microsoft.Identity.Client.IPublicClientApplication]'
-            [Microsoft.Identity.Client.PublicClientApplication] $publicClientApplication = $null
-            #[Microsoft.Identity.Client.PublicClientApplicationOptions] $publicClientApplicationOptions = $null
-            #[Microsoft.Identity.Client.AuthenticationResult]$authenticationResult = $null
-            [Microsoft.Identity.Client.PublicClientApplicationBuilder]$publicClientApplicationBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
             
             # user creds
             if ($this.clientId -and $this.clientSecret) {
 
-                #$publicClientApplicationBuilder = $publicClientApplicationBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
-                #$publicClientApplicationBuilder += $publicClientApplicationBuilder.WithDefaultRedirectUri()
-                #$publicClientApplication = $publicClientApplicationBuilder.Build()
-                
-                #$securePassword = ConvertTo-SecureString -String $this.clientSecret -Force -AsPlainText
-                #$authenticationResult = $publicClientApplication.AcquireTokenByUsernamePassword($scopes, $this.clientId, $securePassword)
+                [Microsoft.Identity.Client.ConfidentialClientApplicationOptions] $cAppOptions = new-Object Microsoft.Identity.Client.ConfidentialClientApplicationOptions
+                $cAppOptions.ClientId = $this.clientId
+                $cAppOptions.RedirectUri = $this.redirectUri
+                $cAppOptions.ClientSecret = $this.clientSecret
+                $cAppOptions.TenantId = $this.tenantId
 
-                #$authenticationResult = $publicClientApplication.AcquireTokenSilent($scopes, $publicClientApplication.GetAccountsAsync().Result[0]).ExecuteAsync().Result
-            }
-            else {
-                #$publicClientApplication = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId).WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId).WithDefaultRedirectUri().WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true ).Build()
-                $publicClientApplicationBuilder = $publicClientApplicationBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
-                $publicClientApplicationBuilder = $publicClientApplicationBuilder.WithDefaultRedirectUri()
-                $publicClientApplicationBuilder = $publicClientApplicationBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
-                $publicClientApplication = $publicClientApplicationBuilder.Build()
+                [Microsoft.Identity.Client.ConfidentialClientApplication] $cClientApp = $null
+                [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]$cAppBuilder = [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]::CreateWithApplicationOptions($cAppOptions)
+                $cAppBuilder = $cAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
+                $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                $cClientApp = $cAppBuilder.Build()
 
                 try {
-                    write-host "acquire token silent" -foregroundcolor green
-                    $this.authenticationResult = $publicClientApplication.AcquireTokenSilent($scopes, $publicClientApplication.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                    write-host "acquire token for client" -foregroundcolor green
+                    $this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).ExecuteAsync().Result
                 }
                 catch {
                     write-error "$($error | out-string)"
                     $error.clear()
                     write-host "acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $publicClientApplication.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    $this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                }
+
+            }
+            else {
+                #$pClientApp = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId).WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId).WithDefaultRedirectUri().WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true ).Build()
+                [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $null
+                [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
+                $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
+                $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
+                $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                $pClientApp = $pAppBuilder.Build()
+
+                try {
+                    write-host "acquire token silent" -foregroundcolor green
+                    $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                }
+                catch {
+                    write-error "$($error | out-string)"
+                    $error.clear()
+                    write-host "acquire token interactive" -foregroundcolor yellow
+                    $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
                 }
             }
 
@@ -801,7 +812,7 @@ class KustoObj {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
-'@ 
+#'@ 
 
 $error.Clear()
   
