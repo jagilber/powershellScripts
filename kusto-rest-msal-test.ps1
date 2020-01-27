@@ -175,20 +175,20 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
 }
 
 if ($global:PSVersionTable.PSEdition -eq "Core") {
-    if (!$this.AddIdentityPackageType("Microsoft.Identity.Client", "netcoreapp2.1")) {
+    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp2.1")) {
         write-error "unable to add package"
         return $false
     }
 }
 else {
-    if (!$this.AddIdentityPackageType("Microsoft.Identity.Client", "net45")) {
+    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net45")) {
         write-error "unable to add package"
         return $false
     }
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
-#invoke-expression @'
+invoke-expression @'
 
 class KustoObj {
     hidden [object]$identityDll = $null
@@ -598,7 +598,7 @@ class KustoObj {
         return $true
     }
 
-    hidden [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
+    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
         Write-Host "MSAL: $level $containsPII $message"
     }
 
@@ -817,7 +817,7 @@ class KustoObj {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
-#'@ 
+'@ 
 
 $error.Clear()
   
