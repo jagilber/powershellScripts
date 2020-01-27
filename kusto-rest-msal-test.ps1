@@ -188,7 +188,7 @@ else {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
-invoke-expression @'
+#invoke-expression @'
 
 class KustoObj {
     hidden [object]$identityDll = $null
@@ -554,12 +554,13 @@ class KustoObj {
             return $true
         }
 
-        if(!($this.LogonMsal($resourceUrl, $null))) {
-            [system.collections.generic.IEnumerable[string]]$scopes = new-object system.collections.generic.list[string]
-            $scopes.Add("$resourceUrl/kusto.read")
-            $scopes.Add("$resourceUrl/kusto.write")
+        $this.LogonMsal($resourceUrl, $null)
+        #if(!($this.LogonMsal($resourceUrl, $null))) {
+            [string[]]$scopes = $null
+            $scopes += "$resourceUrl/kusto.read"
+            $scopes += "$resourceUrl/kusto.write"
             return $this.LogonMsal($resourceUrl, $scopes)
-        }
+        #}
 
         return $true
     }
@@ -602,14 +603,13 @@ class KustoObj {
         Write-Host "MSAL: $level $containsPII $message"
     }
 
-    hidden [bool] LogonMsal([string]$resourceUrl,[system.collections.generic.IEnumerable[string]]$scopes) {
+    hidden [bool] LogonMsal([string]$resourceUrl, [string[]]$scopes) {
         try {
             $error.Clear()
             if($scopes -eq $null) {
-                [system.collections.generic.IEnumerable[string]]$scopes = new-object system.collections.generic.list[string]
-                $scopes.Add(".default")
-                #$scopes.Add("$resourceUrl/kusto.read")
-                #$scopes.Add("$resourceUrl/kusto.write")
+                $scopes += ".default"
+                #$scopes += "$resourceUrl/kusto.read"
+                #$scopes += "$resourceUrl/kusto.write"
             }
         
             if ($global:PSVersionTable.PSEdition -eq "Core") {
@@ -817,7 +817,7 @@ class KustoObj {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
-'@ 
+#'@ 
 
 $error.Clear()
   
