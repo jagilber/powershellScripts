@@ -187,14 +187,8 @@ else {
     }
 }
 
-#$tobject = @'{ class test {[void] function test(){}}}#New-Object PSObject'@
-#Add a custom typename to the object
-#$tobject.pstypenames.insert(0,'Microsoft.Identity.Client')
-#$tobject.pstypenames.insert(0,'Microsoft.Identity.Client.LogLevel')
-#add-type -Namespace "Microsoft.Identity.Client.LogLevel" -memberdefinition $tobject -name 'loglevel'  # -TypeDefinition {$test = "this"} #$tobject
-
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
-invoke-expression @'
+#invoke-expression @'
 
 class KustoObj {
     hidden [object]$identityDll = $null
@@ -559,21 +553,15 @@ class KustoObj {
             write-verbose "token valid: $($this.AuthenticationResult.expireson). use -force to force logon"
             return $true
         }
-    
-        #if ($global:PSVersionTable.PSEdition -eq "Core") {
-            
-            if(!($this.LogonMsal($resourceUrl, $null))) {
-                [system.collections.generic.IEnumerable[string]]$scopes = new-object system.collections.generic.list[string]
-                $scopes.Add("$resourceUrl/kusto.read")
-                $scopes.Add("$resourceUrl/kusto.write")
-                return $this.LogonMsal($resourceUrl, $scopes)
-            }
 
-            return $true
-        #}
-        #else { 
-        #    return $this.LogonAdal($resourceUrl)
-        #}
+        if(!($this.LogonMsal($resourceUrl, $null))) {
+            [system.collections.generic.IEnumerable[string]]$scopes = new-object system.collections.generic.list[string]
+            $scopes.Add("$resourceUrl/kusto.read")
+            $scopes.Add("$resourceUrl/kusto.write")
+            return $this.LogonMsal($resourceUrl, $scopes)
+        }
+
+        return $true
     }
 
     [bool] AddIdentityPackageType([string]$packageName, [string] $edition) {
@@ -610,63 +598,8 @@ class KustoObj {
         return $true
     }
 
-    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
+    hidden [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
         Write-Host "MSAL: $level $containsPII $message"
-    }
-
-    hidden [bool] LogonAdal([string]$resourceUrl) {
-        [object]$authenticationContext = $Null
-        [string]$ADauthorityURL = "https://login.microsoftonline.com/$($this.TenantId)"
-      
-        if (!$this.AddIdentityPackageType("Microsoft.IdentityModel.Clients.ActiveDirectory", "net45")) {
-            return $false
-        }
-
-        if (!$this.force -and $this.identityDll) {
-            write-warning 'identity dll already set. use -force to force'
-            return $true
-        }
-
-        write-host "identityDll: $($this.identityPackageLocation)" -ForegroundColor Green
-        #import-module $($this.identityDll.FullName)
-        $this.identityDll = [Reflection.Assembly]::LoadFile($this.identityPackageLocation) 
-        $this.identityDll
-        $this.identityPackageLocation = $this.identityDll.Location
-        $authenticationContext = New-Object Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext($ADAuthorityURL)
-      
-        if ($this.clientid -and $this.clientSecret) {
-            # client id / secret
-            $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential($this.clientId, $this.clientSecret))).Result
-        }
-        else {
-            # user / pass
-            $error.Clear()
-            $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                $this.wellknownClientId,
-                (new-object Uri($this.RedirectUri)),
-                (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters(0))).Result # auto
-              
-            if ($error) {
-                # MFA
-                $this.authenticationResult = $authenticationContext.AcquireTokenAsync($resourceUrl, 
-                    $this.wellknownClientId,
-                    (new-object Uri($this.RedirectUri)),
-                    (new-object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters(1))).Result # [promptbehavior]::always
-            }
-        }
-      
-        if (!($this.authenticationResult)) {
-            write-error "error authenticating"
-            #write-host (Microsoft.IdentityModel.Clients.ActiveDirectory.AdalError)
-            return $false
-        }
-        write-verbose (convertto-json $this.authenticationResult -Depth 99)
-        $this.Token = $this.authenticationResult.AccessToken;
-        $this.Token
-        $this.AuthenticationResult
-        write-verbose "results saved in `$this.authenticationResult and `$this.Token"
-        return $true
     }
 
     hidden [bool] LogonMsal([string]$resourceUrl,[system.collections.generic.IEnumerable[string]]$scopes) {
@@ -884,7 +817,7 @@ class KustoObj {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
-'@ 
+#'@ 
 
 $error.Clear()
   
