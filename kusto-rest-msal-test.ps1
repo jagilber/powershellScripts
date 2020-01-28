@@ -554,16 +554,10 @@ class KustoObj {
             return $true
         }
 
-        $this.LogonMsal($resourceUrl, $null)
-        #if(!($this.LogonMsal($resourceUrl, $null))) {
-            [string[]]$scopes = $null
-            #$scopes += "$resourceUrl/user_impersonation"
-            $scopes += "$resourceUrl/kusto.read"
-            $scopes += "$resourceUrl/kusto.write"
-           # return $this.LogonMsal($resourceUrl, $scopes)
-        #}
-
-        return $true
+        [string[]]$scopes = $null
+        $scopes += "$resourceUrl/kusto.read"
+        $scopes += "$resourceUrl/kusto.write"
+        return $this.LogonMsal($resourceUrl, $scopes)
     }
 
     [bool] AddIdentityPackageType([string]$packageName, [string] $edition) {
@@ -607,17 +601,7 @@ class KustoObj {
     hidden [bool] LogonMsal([string]$resourceUrl, [string[]]$scopes) {
         try {
             $error.Clear()
-            if($scopes -eq $null) {
-                $scopes += ".default"
-                #$scopes += "$resourceUrl/kusto.read"
-                #$scopes += "$resourceUrl/kusto.write"
-            }
-        
-            #test
-            [string[]]$additionalScopes = $null
-            $additionalScopes += "$resourceUrl/kusto.read"
-            $additionalScopes += "$resourceUrl/kusto.write"
-            #end test
+            [string[]]$defaultScope = @(".default")
 
             if ($global:PSVersionTable.PSEdition -eq "Core") {
                 if (!$this.AddIdentityPackageType("Microsoft.Identity.Client", "netcoreapp2.1")) {
@@ -652,72 +636,50 @@ class KustoObj {
 
                 try {
                     write-host "acquire token for client" -foregroundcolor green
-                    #$this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).ExecuteAsync().Result
-                    $this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+                    $this.authenticationResult = $cClientApp.AcquireTokenForClient($defaultScope).ExecuteAsync().Result
                 }
                 catch {
                     write-error "$($error | out-string)"
                     $error.clear()
                     write-host "acquire token interactive" -foregroundcolor yellow
-                    #$this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
-                    $this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+                    $this.authenticationResult = $cClientApp.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
                 }
 
             }
             else {
-                #$pClientApp = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId).WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId).WithDefaultRedirectUri().WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true ).Build()
                 [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $null
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
-                #$pAppBuilder = $pAppBuilder.WithExtraScopeToConsent($additionalScopes)
                 $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 $pClientApp = $pAppBuilder.Build()
                 write-host ($pClientApp | convertto-json)
 
+                #preauth with .default scope
                 try {
-                    write-host "acquire token silent" -foregroundcolor green
-                    $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
-                    #$this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
-
-                    #test
-                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
-                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
-                    #end test
+                    write-host "preauth acquire token silent" -foregroundcolor green
+                    $this.authenticationResult = $pClientApp.AcquireTokenSilent($defaultScope, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
                 }
                 catch {
                     write-error "$($error | out-string)"
                     $error.clear()
-                    write-host "acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
-                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+                    write-host "preauth acquire token interactive" -foregroundcolor yellow
+                    $this.authenticationResult = $pClientApp.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
                 }
 
-                #test
-                [string[]]$scopes = $null
-                $scopes += "$resourceUrl//kusto.read"
-                $scopes += "$resourceUrl//kusto.write"
-    
-                try {
-                    write-host "acquire token silent" -foregroundcolor green
-                    $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
-                    #$this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
-
-                    #test
-                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
-                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
-                    #end test
+                #add kusto scopes after preauth
+                if($scopes) {
+                    try {
+                        write-host "kusto acquire token silent" -foregroundcolor green
+                        $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                    }
+                    catch {
+                        write-error "$($error | out-string)"
+                        $error.clear()
+                        write-host "kusto acquire token interactive" -foregroundcolor yellow
+                        $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    }
                 }
-                catch {
-                    write-error "$($error | out-string)"
-                    $error.clear()
-                    write-host "acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
-                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
-                }
-
-                #end test
-
             }
 
             if ($this.authenticationResult) {
