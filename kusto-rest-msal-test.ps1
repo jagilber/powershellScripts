@@ -127,7 +127,7 @@ param(
     [string]$clientId ="1950a258-227b-4e31-a9cf-717495945fc2",
     [string]$tenantId = "common",
     [bool]$pipeLine,
-    [string]$redirectUri = $null, # "urn:ietf:wg:oauth:2.0:oob",
+    [string]$redirectUri = "urn:ietf:wg:oauth:2.0:oob", #$null
     [bool]$force,
     [timespan]$serverTimeout = (new-Object timespan (0, 4, 0)),
     [switch]$updateScript,
@@ -557,9 +557,10 @@ class KustoObj {
         $this.LogonMsal($resourceUrl, $null)
         #if(!($this.LogonMsal($resourceUrl, $null))) {
             [string[]]$scopes = $null
+            #$scopes += "$resourceUrl/user_impersonation"
             $scopes += "$resourceUrl/kusto.read"
             $scopes += "$resourceUrl/kusto.write"
-            return $this.LogonMsal($resourceUrl, $scopes)
+           # return $this.LogonMsal($resourceUrl, $scopes)
         #}
 
         return $true
@@ -612,6 +613,12 @@ class KustoObj {
                 #$scopes += "$resourceUrl/kusto.write"
             }
         
+            #test
+            [string[]]$additionalScopes = $null
+            $additionalScopes += "$resourceUrl/kusto.read"
+            $additionalScopes += "$resourceUrl/kusto.write"
+            #end test
+
             if ($global:PSVersionTable.PSEdition -eq "Core") {
                 if (!$this.AddIdentityPackageType("Microsoft.Identity.Client", "netcoreapp2.1")) {
                     return $false
@@ -645,13 +652,15 @@ class KustoObj {
 
                 try {
                     write-host "acquire token for client" -foregroundcolor green
-                    $this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).ExecuteAsync().Result
+                    $this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
                 }
                 catch {
                     write-error "$($error | out-string)"
                     $error.clear()
                     write-host "acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    $this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
                 }
 
             }
@@ -661,23 +670,60 @@ class KustoObj {
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
+                #$pAppBuilder = $pAppBuilder.WithExtraScopeToConsent($additionalScopes)
                 $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 $pClientApp = $pAppBuilder.Build()
+                write-host ($pClientApp | convertto-json)
 
                 try {
                     write-host "acquire token silent" -foregroundcolor green
                     $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                    #$this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+
+                    #test
+                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    #end test
                 }
                 catch {
                     write-error "$($error | out-string)"
                     $error.clear()
                     write-host "acquire token interactive" -foregroundcolor yellow
                     $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
                 }
+
+                #test
+                [string[]]$scopes = $null
+                $scopes += "$resourceUrl//kusto.read"
+                $scopes += "$resourceUrl//kusto.write"
+    
+                try {
+                    write-host "acquire token silent" -foregroundcolor green
+                    $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                    #$this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+
+                    #test
+                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    #end test
+                }
+                catch {
+                    write-error "$($error | out-string)"
+                    $error.clear()
+                    write-host "acquire token interactive" -foregroundcolor yellow
+                    $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).WithExtraScopeToConsent($additionalScopes).ExecuteAsync().Result
+                }
+
+                #end test
+
             }
 
             if ($this.authenticationResult) {
-                $this.Token = $this.authenticationResult.Token
+                write-host "authenticationresult:$($this.authenticationResult | convertto-json)"
+                #$this.Token = $this.authenticationResult.Token
+                $this.Token = $this.authenticationResult.AccessToken
                 write-host ($this.authenticationResult | convertto-json -depth 5)
                 return $true
             }
