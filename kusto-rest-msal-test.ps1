@@ -4,10 +4,7 @@
     script gives ability to import, export, execute query and commands, and removing empty columns
 
 .DESCRIPTION
-    this script will setup Microsoft.IdentityModel.Clients.ActiveDirectory Adal for powershell 5.1 
-        or Microsoft.IdentityModel.Clients Msal using https://github.com/jagilber/netCore/tree/master/netCoreMsal 
-        for .net core 3 verified single executable package for powershell 6+
-    
+    this script will setup Microsoft.IdentityModel.Clients Msal for use with powershell 5.1, 6, and 7
     KustoObj will be created as $global:kusto to hold properties and run methods from
     
     use the following to save and pass arguments:
@@ -17,8 +14,8 @@
 .NOTES
     Author : jagilber
     File Name  : kusto-rest.ps1
-    Version    : 200102
-    History    : 
+    Version    : 200128
+    History    : add msal without .netcore helper exe
 
 .EXAMPLE
     .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
@@ -594,9 +591,10 @@ class KustoObj {
         return $true
     }
 
-    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
-        Write-Host "MSAL: $level $containsPII $message"
-    }
+    # issue with ps 5.1
+    #[void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
+    #    Write-Host "MSAL: $level $containsPII $message"
+    #}
 
     hidden [bool] LogonMsal([string]$resourceUrl, [string[]]$scopes) {
         try {
@@ -631,7 +629,7 @@ class KustoObj {
                 [Microsoft.Identity.Client.ConfidentialClientApplication] $cClientApp = $null
                 [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]$cAppBuilder = [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]::CreateWithApplicationOptions($cAppOptions)
                 $cAppBuilder = $cAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
-                $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                #$cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 $cClientApp = $cAppBuilder.Build()
 
                 try {
@@ -650,8 +648,14 @@ class KustoObj {
                 [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $null
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
-                $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
-                $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                
+                if ($global:PSVersionTable.PSEdition -eq "Core") {
+                    $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
+                }
+                else {
+                    $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
+                }
+                #$pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 $pClientApp = $pAppBuilder.Build()
                 write-host ($pClientApp | convertto-json)
 
