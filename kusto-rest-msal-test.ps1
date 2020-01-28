@@ -188,7 +188,7 @@ else {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
-#invoke-expression @'
+invoke-expression @'
 
 class KustoObj {
     hidden [object]$identityDll = $null
@@ -648,7 +648,7 @@ class KustoObj {
             }
             else {
                 [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $null
-                [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)        
+                [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
                 $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
@@ -661,7 +661,7 @@ class KustoObj {
                     $this.authenticationResult = $pClientApp.AcquireTokenSilent($defaultScope, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
                 }
                 catch {
-                    write-error "$($error | out-string)"
+                    write-error "preauth acquire error: $($error | out-string)"
                     $error.clear()
                     write-host "preauth acquire token interactive" -foregroundcolor yellow
                     $this.authenticationResult = $pClientApp.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
@@ -674,7 +674,7 @@ class KustoObj {
                         $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
                     }
                     catch {
-                        write-error "$($error | out-string)"
+                        write-error "kusto acquire error: $($error | out-string)"
                         $error.clear()
                         write-host "kusto acquire token interactive" -foregroundcolor yellow
                         $this.authenticationResult = $pClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
@@ -825,7 +825,7 @@ class KustoObj {
 }
 
 # comment next line once microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
-#'@ 
+'@ 
 
 $error.Clear()
   
