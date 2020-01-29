@@ -143,17 +143,15 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
     [string]$nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
     [io.directory]::createDirectory($nugetPackageDirectory)
     [string]$packageDirectory = "$nugetPackageDirectory\$packageName"
-
     $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "lib\\$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
 
     if (!$global:identityPackageLocation) {
         if (!(test-path $nuget)) {
             $nuget = "$env:temp\nuget.exe"
             if (!(test-path $nuget)) {
-                (new-object net.webclient).downloadFile($nugetDownloadUrl, "$psscriptroot\nuget.exe")
+                (new-object net.webclient).downloadFile($nugetDownloadUrl, $nuget)
             }
         }
-    
         [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
 
         if ($force -or !($localPackages -imatch $packageName)) {
