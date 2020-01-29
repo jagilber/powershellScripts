@@ -557,7 +557,6 @@ class KustoObj {
                 return $true
             }
             
-            # user creds
             if ($this.clientId -and $this.clientSecret) {
                 [string[]]$defaultScope = @("$resourceUrl/.default")
                 [Microsoft.Identity.Client.ConfidentialClientApplicationOptions] $cAppOptions = new-Object Microsoft.Identity.Client.ConfidentialClientApplicationOptions
@@ -587,6 +586,7 @@ class KustoObj {
                 }
             }
             else {
+                # user creds
                 [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $this.publicClientApplication
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
@@ -598,7 +598,6 @@ class KustoObj {
                 else {
                     $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
                 }
-
                 $pClientApp = $pAppBuilder.Build()
                 write-host ($pClientApp | convertto-json)
 
@@ -629,9 +628,7 @@ class KustoObj {
 
             if ($this.authenticationResult) {
                 write-host "authenticationresult:$($this.authenticationResult | convertto-json)"
-                #$this.Token = $this.authenticationResult.Token
                 $this.Token = $this.authenticationResult.AccessToken
-                write-host ($this.authenticationResult | convertto-json -depth 5)
                 return $true
             }
             return $false
@@ -643,7 +640,7 @@ class KustoObj {
     }
 
     [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
-    write-verbose "MSAL: $level $containsPII $message"
+        write-verbose "MSAL: $level $containsPII $message"
     }
 
     [KustoObj] Pipe() {
@@ -776,14 +773,13 @@ class KustoObj {
 # comment next line after microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
 '@ 
 
-$error.Clear()
-
 if ($updateScript) {
     (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1", "$psscriptroot/kusto-rest.ps1");
     write-warning "script updated. restart script"
     return
 }
 
+$error.Clear()
 $global:kusto = [KustoObj]::new()
 $kusto.Exec()
 
