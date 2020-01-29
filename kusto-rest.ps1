@@ -118,7 +118,7 @@ param(
     [int]$limit,
     [string]$script,
     [string]$clientSecret,
-    [string]$clientId ="1950a258-227b-4e31-a9cf-717495945fc2",
+    [string]$clientId = "1950a258-227b-4e31-a9cf-717495945fc2",
     [string]$tenantId = "common",
     [bool]$pipeLine,
     [string]$redirectUri = "http://localhost", # "urn:ietf:wg:oauth:2.0:oob", #$null
@@ -786,7 +786,7 @@ if ($updateScript) {
 
 $global:kusto = [KustoObj]::new()
 $kusto.Exec()
-    
+
 if ($error) {
     write-warning ($error | out-string)
 }
