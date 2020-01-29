@@ -90,9 +90,6 @@ requires clientSecret
 .PARAMETER serverTimeout
 [timespan]optional override default 4 minute kusto server side timeout. max 60 minutes.
 
-.PARAMETER clean
-[switch]optional clean nuget for .net
-
 .PARAMETER updateScript
 [switch]optional enable to download latest version of script
 
@@ -128,7 +125,6 @@ param(
     [bool]$force,
     [timespan]$serverTimeout = (new-Object timespan (0, 4, 0)),
     [switch]$updateScript,
-    [switch]$clean,
     [hashtable]$parameters = @{ } #@{'clusterName' = $resourceGroup; 'dnsName' = $resourceGroup;}
 )
     
@@ -681,7 +677,7 @@ class KustoObj {
     
         if (!$this.Token -or $this.authenticationResult) {
             if (!($this.Logon($kustoResource))) {
-                write-error "unable to acquire token.`r`ntry .\kusto-rest.ps1 -clean if there are errors."
+                write-error "unable to acquire token."
                 return $error
             }
         }
@@ -785,17 +781,6 @@ $error.Clear()
 if ($updateScript) {
     (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1", "$psscriptroot/kusto-rest.ps1");
     write-warning "script updated. restart script"
-    return
-}
-
-if ($clean) {
-    $paths = @("$env:temp\nuget.exe")
-    foreach ($path in $paths) {    
-        if ((test-path $path)) {
-            Write-Warning "deleting $path"
-            remove-item -Path $path -Recurse -Force
-        }
-    }
     return
 }
 
