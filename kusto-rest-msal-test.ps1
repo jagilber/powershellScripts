@@ -91,7 +91,7 @@
     [timespan]optional override default 4 minute kusto server side timeout. max 60 minutes.
 
 .PARAMETER clean
-    [switch]optional clean msal logon utility for .net core and nuget for .net
+    [switch]optional clean nuget for .net
 
 .PARAMETER updateScript
     [switch]optional enable to download latest version of script
@@ -124,7 +124,7 @@ param(
     [string]$clientId ="1950a258-227b-4e31-a9cf-717495945fc2",
     [string]$tenantId = "common",
     [bool]$pipeLine,
-    [string]$redirectUri = "urn:ietf:wg:oauth:2.0:oob", #$null
+    [string]$redirectUri = "http://localhost", # "urn:ietf:wg:oauth:2.0:oob", #$null
     [bool]$force,
     [timespan]$serverTimeout = (new-Object timespan (0, 4, 0)),
     [switch]$updateScript,
@@ -191,6 +191,7 @@ class KustoObj {
     hidden [object]$identityDll = $null
     hidden [string]$identityPackageLocation = $identityPackageLocation
     hidden [object]$authenticationResult
+    hidden [Microsoft.Identity.Client.ConfidentialClientApplication] $confidentialClientApplication = $null
     [string]$clientId = $clientID
     hidden [string]$clientSecret = $clientSecret
     [string]$Cluster = $cluster
@@ -198,10 +199,8 @@ class KustoObj {
     [bool]$FixDuplicateColumns = $fixDuplicateColumns
     [bool]$Force = $force
     [int]$Limit = $limit
-    hidden [string]$msalUtility = $msalUtility
-    hidden [string]$msalUtilityFileName = $msalUtilityFileName
-    #hidden [string]$nuget = "nuget.exe"
     [hashtable]$parameters = $parameters
+    hidden [Microsoft.Identity.Client.PublicClientApplication] $publicClientApplication = $null
     [bool]$PipeLine = $null
     [string]$Query = $query
     hidden [string]$redirectUri = $redirectUri
@@ -551,10 +550,7 @@ class KustoObj {
             return $true
         }
 
-        [string[]]$scopes = $null
-        $scopes += "$resourceUrl/kusto.read"
-        $scopes += "$resourceUrl/kusto.write"
-        return $this.LogonMsal($resourceUrl, $scopes)
+        return $this.LogonMsal($resourceUrl, @("$resourceUrl/kusto.read", "$resourceUrl/kusto.write"))
     }
 
     [bool] AddIdentityPackageType([string]$packageName, [string] $edition) {
@@ -591,10 +587,9 @@ class KustoObj {
         return $true
     }
 
-    # issue with ps 5.1
-    #[void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
-    #    Write-Host "MSAL: $level $containsPII $message"
-    #}
+    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
+        Write-Host "MSAL: $level $containsPII $message"
+    }
 
     hidden [bool] LogonMsal([string]$resourceUrl, [string[]]$scopes) {
         try {
@@ -619,18 +614,23 @@ class KustoObj {
             
             # user creds
             if ($this.clientId -and $this.clientSecret) {
-
+                [string[]]$defaultScope = @("$resourceUrl/.default")
                 [Microsoft.Identity.Client.ConfidentialClientApplicationOptions] $cAppOptions = new-Object Microsoft.Identity.Client.ConfidentialClientApplicationOptions
                 $cAppOptions.ClientId = $this.clientId
                 $cAppOptions.RedirectUri = $this.redirectUri
                 $cAppOptions.ClientSecret = $this.clientSecret
                 $cAppOptions.TenantId = $this.tenantId
 
-                [Microsoft.Identity.Client.ConfidentialClientApplication] $cClientApp = $null
+                [Microsoft.Identity.Client.ConfidentialClientApplication] $cClientApp = $this.confidentialClientApplication
                 [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]$cAppBuilder = [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]::CreateWithApplicationOptions($cAppOptions)
                 $cAppBuilder = $cAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
-                #$cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+
+                if ($global:PSVersionTable.PSEdition -eq "Core") {
+                    $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                }
+
                 $cClientApp = $cAppBuilder.Build()
+                write-host ($cClientApp | convertto-json)
 
                 try {
                     write-host "acquire token for client" -foregroundcolor green
@@ -639,23 +639,38 @@ class KustoObj {
                 catch {
                     write-error "$($error | out-string)"
                     $error.clear()
-                    write-host "acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $cClientApp.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
+                    write-host "preauth acquire token interactive" -foregroundcolor yellow
+                    #$this.authenticationResult = $cClientApp.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
                 }
+
+                try {
+                    write-host "acquire token for client" -foregroundcolor green
+                    #$this.authenticationResult = $cClientApp.AcquireTokenForClient($scopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $cClientApp.AcquireTokenForClient(@(".reader")).ExecuteAsync().Result
+                }
+                catch {
+                    write-error "$($error | out-string)"
+                    $error.clear()
+                    write-host "acquire token interactive" -foregroundcolor yellow
+                    #$this.authenticationResult = $cClientApp.AcquireTokenInteractive($scopes).ExecuteAsync().Result
+                    #$this.authenticationResult = $cClientApp.AcquireTokenInteractive(@("Reader")).ExecuteAsync().Result
+                }
+
 
             }
             else {
-                [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $null
+                [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $this.publicClientApplication
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 
                 if ($global:PSVersionTable.PSEdition -eq "Core") {
                     $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
+                    $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 }
                 else {
                     $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
                 }
-                #$pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+
                 $pClientApp = $pAppBuilder.Build()
                 write-host ($pClientApp | convertto-json)
 
@@ -840,7 +855,7 @@ if ($updateScript) {
 }
 
 if ($clean) {
-    $paths = @("$env:LOCALAPPDATA\$msalUtilityFileName", "$env:temp\.net\$msalUtilityFileName", "$env:LOCALAPPDATA\$msalUtilityFileName.zip", "$psscriptroot\nuget.exe")
+    $paths = @("$env:temp\nuget.exe")
     foreach ($path in $paths) {    
         if ((test-path $path)) {
             Write-Warning "deleting $path"
@@ -859,4 +874,5 @@ if ($error) {
 else {
     $kusto | Get-Member
     write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
+    write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
 }
