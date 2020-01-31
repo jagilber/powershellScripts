@@ -182,7 +182,6 @@ else {
 invoke-expression @'
 
 class KustoObj {
-    hidden [object]$identityDll = $null
     hidden [string]$identityPackageLocation = $identityPackageLocation
     hidden [object]$authenticationResult
     hidden [Microsoft.Identity.Client.ConfidentialClientApplication] $confidentialClientApplication = $null
@@ -547,7 +546,7 @@ class KustoObj {
         }
         write-verbose "token expires in: $expirationMinutes minutes"
 
-        if (!$this.force -and $expirationMinutes -gt $expirationRefreshMinutes) {
+        if (!$this.force -and ($expirationMinutes -gt $expirationRefreshMinutes)) {
             write-verbose "token valid: $($this.authenticationResult.expireson). use -force to force logon"
             return $true
         }
@@ -558,11 +557,6 @@ class KustoObj {
         try {
             $error.Clear()
             [string[]]$defaultScope = @(".default")
-
-            if (!$this.force -and $this.identityDll) {
-                write-warning 'identity dll already set. use -force to force'
-                return $true
-            }
             
             if ($this.clientId -and $this.clientSecret) {
                 [string[]]$defaultScope = @("$resourceUrl/.default")
@@ -586,8 +580,8 @@ class KustoObj {
                     write-host "acquire token for client" -foregroundcolor green
                     $this.authenticationResult = $this.confidentialClientApplication.AcquireTokenForClient($defaultScope).ExecuteAsync().Result
                 }
-                catch {
-                    write-error "$($error | out-string)"
+                catch [Exception] {
+                    write-host "error client acquire error: $_`r`n$($error | out-string)" -foregroundColor red
                     $error.clear()
                 }
             }
@@ -783,6 +777,7 @@ class KustoObj {
 '@ 
 
 if ($PSBoundParameters['Verbose'] -eq $true) {
+    write-host "enabling verbose output"
     $VerbosePreference = "continue"
 }
 else {
