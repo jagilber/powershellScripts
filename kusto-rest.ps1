@@ -185,7 +185,7 @@ class KustoObj {
     hidden [string]$identityPackageLocation = $identityPackageLocation
     hidden [object]$authenticationResult
     hidden [Microsoft.Identity.Client.ConfidentialClientApplication] $confidentialClientApplication = $null
-    [string]$clientId = $clientID
+    [string]$clientId = $clientId
     hidden [string]$clientSecret = $clientSecret
     [string]$Cluster = $cluster
     [string]$Database = $database
@@ -546,8 +546,8 @@ class KustoObj {
         }
         write-verbose "token expires in: $expirationMinutes minutes"
 
-        if (!$this.force -and ($expirationMinutes -gt $expirationRefreshMinutes)) {
-            write-verbose "token valid: $($this.authenticationResult.expireson). use -force to force logon"
+        if (!$this.Force -and ($expirationMinutes -gt $expirationRefreshMinutes)) {
+            write-verbose "token valid: $($this.authenticationResult.ExpiresOn). use -force to force logon"
             return $true
         }
         return $this.LogonMsal($resourceUrl, @("$resourceUrl/kusto.read", "$resourceUrl/kusto.write"))
@@ -607,20 +607,21 @@ class KustoObj {
                 #preauth with .default scope
                 try {
                     write-host "preauth acquire token silent for account: $account" -foregroundcolor green
-                    $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($defaultScope, $this.publicClientApplication.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                    $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($defaultScope, $account).ExecuteAsync().Result
                 }
                 catch [Exception] {
-                    write-host "preauth acquire error: $_`r`n$($error | out-string)" -foregroundColor red
+                    write-host "preauth acquire error: $_`r`n$($error | out-string)" -foregroundColor yellow
                     $error.clear()
                     write-host "preauth acquire token interactive" -foregroundcolor yellow
                     $this.authenticationResult = $this.publicClientApplication.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
                 }
 
+                $account = $this.publicClientApplication.GetAccountsAsync().Result[0]
                 #add kusto scopes after preauth
                 if($scopes) {
                     try {
                         write-host "kusto acquire token silent" -foregroundcolor green
-                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($scopes, $this.publicClientApplication.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($scopes, $account).ExecuteAsync().Result
                     }
                     catch [Exception] {
                         write-host "kusto acquire error: $_`r`n$($error | out-string)" -foregroundColor red
@@ -776,14 +777,6 @@ class KustoObj {
 # comment next line after microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
 '@ 
 
-if ($PSBoundParameters['Verbose'] -eq $true) {
-    write-host "enabling verbose output"
-    $VerbosePreference = "continue"
-}
-else {
-    $VerbosePreference = "silentlycontinue"
-}
-
 if ($updateScript) {
     (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1", "$psscriptroot/kusto-rest.ps1");
     write-warning "script updated. restart script"
@@ -794,6 +787,8 @@ $error.Clear()
 $global:kusto = [KustoObj]::new()
 $kusto.Exec()
 
+write-host ($PSBoundParameters | out-string)
+
 if ($error) {
     write-warning ($error | out-string)
 }
@@ -802,3 +797,4 @@ else {
     write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
     write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
 }
+
