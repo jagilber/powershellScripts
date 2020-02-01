@@ -133,6 +133,12 @@ $global:kusto = $null
 $global:identityPackageLocation  
 $global:nuget = "nuget.exe"
 
+if ($updateScript) {
+    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1", "$psscriptroot/kusto-rest.ps1");
+    write-warning "script updated. restart script"
+    return
+}
+
 function AddIdentityPackageType([string]$packageName, [string] $edition) {
     [string]$nugetPackageDirectory = "$($env:USERPROFILE)\.nuget\packages"
     [string]$nugetSource = "https://api.nuget.org/v3/index.json"
@@ -776,12 +782,6 @@ class KustoObj {
 
 # comment next line after microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
 '@ 
-
-if ($updateScript) {
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1", "$psscriptroot/kusto-rest.ps1");
-    write-warning "script updated. restart script"
-    return
-}
 
 $error.Clear()
 $global:kusto = [KustoObj]::new()
