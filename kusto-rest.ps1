@@ -182,11 +182,10 @@ else {
 invoke-expression @'
 
 class KustoObj {
-    hidden [object]$identityDll = $null
     hidden [string]$identityPackageLocation = $identityPackageLocation
     hidden [object]$authenticationResult
     hidden [Microsoft.Identity.Client.ConfidentialClientApplication] $confidentialClientApplication = $null
-    [string]$clientId = $clientID
+    [string]$clientId = $clientId
     hidden [string]$clientSecret = $clientSecret
     [string]$Cluster = $cluster
     [string]$Database = $database
@@ -534,16 +533,23 @@ class KustoObj {
     }
 
     [bool] Logon([string]$resourceUrl) {
+        [int]$expirationRefreshMinutes = 15
+        [int]$expirationMinutes = 0
+
         if (!$resourceUrl) {
             write-warning "-resourceUrl required. example: https://{{ kusto cluster }}.kusto.windows.net"
             return $false
         }
-    
-        if (!$this.force -and $this.AuthenticationResult.expireson -gt (get-date)) {
-            write-verbose "token valid: $($this.AuthenticationResult.expireson). use -force to force logon"
+
+        if($this.authenticationResult) {
+            $expirationMinutes = $this.authenticationResult.ExpiresOn.Subtract((get-date)).TotalMinutes
+        }
+        write-verbose "token expires in: $expirationMinutes minutes"
+
+        if (!$this.Force -and ($expirationMinutes -gt $expirationRefreshMinutes)) {
+            write-verbose "token valid: $($this.authenticationResult.ExpiresOn). use -force to force logon"
             return $true
         }
-
         return $this.LogonMsal($resourceUrl, @("$resourceUrl/kusto.read", "$resourceUrl/kusto.write"))
     }
 
@@ -551,11 +557,6 @@ class KustoObj {
         try {
             $error.Clear()
             [string[]]$defaultScope = @(".default")
-
-            if (!$this.force -and $this.identityDll) {
-                write-warning 'identity dll already set. use -force to force'
-                return $true
-            }
             
             if ($this.clientId -and $this.clientSecret) {
                 [string[]]$defaultScope = @("$resourceUrl/.default")
@@ -565,7 +566,6 @@ class KustoObj {
                 $cAppOptions.ClientSecret = $this.clientSecret
                 $cAppOptions.TenantId = $this.tenantId
 
-                [Microsoft.Identity.Client.ConfidentialClientApplication] $cClientApp = $this.confidentialClientApplication
                 [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]$cAppBuilder = [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]::CreateWithApplicationOptions($cAppOptions)
                 $cAppBuilder = $cAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
 
@@ -573,61 +573,65 @@ class KustoObj {
                     $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 }
 
-                $cClientApp = $cAppBuilder.Build()
-                write-host ($cClientApp | convertto-json)
+                $this.confidentialClientApplication = $cAppBuilder.Build()
+                write-verbose ($this.confidentialClientApplication | convertto-json)
 
                 try {
                     write-host "acquire token for client" -foregroundcolor green
-                    $this.authenticationResult = $cClientApp.AcquireTokenForClient($defaultScope).ExecuteAsync().Result
+                    $this.authenticationResult = $this.confidentialClientApplication.AcquireTokenForClient($defaultScope).ExecuteAsync().Result
                 }
-                catch {
-                    write-error "$($error | out-string)"
+                catch [Exception] {
+                    write-host "error client acquire error: $_`r`n$($error | out-string)" -foregroundColor red
                     $error.clear()
                 }
             }
             else {
                 # user creds
-                [Microsoft.Identity.Client.PublicClientApplication] $pClientApp = $this.publicClientApplication
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 
-                if ($global:PSVersionTable.PSEdition -eq "Core") {
-                    $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
-                    $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                if(!($this.publicClientApplication)) {
+                    if ($global:PSVersionTable.PSEdition -eq "Core") {
+                        $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
+                        $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                    }
+                    else {
+                        $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
+                    }
+                    $this.publicClientApplication = $pAppBuilder.Build()
                 }
-                else {
-                    $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
-                }
-                $pClientApp = $pAppBuilder.Build()
-                write-host ($pClientApp | convertto-json)
+                    
+                write-verbose ($this.publicClientApplication | convertto-json)
 
+                [Microsoft.Identity.Client.IAccount]$account = $this.publicClientApplication.GetAccountsAsync().Result[0]
                 #preauth with .default scope
                 try {
-                    write-host "preauth acquire token silent" -foregroundcolor green
-                    $this.authenticationResult = $pClientApp.AcquireTokenSilent($defaultScope, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                    write-host "preauth acquire token silent for account: $account" -foregroundcolor green
+                    $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($defaultScope, $account).ExecuteAsync().Result
                 }
-                catch {
-                    write-error "preauth acquire error: $($error | out-string)"
+                catch [Exception] {
+                    write-host "preauth acquire error: $_`r`n$($error | out-string)" -foregroundColor yellow
                     $error.clear()
                     write-host "preauth acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $pClientApp.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
+                    $this.authenticationResult = $this.publicClientApplication.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
                 }
 
+                $account = $this.publicClientApplication.GetAccountsAsync().Result[0]
                 #add kusto scopes after preauth
                 if($scopes) {
                     try {
                         write-host "kusto acquire token silent" -foregroundcolor green
-                        $this.authenticationResult = $pClientApp.AcquireTokenSilent($scopes, $pClientApp.GetAccountsAsync().Result[0]).ExecuteAsync().Result
+                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($scopes, $account).ExecuteAsync().Result
                     }
-                    catch {
-                        write-error "kusto acquire error: $($error | out-string)"
+                    catch [Exception] {
+                        write-host "kusto acquire error: $_`r`n$($error | out-string)" -foregroundColor red
                         $error.clear()
                     }
                 }
             }
 
             if ($this.authenticationResult) {
-                write-host "authenticationresult:$($this.authenticationResult | convertto-json)"
+                write-host "authenticationResult:$($this.authenticationResult | convertto-json)"
                 $this.Token = $this.authenticationResult.AccessToken
                 return $true
             }
@@ -671,7 +675,7 @@ class KustoObj {
         else {
             $uri = "$kustoResource/v1/rest/mgmt"
         }
-    
+
         if (!$this.Token -or $this.authenticationResult) {
             if (!($this.Logon($kustoResource))) {
                 write-error "unable to acquire token."
@@ -783,6 +787,8 @@ $error.Clear()
 $global:kusto = [KustoObj]::new()
 $kusto.Exec()
 
+write-host ($PSBoundParameters | out-string)
+
 if ($error) {
     write-warning ($error | out-string)
 }
@@ -791,3 +797,4 @@ else {
     write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
     write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
 }
+
