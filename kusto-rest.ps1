@@ -105,9 +105,9 @@ https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.p
 
 [cmdletbinding()]
 param(
-    [string]$query = '.show tables',
     [string]$cluster,
     [string]$database,
+    [string]$query = '.show tables',
     [bool]$fixDuplicateColumns,
     [bool]$removeEmptyColumns,
     [string]$table,
