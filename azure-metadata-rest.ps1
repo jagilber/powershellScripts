@@ -144,7 +144,8 @@
 #>
 param(
     $iterations = 1000,
-    $logFile = "$pwd\azure-metadata-rest.log"
+    $logFile = "$pwd\azure-metadata-rest.log",
+    $sleepMilliseconds = 1000
 )
 
 $error.Clear()
@@ -170,6 +171,8 @@ while($count -le $iterations) {
         $errorCounter ++
         $error.Clear()
     }
+    write-host $result
+    start-sleep -Milliseconds $sleepMilliseconds
     $count++
 }
 
