@@ -1,7 +1,7 @@
 # powershell test tcp listener for troubleshooting
-# $script:client.Client.Shutdown([net.sockets.socketshutdown]::Both)
+# $client.Client.Shutdown([net.sockets.socketshutdown]::Both)
 # do a final client connect to free up close
-
+[cmdletbinding()]
 param(
     [int]$port = 80,
     [int]$count = 0,
@@ -9,12 +9,13 @@ param(
     [string]$testClientMessage = 'test message from client',
     [switch]$isClient,
     [hashtable]$clientHeaders = @{ },
-    [string]$clientBody = ""
+    [string]$clientBody = "",
+    [string]$absolutePath = "/"
 )
 
-$script:server = $null
-$script:client = $null
-$script:uri = "http://$($hostname):$port/"
+$server = $null
+$client = $null
+$uri = "http://$($hostname):$port$absolutePath"
 function main() {
     try {
         if ($isClient) {
@@ -27,13 +28,13 @@ function main() {
         Write-Host "$(get-date) Finished!";
     }
     finally {
-        if ($script:client) {
-            $script:client.Close()
-            $script:client.Dispose();
+        if ($client) {
+            $client.Close()
+            $client.Dispose();
         }
-        if ($script:server) {
-            $script:server.Close()
-            $script:server.Dispose();
+        if ($server) {
+            $server.Close()
+            $server.Dispose();
         }
         if ($http) {
             $http.Stop();
@@ -58,30 +59,22 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
                 'x-ms-client-request-id' = $requestId
             } 
         }
-<#
-        if (!$body) {
-            $body = @{
-                db         = 'database'
-                csl        = 'csl'
-                properties = @{
-                    Options    = @{
-                        queryconsistency = 'strongconsistency'
-                        servertimeout    = 'ServerTimeout.ToString()'
-                    }
-                    Parameters = '$PSBoundParameters'
-                }
-            } | ConvertTo-Json
+
+        $params = @{
+            method = $method
+            uri = $uri
+            headers = $header
         }
-        if ($body) {
-            # todo fix
-            #$header.Add("content-length", $body.Length)
+        
+        if($method -ine "GET" -and ![string]::IsNullOrEmpty($body)) {
+            $params += @{body=$body}
         }
-  #>  
         write-verbose ($header | convertto-json)
+        Write-Verbose ($params | fl * | out-string)
         write-verbose $body
     
         $error.clear()
-        $result = Invoke-WebRequest -Method $method -Uri $script:uri -Headers $header -Body $body -SkipHeaderValidation #-ContentType 'application/json'
+        $result = Invoke-WebRequest -verbose @params
         write-host $result
         
         if ($error) {
@@ -93,13 +86,17 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
         $iteration++
     }
 
-    $script:client.Close()
+    $client.Close()
 }
 
 function start-server() {
     $iteration = 0
     $http = [System.Net.HttpListener]::new();
-    $http.Prefixes.Add($script:uri)
+    $http.Prefixes.Add($uri)
+    $http.Prefixes.Add("http://$($env:computername):$port/")
+    #foreach($ip in (Get-NetIPAddress).IPv4Address) {
+    #    $http.Prefixes.Add("http://$($ip):$port/")
+    #}
     $http.Start();
 
     if ($http.IsListening) {
@@ -112,7 +109,7 @@ function start-server() {
         if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/') {
             write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
 
-            [string]$html = "$(get-date) http server received request:`r`n"
+            [string]$html = "$(get-date) http server $($env:computername) received request:`r`n"
             $html += $context | ConvertTo-Json -depth 99
             write-host $html
             #respond to the request
