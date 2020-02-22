@@ -158,6 +158,7 @@ $global:success = 0
 $global:fail = 0
 $global:extensionInstalled = 0
 $global:extensionNotInstalled = 0
+$global:psscommand = $commandId -ieq "RunPowerShellScript"
 
 function main() {
     $error.Clear()
@@ -185,7 +186,7 @@ function main() {
         return
     }
 
-    if (!$script) {
+    if ($pscommand -and !$script) {
         Write-Warning "using test script. use -script and -parameters arguments to supply script and parameters"
         $script = node-psTestScript
     }
@@ -263,7 +264,7 @@ function main() {
         }
     }
 
-    if (!(test-path $script)) {
+    if ($pscommand -and !(test-path $script)) {
         out-file -InputObject $script -filepath $tempscript -Force
         $script = $tempScript
     }
@@ -451,11 +452,44 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -CommandId $commandId `
                 -AsJob
         }
-        elseif ($parameters) {
+        elseif($pscommand) {
+            if ($parameters.Count -gt 0) {
+                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
+                -VMScaleSetName $vmssName `
+                -InstanceId $instanceId `
+                -ScriptPath $script `
+                -Parameter $parameters `
+                -CommandId $commandId `
+                -AsJob"
+        
+                $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
+                    -VMScaleSetName $vmssName `
+                    -InstanceId $instanceId `
+                    -ScriptPath $script `
+                    -Parameter $parameters `
+                    -CommandId $commandId `
+                    -AsJob
+            }
+            else {
+                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
+                -VMScaleSetName $vmssName `
+                -InstanceId $instanceId `
+                -ScriptPath $script `
+                -CommandId $commandId `
+                -AsJob"
+        
+                $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
+                    -VMScaleSetName $vmssName `
+                    -InstanceId $instanceId `
+                    -ScriptPath $script `
+                    -CommandId $commandId `
+                    -AsJob
+            }
+        }
+        elseif ($parameters.Count -gt 0) {
             write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
             -VMScaleSetName $vmssName `
             -InstanceId $instanceId `
-            -ScriptPath $script `
             -Parameter $parameters `
             -CommandId $commandId `
             -AsJob"
@@ -463,7 +497,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
                 -InstanceId $instanceId `
-                -ScriptPath $script `
                 -Parameter $parameters `
                 -CommandId $commandId `
                 -AsJob

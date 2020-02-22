@@ -1,4 +1,8 @@
-# script to setup git, hub, and vscode with common settings and extensions
+<# script to setup git, hub, and vscode with common settings and extensions
+to download and execute script:
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1", "$pwd/git-vscode-setup.ps1");
+.\git-vscode-setup.ps1
+#>
 
 param(
     [string]$gitHubDir = "c:\github",

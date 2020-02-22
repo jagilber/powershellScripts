@@ -3,12 +3,11 @@
     powershell script to to enumerate directory summarizing in tree view directories over a given size
 
 .DESCRIPTION
-    To download and execute, run the following command in powershell:
-    iwr('https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1') -UseBasicParsing|iex
-
     To download and execute with arguments:
-    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1",".\directory-treesize.ps1");
-    .\directory-treesize.ps1 c:\windows\system32
+    [net.servicePointManager]::Expect100Continue = $true;
+    [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1","$pwd\directory-treesize.ps1");
+    .\directory-treesize.ps1 c:\windows\system32 -showPercent -detail -minSizeGB 0 -logFile .\dts.log
 
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
     
