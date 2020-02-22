@@ -1,4 +1,4 @@
-﻿# powershell test tcp listener for troubleshooting
+﻿﻿# powershell test tcp listener for troubleshooting
 # $client.Client.Shutdown([net.sockets.socketshutdown]::Both)
 # do a final client connect to free up close
 
@@ -13,12 +13,7 @@ function main() {
 try {
     $listener = [net.sockets.tcpListener]$port;
     $listener.Start();
-    write-host "use following client commands to test:" -ForegroundColor Green
-    write-host "`$client = new-object net.sockets.tcpClient"
-    write-host "`$client.Connect('$hostName', $port)"
-    #write-host "`$sendBytes = [text.encoding]::ASCII.GetBytes('client connection');"
-    #write-host "`$client.Client.Send(`$sendBytes)"
-    $iteration = 0
+    $script:server = $listener.AcceptSocket();     
 
     while ($iteration -lt $count -or $count -eq 0) {
         Write-Host "$(get-date) listening on port $port";
@@ -31,7 +26,7 @@ try {
         $responseString += "waiting for client send bytes to be sent..."
 
         [byte[]]$sendBytes = [text.encoding]::ASCII.GetBytes($responseString);
-        $i = $server.Send($sendBytes);
+        $i = $script:server.Send($sendBytes);
         Write-Host "$i : $responseString"
 
         [byte[]]$buffer = @(0) * 65536
@@ -44,8 +39,8 @@ try {
         $server.Close();
         $iteration++
     }
-
-    Write-Host "$(get-date) Finished!";
+    
+    $script:server.Close();
 }
 finally {
     if ($server) {
