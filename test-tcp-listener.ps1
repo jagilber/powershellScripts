@@ -1,4 +1,4 @@
-﻿﻿# powershell test tcp listener for troubleshooting
+﻿# powershell test tcp listener for troubleshooting
 # $client.Client.Shutdown([net.sockets.socketshutdown]::Both)
 # do a final client connect to free up close
 
