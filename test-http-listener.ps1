@@ -8,13 +8,14 @@ param(
     [switch]$isClient,
     [hashtable]$clientHeaders = @{ },
     [string]$clientBody = 'test message from client',
-    [ValidateSet('GET','POST','HEAD')]
+    [ValidateSet('GET', 'POST', 'HEAD')]
     [string]$clientMethod = "GET",
     [string]$absolutePath = '/'
 )
 
 $uri = "http://$($hostname):$port$absolutePath"
 $http = $null
+$scriptParams = $PSBoundParameters
 
 function main() {
     try {
@@ -23,23 +24,25 @@ function main() {
         }
         else {
             # start client so server can periodically resume without async
-<#
-            start-job -InitializationScript ([scriptblock]::Create("function start-client{$((get-command start-client -showCommandInfo| select Definition).Definition)}")) `
-                -ScriptBlock { param($params); start-client -method GET -clientUri "$($params.uri)/clientcheck" } -ArgumentList @PSBoundParameters
-            start-job -InitializationScript ([scriptblock]::Create("function start-server{$((get-command start-server -showCommandInfo| select Definition).Definition)}")) `
-                -ScriptBlock { param($params); start-server } -ArgumentList @PSBoundParameters
+            if ($host.Name -ine "ServerRemoteHost") {
+                # called on foreground thread only
+                start-job -ScriptBlock { param($script,$params); . $script @params } -ArgumentList $MyInvocation.ScriptName, $scriptParams
 
-            while(get-job) {
-                foreach($job in get-job) {
-                    write-host (Receive-Job -Job $job | convertto-json -Depth 5)
-                    if($job.State -ine "running") {
-                        Remove-Job -Job $job -Force
+                while(get-job) {
+                    foreach($job in get-job) {
+                        $jobInfo = Receive-Job -Job $job | convertto-json -Depth 5
+                        if($jobInfo) { write-host $jobInfo }
+                        if($job.State -ine "running") {
+                            Remove-Job -Job $job -Force
+                        }
                     }
+                    start-sleep -Seconds 1
                 }
-                start-sleep -Seconds 1
+    
             }
-            #>
-            start-server
+            else {
+                start-server
+            }
         }
 
         Write-Host "$(get-date) Finished!";
@@ -114,10 +117,9 @@ function start-server() {
     while ($iteration -lt $count -or $count -eq 0) {
         $context = $http.GetContext()
         [string]$html = $null
-        if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/clientcheck') {
-            write-host "$(get-date) clientcheck: $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Gray
-        }
-        elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/') {
+        write-host "$(get-date) http server $($context.Request.UserHostAddress) received $($context.Request.HttpMethod) request:`r`n"
+
+        if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/') {
             write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
             $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
             $html += $context | ConvertTo-Json -depth 99
@@ -138,13 +140,19 @@ function start-server() {
             $html += "INPUT STREAM: $(([text.encoding]::ASCII.GetString($inputBuffer)).Trim())`r`n"
             $html += $context | ConvertTo-Json -depth 99
         }
+        else {
+            #$html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
+        }
 
         if ($html) {
             write-host $html
             #respond to the request
-            $buffer = [Text.Encoding]::UTF8.GetBytes($html)
+            $buffer = [Text.Encoding]::ASCII.GetBytes($html)
             $context.Response.ContentLength64 = $buffer.Length
             $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
+            $context.Response.OutputStream.Close()
+        }
+        else {
             $context.Response.OutputStream.Close()
         }
         
