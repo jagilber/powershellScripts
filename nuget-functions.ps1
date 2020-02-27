@@ -10,21 +10,16 @@ class NugetObj {
     [string]$globalPackages = "$($env:USERPROFILE)\.nuget\packages"
     [bool]$allVersions = $false
     [string]$verbose = "detailed" #"normal" # detailed, quiet
+    [string]$nuget = "nuget.exe"
 
     NugetObj() {
         $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
-        if (!($env:path.contains(";$pwd;$env:temp"))) { 
-            $env:path += ";$pwd;$env:temp" 
-            
-            if($PSScriptRoot -and !($env:path.contains(";$psscriptroot"))) {
-                $env:path += ";$psscriptroot" 
+        if (!(test-path $this.nuget)) {
+            $this.nuget = "$env:temp\nuget.exe"
+            if (!(test-path $this.nuget)) {
+                (new-object net.webclient).downloadFile($nugetDownloadUrl, $this.nuget)
             }
-        } 
-
-        if (!(test-path nuget)) {
-            (new-object net.webclient).downloadFile($nugetDownloadUrl, "$pwd\nuget.exe")
         }
-
         $this.EnumSources()
         $this.EnumLocals()
     }
