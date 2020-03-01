@@ -1,5 +1,12 @@
+<#
 # script to update azure service fabric settings for imagestore best practice
 # https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-fabric-settings
+
+download:
+(new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-set-fabric-imagestore-settings.ps1","$pwd\azure-az-sf-set-fabric-imagestore-settings.ps1")
+.\azure-az-sf-set-fabric-imagestore-settings.ps1 -resourceGroup {{cluster resource group}} -clusterName {{cluster name}}
+
+#>
 
 param (
     [string]$resourceGroup = '',
@@ -39,7 +46,7 @@ function main () {
     }
 
     write-host "updating fabric settings" -foregroundcolor yellow
-    write-host "using fabric settings array. one ud walk. fast"
+    write-host "using fabric settings array for one ud walk"
 
     if($fabricSettingsJson) {
         $error.Clear()
