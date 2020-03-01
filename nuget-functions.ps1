@@ -16,6 +16,10 @@ class NugetObj {
         $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
         if (!(test-path $this.nuget)) {
             $this.nuget = "$env:temp\nuget.exe"
+            if(!$env:path.Contains($env:temp)) {
+                $env:path += ";$($env:temp)"
+            }
+
             if (!(test-path $this.nuget)) {
                 (new-object net.webclient).downloadFile($nugetDownloadUrl, $this.nuget)
             }
