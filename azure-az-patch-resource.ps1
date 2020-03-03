@@ -8,17 +8,22 @@ download:
 #>
 param (
     [string]$resourceGroupName = '',
-    [string]$resourceName = '',
+    [string[]]$resourceNames = '',
     [string]$templateJsonFile = '.\template.json', 
-    [string]$apiVersion = '' ,#'2019-06-01-preview' sf, # '2019-07-01' vmss
+    [string]$apiVersion = '' , #'2019-06-01-preview' sf, # '2019-07-01' vms
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [switch]$patch
 )
 
 function main () {
-    if (!$resourceGroupName -or !$resourceName -or !$templateJsonFile) {
-        write-error 'pass arguments'
+    #if (!$resourceGroupName -or !$resourceNames -or !$templateJsonFile) {
+    if (!$resourceGroupName -or !$templateJsonFile) {
+        write-error 'pas arguments'
         return
+    }
+
+    if (!$resourceNames) {
+        $resourceNames = @((get-azresource -resourceGroupName $resourceGroupName).Name)
     }
 
     if (!(Get-AzContext)) {
@@ -34,7 +39,7 @@ function main () {
     }
 
     if ($patch) {
-        if(!(get-content -raw $templateJsonFile | convertfrom-json)) {
+        if (!(get-content -raw $templateJsonFile | convertfrom-json)) {
             write-error "invalid template file $templateJsonFile"
             return
         }
@@ -42,9 +47,9 @@ function main () {
         $error.Clear()
         $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $templateJsonFile -Verbose
 
-        if(!$error -and !$result) {
+        if (!$error -and !$result) {
             write-host "patching cluster with $templateJsonFile" -ForegroundColor Yellow
-            New-AzResourceGroupDeployment -Name "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmmss"))" `
+            New-AzResourceGroupDeployment -Name "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))" `
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel All `
                 -TemplateFile $templateJsonFile `
@@ -57,27 +62,37 @@ function main () {
     }
     else {
         write-host "exporting template to $templateJsonFile" -ForegroundColor Yellow
-        # convert az resource to arm template
-        $azResource = get-azresource -Name $resourceName -ResourceGroupName $resourceGroupName -ExpandProperties
+        $resources = [collections.arraylist]@()
+        $azResourceGroupLocation = @(get-azresource -ResourceGroupName $resourceGroupName)[0].Location
+        $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
 
-        if(!$apiVersion) {
-            $apiVersion = "[providers('$($azResource.ResourceType.split('/')[0])','$($azResource.ResourceType.split('/')[1])').apiVersions[0]]"
-        }
+        foreach ($name in $resourceNames) {
+            # convert az resource to arm template
+            $azResource = get-azresource -Name $name -ResourceGroupName $resourceGroupName -ExpandProperties
+            $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq ($azResource.ResourceType.split('/')[0])
+            $rpType = $resourceProvider.ResourceTypes | Where-Object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+            $resourceApiVersion = $apiVersion
 
-        $resourceTemplate = @{ 
-            '$schema' = $schema
-            contentVersion = "1.0.0.0"
-            resources = @(
-                @{
-                    apiVersion = $apiVersion
-                    dependsOn = @()
-                    type = $azResource.Type
-                    location = $azResource.Location
-                    id = $azResource.Id
-                    name = $azResource.Name
-                    tags = $azResource.Tags
+            if(!$apiVersion) {
+                $resourceApiVersion = $rpType.ApiVersions[0]
+            }
+
+            $resources.Add(@{
+                    apiVersion = $resourceApiVersion
+                    dependsOn  = @()
+                    type       = $azResource.Type
+                    location   = $azResource.Location
+                    id         = $azResource.Id
+                    name       = $azResource.Name
+                    tags       = $azResource.Tags
                     properties = $azResource.properties
                 })
+        }
+        
+        $resourceTemplate = @{ 
+            '$schema'      = $schema
+            contentVersion = "1.0.0.0"
+            resources      = $resources
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $templateJsonFile
@@ -94,10 +109,13 @@ function main () {
 }
 
 function display-settings() {
-    $settings = Get-AzResource -ResourceGroupName $resourceGroupName `
-        -Name $resourceName `
-        -ExpandProperties | convertto-json -depth 99
+    foreach ($name in $resourceNames) {
+        $settings += Get-AzResource -ResourceGroupName $resourceGroupName `
+            -Name $name `
+            -ExpandProperties | convertto-json -depth 99
+    }
     write-host "current settings: `r`n $settings" -ForegroundColor Green
 }
 
 main
+
