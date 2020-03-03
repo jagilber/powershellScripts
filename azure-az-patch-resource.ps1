@@ -1,12 +1,11 @@
 <#
 # script to update azure arm template resource settings
 download:
-(new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-patch-resource.ps1","$pwd\azure-az-patch-resource.ps1")
+(new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1","$pwd\azure-az-patch-resource.ps1")
 .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
 .EXAMPLE
 #>
-
 param (
     [string]$resourceGroupName = '',
     [string]$resourceName = '',
@@ -84,7 +83,7 @@ function main () {
         $resourceTemplate | out-file $templateJsonFile
         write-host $resourceTemplate -ForegroundColor Cyan
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
-        write-host "to update cluster, modify $templateJsonFile.  when finished, execute script with -patch to update cluster" -ForegroundColor Yellow
+        write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
         . $templateJsonFile
 
         return
