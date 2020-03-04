@@ -80,9 +80,9 @@ function main () {
             $resources.Add(@{
                     apiVersion = $resourceApiVersion
                     dependsOn  = @()
-                    type       = $azResource.Type
+                    type       = $azResource.ResourceType
                     location   = $azResource.Location
-                    id         = $azResource.Id
+                    id         = $azResource.ResourceId
                     name       = $azResource.Name
                     tags       = $azResource.Tags
                     properties = $azResource.properties
