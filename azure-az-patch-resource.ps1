@@ -16,9 +16,11 @@ param (
     [switch]$patch
 )
 
-$ErrorActionPreference = 'stop' #'continue'
+$ErrorActionPreference = 'continue'
 $VerbosePreference = 'continue'
 function main () {
+    $global:startTime = get-date
+
     if (!$resourceGroupName -or !$templateJsonFile) {
         write-error 'pas arguments'
         return
@@ -40,6 +42,8 @@ function main () {
         return
     }
 
+    $deploymentName = "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))"
+
     if ($patch) {
         remove-jobs
         if (!(deploy-template -resourceNames $resourceNames)) { return }
@@ -49,6 +53,7 @@ function main () {
         export-template -resourceNames $resourceNames
     }
 
+    Write-Progress -Completed -Activity "complete"
     display-settings
     write-host 'finished'
 }
@@ -59,6 +64,8 @@ function deploy-template($resourceNames) {
         write-error "invalid template file $templateJsonFile"
         return
     }
+
+    $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
     $resources = @($json.resources | ? Name -imatch ($resourceNames -join '|'))
 
@@ -68,12 +75,16 @@ function deploy-template($resourceNames) {
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
-        New-AzResourceGroupDeployment -Name "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))" `
-            -ResourceGroupName $resourceGroupName `
-            -DeploymentDebugLogLevel All `
-            -TemplateFile $tempJsonFile `
-            -Verbose `
-            #-asjob
+        start-job -ScriptBlock {
+            param ($resourceGroupName, $tempJsonFile, $deploymentName)
+            $VerbosePreference = 'continue'
+            write-host "using file: $tempJsonFile"
+            New-AzResourceGroupDeployment -Name $deploymentName `
+                -ResourceGroupName $resourceGroupName `
+                -DeploymentDebugLogLevel All `
+                -TemplateFile $tempJsonFile `
+                -Verbose
+            } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName
     }
     else {
         write-error "template validation failed`r`n$($error | out-string)`r`n$result"
@@ -205,35 +216,35 @@ function wait-jobs() {
 }
 function write-log($data) {
     if (!$data) { return }
-    [string]$stringData = ""
+    [text.stringbuilder]$stringData = New-Object text.stringbuilder
     
     if ($data.GetType().Name -eq "PSRemotingJob") {
         foreach ($job in $data.childjobs) {
             if ($job.Information) {
-                $stringData += (@($job.Information.ReadAll()) -join "`r`n")
+                $stringData.appendline(@($job.Information.ReadAll()) -join "`r`n")
             }
             if ($job.Verbose) {
-                $stringData += (@($job.Verbose.ReadAll()) -join "`r`n")
+                $stringData.appendline(@($job.Verbose.ReadAll()) -join "`r`n")
             }
             if ($job.Debug) {
-                $stringData += (@($job.Debug.ReadAll()) -join "`r`n")
+                $stringData.appendline(@($job.Debug.ReadAll()) -join "`r`n")
             }
             if ($job.Output) {
-                $stringData += (@($job.Output.ReadAll()) -join "`r`n")
+                $stringData.appendline(@($job.Output.ReadAll()) -join "`r`n")
             }
             if ($job.Warning) {
                 write-warning (@($job.Warning.ReadAll()) -join "`r`n")
-                $stringData += (@($job.Warning.ReadAll()) -join "`r`n")
-                $stringData += ($job | fl * | out-string)
+                $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
+                $stringData.appendline(($job | fl * | out-string))
             }
             if ($job.Error) {
                 write-error (@($job.Error.ReadAll()) -join "`r`n")
-                $stringData += (@($job.Error.ReadAll()) -join "`r`n")
-                $stringData += ($job | fl * | out-string)
+                $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
+                $stringData.appendline(($job | fl * | out-string))
             }
     
-            if ($stringData.Trim().Length -gt 0) {
-                $stringData += "`r`nname: $($data.Name) state: $($job.State) $($job.Status)`r`n"     
+            if ($stringData.tostring().Trim().Length -gt 0) {
+                #$stringData += "`r`nname: $($data.Name) state: $($job.State) $($job.Status)`r`n"     
             }
             else {
                 return
@@ -243,7 +254,17 @@ function write-log($data) {
     else {
         $stringData = "$(get-date):$($data | fl * | out-string)"
     }
-    
+
+    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
+    $status += $stringData.ToString().trim()
+    $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
+
+    if($deploymentOperations) {
+        
+        $status += ($deploymentOperations | out-string).Trim()
+    }
+
+    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceNames" -Status $status -id 1
     write-host $stringData
 }
 
