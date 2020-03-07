@@ -17,8 +17,7 @@ param(
         'ms-vscode.csharp',
         'ms-vscode.powershell'),
     [string]$user,
-    [string]$email,
-    [string]$binPath = "c:\program files\git"
+    [string]$email
 )
 
 [io.directory]::CreateDirectory($gitHubDir)
@@ -64,7 +63,7 @@ $error.clear()
 (hub)|out-null
 
 if($error) {
-    .\download-git-client.ps1 -hub -setpath -destPath 
+    .\download-git-client.ps1 -hub -setpath
 }
 
 Set-Location $gitHubDir
