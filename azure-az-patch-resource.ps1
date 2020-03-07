@@ -15,6 +15,7 @@ param (
     [switch]$patch
 )
 
+$global:resourceTemplateObj = @{}
 function main () {
     #if (!$resourceGroupName -or !$resourceNames -or !$templateJsonFile) {
     if (!$resourceGroupName -or !$templateJsonFile) {
@@ -100,12 +101,12 @@ function main () {
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
         . $templateJsonFile
-
+        $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
         return
     }
 
     display-settings
-    write-host 'finished'
+    write-host 'finished. template stored in `$global:resourceTemplateObj' -ForegroundColor Green
 }
 
 function display-settings() {
