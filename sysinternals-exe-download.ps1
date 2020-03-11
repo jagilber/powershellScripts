@@ -11,6 +11,7 @@ param(
 if(!$sysinternalsCustomExe) { $sysinternalsCustomExe = $sysinternalsExe}
 
 if(!(test-path $sysinternalsCustomExe)){
+    write-host "(new-object net.webclient).DownloadFile('http://live.sysinternals.com/$sysinternalsCustomExe','$pwd\$sysinternalsCustomExe')"
     (new-object net.webclient).DownloadFile("http://live.sysinternals.com/$sysinternalsCustomExe","$pwd\$sysinternalsCustomExe")
 }
 
