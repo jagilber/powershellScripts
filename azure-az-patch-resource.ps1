@@ -18,6 +18,8 @@ param (
 
 $ErrorActionPreference = 'continue'
 $VerbosePreference = 'continue'
+$global:resourceTemplateObj = @{}
+
 function main () {
     $global:startTime = get-date
 
@@ -148,6 +150,15 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
+
+        write-host $resourceTemplate -ForegroundColor Cyan
+        write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
+        write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
+        . $templateJsonFile
+        $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
+        display-settings
+        write-host 'finished. template stored in `$global:resourceTemplateObj' -ForegroundColor Green
+    
         return $true
     }
     catch { 

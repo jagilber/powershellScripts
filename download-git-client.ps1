@@ -48,13 +48,15 @@ function main() {
         Set-Alias git hub
         $gitClientType = $hubClientType
         $gitReleaseApi = $hubReleaseApi
-        $destPath += "\Hub"
+        $destPath = "$destPath\Hub"
     }
     else {
-        $destPath += "\Git"
+        $destPath = "$destPath\Git"
     }
 
     $binPath = $destPath.ToLower() + "\bin"
+    write-host "binpath: $binpath" -ForegroundColor Green
+
     (git) | out-null
 
     if ($error -and $clean) {
@@ -119,6 +121,7 @@ function main() {
         start-process -FilePath $clientFile -ArgumentList $argumentList -Wait
     
         if (!(test-path $binPath)) {
+            write-warning "unable to find $binPath"
             $binPath = $null
         }
     }
