@@ -8,13 +8,13 @@ param(
 [net.ServicePointManager]::Expect100Continue = $true
 [net.ServicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12
 
-if($sysinternalsCustomExe) { $sysinternalsExe = $sysinternalsCustomExe }
+if(!$sysinternalsCustomExe) { $sysinternalsCustomExe = $sysinternalsExe}
 
 if(!(test-path $sysinternalsexe)){
-    (new-object net.webclient).DownloadFile("http://live.sysinternals.com/$sysinternalsexe","$pwd\$sysinternalsexe")
+    (new-object net.webclient).DownloadFile("http://live.sysinternals.com/$sysinternalsCustomExe","$pwd\$sysinternalsCustomExe")
 }
 
 if(!$noExecute) {
-    . .\$sysinternalsexe -accepteula
+    . .\$sysinternalsCustomExe -accepteula
 }
   
