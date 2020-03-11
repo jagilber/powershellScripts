@@ -10,7 +10,7 @@ param(
 
 if(!$sysinternalsCustomExe) { $sysinternalsCustomExe = $sysinternalsExe}
 
-if(!(test-path $sysinternalsexe)){
+if(!(test-path $sysinternalsCustomExe)){
     (new-object net.webclient).DownloadFile("http://live.sysinternals.com/$sysinternalsCustomExe","$pwd\$sysinternalsCustomExe")
 }
 
