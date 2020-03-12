@@ -57,7 +57,7 @@ function main () {
 
     Write-Progress -Completed -Activity "complete"
     display-settings
-    write-host 'finished'
+    write-host 'finished. template stored in `$global:resourceTemplateObj' -ForegroundColor Cyan
 }
 
 function deploy-template($resourceNames) {
@@ -132,12 +132,6 @@ function export-template($resourceNames) {
     }
 
     if (!(create-jsonTemplate -resources $resources -jsonFile $templateJsonFile)) { return }
-
-    write-host $resourceTemplate -ForegroundColor Cyan
-    write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
-    write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
-    . $templateJsonFile
-    
     return
 }
 
@@ -155,10 +149,8 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
         . $templateJsonFile
+
         $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
-        display-settings
-        write-host 'finished. template stored in `$global:resourceTemplateObj' -ForegroundColor Green
-    
         return $true
     }
     catch { 
