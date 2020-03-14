@@ -214,6 +214,8 @@ class KustoObj {
     [timespan]$ServerTimeout = $serverTimeout
     hidden [string]$token = $token
     [bool]$ViewResults = $viewResults
+    [hashtable]$Tables = @{}
+    [hashtable]$Functions = @{}
         
     KustoObj() { }
     static KustoObj() { }
@@ -328,7 +330,12 @@ class KustoObj {
         }
         return $this.Pipe()
     }
-    
+
+    [KustoObj] ExecFunction([string]$function, [array]$parameters) {
+        $this.Exec([string]::Format("{0}('{1}')",$function,$parameters -join "','"))
+        return $this.Pipe()
+    }
+
     [KustoObj] ExecScript([string]$script, [hashtable]$parameters) {
         $this.Script = $script
         $this.parameters = $parameters
@@ -766,6 +773,8 @@ class KustoObj {
     
     [KustoObj] SetDatabase([string]$database) {
         $this.Database = $database
+        $this.SetTables()
+        $this.SetFunctions()
         return $this.Pipe()
     }
     
@@ -778,6 +787,28 @@ class KustoObj {
         $this.Table = $table
         return $this.Pipe()
     }
+
+    [KustoObj] SetFunctions() {
+        $this.Functions.Clear()
+        $this.exec('.show functions | project Name')
+        $this.CreateResultTable()
+
+        foreach($function in $this.ResultTable) {
+            $this.Functions.Add($function.Name,$function.Name)
+        }
+        return $this.Pipe()
+    }
+
+    [KustoObj] SetTables() {
+        $this.Tables.Clear()
+        $this.exec('.show tables | project TableName')
+        $this.CreateResultTable()
+
+        foreach($table in $this.ResultTable) {
+            $this.Tables.Add($table.TableName,$table.TableName)
+        }
+        return $this.Pipe()
+    }
 }
 
 # comment next line after microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
@@ -785,6 +816,8 @@ class KustoObj {
 
 $error.Clear()
 $global:kusto = [KustoObj]::new()
+$kusto.SetTables()
+$kusto.SetFunctions()
 $kusto.Exec()
 
 write-host ($PSBoundParameters | out-string)
