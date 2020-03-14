@@ -57,7 +57,7 @@ function main () {
 
     Write-Progress -Completed -Activity "complete"
     display-settings
-    write-host 'finished. template stored in `$global:resourceTemplateObj' -ForegroundColor Cyan
+    write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
 }
 
 function deploy-template($resourceNames) {
