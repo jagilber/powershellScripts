@@ -138,9 +138,9 @@ function export-template($resourceNames) {
 function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {
     try {
         $resourceTemplate = @{ 
+            resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
-            resources      = $resources
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
