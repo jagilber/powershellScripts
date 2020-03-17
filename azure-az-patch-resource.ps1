@@ -11,7 +11,7 @@ param (
     [string[]]$resourceNames = '',
     [string]$templateJsonFile = '.\template.json', 
     [string]$apiVersion = '' ,
-    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
+    [string]$schema = 'http://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [switch]$patch
 )
@@ -19,6 +19,8 @@ param (
 $ErrorActionPreference = 'continue'
 $VerbosePreference = 'continue'
 $global:resourceTemplateObj = @{}
+import-module az.accounts
+import-module az.resources
 
 function main () {
     $global:startTime = get-date
@@ -73,7 +75,7 @@ function deploy-template($resourceNames) {
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
     $error.Clear()
-    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose
+    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Pre
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
@@ -85,11 +87,12 @@ function deploy-template($resourceNames) {
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel All `
                 -TemplateFile $tempJsonFile `
-                -Verbose
+                -Verbose `
+                -pre
             } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName
     }
     else {
-        write-error "template validation failed`r`n$($error | out-string)`r`n$result"
+        write-error "template validation failed`r`n$($error | convertto-json)`r`n$($result | convertto-json)"
         return $false
     }
 
