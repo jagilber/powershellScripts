@@ -62,8 +62,10 @@ function main() {
 
         . $sfCabScript -sfversion $etlFileVersion -outputfolder $outputDir
         $sfBinDir = "$outputDir\$etlFileVersion\bin\Fabric\Fabric.Code"
-        start-process -Wait -FilePath "FabricSetup.exe" -ArgumentList "/operation:uninstall" -WorkingDirectory $sfBinDir -NoNewWindow
-        start-process -Wait -FilePath "FabricSetup.exe" -ArgumentList "/operation:install" -WorkingDirectory $sfBinDir -NoNewWindow
+        write-host "start-process -Wait -FilePath '$sfBinDir\FabricSetup.exe' -ArgumentList '/operation:uninstall' -WorkingDirectory $sfBinDir -NoNewWindow" -ForegroundColor Green
+        start-process -Wait -FilePath "$sfBinDir\FabricSetup.exe" -ArgumentList "/operation:uninstall" -WorkingDirectory $sfBinDir -NoNewWindow
+        write-host "start-process -Wait -FilePath '$sfBinDir\FabricSetup.exe' -ArgumentList '/operation:install' -WorkingDirectory $sfBinDir -NoNewWindow" -ForegroundColor green
+        start-process -Wait -FilePath "$sfBinDir\FabricSetup.exe" -ArgumentList "/operation:install" -WorkingDirectory $sfBinDir -NoNewWindow
 
     }
 
