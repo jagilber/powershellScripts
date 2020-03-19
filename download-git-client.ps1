@@ -43,10 +43,12 @@ function main() {
 
         if($destpath -ieq "c:\program files"){
             Write-Warning "not in admin powershell session. setting path from $destpath to $pwd"
-            $destpath = $pwd.tostring().trim('\')
+            $destpath = $pwd.tostring()
         }
     }
 
+    $destpath = $destpath.replace("\\","\").TrimEnd("\")
+    
     if ($gitMinClient) {
         $gitClientType = $minGitClientType
     }
@@ -101,7 +103,7 @@ function main() {
 
     $downloadUrl
     #$clientFile = "$($destPath)\gitfullclient.zip"
-    $clientFile = "`"$($destPath)\$([io.path]::GetFileName($downloadUrl))`""
+    $clientFile = "$($destPath)\$([io.path]::GetFileName($downloadUrl))"
 
     if ($force) {
         remove-install
@@ -115,7 +117,7 @@ function main() {
         }
 
         write-host "downloading $downloadUrl to $clientFile"
-        (new-object net.webclient).DownloadFile($downloadUrl, $clientFile.trim('"'))
+        (new-object net.webclient).DownloadFile($downloadUrl, $clientFile)
     }
 
     if ($clientFile -imatch ".zip") {
