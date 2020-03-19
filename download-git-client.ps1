@@ -101,7 +101,7 @@ function main() {
 
     $downloadUrl
     #$clientFile = "$($destPath)\gitfullclient.zip"
-    $clientFile = "$($destPath)\$([io.path]::GetFileName($downloadUrl))"
+    $clientFile = "`"$($destPath)\$([io.path]::GetFileName($downloadUrl))`""
 
     if ($force) {
         remove-install
