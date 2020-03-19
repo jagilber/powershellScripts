@@ -41,9 +41,9 @@ function main() {
             return
         }
 
-        if($path -ieq "c:\program files"){
-            Write-Warning "not in admin powershell session. setting path from $path to $pwd"
-            $path = $pwd
+        if($destpath -ieq "c:\program files"){
+            Write-Warning "not in admin powershell session. setting path from $destpath to $pwd"
+            $destpath = $pwd
         }
     }
 
