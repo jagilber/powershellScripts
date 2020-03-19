@@ -36,8 +36,15 @@ $error.clear()
 function main() {
 
     if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-        Write-Warning "restart in admin powershell."
-        return
+        if(!$force) {
+            Write-Warning "restart in admin powershell or use -force"
+            return
+        }
+
+        if($path -ieq "c:\program files"){
+            Write-Warning "not in admin powershell session. setting path from $path to $pwd"
+            $path = $pwd
+        }
     }
 
     if ($gitMinClient) {
