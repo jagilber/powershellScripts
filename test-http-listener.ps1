@@ -19,7 +19,7 @@ param(
     [net.http.httpMethod]$clientMethod = "GET",
     [string]$absolutePath = '/',
     [switch]$useClientProxy,
-    [switch]$asJob
+    [bool]$asJob = $true
 )
 
 $uri = "http://$($hostname):$port$absolutePath"
@@ -38,10 +38,10 @@ function main() {
             if ($host.Name -ine "ServerRemoteHost") {
             #if ($false) {
                 # called on foreground thread only
-                start-server -asjob $true
+                start-server -asjob $asJob
             }
             else {
-                start-server -asJob $asJob
+                start-server -asJob $true
             }
         }
 
