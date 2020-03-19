@@ -119,7 +119,7 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
     }
 }
 
-function start-server([switch]$asjob, [int]$serverPort = $port) {
+function start-server([bool]$asjob, [int]$serverPort = $port) {
 
     if($asjob) {
         start-job -ScriptBlock { param($script, $params); . $script @params } -ArgumentList $MyInvocation.ScriptName, $scriptParams
