@@ -63,7 +63,7 @@ function main() {
 
     if ($gitMinClient) {
         $gitClientType = $minGitClientType
-        $binPath = $destPath.tolower() + "\cmd"
+        $binPath = $destPath.tolower() + "\mingw32\bin"
     }
 
     write-host "binpath: $binpath" -ForegroundColor Green
