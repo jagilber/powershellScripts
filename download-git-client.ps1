@@ -115,7 +115,7 @@ function main() {
         }
 
         write-host "downloading $downloadUrl to $clientFile"
-        (new-object net.webclient).DownloadFile($downloadUrl, $clientFile)
+        (new-object net.webclient).DownloadFile($downloadUrl, $clientFile.trim('"'))
     }
 
     if ($clientFile -imatch ".zip") {
