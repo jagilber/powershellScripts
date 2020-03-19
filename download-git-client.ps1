@@ -48,10 +48,6 @@ function main() {
     }
 
     $destpath = $destpath.replace("\\","\").TrimEnd("\")
-    
-    if ($gitMinClient) {
-        $gitClientType = $minGitClientType
-    }
 
     if ($hub) {
         Set-Alias git hub
@@ -64,6 +60,12 @@ function main() {
     }
 
     $binPath = $destPath.ToLower() + "\bin"
+
+    if ($gitMinClient) {
+        $gitClientType = $minGitClientType
+        $binPath = $destPath.tolower() + "\cmd"
+    }
+
     write-host "binpath: $binpath" -ForegroundColor Green
 
     (git) | out-null
