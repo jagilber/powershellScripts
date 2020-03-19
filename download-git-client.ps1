@@ -43,7 +43,7 @@ function main() {
 
         if($destpath -ieq "c:\program files"){
             Write-Warning "not in admin powershell session. setting path from $destpath to $pwd"
-            $destpath = $pwd.trim('\')
+            $destpath = $pwd.tostring().trim('\')
         }
     }
 
