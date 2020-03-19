@@ -1,5 +1,12 @@
-# powershell test http listener for troubleshooting
-# do a final client connect to free up close
+<#
+ powershell test http listener for troubleshooting
+ use the following to save and pass arguments:
+(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1","$pwd/test-http-listener.ps1");
+.\test-http-listener
+
+ do a final client connect to free up close
+#>
+
 [cmdletbinding()]
 param(
     [int]$port = 80,
@@ -11,7 +18,8 @@ param(
     #[ValidateSet('GET', 'POST', 'HEAD')]
     [net.http.httpMethod]$clientMethod = "GET",
     [string]$absolutePath = '/',
-    [switch]$useClientProxy
+    [switch]$useClientProxy,
+    [switch]$asJob
 )
 
 $uri = "http://$($hostname):$port$absolutePath"
@@ -30,10 +38,10 @@ function main() {
             if ($host.Name -ine "ServerRemoteHost") {
             #if ($false) {
                 # called on foreground thread only
-                start-server -asjob
+                start-server -asjob $true
             }
             else {
-                start-server
+                start-server -asJob $asJob
             }
         }
 
