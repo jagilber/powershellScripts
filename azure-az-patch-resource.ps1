@@ -11,27 +11,34 @@ param (
     [string[]]$resourceNames = '',
     [string]$templateJsonFile = '.\template.json', 
     [string]$apiVersion = '' ,
-    [string]$schema = 'http://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json',
+    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [switch]$patch
 )
 
-$ErrorActionPreference = 'continue'
-$VerbosePreference = 'continue'
 $global:resourceTemplateObj = @{}
 import-module az.accounts
 import-module az.resources
 
 function main () {
+    $ErrorActionPreference = 'continue'
+    $VerbosePreference = 'continue'
+
     $global:startTime = get-date
+    $resourceIds = [collections.arraylist]::new()
 
     if (!$resourceGroupName -or !$templateJsonFile) {
-        write-error 'pas arguments'
+        write-error 'specify resourceGroupName'
         return
     }
 
-    if (!$resourceNames) {
-        $resourceNames = @((get-azresource -resourceGroupName $resourceGroupName).Name)
+    if ($resourceNames) {
+        foreach($resourceName in $resourceNames){
+            $resourceIds.AddRange(@((get-azresource -resourceName $resourceName).Id))
+        }
+    }
+        else{
+        $resourceIds.AddRange(@((get-azresource -resourceGroupName $resourceGroupName).Id))
     }
 
     if (!(Get-AzContext)) {
@@ -39,7 +46,7 @@ function main () {
     }
 
     $error.Clear()
-    display-settings
+    display-settings -resourceIds $resourceIds
 
     if ($error) {
         Write-Warning "error enumerating resource"
@@ -50,19 +57,20 @@ function main () {
 
     if ($patch) {
         remove-jobs
-        if (!(deploy-template -resourceNames $resourceNames)) { return }
+        if (!(deploy-template -resourceIds $resourceIds)) { return }
         wait-jobs
     }
     else {
-        export-template -resourceNames $resourceNames
+        export-template -resourceIds $resourceIds
     }
 
     Write-Progress -Completed -Activity "complete"
-    display-settings
+    display-settings -resourceIds $resourceIds
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
+ 
 }
 
-function deploy-template($resourceNames) {
+function deploy-template($resourceIds) {
     $json = get-content -raw $templateJsonFile | convertfrom-json
     if ($error -or !$json -or !$json.resources) {
         write-error "invalid template file $templateJsonFile"
@@ -71,11 +79,12 @@ function deploy-template($resourceNames) {
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | ? Name -imatch ($resourceNames -join '|'))
+    $resources = @($json.resources | ? Id -imatch ($resourceIds -join '|'))
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
     $error.Clear()
-    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Pre
+    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug" -ForegroundColor Cyan
+    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
@@ -83,15 +92,22 @@ function deploy-template($resourceNames) {
             param ($resourceGroupName, $tempJsonFile, $deploymentName)
             $VerbosePreference = 'continue'
             write-host "using file: $tempJsonFile"
+            write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
+                -ResourceGroupName $resourceGroupName `
+                -DeploymentDebugLogLevel All `
+                -TemplateFile $tempJsonFile `
+                -Verbose" -ForegroundColor Cyan
+
             New-AzResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel All `
                 -TemplateFile $tempJsonFile `
-                -Verbose `
-                -pre
+                -Verbose #`
+                #-pre
             } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName
     }
     else {
+        write-host "template validation failed: $($error |out-string) $($result | out-string)"
         write-error "template validation failed`r`n$($error | convertto-json)`r`n$($result | convertto-json)"
         return $false
     }
@@ -105,22 +121,21 @@ function deploy-template($resourceNames) {
     }
 }
 
-function export-template($resourceNames) {
+function export-template($resourceIds) {
     write-host "exporting template to $templateJsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
     $azResourceGroupLocation = @(get-azresource -ResourceGroupName $resourceGroupName)[0].Location
     $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
     
-    foreach ($name in $resourceNames) {
+    foreach ($resourceId in $resourceIds) {
         # convert az resource to arm template
-        $azResource = get-azresource -Name $name -ResourceGroupName $resourceGroupName -ExpandProperties
+        $azResource = get-azresource -Id $resourceId
         $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
         $rpType = $resourceProvider.ResourceTypes | Where-Object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
-        $resourceApiVersion = $apiVersion
 
-        if (!$apiVersion) {
-            $resourceApiVersion = $rpType.ApiVersions[0]
-        }
+        # query again with latest api ver
+        $resourceApiVersion = $rpType.ApiVersions[0]
+        $azResource = get-azresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
 
         [void]$resources.Add(@{
                 apiVersion = $resourceApiVersion
@@ -161,10 +176,9 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         return $false
     }
 }
-function display-settings() {
-    foreach ($name in $resourceNames) {
-        $settings += Get-AzResource -ResourceGroupName $resourceGroupName `
-            -Name $name `
+function display-settings($resourceIds) {
+    foreach ($resourceId in $resourceIds) {
+        $settings += Get-AzResource -Id $resourceId `
             -ExpandProperties | convertto-json -depth 99
     }
     write-host "current settings: `r`n $settings" -ForegroundColor Green
@@ -270,9 +284,11 @@ function write-log($data) {
         $status += ($deploymentOperations | out-string).Trim()
     }
 
-    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceNames" -Status $status -id 1
+    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status -id 1
     write-host $stringData
 }
 
-main
 
+main
+#$ErrorActionPreference = 'silentlycontinue'
+#$VerbosePreference = 'silentlycontinue'
