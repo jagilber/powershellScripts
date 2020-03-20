@@ -103,7 +103,7 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
             #write-host ($httpClient | fl * | convertto-json -Depth 99)
             #$requestMessage.
             $httpClient
-            pause
+            #pause
         
             if ($error) {
                 write-host "$($error | out-string)"
