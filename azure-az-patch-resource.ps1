@@ -13,10 +13,12 @@ param (
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
-    [switch]$patch
+    [switch]$patch,
+    [ValidateSet('Incremental', 'Complete')]
+    [string]$mode = 'Incremental'
 )
 
-$global:resourceTemplateObj = @{}
+$global:resourceTemplateObj = @{ }
 import-module az.accounts
 import-module az.resources
 
@@ -33,11 +35,11 @@ function main () {
     }
 
     if ($resourceNames) {
-        foreach($resourceName in $resourceNames){
+        foreach ($resourceName in $resourceNames) {
             $resourceIds.AddRange(@((get-azresource -resourceName $resourceName).Id))
         }
     }
-        else{
+    else {
         $resourceIds.AddRange(@((get-azresource -resourceGroupName $resourceGroupName).Id))
     }
 
@@ -83,28 +85,33 @@ function deploy-template($resourceIds) {
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
     $error.Clear()
-    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug" -ForegroundColor Cyan
-    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug
+    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug -Mode $mode" -ForegroundColor Cyan
+    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+        -TemplateFile $tempJsonFile `
+        -Verbose `
+        -Debug `
+        -Mode $mode
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
         start-job -ScriptBlock {
-            param ($resourceGroupName, $tempJsonFile, $deploymentName)
+            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode)
             $VerbosePreference = 'continue'
             write-host "using file: $tempJsonFile"
             write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel All `
                 -TemplateFile $tempJsonFile `
-                -Verbose" -ForegroundColor Cyan
+                -Verbose `
+                -Mode $mode" -ForegroundColor Cyan
 
             New-AzResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel All `
                 -TemplateFile $tempJsonFile `
-                -Verbose #`
-                #-pre
-            } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName
+                -Verbose `
+                -Mode $mode
+        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode
     }
     else {
         write-host "template validation failed: $($error |out-string) $($result | out-string)"
@@ -279,7 +286,7 @@ function write-log($data) {
     $status += $stringData.ToString().trim()
     $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
 
-    if($deploymentOperations) {
+    if ($deploymentOperations) {
         
         $status += ($deploymentOperations | out-string).Trim()
     }
