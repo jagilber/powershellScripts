@@ -6,7 +6,6 @@
 
  do a final client connect to free up close
 #>
-
 [cmdletbinding()]
 param(
     [int]$port = 80,
@@ -15,8 +14,8 @@ param(
     [switch]$server,
     [hashtable]$clientHeaders = @{ },
     [string]$clientBody = 'test message from client',
-    #[ValidateSet('GET', 'POST', 'HEAD')]
-    [net.http.httpMethod]$clientMethod = "GET",
+    [ValidateSet('GET', 'POST', 'HEAD')]
+    [string]$clientMethod = "GET",
     [string]$absolutePath = '/',
     [switch]$useClientProxy,
     [bool]$asJob = $true
@@ -27,6 +26,8 @@ $http = $null
 $scriptParams = $PSBoundParameters
 $httpClient = $null
 $httpClientHandler = $null
+# older ps doesnt handle this always so add explicitly
+Add-Type -AssemblyName System.Net.Http
 
 function main() {
     try {
@@ -60,7 +61,7 @@ function main() {
     }
 }
 
-function start-client([hashtable]$header = $clientHeaders, [string]$body = $clientBody, [net.http.httpMethod]$method = $clientMethod, [string]$clientUri = $uri) {
+function start-client([hashtable]$header = $clientHeaders, [string]$body = $clientBody, [net.http.httpMethod]$method = [net.http.httpmethod]::new($clientMethod), [string]$clientUri = $uri) {
     $iteration = 0
     $httpClientHandler = new-object net.http.HttpClientHandler
 
