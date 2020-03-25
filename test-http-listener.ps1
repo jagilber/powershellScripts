@@ -170,17 +170,17 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
-            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/min') {
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/min') {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
             }
-            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq $absolutePath) {
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq $absolutePath) {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
-            elseif ($context.Request.HttpMethod -eq 'POST' -and $context.Request.RawUrl -eq '/') {
+            elseif ($context.Request.HttpMethod -eq 'POST' -and $context.Request.RawUrl -ieq '/') {
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 [byte[]]$inputBuffer = @(0) * $maxBuffer
                 $context.Request.InputStream.Read($inputBuffer, 0, $maxBuffer)# $context.Request.InputStream.Length)
