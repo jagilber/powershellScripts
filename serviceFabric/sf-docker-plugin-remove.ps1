@@ -1,7 +1,7 @@
 <# 
 .SYNOPSIS
 remove sfazurefiles.json from docker plugin
-
+.LINK
 (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
 .\sf-docker-plugin-remove.ps1 -whatIf -stopServices -stopProcesses;
 #>
