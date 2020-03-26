@@ -8,7 +8,8 @@ remove sfazurefile.json from docker plugin
 
 #[cmdletbinding()]
 param(
-    [string]$fileFilter = 'c:\programdata\docker\sfazurefile.json',
+    [string]$dockerRoot = 'c:\programdata\docker\',
+    [string]$pluginFile = 'sfazurefile.json',
     [ValidateSet('continue', 'stop', 'silentlycontinue')]
     [string]$errorAction = 'silentlycontinue',
     [ValidateSet('remove', 'rename')]
@@ -25,6 +26,7 @@ param(
 function main() {
     clear-host;
     $error.Clear()
+    $fileFilter = "$dockerRoot\$pluginFile"
     $dockerInfo = invoke-webRequest -UseBasicParsing $dockerHost
     
     if ($error -or !$dockerInfo) {
@@ -34,11 +36,12 @@ function main() {
     else {
         $dockerObj = $dockerInfo | ConvertFrom-Json
         $dockerObj
-        $fileFilter = "$($dockerObj.DockerRootDir)\$([io.path]::GetFileName($fileFilter))"
+        $dockerRoot = $dockerObj.DockerRootDir
+        $fileFilter = "$dockerRoot\$pluginFile"
     }
-    
 
     write-output "getting files $fileFilter"
+    write-output "dir plugin: $(Get-ChildItem "$dockerRoot\plugins")"
     $pluginFiles = get-childitem $fileFilter -Recurse -ErrorAction $errorAction
 
     if (!$pluginFiles) {
