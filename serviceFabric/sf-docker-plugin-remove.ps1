@@ -38,24 +38,24 @@ function main() {
     }
     
 
-    write-output "getting files $fileFilter" -ForegroundColor Cyan
+    write-output "getting files $fileFilter"
     $pluginFiles = get-childitem $fileFilter -Recurse -ErrorAction $errorAction
 
     if (!$pluginFiles) {
-        write-output "no files found matching $fileFilter" -ForegroundColor Green
+        write-output "no files found matching $fileFilter"
         return
     }
 
     if ($stopServices) {
         foreach ($service in $services) {
-            write-output "stopping $service" -ForegroundColor Yellow
+            write-output "stopping $service"
             stop-service -name $service -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
     }
 
     if ($stopProcesses) {
         foreach ($process in $processes) {
-            write-output "stopping $process" -ForegroundColor Yellow
+            write-output "stopping $process"
             stop-process -name $process -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
     }
@@ -67,11 +67,11 @@ function main() {
 
         if (!$isLocked) {
             if ($action -ieq 'remove') {
-                write-output "remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force" -ForegroundColor Yellow
+                write-output "remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force"
                 remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
             }
             elseif ($action -ieq 'rename') {
-                write-output "rename-item -path $fileName -NewName `"$fileName.old`" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force" -ForegroundColor Yellow
+                write-output "rename-item -path $fileName -NewName `"$fileName.old`" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force"
                 rename-item -path $fileName -NewName "$fileName.old" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
             }
             else {
