@@ -1,5 +1,7 @@
-# script to monitor docker stderr .err and stdout .out sf files
-# get-content ((get-childitem D:\SvcFab\Log\_sf_docker_logs\*.out)|sort LastWriteTime| select -last 1) -tail 1000 -Wait
+# script to monitor docker console stderr .err and stdout .out sf files
+# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-docker-log.ps1","$pwd\sf-docker-log.ps1");
+# .\sf-docker-log.ps1;
+
 [cmdletbinding()]
 param(
     $sfDockerLogDir = 'D:\SvcFab\Log\_sf_docker_logs\',

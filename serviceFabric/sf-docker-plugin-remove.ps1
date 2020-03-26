@@ -1,4 +1,7 @@
-# monitor docker status
+# remove sfazurefiles.json from docker plugin
+# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
+# .\sf-docker-plugin-remove.ps1 -whatIf;
+
 #[cmdletbinding()]
 param(
     [string]$fileFilter = 'c:\programdata\docker\sf*.json',
@@ -16,6 +19,12 @@ param(
 
 function main() {
     clear-host;
+    $pluginFiles = get-childitem $fileFilter -Recurse -ErrorAction $errorAction
+
+    if(!$pluginFiles){
+        Write-Host "no files found matching $fileFilter" -ForegroundColor Green
+        return
+    }
 
     if($stopServices) {
         foreach($service in $services) {
@@ -29,12 +38,6 @@ function main() {
             write-host "stopping $process" -ForegroundColor Yellow
             stop-process -name $process -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
-    }
-
-    $pluginFiles = get-childitem $fileFilter -Recurse -ErrorAction $errorAction
-    if(!$pluginFiles){
-        Write-Host "no files found matching $fileFilter" -ForegroundColor Green
-        return
     }
 
     foreach ($f in $pluginFiles) {
