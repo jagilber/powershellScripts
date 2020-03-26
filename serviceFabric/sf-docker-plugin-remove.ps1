@@ -39,8 +39,11 @@ function main() {
 
     }
 
-    write-output "getting files $dockerRoot $pluginFile"
+    write-output "docker volume ls"
+    docker volume ls
+
     write-output "dir plugin: $(Get-ChildItem "$dockerRoot\plugins")"
+    write-output "getting files $dockerRoot $pluginFile"
     $pluginFiles = get-childitem -Path $dockerRoot -Filter $pluginFile -Recurse -ErrorAction $errorAction
 
     if (!$pluginFiles) {
@@ -82,6 +85,20 @@ function main() {
             }
         }
     }
+
+    write-output "docker volume ls"
+    docker volume ls
+
+    write-output "docker volume prune"
+    if(!$whatIf){
+        if($force) {
+            docker volume prune --force
+        }
+        else {
+            docker volume prune
+        }
+    }
+    
 
     if ($stopServices) {
         foreach ($service in ($services | sort-object)) {
