@@ -81,6 +81,14 @@ function main() {
         }
     }
 
+    if ($stopServices) {
+        foreach ($service in ($services | sort-object)) {
+            write-output "starting $service"
+            start-service -name $service -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
+        }
+    }
+
+
 }
 
 function is-fileLocked([string] $file) {
