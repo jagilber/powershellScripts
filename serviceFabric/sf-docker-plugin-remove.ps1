@@ -1,6 +1,7 @@
-# remove sfazurefiles.json from docker plugin
-# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
-# .\sf-docker-plugin-remove.ps1 -whatIf;
+<# remove sfazurefiles.json from docker plugin
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
+.\sf-docker-plugin-remove.ps1 -whatIf;
+#>
 
 #[cmdletbinding()]
 param(
@@ -19,6 +20,7 @@ param(
 
 function main() {
     clear-host;
+    write-host "getting files $fileFilter" -ForegroundColor Cyan
     $pluginFiles = get-childitem $fileFilter -Recurse -ErrorAction $errorAction
 
     if(!$pluginFiles){
