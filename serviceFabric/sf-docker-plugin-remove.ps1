@@ -29,7 +29,7 @@ function main() {
     $dockerInfo = invoke-webRequest -UseBasicParsing $dockerHost
     
     if ($error -or !$dockerInfo) {
-        write-output "unable to connect to docker"
+        write-output "$(get-date):unable to connect to docker"
         $error.Clear()
     }
     else {
@@ -39,29 +39,28 @@ function main() {
 
     }
 
-    write-output "process list: $(get-process)"
-    write-output "docker volume ls"
-    docker volume ls
-
-    write-output "dir plugin: $(Get-ChildItem "$dockerRoot\plugins")"
-    write-output "getting files $dockerRoot $pluginFile"
+    write-output "$(get-date):process list: $(get-process | out-string)"
+    write-output "$(get-date):docker volume ls: $(docker volume ls)"
+    write-output "$(get-date):dir plugin: $(Get-ChildItem "$dockerRoot\plugins")"
+    write-output "$(get-date):getting files: $dockerRoot $pluginFile"
     $pluginFiles = get-childitem -Path $dockerRoot -Filter $pluginFile -Recurse -ErrorAction $errorAction
 
     if (!$pluginFiles) {
-        write-output "no files found matching $pluginFile"
+        write-output "$(get-date):no files found matching $pluginFile"
+        prune-volume
         return
     }
 
     if ($stopServices) {
         foreach ($service in $services) {
-            write-output "stopping $service"
+            write-output "$(get-date):stopping $service"
             stop-service -name $service -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
     }
 
     if ($stopProcesses) {
         foreach ($process in $processes) {
-            write-output "stopping $process"
+            write-output "$(get-date):stopping $process"
             stop-process -name $process -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
     }
@@ -69,53 +68,41 @@ function main() {
     foreach ($f in $pluginFiles) {
         $fileName = $f.FullName
         $isLocked = is-fileLocked $fileName
-        write-output "$fileName locked:$($isLocked) content:$(get-content $fileName)"
+        write-output "$(get-date):$fileName locked:$($isLocked) content:$(get-content $fileName)"
 
         if (!$isLocked) {
             if ($action -ieq 'remove') {
-                write-output "remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force"
+                write-output "$(get-date):remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force"
                 remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
             }
             elseif ($action -ieq 'rename') {
-                write-output "rename-item -path $fileName -NewName `"$fileName.old`" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force"
+                write-output "$(get-date):rename-item -path $fileName -NewName `"$fileName.old`" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force"
                 rename-item -path $fileName -NewName "$fileName.old" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
             }
             else {
-                write-output "unknown action"
+                write-output "$(get-date):unknown action"
                 return
             }
         }
     }
 
-    write-output "docker volume ls"
-    docker volume ls
-
-    write-output "docker volume prune"
-    if(!$whatIf){
-        if($force) {
-            docker volume prune --force
-        }
-        else {
-            docker volume prune
-        }
-    }
-    
+    prune-volume
 
     if ($stopServices) {
         foreach ($service in ($services | sort-object)) {
-            write-output "starting $service"
+            write-output "$(get-date):starting $service"
             start-service -name $service -WhatIf:$whatIf -ErrorAction $errorAction
         }
     }
 
-    write-output "process list: $(get-process)"
+    write-output "$(get-date):process list: $(get-process | out-string)"
 }
 
 function is-fileLocked([string] $file) {
     $fileInfo = New-Object System.IO.FileInfo $file
  
     if ((Test-Path -Path $file) -eq $false) {
-        write-output "File does not exist:$($file)"
+        write-output "$(get-date):File does not exist:$($file)"
         return $false
     }
   
@@ -130,8 +117,23 @@ function is-fileLocked([string] $file) {
     }
     catch {
         # file is locked by a process.
-        write-output "File is locked:$($file)"
+        write-output "$(get-date):File is locked:$($file)"
         return $true
+    }
+}
+
+function prune-volume() {
+    write-output "$(get-date):docker volume ls"
+    docker volume ls
+
+    write-output "$(get-date):docker volume prune"
+    if(!$whatIf){
+        if($force) {
+            docker volume prune --force
+        }
+        else {
+            docker volume prune
+        }
     }
 }
 
