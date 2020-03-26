@@ -28,7 +28,7 @@ function main() {
     $dockerInfo = invoke-webRequest -UseBasicParsing $dockerHost
     
     if ($error -or !$dockerInfo) {
-        write-warning "unable to connect to docker"
+        write-output "unable to connect to docker"
         $error.Clear()
     }
     else {
@@ -38,24 +38,24 @@ function main() {
     }
     
 
-    write-host "getting files $fileFilter" -ForegroundColor Cyan
+    write-output "getting files $fileFilter" -ForegroundColor Cyan
     $pluginFiles = get-childitem $fileFilter -Recurse -ErrorAction $errorAction
 
     if (!$pluginFiles) {
-        Write-Host "no files found matching $fileFilter" -ForegroundColor Green
+        write-output "no files found matching $fileFilter" -ForegroundColor Green
         return
     }
 
     if ($stopServices) {
         foreach ($service in $services) {
-            write-host "stopping $service" -ForegroundColor Yellow
+            write-output "stopping $service" -ForegroundColor Yellow
             stop-service -name $service -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
     }
 
     if ($stopProcesses) {
         foreach ($process in $processes) {
-            write-host "stopping $process" -ForegroundColor Yellow
+            write-output "stopping $process" -ForegroundColor Yellow
             stop-process -name $process -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
         }
     }
@@ -63,19 +63,19 @@ function main() {
     foreach ($f in $pluginFiles) {
         $fileName = $f.FullName
         $isLocked = is-fileLocked $fileName
-        write-host "$fileName locked:$($isLocked) content:$(get-content $fileName)"
+        write-output "$fileName locked:$($isLocked) content:$(get-content $fileName)"
 
         if (!$isLocked) {
             if ($action -ieq 'remove') {
-                write-host "remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force" -ForegroundColor Yellow
+                write-output "remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force" -ForegroundColor Yellow
                 remove-item $fileName -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
             }
             elseif ($action -ieq 'rename') {
-                write-host "rename-item -path $fileName -NewName `"$fileName.old`" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force" -ForegroundColor Yellow
+                write-output "rename-item -path $fileName -NewName `"$fileName.old`" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force" -ForegroundColor Yellow
                 rename-item -path $fileName -NewName "$fileName.old" -WhatIf:$whatIf -ErrorAction $errorAction -Force:$force
             }
             else {
-                write-error "unknown action"
+                write-output "unknown action"
                 return
             }
         }
@@ -87,7 +87,7 @@ function is-fileLocked([string] $file) {
     $fileInfo = New-Object System.IO.FileInfo $file
  
     if ((Test-Path -Path $file) -eq $false) {
-        write-warning "File does not exist:$($file)"
+        write-output "File does not exist:$($file)"
         return $false
     }
   
@@ -102,7 +102,7 @@ function is-fileLocked([string] $file) {
     }
     catch {
         # file is locked by a process.
-        write-warning "File is locked:$($file)"
+        write-output "File is locked:$($file)"
         return $true
     }
 }
