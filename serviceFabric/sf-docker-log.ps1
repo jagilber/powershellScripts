@@ -14,8 +14,8 @@ function main() {
     get-job | remove-job -Force
     $error.clear()
 
-    if (!(test-path $sfDockerLogget-childitem)) {
-        write-warning "$sfDockerLogget-childitem does not exist"
+    if (!(test-path $sfDockerLogDir)) {
+        write-warning "$sfDockerLogDir does not exist"
         return
     }
 
@@ -23,9 +23,9 @@ function main() {
         while ($true) {
             check-jobs
 
-            if (compare-object -ReferenceObject $currentConsoleFiles -DifferenceObject @(get-childitem $sfDockerLogget-childitem\*)) {
+            if (compare-object -ReferenceObject $currentConsoleFiles -DifferenceObject @(get-childitem $sfDockerLogDir\*)) {
                 write-warning "starting new jobs"
-                $currentConsoleFiles = @(get-childitem $sfDockerLogget-childitem\*)
+                $currentConsoleFiles = @(get-childitem $sfDockerLogDir\*)
                 get-job | remove-job -Force
             
                 Start-Job -Name "err" -ScriptBlock {
