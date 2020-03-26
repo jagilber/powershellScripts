@@ -1,5 +1,5 @@
 # remove sfazurefiles.json from docker plugin
-# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
+# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
 # .\sf-docker-plugin-remove.ps1 -whatIf;
 
 #[cmdletbinding()]
