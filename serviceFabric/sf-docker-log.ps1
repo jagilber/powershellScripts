@@ -1,5 +1,5 @@
 # script to monitor docker console stderr .err and stdout .out sf files
-# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-docker-log.ps1","$pwd\sf-docker-log.ps1");
+# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-log.ps1","$pwd\sf-docker-log.ps1");
 # .\sf-docker-log.ps1;
 
 [cmdletbinding()]

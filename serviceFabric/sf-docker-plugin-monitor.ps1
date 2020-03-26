@@ -1,5 +1,5 @@
 # monitor docker status
-# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-docker-plugin-monitor.ps1","$pwd\sf-docker-plugin-monitor.ps1");
+# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-monitor.ps1","$pwd\sf-docker-plugin-monitor.ps1");
 # .\sf-docker-plugin-monitor.ps1 -whatIf;
 
 param(
