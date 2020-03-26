@@ -1,6 +1,7 @@
-# script to monitor docker named pipe
-# (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-namedpipe-connect.ps1","$pwd\sf-docker-namedpipe-connect.ps1");
-# .\sf-docker-namedpipe-connect.ps1;
+<# script to monitor docker named pipe
+(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-namedpipe-connect.ps1","$pwd\sf-docker-namedpipe-connect.ps1");
+.\sf-docker-namedpipe-connect.ps1;
+#>
 
 $ErrorActionPreference = 'continue'
 while ($true) {
