@@ -1,4 +1,7 @@
-<# remove sfazurefiles.json from docker plugin
+<# 
+.SYNOPSIS
+remove sfazurefiles.json from docker plugin
+
 (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-remove.ps1","$pwd\sf-docker-plugin-remove.ps1");
 .\sf-docker-plugin-remove.ps1 -whatIf -stopServices -stopProcesses;
 #>
@@ -13,15 +16,16 @@ param(
     [switch]$stopServices,
     [string[]]$services = @('service fabric host service', 'Azure Service Fabric Node Bootstrap Agent'),
     [switch]$stopProcesses,
-    [string[]]$processes = @('dockerd', 'fabricdeployer'),
+    [string[]]$processes = @('fabricdeployer','dockerd'),
     [switch]$whatIf,
-    [switch]$force
+    [switch]$force,
+    [string]$dockerHost = 'http://localhost:2375/info'
 )
 
 function main() {
     clear-host;
     $error.Clear()
-    $dockerInfo = invoke-webRequest -UseBasicParsing http://localhost:2375/info
+    $dockerInfo = invoke-webRequest -UseBasicParsing $dockerHost
     
     if ($error -or !$dockerInfo) {
         write-warning "unable to connect to docker"
