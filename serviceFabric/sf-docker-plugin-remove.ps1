@@ -39,6 +39,7 @@ function main() {
 
     }
 
+    write-output "process list: $(get-process)"
     write-output "docker volume ls"
     docker volume ls
 
@@ -106,6 +107,8 @@ function main() {
             start-service -name $service -WhatIf:$whatIf -ErrorAction $errorAction
         }
     }
+
+    write-output "process list: $(get-process)"
 }
 
 function is-fileLocked([string] $file) {
