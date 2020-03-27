@@ -11,7 +11,7 @@ param(
     [string]$dockerRoot = 'c:\programdata\docker',
     [string]$pluginFile = 'sfazurefile.json',
     [ValidateSet('continue', 'stop', 'silentlycontinue')]
-    [string]$errorAction = 'silentlycontinue',
+    [string]$errorAction = 'continue',
     [ValidateSet('remove', 'rename')]
     [string]$action = 'remove',
     [switch]$stopServices,
@@ -27,6 +27,8 @@ function main() {
     clear-host;
     $error.Clear()
     $dockerInfo = invoke-webRequest -UseBasicParsing $dockerHost
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+    write-output "isadmin:$isAdmin"
     
     if ($error -or !$dockerInfo) {
         write-output "$(get-date):unable to connect to docker"
@@ -36,12 +38,16 @@ function main() {
         $dockerObj = $dockerInfo | ConvertFrom-Json
         $dockerObj
         $dockerRoot = $dockerObj.DockerRootDir
-
     }
 
     write-output "$(get-date):process list: $(get-process | out-string)"
     write-output "$(get-date):docker volume ls: $(docker volume ls)"
     write-output "$(get-date):dir plugin: $(Get-ChildItem "$dockerRoot\plugins")"
+
+    if((Get-ChildItem "\\?\$pwd")) { 
+        $dockerRoot = "\\?\$dockerRoot"
+    }
+    
     write-output "$(get-date):getting files: $dockerRoot $pluginFile"
     $pluginFiles = get-childitem -Path $dockerRoot -Filter $pluginFile -Recurse -ErrorAction $errorAction
 
