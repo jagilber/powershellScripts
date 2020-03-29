@@ -113,6 +113,7 @@ param(
     [string]$table,
     [string]$identityPackageLocation,
     [string]$resultFile, # = ".\result.json",
+    [bool]$createResults = $true,
     [bool]$viewResults = $true,
     [string]$token,
     [int]$limit,
@@ -213,6 +214,7 @@ class KustoObj {
     [string]$tenantId = $tenantId
     [timespan]$ServerTimeout = $serverTimeout
     hidden [string]$token = $token
+    [bool]$CreateResults = $createResults
     [bool]$ViewResults = $viewResults
     [hashtable]$Tables = @{}
     [hashtable]$Functions = @{}
@@ -303,9 +305,11 @@ class KustoObj {
             $this.ResultObject.Exceptions = $null
         }
     
-        if ($this.ViewResults) {
+        if ($this.ViewResults -or $this.CreateResults) {
             $this.CreateResultTable()
-            write-host ($this.ResultTable | out-string)
+            if($this.ViewResults) {
+                write-host ($this.ResultTable | out-string)
+            }
         }
     
         if ($this.ResultFile) {
