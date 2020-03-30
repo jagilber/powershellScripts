@@ -14,8 +14,8 @@ use the following to save and pass arguments:
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 200128
-History    : add msal without .netcore helper exe
+Version    : 200330
+History    : add createresults
 
 .EXAMPLE
 .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
@@ -109,7 +109,7 @@ param(
     [string]$database,
     [string]$query = '.show tables',
     [bool]$fixDuplicateColumns,
-    [bool]$removeEmptyColumns,
+    [bool]$removeEmptyColumns = $true,
     [string]$table,
     [string]$identityPackageLocation,
     [string]$resultFile, # = ".\result.json",
