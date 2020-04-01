@@ -65,6 +65,10 @@ function main () {
     }
     else {
         export-template -resourceIds $resourceIds
+        write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
+        write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
+        . $templateJsonFile
+
     }
 
     Write-Progress -Completed -Activity "complete"
@@ -170,12 +174,7 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
-
         write-host $resourceTemplate -ForegroundColor Cyan
-        write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
-        write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
-        . $templateJsonFile
-
         $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
         return $true
     }
