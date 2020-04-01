@@ -19,8 +19,9 @@ param (
 )
 
 $global:resourceTemplateObj = @{ }
-import-module az.accounts
-import-module az.resources
+$PSModuleAutoLoadingPreference = 1
+#import-module az.accounts
+#import-module az.resources
 
 function main () {
     $ErrorActionPreference = 'continue'
