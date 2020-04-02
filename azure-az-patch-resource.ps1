@@ -75,7 +75,7 @@ function main () {
 
     if($global:resourceErrors -or $global:resourceWarnings) {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
-        write-host "errors: $($error | out-string)"
+        write-host "errors: $($error | sort-object -Descending | out-string)"
     }
 
     Write-Progress -Completed -Activity "complete"
