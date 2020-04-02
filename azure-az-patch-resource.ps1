@@ -1,10 +1,9 @@
 <#
+.SYNOPSIS
 # script to update azure arm template resource settings
-download:
+.LINK
 (new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1","$pwd\azure-az-patch-resource.ps1")
 .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
-
-.EXAMPLE
 #>
 param (
     [string]$resourceGroupName = '',
@@ -19,6 +18,9 @@ param (
 )
 
 $global:resourceTemplateObj = @{ }
+$global:resourceErrors = 0
+$global:resourceWarnings = 0
+
 $PSModuleAutoLoadingPreference = 1
 #import-module az.accounts
 #import-module az.resources
@@ -71,10 +73,14 @@ function main () {
 
     }
 
+    if($global:resourceErrors -or $global:resourceWarnings) {
+        write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
+        write-host "errors: $($error | out-string)"
+    }
+
     Write-Progress -Completed -Activity "complete"
-    display-settings -resourceIds $resourceIds
+    write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
- 
 }
 
 function deploy-template($resourceIds) {
@@ -228,18 +234,11 @@ function wait-jobs() {
                 write-log -data $job
                 remove-job -Id $job.Id -Force  
             }
-            #            else {
-            #                $jobInfo = (receive-job -Id $job.id)
-            #                if ($jobInfo) {
-            #                    write-log -data $jobInfo
-            #                }
-            #            }
-
             start-sleep -Seconds $sleepSeconds
         }
     }
 
-    write-log "finished jobs: $scriptStartDateTimeUtc" -report $global:scriptName
+    write-log "finished jobs"
 }
 function write-log($data) {
     if (!$data) { return }
@@ -263,11 +262,13 @@ function write-log($data) {
                 write-warning (@($job.Warning.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
                 $stringData.appendline(($job | fl * | out-string))
+                $global:resourceWarnings++
             }
             if ($job.Error) {
                 write-error (@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(($job | fl * | out-string))
+                $global:resourceErrors++
             }
     
             if ($stringData.tostring().Trim().Length -gt 0) {
@@ -297,5 +298,5 @@ function write-log($data) {
 
 
 main
-#$ErrorActionPreference = 'silentlycontinue'
-#$VerbosePreference = 'silentlycontinue'
+$ErrorActionPreference = 'silentlycontinue'
+$VerbosePreference = 'silentlycontinue'
