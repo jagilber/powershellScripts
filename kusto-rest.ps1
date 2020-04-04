@@ -14,8 +14,8 @@ use the following to save and pass arguments:
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 200128
-History    : add msal without .netcore helper exe
+Version    : 200330
+History    : add createresults
 
 .EXAMPLE
 .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
@@ -109,10 +109,11 @@ param(
     [string]$database,
     [string]$query = '.show tables',
     [bool]$fixDuplicateColumns,
-    [bool]$removeEmptyColumns,
+    [bool]$removeEmptyColumns = $true,
     [string]$table,
     [string]$identityPackageLocation,
     [string]$resultFile, # = ".\result.json",
+    [bool]$createResults = $true,
     [bool]$viewResults = $true,
     [string]$token,
     [int]$limit,
@@ -213,6 +214,7 @@ class KustoObj {
     [string]$tenantId = $tenantId
     [timespan]$ServerTimeout = $serverTimeout
     hidden [string]$token = $token
+    [bool]$CreateResults = $createResults
     [bool]$ViewResults = $viewResults
     [hashtable]$Tables = @{}
     [hashtable]$Functions = @{}
@@ -303,9 +305,11 @@ class KustoObj {
             $this.ResultObject.Exceptions = $null
         }
     
-        if ($this.ViewResults) {
+        if ($this.ViewResults -or $this.CreateResults) {
             $this.CreateResultTable()
-            write-host ($this.ResultTable | out-string)
+            if($this.ViewResults) {
+                write-host ($this.ResultTable | out-string)
+            }
         }
     
         if ($this.ResultFile) {

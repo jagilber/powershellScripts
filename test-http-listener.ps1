@@ -6,7 +6,6 @@
 
  do a final client connect to free up close
 #>
-
 [cmdletbinding()]
 param(
     [int]$port = 80,
@@ -15,8 +14,8 @@ param(
     [switch]$server,
     [hashtable]$clientHeaders = @{ },
     [string]$clientBody = 'test message from client',
-    #[ValidateSet('GET', 'POST', 'HEAD')]
-    [net.http.httpMethod]$clientMethod = "GET",
+    [ValidateSet('GET', 'POST', 'HEAD')]
+    [string]$clientMethod = "GET",
     [string]$absolutePath = '/',
     [switch]$useClientProxy,
     [bool]$asJob = $true
@@ -27,6 +26,8 @@ $http = $null
 $scriptParams = $PSBoundParameters
 $httpClient = $null
 $httpClientHandler = $null
+# older ps doesnt handle this always so add explicitly
+Add-Type -AssemblyName System.Net.Http
 
 function main() {
     try {
@@ -60,7 +61,7 @@ function main() {
     }
 }
 
-function start-client([hashtable]$header = $clientHeaders, [string]$body = $clientBody, [net.http.httpMethod]$method = $clientMethod, [string]$clientUri = $uri) {
+function start-client([hashtable]$header = $clientHeaders, [string]$body = $clientBody, [net.http.httpMethod]$method = [net.http.httpmethod]::new($clientMethod), [string]$clientUri = $uri) {
     $iteration = 0
     $httpClientHandler = new-object net.http.HttpClientHandler
 
@@ -103,7 +104,7 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
             #write-host ($httpClient | fl * | convertto-json -Depth 99)
             #$requestMessage.
             $httpClient
-            pause
+            #pause
         
             if ($error) {
                 write-host "$($error | out-string)"
@@ -169,17 +170,17 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
-            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/min') {
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/min') {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
             }
-            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq $absolutePath) {
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq $absolutePath) {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
-            elseif ($context.Request.HttpMethod -eq 'POST' -and $context.Request.RawUrl -eq '/') {
+            elseif ($context.Request.HttpMethod -eq 'POST' -and $context.Request.RawUrl -ieq '/') {
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 [byte[]]$inputBuffer = @(0) * $maxBuffer
                 $context.Request.InputStream.Read($inputBuffer, 0, $maxBuffer)# $context.Request.InputStream.Length)

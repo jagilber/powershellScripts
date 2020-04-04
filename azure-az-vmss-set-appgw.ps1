@@ -29,7 +29,7 @@ param (
     [hashtable]$additionalParameters
 )
 
-$ErrorActionPreference = 'continue'
+$ErrorActionPreference = $DebugPreference = $VerbosePreference = 'continue'
 $error.Clear()
 write-host "$pscommandpath $($PSBoundParameters | out-string)"
 write-host "variables: `r`n$(get-variable | select Name,Value | ft -AutoSize * | out-string)"
@@ -119,11 +119,18 @@ function check-vnet () {
 function create-agw($vnet) {
     $error.clear()
     if (!(create-subnet -vnet $vnet)) { return $null }
+    $agSubnet = $null
+    $count = 0
 
-    $agSubnet = Get-azVirtualNetworkSubnetConfig `
-        -Name $agSubnetName `
-        -VirtualNetwork $vnet 
-    
+    while ((!$agSubnet -or $error) -and ++$count -lt 300) {
+        write-host "checking subnet $agSubnetName $count"
+        $error.Clear()
+        $agSubnet = Get-azVirtualNetworkSubnetConfig `
+            -Name $agSubnetName `
+            -VirtualNetwork $vnet 
+        start-sleep -Seconds 1
+    }
+
     $gatewayIPconfig = New-azApplicationGatewayIPConfiguration `
         -Name $agGatewayIpConfigName `
         -Subnet $agSubnet
@@ -175,9 +182,9 @@ function create-agw($vnet) {
         -Tier Standard `
         -Capacity 2
 
-   # [Microsoft.Azure.Commands.Network.Models.PSApplicationGateway]$gwModel = [Microsoft.Azure.Commands.Network.Models.PSApplicationGateway]::new()
+    # [Microsoft.Azure.Commands.Network.Models.PSApplicationGateway]$gwModel = [Microsoft.Azure.Commands.Network.Models.PSApplicationGateway]::new()
 
-   write-host "$gateway = New-azApplicationGateway -Name $appGatewayName `
+    write-host "$gateway = New-azApplicationGateway -Name $appGatewayName `
         -ResourceGroupName $resourceGroupName `
         -Location $location `
         -BackendAddressPools $($pool |out-string)`
@@ -203,7 +210,7 @@ function create-agw($vnet) {
         -Sku $agSku `
         -Verbose `
         -Debug
-        #@additionalParameters
+    #@additionalParameters
 
     write-host "new application gateway:`r`n$($gateway|convertto-json -depth 5)" -ForegroundColor Magenta
 
@@ -279,3 +286,5 @@ function modify-vmssIpConfig ($vmss, $agw) {
 }
 
 main
+$ErrorActionPreference = 'continue'
+$DebugPreference = $VerbosePreference = 'silentlycontinue'
