@@ -8,10 +8,16 @@ param(
     $scale = 100,
     $sleepSeconds = 1,
     $maxSamples = 1,
-    $processId = $pid,
-    $counters = @("\\$env:computername\memory\Available KBytes", "\\$env:computername\memory\% committed bytes in use", "\\$env:computername\Process(pwsh*)\% Processor Time","\\$env:computername\Processor(_Total)\% Processor Time"),
     [switch]$noChart,
-    [switch]$noColor
+    [switch]$noColor,
+    $counters = @(
+        "\\$env:computername\memory\Available MBytes", 
+        "\\$env:computername\memory\% committed bytes in use", 
+        "\\$env:computername\Process(fabric*)\% Processor Time",
+        "\\$env:computername\Processor(_Total)\% Processor Time",
+        "\\$env:computername\PhysicalDisk(*)\Avg. Disk Queue Length",
+        "\\$env:computername\Paging File(*)\*"
+    )
 )
 
 $counterObj = @{ }
@@ -25,7 +31,7 @@ $script:bgColorCount = 0
 function main() {
     try {
 
-        if(!$global:AllCounters){
+        if (!$global:AllCounters) {
             Write-Host "loading counter list..."
             $global:allCounters = Get-Counter -ListSet *
         }
@@ -35,7 +41,7 @@ function main() {
         }
 
         while ($true) {
-            $counterSamples = get-counter -counter $counters -SampleInterval ([math]::max(1,$sleepSeconds)) -MaxSamples $maxSamples
+            $counterSamples = get-counter -counter $counters -SampleInterval ([math]::max(1, $sleepSeconds)) -MaxSamples $maxSamples
             foreach ($sample in $counterSamples.CounterSamples) {
                 $data = $sample.CookedValue
                 $sampleName = $sample.Path # $sample.Readings.split(' :')[0]
