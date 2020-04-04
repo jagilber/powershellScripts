@@ -21,7 +21,7 @@ $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
 
-$PSModuleAutoLoadingPreference = 1
+$PSModuleAutoLoadingPreference = 2
 #import-module az.accounts
 #import-module az.resources
 
@@ -270,11 +270,7 @@ function write-log($data) {
                 $stringData.appendline(($job | fl * | out-string))
                 $global:resourceErrors++
             }
-    
-            if ($stringData.tostring().Trim().Length -gt 0) {
-                #$stringData += "`r`nname: $($data.Name) state: $($job.State) $($job.Status)`r`n"     
-            }
-            else {
+            if ($stringData.tostring().Trim().Length -lt 1) {
                 return
             }
         }
