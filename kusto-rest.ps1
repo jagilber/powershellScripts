@@ -128,7 +128,8 @@ param(
     [switch]$updateScript,
     [hashtable]$parameters = @{ } #@{'clusterName' = $resourceGroup; 'dnsName' = $resourceGroup;}
 )
-    
+
+$PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "continue"
 $global:kusto = $null
 $global:identityPackageLocation  
@@ -218,9 +219,15 @@ class KustoObj {
     [bool]$ViewResults = $viewResults
     [hashtable]$Tables = @{}
     [hashtable]$Functions = @{}
+    hidden [hashtable]$FunctionObjs = @{}
         
     KustoObj() { }
     static KustoObj() { }
+
+    [void] ClearResults() {
+        $this.ResultObject = $null
+        $this.ResultTable = $null
+    }
 
     [KustoObj] CreateResultTable() {
         $this.ResultTable = [collections.arraylist]@()
@@ -335,8 +342,32 @@ class KustoObj {
         return $this.Pipe()
     }
 
+    [KustoObj] ExecFunctionWithTableName([string]$function) {
+        $functionObj = ($this.FunctionObjs.getEnumerator() | where-object Name -imatch $function).Value
+
+        if(!$function -or !$functionObj -or $functionObj.parameters.length -lt 1) {
+            write-warning "verify function '$function' and number of parameters '$($functionObj.parameters)'"
+        }
+        else {
+            write-host "function:$function$($functionObj.parameters)" -foregroundcolor cyan
+        }
+
+        if($this.Table) {
+            $this.Exec([string]::Format("{0}('{1}')",$function, $this.Table))
+        }
+        else {
+            write-warning "table not set"
+        }
+        return $this.Pipe()
+    }
+
     [KustoObj] ExecFunction([string]$function, [array]$parameters) {
-        $this.Exec([string]::Format("{0}('{1}')",$function,$parameters -join "','"))
+        if($parameters) {
+            $this.Exec([string]::Format("{0}('{1}')",$function,$parameters -join "','"))
+        }
+        else {
+            $this.Exec([string]::Format("{0}()",$function))
+        }
         return $this.Pipe()
     }
 
@@ -794,11 +825,13 @@ class KustoObj {
 
     [KustoObj] SetFunctions() {
         $this.Functions.Clear()
-        $this.exec('.show functions | project Name')
+        $this.FunctionObjs.Clear()
+        $this.exec('.show functions')
         $this.CreateResultTable()
 
         foreach($function in $this.ResultTable) {
             $this.Functions.Add($function.Name,$function.Name)
+            $this.FunctionObjs.Add($function.Name,$function)
         }
         return $this.Pipe()
     }
@@ -823,6 +856,7 @@ $global:kusto = [KustoObj]::new()
 $kusto.SetTables()
 $kusto.SetFunctions()
 $kusto.Exec()
+$kusto.ClearResults()
 
 write-host ($PSBoundParameters | out-string)
 
