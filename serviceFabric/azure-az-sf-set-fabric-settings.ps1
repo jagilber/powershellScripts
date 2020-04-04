@@ -1,8 +1,9 @@
 <#
+.SYNOPSIS
 # script to update azure service fabric settings
 # https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-fabric-settings
 
-download:
+.LINK
 (new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-set-fabric-settings.ps1","$pwd\azure-az-sf-set-fabric-settings.ps1")
 .\azure-az-sf-set-fabric-settings.ps1 -resourceGroup {{cluster resource group}} -clusterName {{cluster name}} -fabricSettingsJson {{fabric settings arm template json string}}
 
@@ -26,6 +27,8 @@ param (
     [string]$fabricSettingsJson = '', # '{"name":"Management","parameters":[{"name":"CleanupApplicationPackageOnProvisionSuccess","value":"True"}]}'
     [hashtable]$fabricSettings = @{''=@{}} # @{'Management' = @{%parameter name%=%parameter value%}
 )
+
+$PSModuleAutoLoadingPreference = 1
 
 function main () {
     $fabricSettingsArray = [collections.Generic.List[Microsoft.Azure.Commands.ServiceFabric.Models.PSSettingsSectionDescription]]::new()

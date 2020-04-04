@@ -20,6 +20,10 @@ import-module servicefabric
 $DebugPreference = "continue"
 $global:ClusterConnection = $null
 
+if($clusterendpoint -inotmatch ':\d{2,5}$'){
+    $clusterendpoint += ":19000"
+}
+
 if($resourceGroup -and $clustername)
 {
     $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
