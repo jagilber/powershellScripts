@@ -10,6 +10,8 @@ param(
     $maxSamples = 1,
     [switch]$noChart,
     [switch]$noColor,
+    [bool]$newLine = $true,
+    [bool]$useScaleAsSymbol = $true,
     $counters = @(
         "\\$env:computername\memory\Available MBytes", 
         "\\$env:computername\memory\% committed bytes in use", 
@@ -67,12 +69,26 @@ function main() {
 
                 $hostForegroundColor = $counterObj[$sampleName].foregroundColor
                 $hostBackgroundColor = $counterObj[$sampleName].backgroundColor
+
+                $graphSymbol = "X"
+
+                if ($useScaleAsSymbol) {
+                    $graphSymbol = $(($sizedScale.tostring().length - 2).tostring())
+                }
+
                 if ($noChart) {
-                    $output = "$($sample.Timestamp) value:$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName"
+                    $output = ">$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName"
                 }
                 else {
-                    $output = ">$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName`r`n`t[$(('X' * ($percentSize)).tostring().padright($scale))]"
+                    if ($newLine) {
+                        $output = ">$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName`r`n`t[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"    
+                    }
+                    else {
+                        $output = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))] >$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName"
+                    }
                 }
+
+
 
                 if ($noColor) {
                     write-host $output
