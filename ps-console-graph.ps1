@@ -53,6 +53,10 @@ function main() {
                 $sizedScale = $scale
                 $percentSize = 101
 
+                if (!$counterObj[$sampleName]) {
+                    add-counterObj $sampleName
+                }
+
                 while ($percentSize -gt 100) {
                     $percentSize = ($data * 100) / $sizedScale
                     if ($percentSize -gt 100) {
@@ -62,10 +66,8 @@ function main() {
 
                 $hostForegroundColor = $currentForegroundColor
                 $hostBackgroundColor = $currentBackgroundColor
-                
-                if (!$counterObj[$sampleName]) {
-                    add-counterObj $sampleName
-                }
+                $lastScale = $minCounter = $counterObj[$sampleName].lastScale
+                $lastCounter = $minCounter = $counterObj[$sampleName].lastCounter
 
                 $hostForegroundColor = $counterObj[$sampleName].foregroundColor
                 $hostBackgroundColor = $counterObj[$sampleName].backgroundColor
@@ -73,27 +75,37 @@ function main() {
                 $avgCounter = $counterObj[$sampleName].averageCounter = (($counterObj[$sampleName].averageCounter * ($counterObj[$sampleName].counterSamples - 1)) + $data) / $counterObj[$sampleName].counterSamples
                 $maxCounter = $counterObj[$sampleName].maxCounter = [math]::Max($counterObj[$sampleName].maxCounter,$data)
                 $minCounter = $counterObj[$sampleName].minCounter = [math]::Min($counterObj[$sampleName].minCounter,$data)
+                $counterObj[$sampleName].lastScale = $sizedScale
+                $counterObj[$sampleName].lastCounter = $data
 
                 $counterDetails = "scale:$sizedScale avg:$($avgCounter.ToString("0.0")) min:$minCounter max:$maxCounter counter:$($sampleName.replace("\\$env:computername".tolower(),[string]::Empty))"
                 $graphSymbol = "X"
-                $noGraphSymbol = "_"
 
                 if ($useScaleAsSymbol) {
                     $graphSymbol = $(($sizedScale.tostring().length - 2).tostring())
                 }
 
                 $graph = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"
-                #$graph = "[$(($graphSymbol * ($percentSize)))$(($noGraphSymbol * ($scale - $percentSize)))]"
+                #$graph = "[$(($graphSymbol * ($percentSize)))$(('_' * ($scale - $percentSize)))]"
+
+                $trendSize = [math]::Abs($sizedScale.tostring().length - $lastScale.tostring().length) + 1
+                $trend = ">"
+                if([int]$data -gt [int]$lastCounter) {
+                    $trend = "^" * $trendSize
+                }
+                elseif([int]$data -lt [int]$lastCounter) {
+                    $trend = "v" * $trendSize
+                }
 
                 if ($noChart) {
-                    $output = ">$($data.ToString("0.0")) $counterDetails"
+                    $output = "$trend $($data.ToString("0.0")) $counterDetails"
                 }
                 else {
                     if ($newLine) {
-                        $output = ">$($data.ToString("0.0")) $counterDetails`r`n`t$graph"
+                        $output = "$trend $($data.ToString("0.0")) $counterDetails`r`n`t$graph"
                     }
                     else {
-                        $output = "$graph >$($data.ToString("0.0")) $counterDetails"
+                        $output = "$graph $trend $($data.ToString("0.0")) $counterDetails"
                     }
                 }
 
@@ -140,6 +152,8 @@ function add-counterObj($counter) {
     $counterInfo = @{
         backgroundColor = $backgroundColor
         foregroundColor = $foregroundColor
+        lastScale = $scale
+        lastCounter = 0
         counterSamples = 0
         averageCounter = 0
         maxCounter = 0
