@@ -74,7 +74,7 @@ function main() {
                 $maxCounter = $counterObj[$sampleName].maxCounter = [math]::Max($counterObj[$sampleName].maxCounter,$data)
                 $minCounter = $counterObj[$sampleName].minCounter = [math]::Min($counterObj[$sampleName].minCounter,$data)
 
-                $counterDetails = "scale:$sizedScale avg:$($avgCounter.ToString("0.0")) min:$minCounter max:$maxCounter counter:$sampleName"
+                $counterDetails = "scale:$sizedScale avg:$($avgCounter.ToString("0.0")) min:$minCounter max:$maxCounter counter:$($sampleName.replace("\\$env:computername".tolower(),[string]::Empty))"
                 $graphSymbol = "X"
                 $noGraphSymbol = "_"
 
