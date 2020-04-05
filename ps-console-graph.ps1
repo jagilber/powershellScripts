@@ -77,12 +77,13 @@ function main() {
                 $counterDetails = "scale:$sizedScale avg:$($avgCounter.ToString("0.0")) min:$minCounter max:$maxCounter counter:$sampleName"
                 $graphSymbol = "X"
                 $noGraphSymbol = "_"
-                #$graph = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"
-                $graph = "[$(($graphSymbol * ($percentSize)))$(($noGraphSymbol * ($scale - $percentSize)))]"
 
                 if ($useScaleAsSymbol) {
                     $graphSymbol = $(($sizedScale.tostring().length - 2).tostring())
                 }
+
+                $graph = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"
+                #$graph = "[$(($graphSymbol * ($percentSize)))$(($noGraphSymbol * ($scale - $percentSize)))]"
 
                 if ($noChart) {
                     $output = ">$($data.ToString("0.0")) $counterDetails"
