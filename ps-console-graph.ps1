@@ -11,7 +11,7 @@ param(
     [switch]$noChart,
     [switch]$noColor,
     [bool]$newLine = $true,
-    [bool]$useScaleAsSymbol = $true,
+    [bool]$useScaleAsSymbol = $false,
     $counters = @(
         "\\$env:computername\memory\Available MBytes", 
         "\\$env:computername\memory\% committed bytes in use", 
@@ -73,29 +73,44 @@ function main() {
                 $hostBackgroundColor = $counterObj[$sampleName].backgroundColor
                 $counterObj[$sampleName].counterSamples++
                 $avgCounter = $counterObj[$sampleName].averageCounter = (($counterObj[$sampleName].averageCounter * ($counterObj[$sampleName].counterSamples - 1)) + $data) / $counterObj[$sampleName].counterSamples
-                $maxCounter = $counterObj[$sampleName].maxCounter = [math]::Max($counterObj[$sampleName].maxCounter,$data)
-                $minCounter = $counterObj[$sampleName].minCounter = [math]::Min($counterObj[$sampleName].minCounter,$data)
+                $maxCounter = $counterObj[$sampleName].maxCounter = [math]::Max($counterObj[$sampleName].maxCounter, $data)
+                $minCounter = $counterObj[$sampleName].minCounter = [math]::Min($counterObj[$sampleName].minCounter, $data)
                 $counterObj[$sampleName].lastScale = $sizedScale
                 $counterObj[$sampleName].lastCounter = $data
 
                 $counterDetails = "scale:$sizedScale avg:$($avgCounter.ToString("0.0")) min:$minCounter max:$maxCounter counter:$($sampleName.replace("\\$env:computername".tolower(),[string]::Empty))"
-                $graphSymbol = "X"
-
-                if ($useScaleAsSymbol) {
-                    $graphSymbol = $(($sizedScale.tostring().length - 2).tostring())
-                }
-
-                $graph = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"
-                #$graph = "[$(($graphSymbol * ($percentSize)))$(('_' * ($scale - $percentSize)))]"
 
                 $trendSize = [math]::Abs($sizedScale.tostring().length - $lastScale.tostring().length) + 1
                 $trend = ">"
-                if([int]$data -gt [int]$lastCounter) {
+                $graphSymbol = "X"
+                $diffSymbol = ""
+                $diffSize = (([int]$data - [int]$lastCounter) * 100) / $sizedScale
+                $graphSymbolMultiplier = $percentSize
+                $diffSymbolMultiplier = 0
+
+                if ($diffSize -gt 0) {
                     $trend = "^" * $trendSize
+                    $graphSymbol = ">"
+                    $diffSymbol = "+"
+                    $graphSymbolMultiplier = [math]::min($percentSize, [math]::abs($percentSize - $diffSize))
+                    $diffSymbolMultiplier = [math]::min($percentSize, [math]::abs($diffSize))
                 }
-                elseif([int]$data -lt [int]$lastCounter) {
+                elseif ($diffSize -lt 0) {
                     $trend = "v" * $trendSize
+                    $graphSymbol = "<"
+                    $diffSymbol = "-"
+                    $graphSymbolMultiplier = [math]::min($percentSize, [math]::abs($percentSize - $diffSize))
+                    $diffSymbolMultiplier = [math]::min($scale - $percentSize, [math]::abs($diffSize))
                 }
+
+                if ($useScaleAsSymbol) {
+                    $graphSymbol = $(($sizedScale.tostring().length - $scale.tostring().length).tostring())
+                }
+
+                #$graph = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"
+                #$graph = "[$(($graphSymbol * ($percentSize)))$(('_' * ($scale - $percentSize)))]"
+
+                $graph = "[$((($graphSymbol * $graphSymbolMultiplier) + ($diffSymbol * $diffSymbolMultiplier)).tostring().padright($scale))]"
 
                 if ($noChart) {
                     $output = "$trend $($data.ToString("0.0")) $counterDetails"
@@ -152,12 +167,12 @@ function add-counterObj($counter) {
     $counterInfo = @{
         backgroundColor = $backgroundColor
         foregroundColor = $foregroundColor
-        lastScale = $scale
-        lastCounter = 0
-        counterSamples = 0
-        averageCounter = 0
-        maxCounter = 0
-        minCounter = [int]::MaxValue
+        lastScale       = $scale
+        lastCounter     = 0
+        counterSamples  = 0
+        averageCounter  = 0
+        maxCounter      = 0
+        minCounter      = [int]::MaxValue
     }
 
     $counterObj.Add($counter, $counterInfo)
