@@ -1,8 +1,9 @@
 <#
+.SYNOPSIS
 # script to update azure service fabric settings for imagestore best practice
 # https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-fabric-settings
 
-download:
+.LINK
 (new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-set-fabric-imagestore-settings.ps1","$pwd\azure-az-sf-set-fabric-imagestore-settings.ps1")
 .\azure-az-sf-set-fabric-imagestore-settings.ps1 -resourceGroup {{cluster resource group}} -clusterName {{cluster name}}
 
