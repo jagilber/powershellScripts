@@ -65,10 +65,10 @@ function main() {
                 $hostForegroundColor = $counterObj[$sampleName].foregroundColor
                 $hostBackgroundColor = $counterObj[$sampleName].backgroundColor
                 if ($noChart) {
-                    $output = "$($sample.Timestamp) value:$($data.ToString("00.0")) scale:$sizedScale counter:$sampleName"
+                    $output = "$($sample.Timestamp) value:$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName"
                 }
                 else {
-                    $output = "[$(('X' * ($percentSize)).tostring().padright($scale))] $($sample.Timestamp) value:$($data.ToString("00.0")) scale:$sizedScale counter:$sampleName"
+                    $output = ">$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName`r`n`t[$(('X' * ($percentSize)).tostring().padright($scale))]"
                 }
 
                 if ($noColor) {
