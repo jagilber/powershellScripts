@@ -15,8 +15,11 @@ param(
         "\\$env:computername\memory\% committed bytes in use", 
         "\\$env:computername\Process(fabric*)\% Processor Time",
         "\\$env:computername\Processor(_Total)\% Processor Time",
-        "\\$env:computername\PhysicalDisk(*)\Avg. Disk Queue Length",
-        "\\$env:computername\Paging File(*)\*"
+        "\\$env:computername\PhysicalDisk(*:)\Avg. Disk Queue Length",
+        "\\$env:computername\Paging File(*\pagefile.sys)\*",
+        "\\$env:computername\Tcpv4\Segments Received/sec",
+        "\\$env:computername\Tcpv4\Segments Sent/sec",
+        "\\$env:computername\Tcpv4\Segments Retransmitted/sec"
     )
 )
 
