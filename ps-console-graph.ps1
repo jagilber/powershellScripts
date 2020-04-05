@@ -69,26 +69,32 @@ function main() {
 
                 $hostForegroundColor = $counterObj[$sampleName].foregroundColor
                 $hostBackgroundColor = $counterObj[$sampleName].backgroundColor
+                $counterObj[$sampleName].counterSamples++
+                $avgCounter = $counterObj[$sampleName].averageCounter = (($counterObj[$sampleName].averageCounter * ($counterObj[$sampleName].counterSamples - 1)) + $data) / $counterObj[$sampleName].counterSamples
+                $maxCounter = $counterObj[$sampleName].maxCounter = [math]::Max($counterObj[$sampleName].maxCounter,$data)
+                $minCounter = $counterObj[$sampleName].minCounter = [math]::Min($counterObj[$sampleName].minCounter,$data)
 
+                $counterDetails = "scale:$sizedScale avg:$($avgCounter.ToString("0.0")) min:$minCounter max:$maxCounter counter:$sampleName"
                 $graphSymbol = "X"
+                $noGraphSymbol = "_"
+                #$graph = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"
+                $graph = "[$(($graphSymbol * ($percentSize)))$(($noGraphSymbol * ($scale - $percentSize)))]"
 
                 if ($useScaleAsSymbol) {
                     $graphSymbol = $(($sizedScale.tostring().length - 2).tostring())
                 }
 
                 if ($noChart) {
-                    $output = ">$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName"
+                    $output = ">$($data.ToString("0.0")) $counterDetails"
                 }
                 else {
                     if ($newLine) {
-                        $output = ">$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName`r`n`t[$(($graphSymbol * ($percentSize)).tostring().padright($scale))]"    
+                        $output = ">$($data.ToString("0.0")) $counterDetails`r`n`t$graph"
                     }
                     else {
-                        $output = "[$(($graphSymbol * ($percentSize)).tostring().padright($scale))] >$($data.ToString("0.0")) scale:$sizedScale counter:$sampleName"
+                        $output = "$graph >$($data.ToString("0.0")) $counterDetails"
                     }
                 }
-
-
 
                 if ($noColor) {
                     write-host $output
@@ -133,6 +139,10 @@ function add-counterObj($counter) {
     $counterInfo = @{
         backgroundColor = $backgroundColor
         foregroundColor = $foregroundColor
+        counterSamples = 0
+        averageCounter = 0
+        maxCounter = 0
+        minCounter = [int]::MaxValue
     }
 
     $counterObj.Add($counter, $counterInfo)
