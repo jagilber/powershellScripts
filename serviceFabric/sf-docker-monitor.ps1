@@ -21,20 +21,20 @@ function main() {
         clear-host;
         (get-date).tostring('o');
         write-host 'docker processes:'
-        (get-process) -imatch 'docker';
+        write-host ((get-process) -imatch 'docker' | out-string)
 
         write-host 'docker port:'
-        (netstat -bna) -imatch '2375';
+        write-host ((netstat -bna) -imatch '2375' | out-string)
         
         write-host 'docker ps:'
-        docker ps;
+        write-host (docker ps | out-string)
 
         write-host 'docker images:'
-        docker images;
+        write-host (docker images | out-string)
 
         #docker stats;
         write-host 'Get-NetNatStaticMapping:'
-        Get-NetNatStaticMapping
+        write-host (Get-NetNatStaticMapping | out-string)
 
         if ($sleepSeconds -gt 0) {
             write-host "sleeping $sleepSeconds seconds"
