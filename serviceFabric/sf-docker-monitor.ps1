@@ -21,7 +21,7 @@ function main() {
         clear-host;
         (get-date).tostring('o');
         write-host 'docker processes:'
-        write-host ((get-process) -imatch 'docker' | out-string)
+        write-host ((get-process) -imatch 'docker'|select NPM,PM,WS,CPU,ID,StartTime|ft * -AutoSize|out-string)
 
         write-host 'docker port:'
         write-host ((netstat -bna) -imatch '2375' | out-string)
