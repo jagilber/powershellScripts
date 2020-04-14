@@ -3,6 +3,7 @@
 
 [cmdletbinding()]
 param (
+    [Parameter(Mandatory = $true)]
     [string]$resourceGroupName = "",
     [string]$vmssName = "nt0",
     [string]$appGatewayName = "$($resourceGroupName)-ag",
@@ -157,7 +158,7 @@ function create-agw($vnet) {
         -Force
 
     write-host "new ip config:`r`n$($publicIp | convertto-json)" -ForegroundColor Green
-
+#Get-AzPublicIpAddress -Name $publicIp.Name
     # create application gateway
     $frontEndIpConfig = New-azApplicationGatewayFrontendIPConfig `
         -Name $agFrontendIPConfigName `

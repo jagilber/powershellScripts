@@ -39,3 +39,7 @@ foreach ($nodename in $nodes.nodename)
         $dpackages | get-servicefabricdeployedservicepackagehealth -NodeName $nodename -ApplicationName $applicationname -TimeoutSec $timeoutsec
     }
 }
+
+$processes = (get-process) -imatch "fabric"
+$processes | fl *
+

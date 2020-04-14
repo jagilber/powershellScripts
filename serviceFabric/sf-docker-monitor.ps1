@@ -7,21 +7,39 @@ monitor docker status
 #>
 
 param(
-    $sleepSeconds = 30,
-    [ValidateSet('continue','stop','silentlycontinue')]
-    $errorAction = 'silentlycontinue'
+    $sleepSeconds = 60
 )
 
 function main() {
-    
-    docker version;
-    docker info;
-    
+    write-host 'docker version:'
+    write-host (docker version | out-string)
+
+    write-host 'docker info:'
+    write-host (docker info | out-string)
+    $currentProcesses = (get-process) -imatch 'docker'
+
     while ($true) {
         clear-host;
         (get-date).tostring('o');
-        write-host 'docker processes:'
-        write-host ((get-process) -imatch 'docker'|select NPM,PM,WS,CPU,ID,StartTime|ft * -AutoSize|out-string)
+
+        $newProcesses = (get-process) -imatch 'docker'
+        $diffIds = (Compare-Object -ReferenceObject $currentProcesses -DifferenceObject $newProcesses -Property Id).Id
+        $currentDiffProcesses = $currentProcesses | ? Id -imatch ($diffIds -join '|')
+
+        if ($diffIds) {
+            write-host 'different docker processes:'
+            write-warning ($currentDiffProcesses | select NPM, PM, WS, CPU, ID, StartTime, ProcessName,ExitTime,ExitCode | ft * -AutoSize | out-string)
+            $diffProcesses += $currentDiffProcesses
+            $currentProcesses = $newProcesses
+        }
+
+        if ($diffProcesses) {
+            write-host 'previous docker processes:'
+            write-host ($diffProcesses | select NPM, PM, WS, CPU, ID, StartTime, ProcessName,ExitTime,ExitCode | ft * -AutoSize | out-string)
+        }
+        
+        write-host 'current docker processes:'
+        write-host ($currentProcesses | select NPM, PM, WS, CPU, ID, StartTime, ProcessName | ft * -AutoSize | out-string)
 
         write-host 'docker port:'
         write-host ((netstat -bna) -imatch '2375' | out-string)
