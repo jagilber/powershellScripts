@@ -10,6 +10,8 @@
 param (
     [Parameter(Mandatory = $true)]
     [string]$resourceGroupName = "",
+    [int]$sleepSeconds = 10, 
+    [int]$maxSleepCount = 360,
     [string]$vmssName = "nt0",
     [string]$appGatewayName = "$($resourceGroupName)-ag",
     [string]$agAddressPrefix = "10.0.1.0/24",
@@ -85,13 +87,19 @@ function check-agw($vnet) {
     return $agw
 }
 
-function check-subnet($vnet) {
+function check-subnet($vnet, $subnetName = $agSubnetName) {
     # ag needs separate subnet that is empty or only other ags
-    if (!(Get-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet).Id) {
-        return $false
+    write-host "Get-azVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet" -ForegroundColor Cyan
+    $config = Get-azVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet
+
+    if (!$config.Id) {
+        Write-Warning "unable to get subnet $subnetName $error"
+        $error.Clear()
+        return $null
     }
 
-    return $true
+    write-host "subnet config:`r`n$($config|convertto-json -depth 5)" -ForegroundColor Magenta
+    return $config
 }
 function check-vmss() {
     $vmss = Get-azVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $vmssScaleSetName
@@ -112,8 +120,8 @@ function check-vmss() {
     return $vmss
 }
 
-function check-vnet () {
-    $vnet = Get-azvirtualNetwork -Name $vnetName -ResourceGroupName $resourceGroupName
+function check-vnet ($name = $vnetName) {
+    $vnet = Get-azvirtualNetwork -Name $name -ResourceGroupName $resourceGroupName
     if (!$vnet) {
         write-warning "unable to enumerate existing vnet $vnet"
         return $null
@@ -123,18 +131,12 @@ function check-vnet () {
 }
 
 function create-agw($vnet) {
-    $error.clear()
-    if (!(create-subnet -vnet $vnet)) { return $null }
     $agSubnet = $null
     $count = 0
 
-    while ((!$agSubnet -or $error) -and ++$count -lt 300) {
-        write-host "checking subnet $agSubnetName $count"
-        $error.Clear()
-        $agSubnet = Get-azVirtualNetworkSubnetConfig `
-            -Name $agSubnetName `
-            -VirtualNetwork $vnet
-        start-sleep -Seconds 1
+    $error.clear()
+    if (!($agSubnet = create-subnet -vnet $vnet -maxSleepCount $maxSleepCount -sleepSeconds $sleepSeconds)) { 
+        return $null 
     }
 
     write-host "agsubnet: $($agSubnet| out-string)" -ForegroundColor Cyan
@@ -208,6 +210,7 @@ function create-agw($vnet) {
         -HttpListeners $($listener |out-string) `
         -RequestRoutingRules $($rule |out-string) `
         -Sku $($agSku |out-string) `
+        -Force `
         $($additionalParameters | out-string)" -ForegroundColor Green
         
     $gateway = New-azApplicationGateway -Name $appGatewayName `
@@ -221,8 +224,10 @@ function create-agw($vnet) {
         -HttpListeners $listener `
         -RequestRoutingRules $rule `
         -Sku $agSku `
-        -Verbose `
-        -Debug
+        -Force
+
+        #-Verbose `
+    #-Debug `
     #@additionalParameters
     write-host "new application gateway:`r`n$($gateway|convertto-json -depth 5)" -ForegroundColor Magenta
 
@@ -241,29 +246,29 @@ function create-agSku($skuName, $tier = 'Standard', $capacity = 2) {
         -Capacity $capacity
 }
 
-function create-subnet($vnet, $sleepSeconds = 30, $maxSleepCount = 5) {
+function create-subnet($vnet, $sleepSeconds, $maxSleepCount) {
     # ag needs separate subnet that is empty or only other ags
+    $retval = $null
+
     if (!(check-subnet -vnet $vnet)) {
-        write-host "adding subnet" -ForegroundColor Cyan
-        Add-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet -AddressPrefix $agAddressPrefix
-        Set-azVirtualNetwork -VirtualNetwork $vnet 
+        $retval = Add-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet -AddressPrefix $agAddressPrefix
+        write-host "adding subnet:Add-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet -AddressPrefix $agAddressPrefix `r`n$retval" -ForegroundColor Cyan
+        
+        $retval = Set-azVirtualNetwork -VirtualNetwork $vnet 
+        write-host "setting subnet: Set-azVirtualNetwork -VirtualNetwork $vnet `r`n$retval" -ForegroundColor Cyan
     }
     
-    # timing issue?
-    $config = $null
-    while (!$config -and ($count -lt $maxSleepCount)) {
-        $config = (Get-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet).Id
-        write-host "waiting for new subnet id:$($config)" -ForegroundColor DarkCyan
-        start-sleep -seconds $sleepSeconds
-        $count++
+    while ((!$agSubnet.Id) -and ++$count -lt $maxSleepCount) {
+        $agSubnet = check-subnet -vnet (check-vnet -name $vnetName) -subnetName $agSubnetName
+        start-sleep -Seconds $sleepSeconds
     }
 
     if ($count -ge $maxSleepCount) {
         write-error "timed out waiting for subnet change maxsleepcount $maxsleepcount sleepseconds $sleepseconds"
-        return $false
+        return $null
     }
 
-    return $true
+    return $agSubnet
 }
 
 function modify-vmssIpConfig ($vmss, $agw) {
