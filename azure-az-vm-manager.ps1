@@ -576,11 +576,11 @@ function do-backgroundJob($jobInfo)
                     log-info "verbose:`tvm started $($jobInfo.vm.resourceGroupName)\$($jobInfo.vm.name)"
                 }
 
-                default: {}
+                default {}
             }
         }
 
-        default: 
+        default
         {
             log-info "error:vm power state unknown $($jobInfo.vm.name)"
         }
@@ -749,7 +749,7 @@ function perform-action($currentAction)
             start-backgroundJobs -jobInfos ($global:jobInfos | where-object vmRunning -imatch $true) -throttle $throttle 
         }
 
-        default: {}
+        default {}
     }
 }
 
