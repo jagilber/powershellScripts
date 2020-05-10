@@ -340,7 +340,7 @@ function main()
             "rds-deployment-existing-ad" { start-rds-deployment-existing-ad }
             "rds-update-rdsh-collection" { start-rds-update-rdsh-collection }
             "rds-deployment-vm-scale-sets" { start-rds-deployment-vm-scale-sets }
-            default: { Write-Error "unknown option $($installOption)" }
+            default { Write-Error "unknown option $($installOption)" }
         } # end switch
 
         if ($pause)
