@@ -1,15 +1,11 @@
 <#
-    Script to test azure metadata identity and instance from a configured vm scaleset
-    Script runs on vm scaleset node
+    Script to import certificate from keyvault using azure managed identity from a configured vm scaleset node
 
-    to run with no arguments:
-    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1" -UseBasicParsing|iex
-
-    or use the following to save and pass arguments:
+    to download and execute:
     (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1","$pwd/azure-metadata-import-cert.ps1");
-    .\azure-metadata-import-cert.ps1
+    .\azure-metadata-import-cert.ps1 -keyvaultName -certificateName
 
-    # if needed, enable system / user managed identity on scaleset
+    if needed, enable system / user managed identity on scaleset:
     PS C:\Users\jagilber> Update-AzVmss -ResourceGroupName sfcluster -Name nt0 -IdentityType "SystemAssigned"
 #>
 param(
@@ -35,18 +31,18 @@ if (!$global:vaultOauthResult.access_token) {
     return
 }
 
-# get cert with private key from keyvault
-$headers = @{
-    Authorization = "Bearer $($global:vaultOauthResult.access_token)"
-}
-
 if ($keyvaultName -and $certificateName) {
+    # get cert with private key from keyvault
+    $headers = @{
+        Authorization = "Bearer $($global:vaultOauthResult.access_token)"
+    }
+
     write-host "invoke-WebRequest "https://$keyvaultName.vault.azure.net/secrets/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers"
     $global:certificateSecrets = invoke-WebRequest "https://$keyvaultName.vault.azure.net/secrets/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers
 
     # save secrets cert with private key to pfx
     $global:pfx = ($global:certificateSecrets.content | convertfrom-json).value
-    if($global:pfx){
+    if ($global:pfx) {
         write-host "out-file -InputObject `$global:pfx -FilePath .\$certificateName.pfx"
         out-file -InputObject $global:pfx -FilePath .\$certificateName.pfx
 
