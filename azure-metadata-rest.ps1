@@ -151,9 +151,9 @@
 
 #>
 param(
-    $iterations = 1,
-    $logFile = "$pwd\azure-metadata-rest.log",
-    $sleepMilliseconds = 1000
+    $keyvaultName,
+    $certificateName,
+    $certificateVersion
 )
 
 $error.Clear()
@@ -161,37 +161,76 @@ $ErrorActionPreference = "continue"
 $count = 0
 $errorCounter = 0
 
-while($count -le $iterations) {
-    # acquire system managed identity oauth token from within node
-    $global:managementOauthResult = (Invoke-WebRequest -Method GET `
+# acquire system managed identity oauth token from within node
+$global:managementOauthResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
         -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' `
-        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
+        -Headers @{'Metadata' = 'true' }).content | convertfrom-json #| convertto-json
 
-    $global:vaultOauthResult = (Invoke-WebRequest -Method GET `
+$global:vaultOauthResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
         -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net' `
-        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
+        -Headers @{'Metadata' = 'true' }).content | convertfrom-json #| convertto-json
 
-    # example instance rest query from within node
-    $global:instanceResult = (Invoke-WebRequest -Method GET `
+# example instance rest query from within node
+$global:instanceResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
         -Uri 'http://169.254.169.254/metadata/instance?api-version=2018-02-01' `
-        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
+        -Headers @{'Metadata' = 'true' }).content | convertfrom-json #| convertto-json
 
-    if($error) {
-        if($logFile) {
-            Out-File -InputObject "$(get-date) $($error | fl * | out-string)`r`n$result" -FilePath $logFile -Append
-        }
-        $errorCounter ++
-        $error.Clear()
+if ($error) {
+    if ($logFile) {
+        Out-File -InputObject "$(get-date) $($error | fl * | out-string)`r`n$result" -FilePath $logFile -Append
+    }
+    $errorCounter ++
+    $error.Clear()
+}
+
+write-host $global:vaultOauthResult
+write-host $global:managementOauthResult
+write-host $global:instanceResult
+start-sleep -Milliseconds $sleepMilliseconds
+
+
+if (!$global:vaultOauthResult.access_token) {
+    write-host 'no vault token'
+    return
+}
+
+# get cert with private key from keyvault
+$headers = @{
+    Authorization = "Bearer $($global:vaultOauthResult.access_token)"
+}
+
+if ($keyvaultName -and $certificateName) {
+    if (!$certificateVersion) {
+        write-host "invoke-WebRequest "https://$keyvaultName.vault.azure.net/certificates/$certificateName/versions?api-version=7.0" -UseBasicParsing -Headers $headers"
+        $global:certificateVersions = invoke-WebRequest "https://$keyvaultName.vault.azure.net/certificates/$certificateName/versions?api-version=7.0" -UseBasicParsing -Headers $headers
     }
 
-    write-host $global:vaultOauthResult
-    write-host $global:managementOauthResult
-    write-host $global:instanceResult
-    start-sleep -Milliseconds $sleepMilliseconds
-    $count++
+    write-host "invoke-WebRequest "https://$keyvaultName.vault.azure.net/certificates/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers"
+    $global:certificate = invoke-WebRequest "https://$keyvaultName.vault.azure.net/certificates/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers
+
+    write-host "invoke-WebRequest "https://$keyvaultName.vault.azure.net/secrets/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers"
+    $global:certificateSecrets = invoke-WebRequest "https://$keyvaultName.vault.azure.net/secrets/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers
+
+    write-host "invoke-WebRequest "https://$keyvaultName.vault.azure.net/keys/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers"
+    $global:certificateKeys = invoke-WebRequest "https://$keyvaultName.vault.azure.net/keys/$certificateName/$($certificateVersion)?api-version=7.0" -UseBasicParsing -Headers $headers
+
+    # save secrets cert with private key to pfx
+    $global:pfx = ($global:certificateSecrets.content | convertfrom-json).value
+    if($global:pfx){
+        write-host "out-file -InputObject `$global:pfx -FilePath .\$certificateName.pfx"
+        out-file -InputObject $global:pfx -FilePath .\$certificateName.pfx
+    }
+
+    write-host $global:certificateVersions.content | convertfrom-json | convertto-json
+    write-host $global:certificateSecrets.content | convertfrom-json | convertto-json
+    write-host $global:certificateKeys.content | convertfrom-json | convertto-json
+    write-host $global:certificate.content | convertfrom-json | convertto-json
+}
+else {
+    write-host 'no keyvault or certificate name'
 }
 
 write-host "objects stored in `$global:managementOauthResult `$global:vaultOauthResult and `$global:instanceResult"
