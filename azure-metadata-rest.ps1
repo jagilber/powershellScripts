@@ -143,7 +143,7 @@
 
 #>
 param(
-    $iterations = 1000,
+    $iterations = 1,
     $logFile = "$pwd\azure-metadata-rest.log",
     $sleepMilliseconds = 1000
 )
@@ -156,11 +156,13 @@ $errorCounter = 0
 while($count -le $iterations) {
     # acquire system managed identity oauth token from within node
     $result = (Invoke-WebRequest -Method GET `
+        -UseBasicParsing `
         -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' `
         -Headers @{'Metadata'='true'}).content | convertfrom-json | convertto-json
 
     # example instance rest query from within node
     $result += (Invoke-WebRequest -Method GET `
+        -UseBasicParsing `
         -Uri 'http://169.254.169.254/metadata/instance?api-version=2018-02-01' `
         -Headers @{'Metadata'='true'}).content | convertfrom-json | convertto-json
 
