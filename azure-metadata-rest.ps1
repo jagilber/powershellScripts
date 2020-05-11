@@ -189,8 +189,6 @@ if ($error) {
 write-host $global:vaultOauthResult
 write-host $global:managementOauthResult
 write-host $global:instanceResult
-start-sleep -Milliseconds $sleepMilliseconds
-
 
 if (!$global:vaultOauthResult.access_token) {
     write-host 'no vault token'
