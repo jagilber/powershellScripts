@@ -2,6 +2,14 @@
     Script to test azure metadata identity and instance from a configured vm scaleset
     Script runs on vm scaleset node
 
+    to run with no arguments:
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-rest.ps1" -UseBasicParsing|iex
+
+    or use the following to save and pass arguments:
+    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-rest.ps1","$pwd/azure-metadata-rest.ps1");
+    .\azure-metadata-rest.ps1
+
+
     # https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-use-vm-token#get-a-token-using-azure-powershell
     # https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/qs-configure-powershell-windows-vmss
 
@@ -97,8 +105,8 @@
 
 
     # acquire system managed identity oauth token from within node
-    (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
-    PS C:\Users\cloudadmin> (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
+    (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
+    PS C:\Users\cloudadmin> (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
     {
         "access_token":  "eyJ0eXAiOiJKV...",
         "client_id":  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -155,16 +163,21 @@ $errorCounter = 0
 
 while($count -le $iterations) {
     # acquire system managed identity oauth token from within node
-    $result = (Invoke-WebRequest -Method GET `
+    $global:managementOauthResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
-        -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' `
-        -Headers @{'Metadata'='true'}).content | convertfrom-json | convertto-json
+        -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' `
+        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
+
+    $global:vaultOauthResult = (Invoke-WebRequest -Method GET `
+        -UseBasicParsing `
+        -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net' `
+        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
 
     # example instance rest query from within node
-    $result += (Invoke-WebRequest -Method GET `
+    $global:instanceResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
         -Uri 'http://169.254.169.254/metadata/instance?api-version=2018-02-01' `
-        -Headers @{'Metadata'='true'}).content | convertfrom-json | convertto-json
+        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
 
     if($error) {
         if($logFile) {
@@ -173,10 +186,14 @@ while($count -le $iterations) {
         $errorCounter ++
         $error.Clear()
     }
-    write-host $result
+
+    write-host $global:vaultOauthResult
+    write-host $global:managementOauthResult
+    write-host $global:instanceResult
     start-sleep -Milliseconds $sleepMilliseconds
     $count++
 }
 
-write-host "finished. total errors:$errrorCounter logfile:$logFile"
+write-host "objects stored in `$global:managementOauthResult `$global:vaultOauthResult and `$global:instanceResult"
+write-host "finished. total errors:$errorCounter logfile:$logFile"
 
