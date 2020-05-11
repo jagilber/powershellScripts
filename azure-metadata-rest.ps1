@@ -220,6 +220,9 @@ if ($keyvaultName -and $certificateName) {
     if($global:pfx){
         write-host "out-file -InputObject `$global:pfx -FilePath .\$certificateName.pfx"
         out-file -InputObject $global:pfx -FilePath .\$certificateName.pfx
+
+        write-host "Import-PfxCertificate -Exportable -CertStoreLocation Cert:\LocalMachine\My -FilePath .\$certificateName.pfx"
+        Import-PfxCertificate -Exportable -CertStoreLocation Cert:\LocalMachine\My -FilePath .\$certificateName.pfx
     }
 
     write-host $global:certificateVersions.content | convertfrom-json | convertto-json
