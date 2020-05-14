@@ -1,9 +1,17 @@
 # script to add app gateway to existing service fabric deployment
 # script requires existing rg, vnet, sub (sf deployment)
+<#
+ "error": {
+    "code": "SubnetIsRequired",
+    "message": "Subnet reference is required for ipconfiguration ../Microsoft.Network/applicationGateways/sfjagilber1nano1-ag/gatewayIPConfigurations/sfjagilber1nano1ApplicationGatewayIPConfig.",
+#>
 
 [cmdletbinding()]
 param (
+    [Parameter(Mandatory = $true)]
     [string]$resourceGroupName = "",
+    [int]$sleepSeconds = 10, 
+    [int]$maxSleepCount = 360,
     [string]$vmssName = "nt0",
     [string]$appGatewayName = "$($resourceGroupName)-ag",
     [string]$agAddressPrefix = "10.0.1.0/24",
@@ -79,13 +87,19 @@ function check-agw($vnet) {
     return $agw
 }
 
-function check-subnet($vnet) {
+function check-subnet($vnet, $subnetName = $agSubnetName) {
     # ag needs separate subnet that is empty or only other ags
-    if (!(Get-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet)) {
-        return $false
+    write-host "Get-azVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet" -ForegroundColor Cyan
+    $config = Get-azVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet
+
+    if (!$config.Id) {
+        Write-Warning "unable to get subnet $subnetName $error"
+        $error.Clear()
+        return $null
     }
 
-    return $true
+    write-host "subnet config:`r`n$($config|convertto-json -depth 5)" -ForegroundColor Magenta
+    return $config
 }
 function check-vmss() {
     $vmss = Get-azVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $vmssScaleSetName
@@ -106,8 +120,8 @@ function check-vmss() {
     return $vmss
 }
 
-function check-vnet () {
-    $vnet = Get-azvirtualNetwork -Name $vnetName -ResourceGroupName $resourceGroupName
+function check-vnet ($name = $vnetName) {
+    $vnet = Get-azvirtualNetwork -Name $name -ResourceGroupName $resourceGroupName
     if (!$vnet) {
         write-warning "unable to enumerate existing vnet $vnet"
         return $null
@@ -117,36 +131,36 @@ function check-vnet () {
 }
 
 function create-agw($vnet) {
-    $error.clear()
-    if (!(create-subnet -vnet $vnet)) { return $null }
     $agSubnet = $null
     $count = 0
 
-    while ((!$agSubnet -or $error) -and ++$count -lt 300) {
-        write-host "checking subnet $agSubnetName $count"
-        $error.Clear()
-        $agSubnet = Get-azVirtualNetworkSubnetConfig `
-            -Name $agSubnetName `
-            -VirtualNetwork $vnet 
-        start-sleep -Seconds 1
+    $error.clear()
+    if (!($agSubnet = create-subnet -vnet $vnet -maxSleepCount $maxSleepCount -sleepSeconds $sleepSeconds)) { 
+        return $null 
     }
 
-    $gatewayIPconfig = New-azApplicationGatewayIPConfiguration `
+    write-host "agsubnet: $($agSubnet| out-string)" -ForegroundColor Cyan
+
+    $gatewayIpConfig = New-azApplicationGatewayIPConfiguration `
         -Name $agGatewayIpConfigName `
         -Subnet $agSubnet
-    
+    write-host "gatewayIpConfig: $($gatewayIpConfig| out-string)" -ForegroundColor Cyan
+
     $pool = New-azApplicationGatewayBackendAddressPool `
         -Name $agBackendAddressPoolName 
+    write-host "pool: $($pool| out-string)" -ForegroundColor Cyan
     
     $poolSetting = New-azApplicationGatewayBackendHttpSettings `
         -Name $backendPoolName `
         -Port $backendPort `
         -Protocol $protocol `
         -CookieBasedAffinity "Disabled"
+    write-host "poolsetting: $($poolsetting| out-string)" -ForegroundColor Cyan
 
     $frontEndPort = New-azApplicationGatewayFrontendPort `
         -Name $frontEndPortName `
         -Port $frontEndPort
+    write-host "frontendport: $($frontendport| out-string)" -ForegroundColor Cyan
 
     # Create a public IP address
     $publicIp = New-azPublicIpAddress `
@@ -155,7 +169,6 @@ function create-agw($vnet) {
         -Location $location `
         -AllocationMethod "Dynamic" `
         -Force
-
     write-host "new ip config:`r`n$($publicIp | convertto-json)" -ForegroundColor Green
 
     # create application gateway
@@ -163,12 +176,14 @@ function create-agw($vnet) {
         -Name $agFrontendIPConfigName `
         -PublicIPAddress $publicIp `
         #-Subnet $agSubnet # for internal
+    write-host "frontend ip config:`r`n$($frontendIpConfig | convertto-json)" -ForegroundColor Green
 
     $listener = New-azApplicationGatewayHttpListener `
         -Name $listenerName  `
         -Protocol $protocol `
         -FrontendIpConfiguration $frontEndIpConfig `
         -FrontendPort $frontEndPort
+    write-host "listener:`r`n$($listener | convertto-json)" -ForegroundColor Green
 
     $rule = New-azApplicationGatewayRequestRoutingRule `
         -Name $agRuleName `
@@ -176,13 +191,13 @@ function create-agw($vnet) {
         -BackendHttpSettings $poolSetting `
         -HttpListener $listener `
         -BackendAddressPool $pool
+    write-host "request routing rule:`r`n$($rule | convertto-json)" -ForegroundColor Green
 
     $agSku = New-azApplicationGatewaySku `
         -Name $agSku `
         -Tier Standard `
         -Capacity 2
-
-    # [Microsoft.Azure.Commands.Network.Models.PSApplicationGateway]$gwModel = [Microsoft.Azure.Commands.Network.Models.PSApplicationGateway]::new()
+    write-host "ag sku:`r`n$($agsku | convertto-json)" -ForegroundColor Green
 
     write-host "$gateway = New-azApplicationGateway -Name $appGatewayName `
         -ResourceGroupName $resourceGroupName `
@@ -195,7 +210,8 @@ function create-agw($vnet) {
         -HttpListeners $($listener |out-string) `
         -RequestRoutingRules $($rule |out-string) `
         -Sku $($agSku |out-string) `
-        $($additionalParameters | out-string)"
+        -Force `
+        $($additionalParameters | out-string)" -ForegroundColor Green
         
     $gateway = New-azApplicationGateway -Name $appGatewayName `
         -ResourceGroupName $resourceGroupName `
@@ -208,10 +224,11 @@ function create-agw($vnet) {
         -HttpListeners $listener `
         -RequestRoutingRules $rule `
         -Sku $agSku `
-        -Verbose `
-        -Debug
-    #@additionalParameters
+        -Force
 
+        #-Verbose `
+    #-Debug `
+    #@additionalParameters
     write-host "new application gateway:`r`n$($gateway|convertto-json -depth 5)" -ForegroundColor Magenta
 
     if (!$error -and $gateway) {
@@ -229,25 +246,29 @@ function create-agSku($skuName, $tier = 'Standard', $capacity = 2) {
         -Capacity $capacity
 }
 
-function create-subnet($vnet, $sleepSeconds = 30, $maxSleepCount = 5) {
+function create-subnet($vnet, $sleepSeconds, $maxSleepCount) {
     # ag needs separate subnet that is empty or only other ags
+    $retval = $null
+
     if (!(check-subnet -vnet $vnet)) {
-        Add-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet -AddressPrefix $agAddressPrefix
-        Set-azVirtualNetwork -VirtualNetwork $vnet 
+        $retval = Add-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet -AddressPrefix $agAddressPrefix
+        write-host "adding subnet:Add-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet -AddressPrefix $agAddressPrefix `r`n$retval" -ForegroundColor Cyan
+        
+        $retval = Set-azVirtualNetwork -VirtualNetwork $vnet 
+        write-host "setting subnet: Set-azVirtualNetwork -VirtualNetwork $vnet `r`n$retval" -ForegroundColor Cyan
     }
     
-    # timing issue?
-    while (!(Get-azVirtualNetworkSubnetConfig -Name $agSubnetName -VirtualNetwork $vnet) -and ($count -lt $maxSleepCount)) {
-        start-sleep -seconds $sleepSeconds
-        $count++
+    while ((!$agSubnet.Id) -and ++$count -lt $maxSleepCount) {
+        $agSubnet = check-subnet -vnet (check-vnet -name $vnetName) -subnetName $agSubnetName
+        start-sleep -Seconds $sleepSeconds
     }
 
-    if ($count -eq $maxSleepCount) {
-        write-warning "timed out waiting for subnet change maxsleepcount $maxsleepcount sleepseconds $sleepseconds"
-        return $false
+    if ($count -ge $maxSleepCount) {
+        write-error "timed out waiting for subnet change maxsleepcount $maxsleepcount sleepseconds $sleepseconds"
+        return $null
     }
 
-    return $true
+    return $agSubnet
 }
 
 function modify-vmssIpConfig ($vmss, $agw) {

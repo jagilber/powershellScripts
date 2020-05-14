@@ -401,7 +401,7 @@ function set-dumpType($dumpType)
             'kernel' { $newDumpType = 2 }
             'automatic' { $newDumpType = 7 }
             'none' { $newDumpType = 0 }
-            default: { Write-Error "unknown option $($setDumpType)" }
+            default { Write-Error "unknown option $($setDumpType)" }
         }
     }
     else
