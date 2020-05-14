@@ -8,11 +8,11 @@
 param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
+    [switch]$patch,
     [string]$templateJsonFile = '.\template.json', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
-    [switch]$patch,
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental'
 )
@@ -174,9 +174,12 @@ function export-template($resourceIds) {
 function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {
     try {
         $resourceTemplate = @{ 
+            parameters = @{}
+            variables = @{}
             resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
+            outputs = @{}
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile

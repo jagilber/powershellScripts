@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-monitor docker status
+monitor sfazurefile docker plugin status
 .LINK
 (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-plugin-monitor.ps1","$pwd\sf-docker-plugin-monitor.ps1");
-.\sf-docker-plugin-monitor.ps1 -whatIf;
+.\sf-docker-plugin-monitor.ps1;
 #>
 
 param(
