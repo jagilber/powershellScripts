@@ -29,9 +29,6 @@ $erroractionpreference = "continue"
 $error.clear()
 
 function main() {
-
-    $error.clear()
-
     if ($latest) {
         $gitReleaseApi = "$gitReleaseApi/latest"
     }
@@ -92,7 +89,6 @@ function main() {
 
     write-host "downloading $downloadUrl to $destinationFile" -ForegroundColor Magenta
     invoke-webrequest $downloadUrl -OutFile $destinationFile
-
 
     if ($destinationFile -imatch ".zip") {
         Expand-Archive -path $destinationFile -destinationpath $destPath -force:$force
