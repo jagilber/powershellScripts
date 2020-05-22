@@ -1,6 +1,5 @@
 <#
 downloads a release from git
-defaults to winget-cli package manager
 
 to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -UseBasicParsing|iex
@@ -11,11 +10,14 @@ or use the following to save and pass arguments:
 #>
 
 param(
-    [string]$owner = "Microsoft",
+    [Parameter(Mandatory = $true)]
+    [string]$owner = "microsoft",
+    [Parameter(Mandatory = $true)]
     [string]$repository = "winget-cli",
     [string]$destPath = $pwd,
     [switch]$latest,
     [switch]$execute,
+    [switch]$force,
     [string]$gitReleaseApi = "https://api.github.com/repos/$owner/$repository/releases"
 )
 
@@ -28,36 +30,36 @@ function main() {
 
     $error.clear()
 
-    if($latest){
+    if ($latest) {
         $gitReleaseApi = "$gitReleaseApi/latest"
     }
     # -usebasicparsing deprecated but needed for nano / legacy
-    write-host "Invoke-WebRequest $gitReleaseApi -UseBasicParsing" -ForegroundColor green
-    $global:apiResults = @(convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing))
+    write-host "Invoke-WebRequest $gitReleaseApi -UseBasicParsing" -ForegroundColor Magenta
+    $global:apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
     write-host "releases:`r`n$($global:apiResults | convertto-json)"
 
-    for($count = 1; $count -le $global:apiResults.count;$count++){
-        $release = $global:apiResults[$count -1] # | select name, tag_name, created_at, assets_url, zipball_url
+    for ($count = 1; $count -le $global:apiResults.count; $count++) {
+        $release = $global:apiResults[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
         write-host "$($count). $($release.name) $($release.tag_name) $($release.created_at)" -ForegroundColor Green
 
     }
 
     $selection = 0
-    if($global:apiResults.count -gt 1){
+    if ($global:apiResults.count -gt 1) {
         $selection = [convert]::ToInt32((read-host -Prompt 'enter number for release to download:')) - 1
     }
 
     $release = $global:apiResults[$selection]
     #write-host "invoke-webrequest $($global:apiResults.zipball_url) -OutFile $destinationFile"
 
-    for($count = 1; $count -le $release.assets.count;$count++){
-        $release = $release.assets[$count -1] # | select name, tag_name, created_at, assets_url, zipball_url
+    for ($count = 1; $count -le $release.assets.count; $count++) {
+        $release = $release.assets[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
         write-host "$($count). $($release.name) $($release.size) $($release.created_at)" -ForegroundColor Green
 
     }
 
     $assetSelection = 0
-    if($release.assets.count -gt 1){
+    if ($release.assets.count -gt 1) {
         $assetSelection = [convert]::ToInt32((read-host -Prompt 'enter number for asset to download:')) - 1
     }
 
@@ -72,7 +74,7 @@ function main() {
 
     write-host $downloadUrl -ForegroundColor Green
 
-    if(!(test-path $destPath)){
+    if (!(test-path $destPath)) {
         mkdir $destPath
     }
 
@@ -81,19 +83,19 @@ function main() {
             remove-item $destinationFile
         }
 
-        write-host "downloading $downloadUrl to $destinationFile"
+        write-host "downloading $downloadUrl to $destinationFile" -ForegroundColor Magenta
         #(new-object net.webclient).DownloadFile($downloadUrl, $destinationFile)
         invoke-webrequest $downloadUrl -OutFile $destinationFile
     }
 
     if ($destinationFile -imatch ".zip") {
-        Expand-Archive $destinationFile $destPath
+        Expand-Archive -path $destinationFile -destinationpath $destPath -force:$force
     }
-    elseif($execute){
+    elseif ($execute) {
         . $destinationFile
     }
 
-    write-host "finished: $destinationFile"
+    write-host "finished: $destinationFile" -ForegroundColor Cyan
 }
 
 main
