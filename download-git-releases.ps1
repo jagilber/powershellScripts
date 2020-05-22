@@ -1,6 +1,8 @@
 <#
+.SYNOPSIS
 downloads a release from git
 
+.LINK
 to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -UseBasicParsing|iex
 
