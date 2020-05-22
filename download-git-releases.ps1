@@ -33,7 +33,7 @@ function main() {
     if ($latest) {
         $gitReleaseApi = "$gitReleaseApi/latest"
     }
-    
+
     # -usebasicparsing deprecated but needed for nano / legacy
     write-host "Invoke-WebRequest $gitReleaseApi -UseBasicParsing" -ForegroundColor Magenta
     $global:apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
@@ -42,13 +42,13 @@ function main() {
     write-host "$($global:apiResults) releases:" -ForegroundColor Cyan
 
     for ($count = 1; $count -le $global:apiResults.count; $count++) {
-        $release = $global:apiResults[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
+        $release = $global:apiResults[$count - 1]
         write-host "$($count). $($release.name) $($release.tag_name) $($release.created_at)" -ForegroundColor Green
     }
 
     $selection = 0
     if ($global:apiResults.count -gt 1) {
-        $selection = [convert]::ToInt32((read-host -Prompt 'enter number for release to download:')) - 1
+        $selection = [convert]::ToInt32((read-host -Prompt 'enter number of release to download:')) - 1
     }
 
     $release = $global:apiResults[$selection]
@@ -62,7 +62,7 @@ function main() {
 
     $assetSelection = 0
     if ($release.assets.count -gt 1) {
-        $assetSelection = [convert]::ToInt32((read-host -Prompt 'enter number for asset to download:')) - 1
+        $assetSelection = [convert]::ToInt32((read-host -Prompt 'enter number of asset to download:')) - 1
     }
 
     $downloadUrl = $global:apiResults[$selection].assets[$assetSelection].browser_download_url
@@ -80,15 +80,17 @@ function main() {
         mkdir $destPath
     }
 
-    if (!(test-path $destinationFile) -or $force) {
-        if ($force) {
-            remove-item $destinationFile
-        }
-
-        write-host "downloading $downloadUrl to $destinationFile" -ForegroundColor Magenta
-        #(new-object net.webclient).DownloadFile($downloadUrl, $destinationFile)
-        invoke-webrequest $downloadUrl -OutFile $destinationFile
+    if ((test-path $destinationFile) -and $force) {
+        remove-item $destinationFile -Force:$force
     }
+    elseif ((test-path $destinationFile)) {
+        write-warning "file $destinationfile exists. use -force to overwrite"
+        return
+    }
+
+    write-host "downloading $downloadUrl to $destinationFile" -ForegroundColor Magenta
+    invoke-webrequest $downloadUrl -OutFile $destinationFile
+
 
     if ($destinationFile -imatch ".zip") {
         Expand-Archive -path $destinationFile -destinationpath $destPath -force:$force
@@ -97,7 +99,7 @@ function main() {
         . $destinationFile
     }
 
-    write-host "$(Get-ChildItem $destinationFile | fl * | out-string)"
+    write-host "$(Get-ChildItem $destinationFile | Format-List * | out-string)"
     write-host "finished: $destinationFile" -ForegroundColor Cyan
 }
 
