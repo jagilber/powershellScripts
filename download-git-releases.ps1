@@ -23,6 +23,7 @@ param(
     [string]$gitReleaseApi = "https://api.github.com/repos/$owner/$repository/releases"
 )
 
+$PSModuleAutoLoadingPreference = 2
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
 $erroractionpreference = "continue"
