@@ -8,7 +8,7 @@ or use the following to save and pass arguments:
 (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1","$pwd/download-git-releases.ps1");
 .\download-git-releases.ps1 -owner {{ git owner }} -repository {{ git repository }} [-latest]
 #>
-
+[cmdletbinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$owner = "microsoft",
@@ -36,12 +36,13 @@ function main() {
     # -usebasicparsing deprecated but needed for nano / legacy
     write-host "Invoke-WebRequest $gitReleaseApi -UseBasicParsing" -ForegroundColor Magenta
     $global:apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
-    write-host "releases:`r`n$($global:apiResults | convertto-json)"
+    
+    write-verbose "releases:`r`n$($global:apiResults | convertto-json)"
+    write-host "releases:" -ForegroundColor Green
 
     for ($count = 1; $count -le $global:apiResults.count; $count++) {
         $release = $global:apiResults[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
         write-host "$($count). $($release.name) $($release.tag_name) $($release.created_at)" -ForegroundColor Green
-
     }
 
     $selection = 0
@@ -50,12 +51,12 @@ function main() {
     }
 
     $release = $global:apiResults[$selection]
-    #write-host "invoke-webrequest $($global:apiResults.zipball_url) -OutFile $destinationFile"
+    write-verbose "assets:`r`n$($global:apiResults | convertto-json)"
+    write-host "assets:" -ForegroundColor Green
 
     for ($count = 1; $count -le $release.assets.count; $count++) {
         $release = $release.assets[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
         write-host "$($count). $($release.name) $($release.size) $($release.created_at)" -ForegroundColor Green
-
     }
 
     $assetSelection = 0
