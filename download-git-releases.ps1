@@ -33,12 +33,13 @@ function main() {
     if ($latest) {
         $gitReleaseApi = "$gitReleaseApi/latest"
     }
+    
     # -usebasicparsing deprecated but needed for nano / legacy
     write-host "Invoke-WebRequest $gitReleaseApi -UseBasicParsing" -ForegroundColor Magenta
     $global:apiResults = convertfrom-json (Invoke-WebRequest $gitReleaseApi -UseBasicParsing)
     
     write-verbose "releases:`r`n$($global:apiResults | convertto-json)"
-    write-host "releases:" -ForegroundColor Green
+    write-host "$($global:apiResults) releases:" -ForegroundColor Cyan
 
     for ($count = 1; $count -le $global:apiResults.count; $count++) {
         $release = $global:apiResults[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
@@ -51,12 +52,12 @@ function main() {
     }
 
     $release = $global:apiResults[$selection]
-    write-verbose "assets:`r`n$($global:apiResults | convertto-json)"
-    write-host "assets:" -ForegroundColor Green
+    write-verbose "assets:`r`n$($release.assets | convertto-json)"
+    write-host "$($release.assets.count) assets:" -ForegroundColor Cyan
 
     for ($count = 1; $count -le $release.assets.count; $count++) {
-        $release = $release.assets[$count - 1] # | select name, tag_name, created_at, assets_url, zipball_url
-        write-host "$($count). $($release.name) $($release.size) $($release.created_at)" -ForegroundColor Green
+        $releaseAsset = $release.assets[$count - 1]
+        write-host "$($count). $($releaseAsset.name) $($releaseAsset.size) $($releaseAsset.created_at)" -ForegroundColor Green
     }
 
     $assetSelection = 0
@@ -96,6 +97,7 @@ function main() {
         . $destinationFile
     }
 
+    write-host "$(Get-ChildItem $destinationFile | fl * | out-string)"
     write-host "finished: $destinationFile" -ForegroundColor Cyan
 }
 
