@@ -78,6 +78,9 @@ function main () {
         write-host "errors: $($error | sort-object -Descending | out-string)"
     }
 
+    $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
+
+    write-host "deployment:`r`n$($deployment | fl * | out-string)"
     Write-Progress -Completed -Activity "complete"
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
@@ -174,12 +177,12 @@ function export-template($resourceIds) {
 function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {
     try {
         $resourceTemplate = @{ 
-            parameters = @{}
-            variables = @{}
             resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
             outputs = @{}
+            parameters = @{}
+            variables = @{}
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
