@@ -2,7 +2,7 @@
     Script to import certificate from keyvault using azure managed identity from a configured vm scaleset node
 
     to download and execute:
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1","$pwd/azure-metadata-import-cert.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1" -outFile "$pwd/azure-metadata-import-cert.ps1";
     .\azure-metadata-import-cert.ps1 -keyvaultName -certificateName
 
     if needed, enable system / user managed identity on scaleset:
@@ -58,4 +58,5 @@ else {
 
 write-host "objects stored in `$global:pfx `$global:certificateSecrets"
 write-host "finished."
+
 

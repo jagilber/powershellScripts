@@ -11,7 +11,7 @@
     iwr https://tinyurl.com/create-azure-client-id -UseBasicParsing| iex
 
     example command to save and/or pass arguments:
-    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1","$(get-location)\azure-rm-create-aad-application-spn.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-create-aad-application-spn.ps1" -outFile "$(get-location)\azure-rm-create-aad-application-spn.ps1";
     then:
     .\azure-rm-create-aad-application-spn.ps1 -aadDisplayName azure-rm-rest-logon -logontype certthumb
     or

@@ -15,7 +15,7 @@ if(!(test-path $handle))
     write-host "downloading $handle"
     [net.ServicePointManager]::Expect100Continue = $true
     [net.ServicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12
-    (new-object net.webclient).DownloadFile("http://live.sysinternals.com/$handle","$psscriptroot\$handle")
+    invoke-webRequest "http://live.sysinternals.com/$handle" -outFile "$psscriptroot\$handle"
 }
 
 $handle = ".\$handle"

@@ -6,7 +6,7 @@
     iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-rest.ps1" -UseBasicParsing|iex
 
     or use the following to save and pass arguments:
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-rest.ps1","$pwd/azure-metadata-rest.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-rest.ps1" -outFile "$pwd/azure-metadata-rest.ps1";
     .\azure-metadata-rest.ps1
 
 
@@ -195,3 +195,4 @@ while($count -le $iterations) {
 
 write-host "objects stored in `$global:managementOauthResult `$global:vaultOauthResult and `$global:instanceResult"
 write-host "finished. total errors:$errorCounter logfile:$logFile"
+

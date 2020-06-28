@@ -8,7 +8,7 @@ this script will setup Microsoft.IdentityModel.Clients Msal for use with powersh
 KustoObj will be created as $global:kusto to hold properties and run methods from
 
 use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1","$pwd/kusto-rest.ps1");
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1" -outFile "$pwd/kusto-rest.ps1";
 .\kusto-rest.ps1 -cluster %kusto cluster% -database %kusto database%
 
 .NOTES
@@ -136,7 +136,7 @@ $global:identityPackageLocation
 $global:nuget = "nuget.exe"
 
 if ($updateScript) {
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1", "$psscriptroot/kusto-rest.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1" -outFile  "$psscriptroot/kusto-rest.ps1";
     write-warning "script updated. restart script"
     return
 }
@@ -153,7 +153,7 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
         if (!(test-path $nuget)) {
             $nuget = "$env:temp\nuget.exe"
             if (!(test-path $nuget)) {
-                (new-object net.webclient).downloadFile($nugetDownloadUrl, $nuget)
+                invoke-webRequest $nugetDownloadUrl -outFile  $nuget
             }
         }
         [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
@@ -392,7 +392,7 @@ class KustoObj {
             
             if (!(test-path $destFile)) {
                 Write-host "downloading $($this.Script)" -foregroundcolor green
-                (new-object net.webclient).DownloadFile($this.Script, $destFile)
+                invoke-webRequest $this.Script -outFile  $destFile
             }
             else {
                 Write-host "using cached script $($this.Script)"
@@ -868,4 +868,5 @@ else {
     write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
     write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
 }
+
 
