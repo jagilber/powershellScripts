@@ -1,12 +1,11 @@
 <# script to setup git, hub, and vscode with common settings and extensions
 to download and execute script:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1", "$pwd/git-vscode-setup.ps1");
-.\git-vscode-setup.ps1
+iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1 -outfile $pwd\git-vscode-setup.ps1;$pwd\git-vscode-setup.ps1
 #>
 
 param(
     [string]$gitHubDir = "c:\github",
-    [string[]]$additionalExtensions = @('shan.code-settings-sync',
+    [string[]]$additionalExtensions = @(
         'msazurermtools.azurerm-vscode-tools',
         'eamodio.gitlens',
         'wengerk.highlight-bad-chars',
@@ -14,7 +13,7 @@ param(
         'sandcastle.vscode-open',
         'mechatroner.rainbow-csv',
         'grapeCity.gc-excelviewer',
-        'ms-vscode.csharp',
+        'ms-dotnettools.csharp',
         'ms-vscode.powershell'),
     [string]$user,
     [string]$email,
