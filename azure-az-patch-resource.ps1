@@ -285,16 +285,16 @@ function write-log($data) {
         $stringData = "$(get-date):$($data | fl * | out-string)"
     }
 
-    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
-    $status += $stringData.ToString().trim()
+    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
+    write-host $status
+    
     $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
-
+    
     if ($deploymentOperations) {
-        
-        $status += ($deploymentOperations | out-string).Trim()
+        write-host ($deploymentOperations | out-string)
     }
 
-    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status -id 1
+    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status #-id 1
     write-host $stringData
 }
 
