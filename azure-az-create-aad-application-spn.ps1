@@ -10,7 +10,7 @@
     example command:
 
     example command to save and/or pass arguments:
-    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-create-aad-application-spn.ps1","$(get-location)\azure-az-create-aad-application-spn.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-create-aad-application-spn.ps1" -outFile "$(get-location)\azure-az-create-aad-application-spn.ps1";
     then:
     .\azure-az-create-aad-application-spn.ps1 -aadDisplayName azure-az-rest-logon -logontype certthumb
     or

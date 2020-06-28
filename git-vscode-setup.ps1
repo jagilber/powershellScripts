@@ -23,7 +23,7 @@ param(
 
 [io.directory]::CreateDirectory($gitHubDir)
 if (!(test-path "$pwd\download-git-client.ps1")) {
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1", "$pwd/download-git-client.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -outFile  "$pwd/download-git-client.ps1";
 }
 
 $error.Clear()
@@ -73,7 +73,7 @@ $error.clear()
 (code /?) | out-null
 
 if ($error) {
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/PowerShell/vscode-powershell/master/scripts/Install-VSCode.ps1", "$pwd/Install-VSCode.ps1");
+    invoke-webRequest "https://raw.githubusercontent.com/PowerShell/vscode-powershell/master/scripts/Install-VSCode.ps1" -outFile  "$pwd/Install-VSCode.ps1";
     .\Install-VSCode.ps1 -additionalExtensions @($additionalExtensions) -launchWhenDone -enableContextMenus
 }
 

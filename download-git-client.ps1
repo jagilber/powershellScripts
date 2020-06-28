@@ -5,7 +5,7 @@ to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1","$pwd/download-git-client.ps1");
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -outFile "$pwd/download-git-client.ps1";
 .\download-git-client.ps1
 
 git has to be pathed .\git.exe 
@@ -119,7 +119,7 @@ function main() {
         }
 
         write-host "downloading $downloadUrl to $clientFile"
-        (new-object net.webclient).DownloadFile($downloadUrl, $clientFile)
+        invoke-webRequest $downloadUrl -outFile  $clientFile
     }
 
     if ($clientFile -imatch ".zip") {
@@ -168,3 +168,4 @@ function remove-install()
 }
 
 main
+

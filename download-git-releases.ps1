@@ -7,7 +7,7 @@ to run with no arguments:
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1","$pwd/download-git-releases.ps1");
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -outFile "$pwd/download-git-releases.ps1";
 .\download-git-releases.ps1 -owner {{ git owner }} -repository {{ git repository }} [-latest]
 #>
 [cmdletbinding()]
@@ -103,3 +103,4 @@ function main() {
 }
 
 main
+
