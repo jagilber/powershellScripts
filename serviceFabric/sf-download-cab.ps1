@@ -7,7 +7,8 @@ param(
     [switch]$force,
     [bool]$removeCab = $true,
     [string]$outputFolder = $pwd,
-    [bool]$extract = $true
+    [bool]$extract = $true,
+    [bool]$install = $false
 )
 
 $allPackages = @(invoke-restmethod $sfPackageUrl).Packages
@@ -38,11 +39,16 @@ foreach ($package in $packages) {
     mkdir "$outputFolder\$($package.Version)"
     invoke-webrequest -uri ($package.TargetPackageLocation) -outfile "$outputFolder\$($package.Version).cab"
 
-    if($extract) {
+    if($extract -or $install) {
         expand "$outputFolder\$($package.Version).cab" -F:* "$outputFolder\$($package.Version)"
     }
 
     if ($removeCab) {
         remove-item "$outputFolder\$($package.Version).cab" -Force -Recurse
     }
+}
+
+if($install){
+    $sfBinDir = "$outputFolder\$($package.Version)\bin\Fabric\Fabric.Code"
+    start-process -Wait -FilePath "$sfBinDir\FabricSetup.exe" -ArgumentList "/operation:install" -WorkingDirectory $sfBinDir -NoNewWindow
 }

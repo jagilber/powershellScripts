@@ -7,7 +7,7 @@
     Invoke-azVmssVMRunCommand -ResourceGroupName {{resourceGroupName}} -VMScaleSetName{{scalesetName}} -InstanceId {{instanceId}} -ScriptPath c:\temp\test1.ps1 -Parameter @{'name' = 'patterns';'value' = "{{certthumb1}},{{certthumb2}}"} -Verbose -Debug -CommandId $commandId
     Get-azVMRunCommandDocument -Location westus | select ID, OSType, Label
 
-    (new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vmss-run-command.ps1","$pwd\azure-az-vmss-run-command.ps1")
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vmss-run-command.ps1" -outFile "$pwd\azure-az-vmss-run-command.ps1"
 
 .NOTES  
    File Name  : azure-az-vmss-run-command.ps1
@@ -47,7 +47,7 @@
     .\azure-az-vmss-run-command.ps1 -script '& {
         $file = "dotnet-runtime-3.0.0-win-x64.exe"
         $downloadUrl = "https://download.visualstudio.microsoft.com/download/pr/b3b81103-619a-48d8-ac1b-e03bbe153b7c/566b0f50872164abd1478a5b3ec38ffa/$file"
-        (new-object net.webclient).downloadfile($downloadUrl,"$pwd/$file")
+        invoke-webRequest $downloadUrl -outFile "$pwd/$file"
         # /install /repair /uninstall /layout /passive /quiet /norestart /log
         start-process -wait -filePath ".\dotnet-runtime-3.0.0-win-x64.exe" -argumentList "/norestart /quiet /install /log `"$pwd/$file.log`""
         type "$pwd/$file.log"
@@ -533,3 +533,4 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
 }
 
 main
+

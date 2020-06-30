@@ -154,7 +154,7 @@ function main()
         write-host "see link for additional information https://blogs.msdn.microsoft.com/igorpag/2017/06/28/using-powershell-as-an-azure-arm-rest-api-client/" -ForegroundColor Cyan
         write-host
         write-host "use this script to generate azure ad spn app with a self signed cert for use with scripts (not just this one)."
-        write-host "(new-object net.webclient).downloadfile(`"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-create-aad-application-spn.ps1`",`"$($currentDir)\azure-az-create-aad-application-spn.ps1`");" -ForegroundColor Cyan
+        write-host "invoke-webRequest `"https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-create-aad-application-spn.ps1`" -outFile `"$($currentDir)\azure-az-create-aad-application-spn.ps1`";" -ForegroundColor Cyan
         write-host "$($currentDir)\azure-az-create-aad-application-spn.ps1 -aadDisplayName powerShellRestSpn -logontype certthumb" -ForegroundColor Cyan
     }
 }
@@ -269,4 +269,5 @@ finally
     write-host "output location: $($outputDir)" -ForegroundColor Yellow
     write-host "finished"
 }
+
 

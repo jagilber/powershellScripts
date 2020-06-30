@@ -2,7 +2,7 @@
 .SYNOPSIS
 # script to update azure arm template resource settings
 .LINK
-(new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1","$pwd\azure-az-patch-resource.ps1")
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
 .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 #>
 param (
@@ -78,6 +78,9 @@ function main () {
         write-host "errors: $($error | sort-object -Descending | out-string)"
     }
 
+    $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
+
+    write-host "deployment:`r`n$($deployment | fl * | out-string)"
     Write-Progress -Completed -Activity "complete"
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
@@ -174,12 +177,12 @@ function export-template($resourceIds) {
 function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {
     try {
         $resourceTemplate = @{ 
-            parameters = @{}
-            variables = @{}
             resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
             outputs = @{}
+            parameters = @{}
+            variables = @{}
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
@@ -282,16 +285,16 @@ function write-log($data) {
         $stringData = "$(get-date):$($data | fl * | out-string)"
     }
 
-    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
-    $status += $stringData.ToString().trim()
+    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
+    write-host $status
+    
     $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
-
+    
     if ($deploymentOperations) {
-        
-        $status += ($deploymentOperations | out-string).Trim()
+        write-host ($deploymentOperations | out-string)
     }
 
-    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status -id 1
+    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status #-id 1
     write-host $stringData
 }
 
@@ -299,3 +302,4 @@ function write-log($data) {
 main
 $ErrorActionPreference = 'silentlycontinue'
 $VerbosePreference = 'silentlycontinue'
+
