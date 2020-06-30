@@ -8,7 +8,7 @@
     see examples and output.
 
     quickstart:
-    (new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1","$(get-location)\azure-storage-query-table.ps1")
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-storage-query-table.ps1" -outFile "$(get-location)\azure-storage-query-table.ps1"
     $sas = "https://sflogsxxxxxxxxxxxxxx.table.core.windows.net/?sv=2017-11-09&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-09-30T09:27:56Z&st=2018-09-30T01:27:56Z&spr=https&sig=4SfN%2Fza0c1CXop6sKQkFf0f8thKDUBYK7xQ%3D"
     .\azure-storage-query-table.ps1 -saskeyTable $sas
             
@@ -299,3 +299,4 @@ function main()
 }
 
 main
+

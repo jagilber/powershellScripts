@@ -3,7 +3,7 @@ param(
     [string]$vmSize = "Basic_A1",
     [string]$publisher = "MicrosoftWindowsServer", #"Canonical"
     [string]$offer = "WindowsServer", #"UbuntuServer"
-    [string]$imagesku = "2016-Datacenter-with-containers", #"18.04-LTS"
+    [string]$imagesku = "2019-Datacenter-with-containers", #"18.04-LTS"
     [switch]$showDetail
 )
 
@@ -55,6 +55,7 @@ if($showDetail)
 }
 
 write-host "checking sku $($publisherName) $($offer) $($imageSku)"
+write-host "Get-azVMImageSku -Location $location -PublisherName $publisherName -Offer $offer"
 $skus = Get-azVMImageSku -Location $location -PublisherName $publisherName -Offer $offer
 
 if (!($skus | Where-Object Skus -Like $imageSKU))

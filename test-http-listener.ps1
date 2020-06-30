@@ -1,7 +1,7 @@
 <#
  powershell test http listener for troubleshooting
  use the following to save and pass arguments:
-(new-object net.webclient).downloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1","$pwd/test-http-listener.ps1");
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1" -outFile "$pwd/test-http-listener.ps1";
 .\test-http-listener
 
  do a final client connect to free up close

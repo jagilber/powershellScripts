@@ -11,8 +11,8 @@ param(
 if(!$sysinternalsCustomExe) { $sysinternalsCustomExe = $sysinternalsExe}
 
 if(!(test-path $sysinternalsCustomExe)){
-    write-host "(new-object net.webclient).DownloadFile('http://live.sysinternals.com/$sysinternalsCustomExe','$pwd\$sysinternalsCustomExe')"
-    (new-object net.webclient).DownloadFile("http://live.sysinternals.com/$sysinternalsCustomExe","$pwd\$sysinternalsCustomExe")
+    write-host "invoke-webRequest 'http://live.sysinternals.com/$sysinternalsCustomExe' -outFile '$pwd\$sysinternalsCustomExe'"
+    invoke-webRequest "http://live.sysinternals.com/$sysinternalsCustomExe" -outFile "$pwd\$sysinternalsCustomExe"
 }
 
 if(!$noExecute) {

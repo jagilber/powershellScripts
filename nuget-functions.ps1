@@ -21,7 +21,7 @@ class NugetObj {
             }
 
             if (!(test-path $this.nuget)) {
-                (new-object net.webclient).downloadFile($nugetDownloadUrl, $this.nuget)
+                invoke-webRequest $nugetDownloadUrl -outFile  $this.nuget
             }
         }
         $this.EnumSources()
@@ -292,3 +292,4 @@ class NugetObj {
 #}
 $nuget | Get-Member
 write-host "use `$nuget object to set properties and run methods. example: `$nuget.Sources" -ForegroundColor Green
+
