@@ -1,9 +1,47 @@
 <#
 .SYNOPSIS
-# script to update azure arm template resource settings
+    powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
+    
+.DESCRIPTION  
+    powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com.
+    useful for environments where resources.azure.com is not an option.
+    PRECAUTION: there is no method to query current api versions being used. when script queries the arm resources, 
+        the latest api version for that resource will be written to the template.json for each resource.
+
+.NOTES  
+    File Name  : azure-az-patch-resource.ps1
+    Author     : jagilber
+    Version    : 200714
+    History    : 
+
+.EXAMPLE 
+    .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup
+    enumerate all resources in resource group 'clusteresourcegroup' and generate template.json
+
+.EXAMPLE 
+    .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup -patch
+    patch all resources in resource group 'clusteresourcegroup' using existing template.json
+
+.EXAMPLE 
+    .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup -resource nt0
+    enumerate resource named 'nt0' in resource group 'clusteresourcegroup' and generate template.json
+
+.EXAMPLE 
+    .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup -resource nt0 -patch
+    patch all resource named 'nt0' in resource group 'clusteresourcegroup' using existing template.json
+
+.EXAMPLE 
+    .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup -templatejsonfile clusterresourcegroup.json
+    enumerate all resources in resource group 'clusteresourcegroup' and generate clusterresourcegroup.json
+
+.EXAMPLE 
+    .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup -patch -templatejsonfile clusterresourcegroup.json
+    patch all resources in resource group 'clusteresourcegroup' using existing clusterresourcegroup.json
+
 .LINK
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
-.\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
+    .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
+
 #>
 param (
     [string]$resourceGroupName = '',
@@ -22,12 +60,16 @@ $global:resourceErrors = 0
 $global:resourceWarnings = 0
 
 $PSModuleAutoLoadingPreference = 2
-#import-module az.accounts
-#import-module az.resources
+$currentErrorActionPreference = $ErrorActionPreference
+$currentVerbosePreference = $VerbosePreference
 
 function main () {
     $ErrorActionPreference = 'continue'
     $VerbosePreference = 'continue'
+
+    if (!(check-module)) {
+        return
+    }
 
     $global:startTime = get-date
     $resourceIds = [collections.arraylist]::new()
@@ -73,17 +115,42 @@ function main () {
 
     }
 
-    if($global:resourceErrors -or $global:resourceWarnings) {
+    if ($global:resourceErrors -or $global:resourceWarnings) {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
         write-host "errors: $($error | sort-object -Descending | out-string)"
     }
 
     $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
 
-    write-host "deployment:`r`n$($deployment | fl * | out-string)"
+    write-host "deployment:`r`n$($deployment | format-list * | out-string)"
     Write-Progress -Completed -Activity "complete"
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
+}
+
+function check-module() {
+    get-command Connect-AzAccount -ErrorAction SilentlyContinue
+    
+    if ($error) {
+        $error.clear()
+        write-warning "Connect-AzAccount not installed."
+
+        if ((read-host "is it ok to install latest az?[y|n]") -imatch "y") {
+            $error.clear()
+            install-module az.accounts
+            install-module az.resources
+
+            import-module az.accounts
+            import-module az.resources
+        }
+        else {
+            return $false
+        }
+
+        if ($error) {
+            return $false
+        }
+    }
 }
 
 function deploy-template($resourceIds) {
@@ -95,7 +162,7 @@ function deploy-template($resourceIds) {
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | ? Id -imatch ($resourceIds -join '|'))
+    $resources = @($json.resources | where-object Id -imatch ($resourceIds -join '|'))
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
     $error.Clear()
@@ -180,9 +247,9 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
             resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
-            outputs = @{}
-            parameters = @{}
-            variables = @{}
+            outputs        = @{}
+            parameters     = @{}
+            variables      = @{}
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
@@ -246,6 +313,7 @@ function wait-jobs() {
 
     write-log "finished jobs"
 }
+
 function write-log($data) {
     if (!$data) { return }
     [text.stringbuilder]$stringData = New-Object text.stringbuilder
@@ -298,8 +366,7 @@ function write-log($data) {
     write-host $stringData
 }
 
-
 main
-$ErrorActionPreference = 'silentlycontinue'
-$VerbosePreference = 'silentlycontinue'
+$ErrorActionPreference = $currentErrorActionPreference
+$VerbosePreference = $currentVerbosePreference
 
