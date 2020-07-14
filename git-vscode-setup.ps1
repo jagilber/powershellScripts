@@ -1,6 +1,6 @@
 <# script to setup git, hub, and vscode with common settings and extensions
 to download and execute script:
-iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1 -outfile $pwd\git-vscode-setup.ps1;$pwd\git-vscode-setup.ps1
+iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1 -outfile $pwd\git-vscode-setup.ps1;. $pwd\git-vscode-setup.ps1
 #>
 
 param(
