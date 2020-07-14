@@ -612,10 +612,12 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
         $queryString = "<QueryList>
         <Query Id=`"0`" Path=`"$($eventLogName)`">
         <Select Path=`"$($eventLogName)`">*[System[$($eventQuery)" `
-            + "TimeCreated[@SystemTime &gt;=`'$($eventStartTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:sszz"))`' " `
-            + "and @SystemTime &lt;=`'$($eventStopTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:sszz"))`']]]</Select>
+            + "TimeCreated[@SystemTime &gt;=`'$($eventStartTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))`' " `
+            + "and @SystemTime &lt;=`'$($eventStopTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))`']]]</Select>
         </Query>
         </QueryList>"
+
+        log-info -debugOnly -data $queryString
 
         try
         {
@@ -631,6 +633,7 @@ function dump-events( $eventLogNames, [string] $machine, [DateTime] $eventStartT
                 $pathType = [Diagnostics.Eventing.Reader.PathType]::FilePath
             }
 
+            log-info -debugOnly -data ($psession.GetLogInformation($eventLogName,$pathType)| fl * | out-string)
             $pquery = New-Object Diagnostics.Eventing.Reader.EventLogQuery ($eventLogName, $pathType, $queryString)
             $pquery.Session = $psession
             $preader = New-Object Diagnostics.Eventing.Reader.EventLogReader $pquery
@@ -878,7 +881,6 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
         }
 
         [Text.StringBuilder] $sb = new-object Text.StringBuilder
-        [void]$sb.Appendline("")
 
         foreach ($eventLogName in $eventLogNames)
         {
@@ -888,6 +890,7 @@ function filter-eventLogs($eventLogPattern, $machine, $eventLogPath)
             }
 
             [void]$filteredEventLogs.Add($eventLogName)
+            [void]$sb.Appendline($eventLogName)
         }
 
         [void]$sb.AppendLine("filtered logs count: $($filteredEventLogs.Count)")
