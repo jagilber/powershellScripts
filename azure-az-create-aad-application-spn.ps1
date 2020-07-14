@@ -44,7 +44,7 @@ function main()
     
     if(!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) 
     {
-        write-warning "script requires powershell admin sesion. restart as admin. exiting"
+        write-warning "script requires powershell admin session. restart as admin. exiting"
         return
     }
 

@@ -149,8 +149,6 @@ function add-counterObj($counter) {
     $foregroundColor = $currentForegroundColor
 
     write-host "adding counter $counter" -ForegroundColor Yellow
-    
-    if ($script:colorCount -ge $consoleColors.Count) {
         do {
             $backgroundColor = $consoleColors[[math]::Min($consoleColors.Count - 1, $script:bgColorCount++)]
         }while ($backgroundColor -ieq $currentForegroundColor)
