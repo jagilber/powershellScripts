@@ -1,7 +1,11 @@
 <#
 .SYNOPSIS
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
-    
+
+.LINK
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
+    .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
+
 .DESCRIPTION  
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com.
     useful for environments where resources.azure.com is not an option.
@@ -37,12 +41,8 @@
 .EXAMPLE 
     .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup -patch -templatejsonfile clusterresourcegroup.json
     patch all resources in resource group 'clusteresourcegroup' using existing clusterresourcegroup.json
-
-.LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
-    .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
-
 #>
+
 param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
