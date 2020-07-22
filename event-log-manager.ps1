@@ -2,6 +2,9 @@
 .SYNOPSIS
     powershell script to manage event logs on multiple machines
 
+.LINK
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/event-log-manager.ps1" -outFile "$pwd\event-log-manager.ps1"
+
 .DESCRIPTION
     To enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
