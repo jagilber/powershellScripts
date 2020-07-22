@@ -3,11 +3,18 @@ if you decide to try, test in non production environment first.
 if you need assistance with your certificate swap, it may be best to open a support case with microsoft.
 if you need assistance with this script feel free to ping me.
 
-**to use:**
+**to use with azure 'az' modules:**
 
 ```powershell
-(new-object net.webclient).DownloadFile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1","$pwd\azure-az-patch-resource.ps1")
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
 .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
+```
+
+**to use azure 'azurerm' modules:**
+
+```powershell
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-azurerm-patch-resource.ps1" -outFile "$pwd\azure-azurerm-patch-resource.ps1"
+.\azure-azurerm-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 ```
 
 **example enumeration (GET) steps 2 - 8 for nodetype:**
