@@ -130,13 +130,14 @@ function main () {
 }
 
 function check-module() {
+    $error.Clear()
     get-command Connect-azurermAccount -ErrorAction SilentlyContinue
     
     if ($error) {
         $error.clear()
-        write-warning "Connect-azurermAccount not installed."
+        write-warning "Azure Connect-azurermAccount module is not installed."
 
-        if ((read-host "is it ok to install latest azurerm?[y|n]") -imatch "y") {
+        if ((read-host "is it ok to install latest Azure azurerm module?[y|n]") -imatch "y") {
             $error.clear()
             install-module azurerm.profile
             install-module azurerm.resources
@@ -152,6 +153,8 @@ function check-module() {
             return $false
         }
     }
+
+    return $true
 }
 
 function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {

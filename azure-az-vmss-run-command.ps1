@@ -306,6 +306,7 @@ function main() {
 }
 
 function check-module() {
+    $error.clear()
     get-command Invoke-azVmssVMRunCommand -ErrorAction SilentlyContinue
     
     if ($error) {
@@ -330,6 +331,8 @@ function check-module() {
             return $false
         }
     }
+
+    return $true
 }
 
 function generate-list([string]$strList) {
