@@ -1,7 +1,14 @@
 param(
-    [string]$inputString,
+    [Parameter(Mandatory=$true)]
+    [object]$inputString,
     [switch]$stringToBase64,
-    [switch]$base64ToString
+    [switch]$base64ToString,
+    [switch]$urlEncodeToString,
+    [switch]$stringToUrlEncode,
+    [switch]$stringToRegexEscaped,
+    [switch]$regexToStringUnescaped,
+    [switch]$stringToCharArray,
+    [switch]$charArrayToString
 )
 
 
@@ -11,6 +18,30 @@ if($stringToBase64){
 
 if($base64ToString){
     write-host "base64ToString: $([text.encoding]::UTF8.GetString([convert]::FromBase64String($inputString)))"
+}
+
+if($urlEncodeToString) {
+    Write-Host "urlEncodeToString: $([web.httpUtility]::UrlDecode($inputString))"
+}
+
+if($stringToUrlEncode) {
+    Write-Host "stringToUrlEncode: $([web.httpUtility]::UrlEncode($inputString))"
+}
+
+if($stringToRegexEscaped) {
+    Write-Host "stringToRegexEscaped: $([regex]::Escape($inputString))"
+}
+
+if($regexToStringUnescaped) {
+    Write-Host "regexToStringUnescaped: $([regex]::Unescape($inputString))"
+}
+
+if($stringToCharArray) {
+    write-host "stringToCharArray: $($inputString.ToCharArray() | foreach-object {[int][char]$_})"
+}
+
+if($charArrayToString) {
+    write-host "charArrayToString: $([string]::new($inputString))"
 }
 
 #write-host "finished"
