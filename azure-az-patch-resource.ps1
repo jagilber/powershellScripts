@@ -130,13 +130,14 @@ function main () {
 }
 
 function check-module() {
+    $error.clear()
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
     
     if ($error) {
         $error.clear()
-        write-warning "Connect-AzAccount not installed."
+        write-warning "azure module for Connect-AzAccount not installed."
 
-        if ((read-host "is it ok to install latest az?[y|n]") -imatch "y") {
+        if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
             $error.clear()
             install-module az.accounts
             install-module az.resources
@@ -152,6 +153,8 @@ function check-module() {
             return $false
         }
     }
+
+    return $true
 }
 
 function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {

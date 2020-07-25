@@ -251,6 +251,7 @@ function main()
 
 function check-module()
 {
+    $error.Clear()
     get-command Invoke-AzureRmVmssVMRunCommand -ErrorAction SilentlyContinue
     
     if ($error)
@@ -275,6 +276,8 @@ function check-module()
             return $false
         }
     }
+
+    return $true
 }
 
 function generate-list([string]$strList)
