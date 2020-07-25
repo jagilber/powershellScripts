@@ -178,6 +178,7 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         return $false
     }
 }
+
 function deploy-template($resourceIds) {
     $json = get-content -raw $templateJsonFile | convertfrom-json
     if ($error -or !$json -or !$json.resources) {
@@ -256,6 +257,7 @@ function export-template($resourceIds) {
 
         # query again with latest api ver
         $resourceApiVersion = $rpType.ApiVersions[0]
+        write-host "using resource api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
         $azResource = get-azresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
 
         [void]$resources.Add(@{
