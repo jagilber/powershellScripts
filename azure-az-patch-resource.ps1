@@ -43,6 +43,7 @@
     patch all resources in resource group 'clusteresourcegroup' using existing clusterresourcegroup.json
 #>
 
+[cmdletbinding()]
 param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
@@ -256,6 +257,7 @@ function export-template($resourceIds) {
 
         # query again with latest api ver
         $resourceApiVersion = $rpType.ApiVersions[0]
+        write-host "using resource api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
         $azResource = get-azresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
 
         [void]$resources.Add(@{
@@ -311,6 +313,8 @@ function wait-jobs() {
                 write-log -data $job
                 remove-job -Id $job.Id -Force  
             }
+
+            write-progressInfo
             start-sleep -Seconds $sleepSeconds
         }
     }
@@ -357,17 +361,39 @@ function write-log($data) {
         $stringData = "$(get-date):$($data | fl * | out-string)"
     }
 
-    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
-    write-host $status
-    
-    $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
-    
-    if ($deploymentOperations) {
-        write-host ($deploymentOperations | out-string)
-    }
-
-    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status #-id 1
     write-host $stringData
+}
+
+function write-progressInfo() {
+    $ErrorActionPreference = $VerbosePreference = "silentlycontinue"
+    write-verbose "Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue"
+    $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
+    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
+    write-verbose $status
+
+    $count = 0
+    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName" -Status $status -id ($count++)
+
+    if ($deploymentOperations) {
+        write-verbose ("deployment operations: `r`n`t$($deploymentOperations | out-string)")
+        
+        foreach($operation in $deploymentOperations) {
+            write-verbose ($operation | convertto-json)
+            $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
+            $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
+            
+            if($operation.Properties.statusMessage) {
+                $status = "$status $($operation.Properties.statusMessage)"
+            }
+            else{
+                $error.Clear()
+            }
+
+            $activity = "$($operation.Properties.provisioningOperation):$($currentOperation)"
+            Write-Progress -Activity $activity -id ($count++) -Status $status
+        }
+    }
+    $ErrorActionPreference = $VerbosePreference = "continue"
 }
 
 main
