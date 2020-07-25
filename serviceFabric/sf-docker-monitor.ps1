@@ -2,7 +2,7 @@
 .SYNOPSIS
 monitor docker status
 .LINK
-(new-object net.webclient).downloadfile("https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-monitor.ps1","$pwd\sf-docker-monitor.ps1");
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-docker-monitor.ps1" -outFile "$pwd\sf-docker-monitor.ps1";
 .\sf-docker-monitor.ps1;
 #>
 
@@ -50,6 +50,9 @@ function main() {
         write-host 'docker images:'
         write-host (docker images | out-string)
 
+        write-host 'docker container'
+        write-host (docker container ls -a --format "{{.ID}},{{.Command}},{{.CreatedAt}},{{.RunningFor}},{{.Ports}},{{.Status}},{{.Size}},{{.Names}},{{.Labels}},{{.Networks}}" | out-string)
+        
         #docker stats;
         write-host 'Get-NetNatStaticMapping:'
         write-host (Get-NetNatStaticMapping | out-string)
