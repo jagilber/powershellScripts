@@ -15,7 +15,7 @@
 .NOTES  
     File Name  : azure-az-patch-resource.ps1
     Author     : jagilber
-    Version    : 200714
+    Version    : 200725
     History    : 
 
 .EXAMPLE 
@@ -365,7 +365,8 @@ function write-log($data) {
 }
 
 function write-progressInfo() {
-    $ErrorActionPreference = $VerbosePreference = "silentlycontinue"
+    $ErrorActionPreference = $VerbosePreference = 'silentlycontinue'
+    $errorCount = $error.Count
     write-verbose "Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue"
     $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
     $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
@@ -385,15 +386,17 @@ function write-progressInfo() {
             if($operation.Properties.statusMessage) {
                 $status = "$status $($operation.Properties.statusMessage)"
             }
-            else{
-                $error.Clear()
-            }
-
+            
             $activity = "$($operation.Properties.provisioningOperation):$($currentOperation)"
             Write-Progress -Activity $activity -id ($count++) -Status $status
         }
     }
-    $ErrorActionPreference = $VerbosePreference = "continue"
+
+    if($errorCount -ne $error.Count) {
+        $error.RemoveRange($errorCount -1,$error.Count - $errorCount)
+    }
+
+    $ErrorActionPreference = $VerbosePreference = 'continue'
 }
 
 main
