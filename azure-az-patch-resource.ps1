@@ -236,6 +236,7 @@ function deploy-template($resourceIds) {
 }
 
 function display-settings($resourceIds) {
+    $settings = @()
     foreach ($resourceId in $resourceIds) {
         $settings += Get-AzResource -Id $resourceId `
             -ExpandProperties | convertto-json -depth 99

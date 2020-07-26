@@ -1,4 +1,16 @@
 # script to add reboot resource to service fabric template using cluster upgrade
+# https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-diagnostics-eventstore
+# Set-AzServiceFabricSetting -ResourceGroupName 'Group1' -Name 'Contoso01SFCluster'  -Section 'upgradeDescription' -Parameter 'forceRestart' -Value true
+# https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-fabric-settings
+# https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-config-upgrade-azure
+# forcerestart restarts fabrichost.exe
+# use this to send a dynamic cluster configuration upgrade with forcerestart to true
+# this allows one fabrichost restart udwalk
+# setting forcerestart back to false and reverting dynamic change prevents 2nd ud walk but allows configuration to reverted
+
+# ps command with static configuration change can be used but if change is not permanent, reverting change will cause 2nd udwalk
+# Set-AzServiceFabricSetting -ResourceGroupName sfjagilber1nt3 -Name sfjagilber1nt3  -Section FabricHost -Parameter FailureReportingTimeout -Value 61
+
 param(
   [Parameter(Mandatory = $true)]
   $resourceGroupName,
@@ -6,6 +18,8 @@ param(
   $templateFileName = ".\template.json",
   $patchScript = "$pwd\..\azure-az-patch-resource.ps1"
 )
+
+$ErrorActionPreference = 'continue'
 
 $upgradeDescription = @{
   "forceRestart"                  = $true #// <--- set to 'false' after upgrade
@@ -40,12 +54,13 @@ if (!$clusterName) {
   $count = 0
   if ($clusters.Count -gt 1) {
     foreach ($cluster in $clusters) {
-      write-host "$(++$count). $($cluster.Name)"
+      $count++
+      write-host "$($count). $($cluster.Name)"
     }
 
     $response = [convert]::ToInt32((read-host "enter number of cluster to upgrade reboot:"))
     if ($response -gt 0 -and $response -le $count) {
-      $clusterName = $clusters[$response].Name
+      $clusterName = $clusters[$response -1].Name
     }
   }
   elseif ($clusters.count -eq 1) {
@@ -68,10 +83,20 @@ if (!$global:resourceTemplateObj.resources.properties.upgradeDescription) {
 
 write-host "setting forcerestart to true" -ForegroundColor Cyan
 $global:resourceTemplateObj.resources.properties.upgradeDescription.forceRestart = $true
+
+write-host "setting tag to trigger update" -ForegroundColor Cyan
+if(!(Get-Member -InputObject $global:resourceTemplateObj.resources.tags | where-object Name -icontains "patch")) {
+  Add-Member -InputObject $global:resourceTemplateObj.resources.tags -NotePropertyName "patch" -NotePropertyValue (get-date).ToString("o")
+}
+else {
+  $global:resourceTemplateObj.resources.tags.patch = (get-date).ToString("o")
+}
+
 write-host $global:resourceTemplateObj | convertto-json -depth 99
 
 write-host "saving file $templateFileName" -ForegroundColor Cyan
 $global:resourceTemplateObj | convertto-json -depth 99 | out-file $templateFileName
+write-host ($global:resourceTemplateObj | convertto-json -depth 99)
 
 write-host "executing deployment setting restart to true" -ForegroundColor Cyan
 . $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch
@@ -82,7 +107,7 @@ write-host $global:resourceTemplateObj | convertto-json -depth 99
 
 write-host "saving file $templateFileName" -ForegroundColor Cyan
 $global:resourceTemplateObj | convertto-json -depth 99 | out-file $templateFileName
-write-host $global:resourceTemplateObj | convertto-json -depth 99
+write-host ($global:resourceTemplateObj | convertto-json -depth 99)
 
 write-host "executing deployment setting restart to false" -ForegroundColor Cyan
 . $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch
