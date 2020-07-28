@@ -3,7 +3,7 @@
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1"
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1";
     .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
 .DESCRIPTION  
@@ -258,7 +258,7 @@ function export-template($resourceIds) {
 
         # query again with latest api ver
         $resourceApiVersion = $rpType.ApiVersions[0]
-        write-host "using resource api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
+        write-host "using resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
         $azResource = get-azresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
 
         [void]$resources.Add(@{
