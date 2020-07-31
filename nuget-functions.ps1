@@ -19,14 +19,18 @@ class NugetObj {
     [string]$nuget = "nuget.exe"
 
     NugetObj() {
+        write-host "nugetobj init"
         $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
         if (!(test-path $this.nuget)) {
+            write-host "nuget does not exist"
             $this.nuget = "$env:temp\nuget.exe"
             if(!$env:path.Contains($env:temp)) {
                 $env:path += ";$($env:temp)"
+                write-host "adding temp path"
             }
 
             if (!(test-path $this.nuget)) {
+                write-host "downloading nuget"
                 invoke-webRequest $nugetDownloadUrl -outFile  $this.nuget
             }
         }
