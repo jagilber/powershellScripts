@@ -1,5 +1,11 @@
+<#
 #using namespace system.collections
 # -allversions is broken in nuget.exe
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/nuget-functions.ps1" -outFile "$pwd/nuget-functions.ps1";
+.\nuget-functions.ps1;
+$nuget
+
+#>
 
 class NugetObj {
     [hashtable]$sources = @{}
@@ -183,6 +189,10 @@ class NugetObj {
     [string[]] GetDirectories([string]$sourcePath, [string]$sourcePattern) {
         write-host "getdirectories: $sourcePath $sourcePattern"
          return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern + "*", [io.searchOption]::TopDirectoryOnly))
+    }
+
+    [string[]] InstallPackage([string]$packageName) {
+        return $this.InstallPackage($packageName, 'nuget.org', $null, $null)
     }
 
     [string[]] InstallPackage([string]$packageName, [string]$packageSource = $null) {
