@@ -24,7 +24,7 @@ class NugetObj {
         if (!(test-path $this.nuget)) {
             write-host "nuget does not exist"
             $this.nuget = "$env:temp\nuget.exe"
-            if(!$env:path -contains $env:temp) {
+            if(!($env:path -split ';') -contains $env:temp) {
                 $env:path += ";$($env:temp)"
                 write-host "adding temp path"
             }
@@ -36,7 +36,7 @@ class NugetObj {
         }
         else {
             $this.nuget = "$pwd\nuget.exe"
-            if(!$env:path -contains $pwd) {
+            if(!($env:path -split ';') -contains $pwd) {
                 $env:path += ";$($pwd)"
                 write-host "adding $pwd path"
             }
