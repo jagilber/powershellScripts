@@ -13,9 +13,9 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 [cmdletbinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$owner = "microsoft",
+    [string]$owner, # = "microsoft",
     [Parameter(Mandatory = $true)]
-    [string]$repository = "winget-cli",
+    [string]$repository, # = "winget-cli",
     [string]$destPath = $pwd,
     [switch]$latest,
     [switch]$execute,
