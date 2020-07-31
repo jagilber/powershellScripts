@@ -35,7 +35,11 @@ class NugetObj {
             }
         }
         else {
-            $this.nuget = ".\nuget.exe"
+            $this.nuget = "$pwd\nuget.exe"
+            if(!$env:path.Contains($pwd)) {
+                $env:path += ";$($pwd)"
+                write-host "adding $pwd path"
+            }
         }
         $this.EnumSources()
         $this.EnumLocals()
