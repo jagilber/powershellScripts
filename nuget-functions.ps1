@@ -34,6 +34,9 @@ class NugetObj {
                 invoke-webRequest $nugetDownloadUrl -outFile  $this.nuget
             }
         }
+        else {
+            $this.nuget = ".\nuget.exe"
+        }
         $this.EnumSources()
         $this.EnumLocals()
     }
