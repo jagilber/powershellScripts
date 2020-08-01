@@ -3,27 +3,27 @@
     powershell script to match local / given windows image build number with matching azure image skus
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-image-build-match" -outFile "$pwd\azure-az-image-build-match";
-    .\azure-az-image-build-match -location {{ location }} -build {{ build }}
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-image-build-match.ps1" -outFile "$pwd\azure-az-image-build-match.ps1";
+    .\azure-az-image-build-match.ps1 -location {{ location }} -build {{ build }}
 
 .DESCRIPTION  
 
 .NOTES  
-    File Name  : azure-az-image-build-match
+    File Name  : azure-az-image-build-match.ps1
     Author     : jagilber
     Version    : 200801
     History    : 
 
 .EXAMPLE 
-    .\azure-az-image-build-match
+    .\azure-az-image-build-match.ps1
     query local machine for build number and use defaults for location, publisher, and imagesku
 
 .EXAMPLE 
-    .\azure-az-image-build-match -location eastus
+    .\azure-az-image-build-match.ps1 -location eastus
     query local machine for build number using location eastus and use defaults for publisher, and imagesku
 
 .EXAMPLE 
-    .\azure-az-image-build-match -build 2004
+    .\azure-az-image-build-match.ps1 -build 2004
     use build number 2004 and use defaults for location, publisher, and imagesku
 
 #>
