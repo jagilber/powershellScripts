@@ -42,16 +42,14 @@ set-strictMode -Version 3.0
 $PSModuleAutoLoadingPreference = 2
 
 function main() {
-    if (!(check-module)) { return }
-
-    if (!(Get-AzContext)) {
-        Connect-AzAccount
-    }
+    if (!(connect-az)) { return }
 
     if (!$build) {
         $build = [convert]::toint32((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").ReleaseId)
         write-host "using local machine build $build"
     }
+
+    enumerate-containerRegistry $build
 
     $skus = $null
     foreach ($offerInfo in (get-azvmimageoffer -Location $location -PublisherName $publisher | ? Offer -imatch $offerName)) {
@@ -81,7 +79,7 @@ function main() {
     }
 }
 
-function check-module() {
+function connect-az() {
     $error.clear()
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
     
@@ -91,8 +89,8 @@ function check-module() {
 
         if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
             $error.clear()
-            install-module az.accounts
-            install-module az.compute
+            install-module az.accounts -force
+            install-module az.compute -force
 
             import-module az.accounts
             import-module az.compute
@@ -101,12 +99,49 @@ function check-module() {
             return $false
         }
 
+        $error.clear()
+        get-command Connect-AzAccount -ErrorAction SilentlyContinue
+    
         if ($error) {
             return $false
         }
     }
 
+    $error.clear()
+    Connect-AzAccount
+    if ($error -and $error.Contains('0x8007007E')) {
+        $error.Clear()
+        Connect-AzAccount -UseDeviceAuthentication
+    }
+
+    if ($error) {
+        return $false
+    }
+    
     return $true
+}
+
+function enumerate-containerRegistry($build) {
+    $mcrRepositories = Invoke-RestMethod 'https://mcr.microsoft.com/v2/_catalog'
+    write-verbose "mcr repositories: $($mcrRepositories.Repositories | fl * | out-string)"
+    
+    write-verbose "dotnet repositories: $($mcrRepositories.Repositories -match 'dotnet' | fl * | out-string)"
+
+    $serverRepos = $mcrRepositories.Repositories -match 'windows.+server'
+    write-verbose "server repositories: $($serverRepos | fl * | out-string)"
+
+    foreach($serverRepo in $serverRepos) {
+        write-host "repo tags for repo: $serverRepo" -ForegroundColor Cyan
+        $repoTags = Invoke-RestMethod "https://mcr.microsoft.com/v2/$serverRepo/tags/list"
+        foreach($tag in $repoTags.tags){
+            if($tag -match $build) {
+                write-host "`t$tag"
+            }
+            else {
+                write-verbose "`t$tag"
+            }
+        }
+    }
 }
 
 main
