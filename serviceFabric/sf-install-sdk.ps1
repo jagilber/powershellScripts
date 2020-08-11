@@ -1,4 +1,3 @@
-# test script using voting application to perform deploy-fabricapplication from node
 # installs webpi and sf sdk if needed
  
 param(
