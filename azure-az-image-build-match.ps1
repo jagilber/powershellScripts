@@ -94,30 +94,30 @@ function connect-az() {
 
             import-module az.accounts
             import-module az.compute
+
+            if ($error) {
+                return $false
+            }
         }
         else {
             return $false
         }
+    }
 
+    if(!($null = get-azresource)) {
         $error.clear()
-        get-command Connect-AzAccount -ErrorAction SilentlyContinue
-    
+        Connect-AzAccount
+
+        if ($error -and $error.Contains('0x8007007E')) {
+            $error.Clear()
+            Connect-AzAccount -UseDeviceAuthentication
+        }
+
         if ($error) {
             return $false
         }
     }
 
-    $error.clear()
-    Connect-AzAccount
-    if ($error -and $error.Contains('0x8007007E')) {
-        $error.Clear()
-        Connect-AzAccount -UseDeviceAuthentication
-    }
-
-    if ($error) {
-        return $false
-    }
-    
     return $true
 }
 
