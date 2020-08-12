@@ -1,27 +1,34 @@
-# installs webpi and sf sdk if needed
- 
+# checks and installs webpi and sf sdk
+
 param(
-    $sfsdk = 'C:\Program Files\Microsoft SDKs\Service Fabric\Tools\PSModule\ServiceFabricSDK',
-    $webpiDir = 'C:\Program Files\Microsoft\Web Platform Installer',
-    $webpiUrl = 'https://go.microsoft.com/fwlink/?LinkId=287166'
+    [string]$sfsdk = 'C:\Program Files\Microsoft SDKs\Service Fabric\Compatibility\SdkRuntimeCompatibility.json',
+    [string]$webpiCmd = 'C:\Program Files\Microsoft\Web Platform Installer\webpiCmd-x64.exe',
+    [string]$webpiUrl = 'https://go.microsoft.com/fwlink/?LinkId=287166',
+    [switch]$force
 )
- 
+
 $startTimer = get-date
- 
-if (!(test-path $sfsdk)) {
-    if (!(test-path $webpiDir)) {
-        write-host "download webpi"
-        invoke-webrequest $webpiUrl -OutFile $pwd\webpi.msi
- 
-        write-host "install webpi"
-        Start-Process -FilePath "$pwd\webpi.msi" -argumentlist "/quiet /norestart" -wait
+
+if ($force -or !(test-path $sfsdk)) {
+    if (!(test-path $webpiCmd)) {
+        $webpiMsi = "$env:temp\webpi.msi"
+        
+        write-host "downloading webpi" -foregroundColor cyan
+        write-host "invoke-webRequest $webpiUrl -outFile $webpiMsi"
+        invoke-webRequest "$webpiUrl" -outFile "$webpiMsi"
+
+        write-host "installing webpi" -foregroundColor cyan
+        write-host "start-process -filePath $webpiMsi -argumentlist /quiet /norestart -wait"
+        start-process -filePath "$webpiMsi" -argumentlist "/quiet /norestart" -wait
     }
- 
-    Start-Process -FilePath "$webpiDir\WebpiCmd-x64.exe" -ArgumentList "/Install /Products:MicrosoftAzure-ServiceFabric-CoreSDK /AcceptEULA /SuppressReboot" -wait
- 
+
+    write-host "installing sf sdk" -foregroundColor cyan
+    write-host "start-process -filePath $webpiCmd -argumentList /install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot -wait"
+
+    start-process -filePath "$webpiCmd" -argumentList "/install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot" -wait
+    write-host "finished: $((get-date) - $startTimer)"
 }
-
- 
-write-host "finished: $((get-date) - $startTimer)"
- 
-
+else {
+    write-host "sf sdk already installed. use -force to install latest" -foregroundColor cyan
+    write-host (get-content $sfsdk)
+}
