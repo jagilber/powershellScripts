@@ -66,7 +66,6 @@ function main() {
         write-host "filtered skus:" -ForegroundColor Yellow
 
         foreach ($sku in $skus) {
-            #if ($sku.Id.contains("-$build-")) {
             if ($sku.Id -match "(^|\D)$build(\D|$)") {
                 Write-Verbose ($sku | fl * | out-string)
                 $image = Get-AzVMImage -Location $location -PublisherName $publisher -Offer $offer -Skus $sku.Skus -ErrorAction SilentlyContinue
