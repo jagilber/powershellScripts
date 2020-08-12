@@ -66,7 +66,8 @@ function main() {
         write-host "filtered skus:" -ForegroundColor Yellow
 
         foreach ($sku in $skus) {
-            if ($sku.Id.contains("-$build-")) {
+            #if ($sku.Id.contains("-$build-")) {
+            if ($sku.Id -match "(^|\D)$build(\D|$)") {
                 Write-Verbose ($sku | fl * | out-string)
                 $image = Get-AzVMImage -Location $location -PublisherName $publisher -Offer $offer -Skus $sku.Skus -ErrorAction SilentlyContinue
                 
@@ -103,13 +104,9 @@ function connect-az() {
             $error.Clear()
             Connect-AzAccount -UseDeviceAuthentication
         }
-
-        if ($error) {
-            return $false
-        }
     }
 
-    return $true
+    return $null = get-azcontext
 }
 
 function enumerate-containerRegistry($build) {
@@ -125,7 +122,7 @@ function enumerate-containerRegistry($build) {
         write-host "repo tags for repo: $serverRepo" -ForegroundColor Cyan
         $repoTags = Invoke-RestMethod "https://mcr.microsoft.com/v2/$serverRepo/tags/list"
         foreach($tag in $repoTags.tags){
-            if($tag -match $build) {
+            if($tag -match "(^|\D)$build(\D|$)") {
                 write-host "`t$tag"
             }
             else {
