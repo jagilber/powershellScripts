@@ -87,13 +87,19 @@ function connect-az() {
         $error.clear()
         write-warning "azure module for Connect-AzAccount not installed."
 
-        if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
-            $error.clear()
-            install-module az.accounts -force
-            install-module az.compute -force
+        if ((read-host "is it ok to install latest azure az modules?[y|n]") -imatch "y") {
+            $moduleList = @('az.accounts','az.compute')
 
-            import-module az.accounts
-            import-module az.compute
+            foreach($module in $moduleList) {
+                write-host "checking module $module" -ForegroundColor Yellow
+
+                if(!(get-module -name $module)) {
+                    $error.clear()
+                    write-host "installing module $module" -ForegroundColor Yellow
+                    install-module $module -force
+                    import-module $module
+                }
+            }
 
             if ($error) {
                 return $false
@@ -104,7 +110,7 @@ function connect-az() {
         }
     }
 
-    if(!($null = get-azresource)) {
+    if(!($null = get-azcontext)) {
         $error.clear()
         Connect-AzAccount
 
