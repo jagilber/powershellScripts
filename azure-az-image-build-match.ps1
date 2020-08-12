@@ -85,11 +85,11 @@ function connect-az() {
     foreach($module in $moduleList) {
         write-host "checking module $module" -ForegroundColor Yellow
 
-        if(!(get-module -name $module)) {
+        if(!(get-module -name $module -listavailable)) {
             write-host "installing module $module" -ForegroundColor Yellow
             install-module $module -force
             import-module $module
-            if(!(get-module -name $module)) {
+            if(!(get-module -name $module -listavailable)) {
                 return $false
             }
         }
