@@ -40,6 +40,7 @@ param(
 $error.Clear()
 set-strictMode -Version 3.0
 $PSModuleAutoLoadingPreference = 2
+$ErrorActionPreference = 'continue'
 
 function main() {
     if (!(connect-az)) { return }
@@ -99,7 +100,7 @@ function connect-az() {
         $error.clear()
         Connect-AzAccount
 
-        if ($error -and $error.Contains('0x8007007E')) {
+        if ($error -and ($error | out-string) -match '0x8007007E') {
             $error.Clear()
             Connect-AzAccount -UseDeviceAuthentication
         }
