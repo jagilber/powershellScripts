@@ -7,12 +7,10 @@ param(
     [switch]$force
 )
 
-$startTimer = get-date
-
 if ($force -or !(test-path $sfsdk)) {
     if (!(test-path $webpiCmd)) {
         $webpiMsi = "$env:temp\webpi.msi"
-        
+
         write-host "downloading webpi" -foregroundColor cyan
         write-host "invoke-webRequest $webpiUrl -outFile $webpiMsi"
         invoke-webRequest "$webpiUrl" -outFile "$webpiMsi"
@@ -26,7 +24,7 @@ if ($force -or !(test-path $sfsdk)) {
     write-host "start-process -filePath $webpiCmd -argumentList /install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot -wait"
 
     start-process -filePath "$webpiCmd" -argumentList "/install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot" -wait
-    write-host "finished: $((get-date) - $startTimer)"
+    write-host "finished"
 }
 else {
     write-host "sf sdk already installed. use -force to install latest" -foregroundColor cyan
