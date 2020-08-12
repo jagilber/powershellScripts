@@ -81,33 +81,21 @@ function main() {
 
 function connect-az() {
     $error.clear()
-    get-command Connect-AzAccount -ErrorAction SilentlyContinue
+    $moduleList = @('az.accounts','az.compute')
     
+    foreach($module in $moduleList) {
+        write-host "checking module $module" -ForegroundColor Yellow
+
+        if(!(get-module -name $module)) {
+            $error.clear()
+            write-host "installing module $module" -ForegroundColor Yellow
+            install-module $module -force
+            import-module $module
+        }
+    }
+
     if ($error) {
-        $error.clear()
-        write-warning "azure module for Connect-AzAccount not installed."
-
-        if ((read-host "is it ok to install latest azure az modules?[y|n]") -imatch "y") {
-            $moduleList = @('az.accounts','az.compute')
-
-            foreach($module in $moduleList) {
-                write-host "checking module $module" -ForegroundColor Yellow
-
-                if(!(get-module -name $module)) {
-                    $error.clear()
-                    write-host "installing module $module" -ForegroundColor Yellow
-                    install-module $module -force
-                    import-module $module
-                }
-            }
-
-            if ($error) {
-                return $false
-            }
-        }
-        else {
-            return $false
-        }
+        return $false
     }
 
     if(!($null = get-azcontext)) {
