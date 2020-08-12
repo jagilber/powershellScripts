@@ -80,22 +80,19 @@ function main() {
 }
 
 function connect-az() {
-    $error.clear()
     $moduleList = @('az.accounts','az.compute')
     
     foreach($module in $moduleList) {
         write-host "checking module $module" -ForegroundColor Yellow
 
         if(!(get-module -name $module)) {
-            $error.clear()
             write-host "installing module $module" -ForegroundColor Yellow
             install-module $module -force
             import-module $module
+            if(!(get-module -name $module)) {
+                return $false
+            }
         }
-    }
-
-    if ($error) {
-        return $false
     }
 
     if(!($null = get-azcontext)) {
