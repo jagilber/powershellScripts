@@ -114,10 +114,9 @@ function main () {
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
 
-        if ((code)) {
-            code $templateJsonFile
-        }
-        else {
+        $error.clear()
+        code $templateJsonFile
+        if($error) {
             . $templateJsonFile
         }
     }
