@@ -48,7 +48,7 @@ param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = '.\template.json', 
+    [string]$templateJsonFile = './template.json', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
