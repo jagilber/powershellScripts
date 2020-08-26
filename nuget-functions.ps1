@@ -1,10 +1,21 @@
 <#
-#using namespace system.collections
+.SYNOPSIS
+nuget.exe ps wrapper
+
+.DESCRIPTION
+checks for nuget.exe and downloads if needed. 
+creates $nuget ps object with functions an properties to manage nuget packages
+
+.NOTES
 # -allversions is broken in nuget.exe
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/nuget-functions.ps1" -outFile "$pwd/nuget-functions.ps1";
+
+.EXAMPLE
+invoke-webRequest "https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/scripts/nuget-functions.ps1" -outFile "$pwd/nuget-functions.ps1";
 .\nuget-functions.ps1;
 $nuget
 
+.LINK
+https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/scripts/nuget-functions.ps1
 #>
 
 class NugetObj {
