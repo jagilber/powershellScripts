@@ -113,8 +113,13 @@ function main () {
         export-template -resourceIds $resourceIds
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
-        . $templateJsonFile
 
+        if ((code)) {
+            code $templateJsonFile
+        }
+        else {
+            . $templateJsonFile
+        }
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
@@ -379,12 +384,12 @@ function write-progressInfo() {
     if ($deploymentOperations) {
         write-verbose ("deployment operations: `r`n`t$($deploymentOperations | out-string)")
         
-        foreach($operation in $deploymentOperations) {
+        foreach ($operation in $deploymentOperations) {
             write-verbose ($operation | convertto-json)
             $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
             $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
             
-            if($operation.Properties.statusMessage) {
+            if ($operation.Properties.statusMessage) {
                 $status = "$status $($operation.Properties.statusMessage)"
             }
             
@@ -393,8 +398,8 @@ function write-progressInfo() {
         }
     }
 
-    if($errorCount -ne $error.Count) {
-        $error.RemoveRange($errorCount -1,$error.Count - $errorCount)
+    if ($errorCount -ne $error.Count) {
+        $error.RemoveRange($errorCount - 1, $error.Count - $errorCount)
     }
 
     $ErrorActionPreference = $VerbosePreference = 'continue'
