@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
 script to write output of one or more perfmon counters
+iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/ps-console-graph.ps1" -outfile $pwd/ps-console-graph.ps1
 
 #>
 
@@ -149,12 +150,11 @@ function add-counterObj($counter) {
     $foregroundColor = $currentForegroundColor
 
     write-host "adding counter $counter" -ForegroundColor Yellow
-        do {
-            $backgroundColor = $consoleColors[[math]::Min($consoleColors.Count - 1, $script:bgColorCount++)]
-        }while ($backgroundColor -ieq $currentForegroundColor)
+    do {
+        $backgroundColor = $consoleColors[[math]::Min($consoleColors.Count - 1, $script:bgColorCount++)]
+    }while ($backgroundColor -ieq $currentForegroundColor)
 
-        $script:colorCount = 0
-    }
+    $script:colorCount = 0
 
     $backgroundColor = $consoleColors[[math]::Min($consoleColors.Count - 1, $script:bgColorCount)]
     
