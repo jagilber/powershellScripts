@@ -53,7 +53,8 @@ param (
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [ValidateSet('Incremental', 'Complete')]
-    [string]$mode = 'Incremental'
+    [string]$mode = 'Incremental',
+    [switch]$useLatestApiVersion
 )
 
 set-strictMode -Version 3.0
@@ -66,11 +67,17 @@ $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
 
 function main () {
+    write-host "starting"
     $ErrorActionPreference = 'continue'
     $VerbosePreference = 'continue'
 
     if (!(check-module)) {
         return
+    }
+
+    if (!(Get-AzContext)) {
+        write-host "connecting to azure"
+        Connect-AzAccount
     }
 
     $global:startTime = get-date
@@ -83,15 +90,13 @@ function main () {
 
     if ($resourceNames) {
         foreach ($resourceName in $resourceNames) {
+            write-host "getting resource $resourceName"
             $resourceIds.AddRange(@((get-azresource -resourceName $resourceName).Id))
         }
     }
     else {
+        write-host "getting resource group resource ids $resourceGroupName"
         $resourceIds.AddRange(@((get-azresource -resourceGroupName $resourceGroupName).Id))
-    }
-
-    if (!(Get-AzContext)) {
-        Connect-AzAccount
     }
 
     $error.Clear()
@@ -119,7 +124,7 @@ function main () {
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
-        write-host "errors: $($error | sort-object -Descending | out-string)"
+        write-host "errors: $($error | sort -Descending | out-string)"
     }
 
     $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
@@ -188,7 +193,7 @@ function deploy-template($resourceIds) {
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where-object Id -imatch ($resourceIds -join '|'))
+    $resources = @($json.resources | where Id -imatch ($resourceIds -join '|'))
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
     $error.Clear()
@@ -248,18 +253,50 @@ function export-template($resourceIds) {
     write-host "exporting template to $templateJsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
     $azResourceGroupLocation = @(get-azresource -ResourceGroupName $resourceGroupName)[0].Location
+    
+    write-host "getting latest api versions" -ForegroundColor yellow
     $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
+
+    write-host "getting configured api versions" -ForegroundColor green
+    Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
+    $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
+    $currentApiVersions = $currentConfig.resources | select type,apiversion | sort -Unique type
+    write-host ($currentApiVersions | fl * | out-string)
+    remove-item $templateJsonFile -Force
+    
     
     foreach ($resourceId in $resourceIds) {
         # convert az resource to arm template
-        $azResource = get-azresource -Id $resourceId
-        $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
-        $rpType = $resourceProvider.ResourceTypes | Where-Object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+        # bug where depending on arguments sent to get-azresource. using rg name and type will return correct name for extensions vm/extension
+        # ex: 2019-dc/AzureNetworkWatcherExtension
+        # querying by resource id returns incorrect name
+        # ex: AzureNetworkWatcherExtension
+        # so query again for just name using type and rg
 
-        # query again with latest api ver
-        $resourceApiVersion = $rpType.ApiVersions[0]
-        write-host "using resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
+        # get validation of rg name and type
+        $azResource = get-azresource -Id $resourceId
+        write-verbose "azresource by id: $($azResource | fl * | out-string)"
+        # requery for correct name
+        $azResourceName = (get-azresource -ResourceGroupName $azResource.ResourceGroupName -ResourceType $azResource.ResourceType | where ResourceId -eq $resourceId | select Name).Name
+        write-verbose ("azresourcename fix: $azResourceName")
+        
+        $resourceApiVersion = $null
+
+        if(!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
+            $rpType = $currentApiVersions | where type -ieq $azResource.ResourceType | select apiversion
+            $resourceApiVersion = $rpType.ApiVersion
+            write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor green
+        }
+
+        if($useLatestApiVersion -or !$resourceApiVersion) {
+            $resourceProvider = $resourceProviders | where ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
+            $rpType = $resourceProvider.ResourceTypes | where ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+            $resourceApiVersion = $rpType.ApiVersions[0]
+            write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
+        }
+
         $azResource = get-azresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
+        write-verbose "azresource by id and version: $($azResource | fl * | out-string)"
 
         [void]$resources.Add(@{
                 apiVersion = $resourceApiVersion
@@ -267,7 +304,7 @@ function export-template($resourceIds) {
                 type       = $azResource.ResourceType
                 location   = $azResource.Location
                 id         = $azResource.ResourceId
-                name       = $azResource.Name
+                name       = $azResourceName #$azResource.Name
                 tags       = $azResource.Tags
                 properties = $azResource.properties
             })
