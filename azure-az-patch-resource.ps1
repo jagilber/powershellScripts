@@ -15,7 +15,7 @@
 .NOTES  
     File Name  : azure-az-patch-resource.ps1
     Author     : jagilber
-    Version    : 200725
+    Version    : 200910
     History    : 
 
 .EXAMPLE 
@@ -47,6 +47,7 @@
 param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
+    [string[]]$excludeResourceNames = '',
     [switch]$patch,
     [string]$templateJsonFile = './template.json', 
     [string]$apiVersion = '' ,
@@ -61,6 +62,7 @@ set-strictMode -Version 3.0
 $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
+$global:configuredRGResources = [collections.arraylist]::new()
 
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
@@ -81,7 +83,6 @@ function main () {
     }
 
     $global:startTime = get-date
-    $resourceIds = [collections.arraylist]::new()
 
     if (!$resourceGroupName -or !$templateJsonFile) {
         write-error 'specify resourceGroupName'
@@ -91,19 +92,23 @@ function main () {
     if ($resourceNames) {
         foreach ($resourceName in $resourceNames) {
             write-host "getting resource $resourceName"
-            $resourceIds.AddRange(@((get-azresource -resourceName $resourceName).Id))
+            $global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
         }
     }
     else {
         write-host "getting resource group resource ids $resourceGroupName"
-        $resourceIds.AddRange(@((get-azresource -resourceGroupName $resourceGroupName).Id))
+        $resources = @((get-azresource -ResourceGroupName $resourceGroupName))
+        if ($excludeResourceNames) {
+            $resources = $resources | where Name -NotMatch "$($excludeResourceNames -join "|")"
+        }
+
+        $global:configuredRGResources.AddRange($resources)
     }
 
-    $error.Clear()
-    display-settings -resourceIds $resourceIds
+    display-settings -resources $global:configuredRGResources
 
-    if ($error) {
-        Write-Warning "error enumerating resource"
+    if ($global:configuredRGResources.count -lt 1) {
+        Write-Warning "error enumerating resource $($error | fl * | out-string)"
         return
     }
 
@@ -111,24 +116,27 @@ function main () {
 
     if ($patch) {
         remove-jobs
-        if (!(deploy-template -resourceIds $resourceIds)) { return }
+        if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
         wait-jobs
     }
     else {
-        export-template -resourceIds $resourceIds
+        export-template -configuredResources $global:configuredRGResources
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
 
         $error.clear()
         code $templateJsonFile
-        if($error) {
+        if ($error) {
             . $templateJsonFile
         }
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
-        write-host "errors: $($error | sort -Descending | out-string)"
+
+        if ($DebugPreference -ieq 'continue') {
+            write-host "errors: $($error | sort -Descending | out-string)"
+        }
     }
 
     $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
@@ -188,16 +196,16 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         return $false
     }
 }
-function deploy-template($resourceIds) {
+function deploy-template($configuredResources) {
     $json = get-content -raw $templateJsonFile | convertfrom-json
-    if ($error -or !$json -or !$json.resources) {
+    if (!$json -or !$json.resources) {
         write-error "invalid template file $templateJsonFile"
         return
     }
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where Id -imatch ($resourceIds -join '|'))
+    $resources = @($json.resources | where Id -imatch ($configuredResources.ResourceId -join '|'))
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
     $error.Clear()
@@ -239,24 +247,22 @@ function deploy-template($resourceIds) {
         return $false
     }
     else {
-        #Remove-Item $tempJsonFile -Force
         return $true
     }
 }
 
-function display-settings($resourceIds) {
+function display-settings($resources) {
     $settings = @()
-    foreach ($resourceId in $resourceIds) {
-        $settings += Get-AzResource -Id $resourceId `
-            -ExpandProperties | convertto-json -depth 99
+    foreach ($resource in $resources) {
+        $settings += $resource | convertto-json -depth 99
     }
     write-host "current settings: `r`n $settings" -ForegroundColor Green
 }
 
-function export-template($resourceIds) {
+function export-template($configuredResources) {
     write-host "exporting template to $templateJsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
-    $azResourceGroupLocation = @(get-azresource -ResourceGroupName $resourceGroupName)[0].Location
+    $azResourceGroupLocation = @($configuredResources)[0].Location
     
     write-host "getting latest api versions" -ForegroundColor yellow
     $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
@@ -264,12 +270,12 @@ function export-template($resourceIds) {
     write-host "getting configured api versions" -ForegroundColor green
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
     $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
-    $currentApiVersions = $currentConfig.resources | select type,apiversion | sort -Unique type
+    $currentApiVersions = $currentConfig.resources | select type, apiversion | sort -Unique type
     write-host ($currentApiVersions | fl * | out-string)
     remove-item $templateJsonFile -Force
     
     
-    foreach ($resourceId in $resourceIds) {
+    foreach ($azResource in $configuredResources) {
         # convert az resource to arm template
         # bug where depending on arguments sent to get-azresource. using rg name and type will return correct name for extensions vm/extension
         # ex: 2019-dc/AzureNetworkWatcherExtension
@@ -278,29 +284,29 @@ function export-template($resourceIds) {
         # so query again for just name using type and rg
 
         # get validation of rg name and type
-        $azResource = get-azresource -Id $resourceId
-        write-verbose "azresource by id: $($azResource | fl * | out-string)"
+        #$azResource = get-azresource -Id $resourceId
+        write-debug "azresource by id: $($azResource | fl * | out-string)"
         # requery for correct name
-        $azResourceName = (get-azresource -ResourceGroupName $azResource.ResourceGroupName -ResourceType $azResource.ResourceType | where ResourceId -eq $resourceId | select Name).Name
-        write-verbose ("azresourcename fix: $azResourceName")
+        $azResourceName = (get-azresource -ResourceGroupName $azResource.ResourceGroupName -ResourceType $azResource.ResourceType | where ResourceId -eq $azResource.ResourceId | select Name).Name
+        write-debug ("azresourcename fix: $azResourceName")
         
         $resourceApiVersion = $null
 
-        if(!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
+        if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
             $rpType = $currentApiVersions | where type -ieq $azResource.ResourceType | select apiversion
             $resourceApiVersion = $rpType.ApiVersion
-            write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor green
+            write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
         }
 
-        if($useLatestApiVersion -or !$resourceApiVersion) {
+        if ($useLatestApiVersion -or !$resourceApiVersion) {
             $resourceProvider = $resourceProviders | where ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
             $rpType = $resourceProvider.ResourceTypes | where ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
             $resourceApiVersion = $rpType.ApiVersions[0]
-            write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.Id)" -ForegroundColor yellow
+            write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
         }
 
-        $azResource = get-azresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
-        write-verbose "azresource by id and version: $($azResource | fl * | out-string)"
+        $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
+        write-debug "azresource by id and version: $($azResource | fl * | out-string)"
 
         [void]$resources.Add(@{
                 apiVersion = $resourceApiVersion
@@ -308,7 +314,7 @@ function export-template($resourceIds) {
                 type       = $azResource.ResourceType
                 location   = $azResource.Location
                 id         = $azResource.ResourceId
-                name       = $azResourceName #$azResource.Name
+                name       = $azResourceName # $azResource.Name 
                 tags       = $azResource.Tags
                 properties = $azResource.properties
             })
