@@ -48,7 +48,7 @@ param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = '.\template.json', 
+    [string]$templateJsonFile = './template.json', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
@@ -118,8 +118,12 @@ function main () {
         export-template -resourceIds $resourceIds
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
-        . $templateJsonFile
 
+        $error.clear()
+        code $templateJsonFile
+        if($error) {
+            . $templateJsonFile
+        }
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
@@ -416,12 +420,12 @@ function write-progressInfo() {
     if ($deploymentOperations) {
         write-verbose ("deployment operations: `r`n`t$($deploymentOperations | out-string)")
         
-        foreach($operation in $deploymentOperations) {
+        foreach ($operation in $deploymentOperations) {
             write-verbose ($operation | convertto-json)
             $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
             $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
             
-            if($operation.Properties.statusMessage) {
+            if ($operation.Properties.statusMessage) {
                 $status = "$status $($operation.Properties.statusMessage)"
             }
             
@@ -430,8 +434,8 @@ function write-progressInfo() {
         }
     }
 
-    if($errorCount -ne $error.Count) {
-        $error.RemoveRange($errorCount -1,$error.Count - $errorCount)
+    if ($errorCount -ne $error.Count) {
+        $error.RemoveRange($errorCount - 1, $error.Count - $errorCount)
     }
 
     $ErrorActionPreference = $VerbosePreference = 'continue'
