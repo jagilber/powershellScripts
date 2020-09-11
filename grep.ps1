@@ -86,7 +86,7 @@ function main() {
     }
 
     write-host "matched files summary:" -ForegroundColor Green
-    foreach($m in $global:matchedFiles.getenumerator()) {
+    foreach ($m in $global:matchedFiles.getenumerator()) {
         write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
     }
 
