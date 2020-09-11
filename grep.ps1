@@ -12,20 +12,16 @@ param(
     [string]$pattern = '.*',
     [string]$path = $pwd,
     [string]$filePattern = '.*',
-    [switch]$includeSubDirs,
-    [switch]$matchLine
+    [switch]$includeSubDirs
 )
 
 $global:matchedFiles = @{}
 
 function main() {
     $error.clear()
-    if ($matchLine) {
-        $pattern = ".*$pattern.*"
-    }
-    
     $startTime = get-date
     $fileCount = 0
+ 
     $regex = [regex]::new($pattern, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
     $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | where Name -match $filePattern).FullName
     write-verbose "filtered files: $($files | fl * | out-string)"
@@ -63,16 +59,18 @@ function main() {
 
                     foreach ($match in $matches) {
                         if ($match.Length -lt 1) { continue }
+
                         $matchCount++
                         $matchObj = @{
-                            line   = $line
+                            lineNumber   = $line
                             index  = $match.index
                             length = $match.Length
                             value  = $match.value
+                            line = $content
                         }
                         
                         [void]$global:matchedFiles.$file.add($matchObj)
-                        write-host "  $($line):$($match | select index, length, value)"
+                        write-host "  $($line):$($content)"
                     }
                 }
             }
@@ -86,6 +84,7 @@ function main() {
     }
 
     write-host "matched files summary:" -ForegroundColor Green
+    
     foreach ($m in $global:matchedFiles.getenumerator()) {
         write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
     }
