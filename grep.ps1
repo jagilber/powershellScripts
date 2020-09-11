@@ -37,7 +37,7 @@ function main() {
         $fs = $null
 
         try {
-            write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor Gray
+            write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
             $line = 0
             $error.clear()
             $fs = [io.streamreader]::new($file)
@@ -46,7 +46,7 @@ function main() {
 
             if ($regex.IsMatch($content)) {
                 write-host $file -ForegroundColor Green
-                $global:matchedFiles.Add($file, [collections.arraylist]::new())
+                [void]$global:matchedFiles.Add($file, [collections.arraylist]::new())
             }
             else {
                 continue
@@ -71,7 +71,7 @@ function main() {
                             value  = $match.value
                         }
                         
-                        $global:matchedFiles.$file.add($matchObj)
+                        [void]$global:matchedFiles.$file.add($matchObj)
                         write-host "  $($line):$($match | select index, length, value)"
                     }
                 }
@@ -90,8 +90,10 @@ function main() {
         write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
     }
 
-    write-host "finished total files:$($filecount) total matched files: $($global:matchedFiles.count) total matches: $($matchCount) total minutes: $((get-date).Subtract($startTime).TotalMinutes)"
-    write-host "matched files in global variable: `$global:matchedFiles"
+    write-host
+    write-host "matched files in global variable: `$global:matchedFiles" -ForegroundColor Magenta
+    write-host "to view: `$global:matchedFiles | convertto-json" -ForegroundColor Magenta
+    write-host "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
 }
 
 main
