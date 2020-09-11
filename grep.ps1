@@ -16,6 +16,8 @@ param(
     [switch]$matchLine
 )
 
+$global:matchedFiles = @{}
+
 function main() {
     $error.clear()
     if ($matchLine) {
@@ -25,15 +27,17 @@ function main() {
     $startTime = get-date
     $fileCount = 0
     $regex = [regex]::new($pattern, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
-    $files = @(get-childitem -recurse:$includeSubDirs -file -path $path) | where Name -match $filePattern
-    write-verbose "filtered files: $($files.FileName | fl * | out-string)"
+    $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | where Name -match $filePattern).FullName
+    write-verbose "filtered files: $($files | fl * | out-string)"
+    $totalFiles = $files.count
+    write-host "checking $totalFiles files"
 
     foreach ($file in $files) {
         $fileCount++
         $fs = $null
 
         try {
-            write-verbose "checking $file"
+            write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor Gray
             $line = 0
             $error.clear()
             $fs = [io.streamreader]::new($file)
@@ -41,7 +45,8 @@ function main() {
             if ($content.Length -lt 1) { continue }
 
             if ($regex.IsMatch($content)) {
-                write-host $file -ForegroundColor Yellow
+                write-host $file -ForegroundColor Green
+                $global:matchedFiles.Add($file, [collections.arraylist]::new())
             }
             else {
                 continue
@@ -59,6 +64,14 @@ function main() {
                     foreach ($match in $matches) {
                         if ($match.Length -lt 1) { continue }
                         $matchCount++
+                        $matchObj = @{
+                            line   = $line
+                            index  = $match.index
+                            length = $match.Length
+                            value  = $match.value
+                        }
+                        
+                        $global:matchedFiles.$file.add($matchObj)
                         write-host "  $($line):$($match | select index, length, value)"
                     }
                 }
@@ -72,7 +85,13 @@ function main() {
         }
     }
 
-    write-host "finished total files:$($filecount) total matches: $($matchCount) total minutes: $((get-date).Subtract($startTime).TotalMinutes)"
+    write-host "matched files summary:" -ForegroundColor Green
+    foreach($m in $global:matchedFiles.getenumerator()) {
+        write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
+    }
+
+    write-host "finished total files:$($filecount) total matched files: $($global:matchedFiles.count) total matches: $($matchCount) total minutes: $((get-date).Subtract($startTime).TotalMinutes)"
+    write-host "matched files in global variable: `$global:matchedFiles"
 }
 
 main
