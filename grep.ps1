@@ -67,6 +67,7 @@ function main() {
                             length = $match.Length
                             value  = $match.value
                             line = $content
+                            groups = $match.Groups
                         }
                         
                         [void]$global:matchedFiles.$file.add($matchObj)
@@ -92,6 +93,7 @@ function main() {
     write-host
     write-host "matched files in global variable: `$global:matchedFiles" -ForegroundColor Magenta
     write-host "to view: `$global:matchedFiles | convertto-json" -ForegroundColor Magenta
+    write-host "to view groups, increase depth: `$global:matchedFiles | convertto-json -depth 4" -ForegroundColor Magenta
     write-host "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
 }
 
