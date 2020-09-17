@@ -1,0 +1,1 @@
+Out-File -InputObject "$(get-date)" -FilePath c:\taskscripts\test.log
