@@ -50,6 +50,7 @@ param (
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
     [string]$templateJsonFile = './template.json', 
+    [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
@@ -206,11 +207,24 @@ function create-jsonTemplate([collections.arraylist]$resources,
         return $false
     }
 }
+
 function deploy-template($configuredResources) {
+    $templateParameters = @{}
     $json = get-content -raw $templateJsonFile | convertfrom-json
+    
     if (!$json -or !$json.resources) {
         write-error "invalid template file $templateJsonFile"
         return
+    }
+
+    if((test-path $templateParameterFile)) {
+        $jsonParameters = get-content -raw $templateParameterFile | convertfrom-json
+        # convert pscustom object to hashtable
+        $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
+        foreach($jsonParameter in $jsonParameters) {
+            $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+        }
+     
     }
 
     $templateJsonFile = Resolve-Path $templateJsonFile
@@ -221,23 +235,26 @@ function deploy-template($configuredResources) {
     $outputs = $json.outputs | convertto-json | convertfrom-json -AsHashtable
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
+
     $error.Clear()
     write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -TemplateFile $tempJsonFile `
         -Verbose:$detail `
+        -TemplateParameterObject $templateParameters `
         -Debug:$detail `
         -Mode $mode" -ForegroundColor Cyan
 
     $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -TemplateFile $tempJsonFile `
         -Verbose:$detail `
+        -TemplateParameterObject $templateParameters `
         -Debug:$detail `
         -Mode $mode
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
         start-job -ScriptBlock {
-            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail)
+            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters)
             if($detail){
                 $VerbosePreference = 'continue'
             }
@@ -247,6 +264,7 @@ function deploy-template($configuredResources) {
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel $debuglevel `
                 -TemplateFile $tempJsonFile `
+                -TemplateParameterObject $templateParameters `
                 -Verbose:$detail `
                 -Mode $mode" -ForegroundColor Cyan
 
@@ -254,9 +272,10 @@ function deploy-template($configuredResources) {
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel $debugLevel `
                 -TemplateFile $tempJsonFile `
+                -TemplateParameterObject $templateParameters `
                 -Verbose:$detail `
                 -Mode $mode
-        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail
+        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters
     }
     else {
         write-host "template validation failed: $($error |out-string) $($result | out-string)"
