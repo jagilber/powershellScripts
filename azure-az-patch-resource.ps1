@@ -9,7 +9,7 @@
 .DESCRIPTION  
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com.
     useful for environments where resources.azure.com is not an option.
-if    PRECAUTION: when script queries the arm resources, if unable to determine configured api version, 
+    PRECAUTION: when script queries the arm resources, if unable to determine configured api version, 
      the latest api version for that resource will be written to the template.json.
 
 .NOTES  
@@ -227,7 +227,7 @@ function deploy-template($configuredResources) {
         -Verbose:$detail `
         -Debug:$detail `
         -Mode $mode" -ForegroundColor Cyan
-        
+
     $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -TemplateFile $tempJsonFile `
         -Verbose:$detail `
