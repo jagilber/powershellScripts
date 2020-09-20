@@ -28,7 +28,8 @@ param(
     [ValidateSet('sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')]
     [string[]]$daysOfweek = @('sunday'),
     [int]$daysInterval = 1,
-    [switch]$remove
+    [switch]$remove,
+    [hashtable]$taskSettingsParameters = @{}
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -111,6 +112,7 @@ switch ($triggerFrequency) {
 write-output "trigger:`r`n$($taskTrigger | convertto-json -depth 1)"
 
 $taskPrincipal = $null
+
 if ($principalLogonType -ieq 'group') {
     write-output "`$taskPrincipal = New-ScheduledTaskPrincipal -GroupId $principal -RunLevel $runLevel"
     $taskPrincipal = New-ScheduledTaskPrincipal -GroupId $principal -RunLevel $runLevel
@@ -122,9 +124,8 @@ else {
 
 write-output "principal:`r`n$($taskPrincipal | convertto-json -depth 1)"
 
-Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
-$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
-
+Write-Output "`$settings = New-ScheduledTaskSettingsSet $taskSettingsParameters"
+$settings = New-ScheduledTaskSettingsSet @taskSettingsParameters
 write-output "settings:`r`n$($settings | convertto-json -depth 1)"
 
 write-output "`$result = Register-ScheduledTask -TaskName $taskName `
