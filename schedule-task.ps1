@@ -35,10 +35,8 @@ $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = $VerbosePreference = $DebugPreference = 'continue'
 $transcriptlog = "$PSScriptRoot\transcript.log"
 Start-Transcript -Path $transcriptlog
-$error.Clear()
-
-
 $global:currentTask = $null
+$error.Clear()
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -73,8 +71,8 @@ if ($scriptFile) {
     $scriptFile = " -File `"$($scriptFileStoragePath)\$($scriptFileName)`""
 }
 
-$global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 $error.clear()
+$global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
 if ($global:currentTask -and ($overwrite -or $remove)) {
     write-output "deleting current task $taskname"
@@ -83,7 +81,8 @@ if ($global:currentTask -and ($overwrite -or $remove)) {
 
 if ($remove) {
     write-output 'remove finished'
-    return
+    Stop-Transcript
+    return $error.Count
 }
 
 write-output "`$taskAction = New-ScheduledTaskAction -execute $action -argument $actionParameter$scriptFile"
@@ -165,9 +164,8 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
     -id 4103 `
     -Payload @($context, $userData, $startResults)
 
-write-output "finished. returning:$([convert]::ToBoolean($global:currentTask)) log location: $transcriptLog"
-Stop-Transcript
+$result = [convert]::ToBoolean($global:currentTask)
+write-output "finished. returning:$result log location: $transcriptLog"
 
-if (!$global:currentTask) {
-    return 1
-}
+Stop-Transcript
+return $result
