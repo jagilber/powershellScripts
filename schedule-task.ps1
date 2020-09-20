@@ -173,6 +173,6 @@ write-output "finished. returning:$result log location: $transcriptLog"
 
 Stop-Transcript
 if(!$success) {
-    throw [exception]
+    throw [exception]::new("task not created $taskName")
 }
 return $error.Count
