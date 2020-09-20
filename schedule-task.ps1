@@ -26,8 +26,9 @@ param(
     [switch]$start,
     [ValidateSet('highest', 'limited')]
     [string]$runLevel = 'limited',
-    [int[]]$daysOfweek = @(0),
-    [int[]]$daysInterval = @(1)
+    [ValidateSet('sunday', 'monday','tuesday','wednesday','thursday','friday','saturday')]
+    [string[]]$daysOfweek = @('sunday'),
+    [int]$daysInterval = 1
 )
 
 $PSModuleAutoLoadingPreference = 2
