@@ -41,7 +41,7 @@ if (!$isAdmin) {
     write-error "not administrator"
 }
 
-write-host (whoami /groups)
+write-output (whoami /groups)
 
 if ($scriptFile) {
     if (!(Test-Path $scriptFileStoragePath -PathType Container)) { 
@@ -51,14 +51,14 @@ if ($scriptFile) {
     $scriptFileName = [io.path]::GetFileName($scriptFile)
 
     if ($scriptFile.StartsWith('http')) {
-        Invoke-WebRequest -Uri $scriptFile -OutFile "$($scriptFileStoragePath)\$($scriptFileName)"
+        Invoke-WebRequest -Uri $scriptFile -OutFile "$($scriptFileStoragePath)\$($scriptFileName)" -UseBasicParsing
     }
     else {
         copy-item $scriptFile -Destination $scriptFileStoragePath
     }
 
     $scriptFile = "$($scriptFileStoragePath)\$($scriptFileName)"
-    write-host "script file: $scriptFile"
+    write-output "script file: $scriptFile"
 
     if (!(test-path $scriptFile)) {
         write-error "$scriptFile does not exist"
@@ -70,11 +70,11 @@ if ($scriptFile) {
 $global:currentTask = Get-ScheduledTask -TaskName $taskName
 
 if ($global:currentTask -and $overwrite) {
-    write-host "deleting current task $taskname" -ForegroundColor Red
+    write-output "deleting current task $taskname" -ForegroundColor Red
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
-write-host "`$taskAction = New-ScheduledTaskAction -execute $action -argument $actionParameter$scriptFile"
+write-output "`$taskAction = New-ScheduledTaskAction -execute $action -argument $actionParameter$scriptFile"
 $taskAction = New-ScheduledTaskAction -execute $action -argument "$actionParameter$scriptFile"
 
 $taskTrigger = $null
@@ -95,7 +95,7 @@ else {
 
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
 
-write-host "$result = Register-ScheduledTask -TaskName $taskName `
+write-output "$result = Register-ScheduledTask -TaskName $taskName `
     -Action $taskAction `
     -Trigger $taskTrigger `
     -Settings $settings `
@@ -110,17 +110,17 @@ $result = Register-ScheduledTask -TaskName $taskName `
     -Principal $taskPrincipal `
     -Force:$overwrite
 
-write-host ($result | convertto-json) -ForegroundColor Green
-write-host ($MyInvocation | convertto-json)
+write-output ($result | convertto-json) -ForegroundColor Green
+write-output ($MyInvocation | convertto-json)
 
 $global:currentTask = Get-ScheduledTask -TaskName $taskName
-write-host ($global:currentTask | convertto-json)
+write-output ($global:currentTask | convertto-json)
 
 if ($start) {
     $startResults = Start-ScheduledTask -TaskName $taskName
 }
 
-write-host ($startResults | convertto-json)
+write-output ($startResults | convertto-json)
 
 New-WinEvent -ProviderName Microsoft-Windows-Powershell `
     -id 4103 `
