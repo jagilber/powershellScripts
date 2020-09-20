@@ -48,6 +48,20 @@ if (!$isAdmin) {
 write-output (whoami /user)
 write-output (whoami /groups)
 
+$error.clear()
+$global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+
+if ($global:currentTask -and ($overwrite -or $remove)) {
+    write-output "deleting current task $taskname"
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+}
+
+if ($remove) {
+    write-output 'remove finished'
+    Stop-Transcript
+    return $error.Count
+}
+
 if ($scriptFile) {
     if (!(Test-Path $scriptFileStoragePath -PathType Container)) { 
         mkdir $scriptFileStoragePath
@@ -72,24 +86,11 @@ if ($scriptFile) {
     $scriptFile = " -File `"$($scriptFileStoragePath)\$($scriptFileName)`""
 }
 
-$error.clear()
-$global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-
-if ($global:currentTask -and ($overwrite -or $remove)) {
-    write-output "deleting current task $taskname"
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-}
-
-if ($remove) {
-    write-output 'remove finished'
-    Stop-Transcript
-    return $error.Count
-}
-
 write-output "`$taskAction = New-ScheduledTaskAction -execute $action -argument $actionParameter$scriptFile"
 $taskAction = New-ScheduledTaskAction -execute $action -argument "$actionParameter$scriptFile"
 
 $taskTrigger = $null
+
 switch ($triggerFrequency) {
     "startup" { 
         write-output "`$taskTrigger = New-ScheduledTaskTrigger -AtStartup"
@@ -169,4 +170,4 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
 write-output "finished. returning:$result log location: $transcriptLog"
 
 Stop-Transcript
-return !$success
+return $error.Count
