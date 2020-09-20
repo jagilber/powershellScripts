@@ -155,8 +155,8 @@ if ($start) {
 
 write-output ($startResults | convertto-json)
 
-$result = $global:currentTask -eq $null
-$context = "context:`r`nresults:$result`r`nlog:file://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))"
+$success = $global:currentTask -ne $null
+$context = "context:`r`nsuccess:$success`r`nlog:file://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))"
 $userData = "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))"
 $startResults = "start results:`r`n$(($startResults | convertto-json -Depth 1))
     current task:`r`n$(($global:currentTask | convertto-json -Depth 1))
@@ -169,4 +169,4 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
 write-output "finished. returning:$result log location: $transcriptLog"
 
 Stop-Transcript
-return $result
+return !$success
