@@ -41,6 +41,7 @@ if (!$isAdmin) {
     write-error "not administrator"
 }
 
+write-output (whoami /user)
 write-output (whoami /groups)
 
 if ($scriptFile) {
