@@ -7,6 +7,7 @@
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/schedule-task.ps1" -outFile "$pwd\schedule-task.ps1";
     .\schedule-task.ps1 -start -scriptFile https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/task.ps1 -overwrite
+    .\schedule-task.ps1 -weekly -parameters @{weeksinterval=1;daysofweek=1} -scriptFile https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/task.ps1 -overwrite
 #>
 
 param(
@@ -24,7 +25,9 @@ param(
     [switch]$overwrite,
     [switch]$start,
     [ValidateSet('highest', 'limited')]
-    [string]$runLevel = 'limited'
+    [string]$runLevel = 'limited',
+    [int[]]$daysOfweek = @(0),
+    [int[]]$daysInterval = @(1)
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -81,10 +84,10 @@ $taskAction = New-ScheduledTaskAction -execute $action -argument "$actionParamet
 
 $taskTrigger = $null
 switch ($triggerFrequency) {
-    "startup" { $taskTrigger = New-ScheduledTaskTrigger -AtStartup }
-    "once" { $taskTrigger = New-ScheduledTaskTrigger -once -At $triggerTime }
-    "daily" { $taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime }
-    "weekly" { $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime }
+    "startup" { $taskTrigger = New-ScheduledTaskTrigger -AtStartup}
+    "once" { $taskTrigger = New-ScheduledTaskTrigger -once -At $triggerTime}
+    "daily" { $taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime $daysInterval}
+    "weekly" { $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime $daysOfweek}
 }
 
 write-output "trigger:`r`n$($taskTrigger | convertto-json -depth 1)"
@@ -101,25 +104,25 @@ else {
 
 write-output "principal:`r`n$($taskPrincipal | convertto-json -depth 1)"
 
-#Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
-#$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
+Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
+$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
 
 write-output "settings:`r`n$($settings | convertto-json -depth 1)"
 
-write-output "`$result = Register-ScheduledTask -TaskName $taskName
-    -Action $taskAction
-    -Trigger $taskTrigger
-    -Principal $taskPrincipal
+write-output "`$result = Register-ScheduledTask -TaskName $taskName `
+    -Action $taskAction `
+    -Trigger $taskTrigger `
+    -Settings $settings `
+    -Principal $taskPrincipal `
+    -Force:$overwrite
 "
 
 $result = Register-ScheduledTask -TaskName $taskName `
     -Action $taskAction `
     -Trigger $taskTrigger `
-    -Principal $taskPrincipal
-
-if($error){
-    write-output "error:$($error | fl * | out-string)"
-}
+    -Settings $settings `
+    -Principal $taskPrincipal `
+    -Force:$overwrite
 
 write-output ($result | convertto-json)
 write-output ($MyInvocation | convertto-json)
