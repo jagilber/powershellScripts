@@ -170,4 +170,7 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
 write-output "finished. returning:$result log location: $transcriptLog"
 
 Stop-Transcript
+if(!$success -and $error.Count) {
+    throw [exception]
+}
 return $error.Count
