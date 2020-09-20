@@ -29,7 +29,7 @@ param(
 
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = $VerbosePreference = $DebugPreference = 'continue'
-Start-Transcript -Path $PSScriptRoot
+Start-Transcript -Path "$PSScriptRoot\trasncript.log"
 $error.Clear()
 
 
