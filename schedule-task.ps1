@@ -25,9 +25,10 @@ param(
     [switch]$start,
     [ValidateSet('highest', 'limited')]
     [string]$runLevel = 'limited',
-    [ValidateSet('sunday', 'monday','tuesday','wednesday','thursday','friday','saturday')]
+    [ValidateSet('sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')]
     [string[]]$daysOfweek = @('sunday'),
-    [int]$daysInterval = 1
+    [int]$daysInterval = 1,
+    [switch]$remove
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -75,9 +76,14 @@ if ($scriptFile) {
 $global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 $error.clear()
 
-if ($global:currentTask -and $overwrite) {
+if ($global:currentTask -and ($overwrite -or $remove)) {
     write-output "deleting current task $taskname"
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+}
+
+if ($remove) {
+    write-output 'remove finished'
+    return
 }
 
 write-output "`$taskAction = New-ScheduledTaskAction -execute $action -argument $actionParameter$scriptFile"
@@ -149,18 +155,19 @@ if ($start) {
 
 write-output ($startResults | convertto-json)
 
+$context = "context:`r`nfile://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))"
+$userData = "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))"
+$startResults = "start results:`r`n$(($startResults | convertto-json -Depth 1))
+    current task:`r`n$(($global:currentTask | convertto-json -Depth 1))
+    error:`r`n$(($error | convertto-json -Depth 1))"
+
 New-WinEvent -ProviderName Microsoft-Windows-Powershell `
     -id 4103 `
-    -Payload @(
-        "context:`r`nfile://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))", 
-        "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))", 
-        "start results:`r`n$(($startResults | convertto-json -Depth 1))`r`ncurrent task:`r`n$(($global:currentTask | convertto-json -Depth 1))`r`nerror:`r`n$(($error | convertto-json -Depth 1))"
-    )
+    -Payload @($context, $userData, $startResults)
 
-write-output "log location: $transcriptLog"
-
+write-output "finished. returning:$([convert]::ToBoolean($global:currentTask)) log location: $transcriptLog"
 Stop-Transcript
 
-if(!$global:currentTask) {
+if (!$global:currentTask) {
     return 1
 }
