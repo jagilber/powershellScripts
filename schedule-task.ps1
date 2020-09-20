@@ -81,7 +81,8 @@ if ($scriptFile) {
 
     if (!(test-path $scriptFile)) {
         write-error "$scriptFile does not exist"
-        throw [InvalidArgumentException]::new("$scriptFile does not exist")
+        Stop-Transcript
+        throw [ArgumentException]::new("$scriptFile does not exist")
     }
 
     $scriptFile = " -File `"$($scriptFileStoragePath)\$($scriptFileName)`""
