@@ -9,13 +9,13 @@
 .DESCRIPTION  
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com.
     useful for environments where resources.azure.com is not an option.
-    PRECAUTION: there is no method to query current api versions being used. when script queries the arm resources, 
-        the latest api version for that resource will be written to the template.json for each resource.
+    PRECAUTION: when script queries the arm resources, if unable to determine configured api version, 
+     the latest api version for that resource will be written to the template.json.
 
 .NOTES  
     File Name  : azure-az-patch-resource.ps1
     Author     : jagilber
-    Version    : 200910
+    Version    : 200917
     History    : 
 
 .EXAMPLE 
@@ -50,12 +50,14 @@ param (
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
     [string]$templateJsonFile = './template.json', 
+    [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental',
-    [switch]$useLatestApiVersion
+    [switch]$useLatestApiVersion,
+    [switch]$detail
 )
 
 set-strictMode -Version 3.0
@@ -67,11 +69,15 @@ $global:configuredRGResources = [collections.arraylist]::new()
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
+$debugLevel = 'none'
 
 function main () {
     write-host "starting"
-    $ErrorActionPreference = 'continue'
-    $VerbosePreference = 'continue'
+    if($detail){
+        $ErrorActionPreference = 'continue'
+        $VerbosePreference = 'continue'
+        $debugLevel = 'all'
+    }
 
     if (!(check-module)) {
         return
@@ -175,15 +181,20 @@ function check-module() {
     return $true
 }
 
-function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {
+function create-jsonTemplate([collections.arraylist]$resources, 
+    [string]$jsonFile, 
+    [hashtable]$parameters = @{},
+    [hashtable]$variables = @{},
+    [hashtable]$outputs = @{}
+    ) {
     try {
         $resourceTemplate = @{ 
             resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
-            outputs        = @{}
-            parameters     = @{}
-            variables      = @{}
+            outputs        = $outputs
+            parameters     = $parameters
+            variables      = $variables
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
@@ -196,46 +207,75 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         return $false
     }
 }
+
 function deploy-template($configuredResources) {
+    $templateParameters = @{}
     $json = get-content -raw $templateJsonFile | convertfrom-json
+    
     if (!$json -or !$json.resources) {
         write-error "invalid template file $templateJsonFile"
         return
     }
 
+    if((test-path $templateParameterFile)) {
+        $jsonParameters = get-content -raw $templateParameterFile | convertfrom-json
+        # convert pscustom object to hashtable
+        $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
+        foreach($jsonParameter in $jsonParameters) {
+            $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+        }
+     
+    }
+
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
     $resources = @($json.resources | where Id -imatch ($configuredResources.ResourceId -join '|'))
+    $parameters = $json.parameters | convertto-json | convertfrom-json -AsHashtable
+    $variables = $json.variables | convertto-json | convertfrom-json -AsHashtable
+    $outputs = $json.outputs | convertto-json | convertfrom-json -AsHashtable
 
-    create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
+    create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
+
     $error.Clear()
-    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug -Mode $mode" -ForegroundColor Cyan
+    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+        -TemplateFile $tempJsonFile `
+        -Verbose:$detail `
+        -TemplateParameterObject $templateParameters `
+        -Debug:$detail `
+        -Mode $mode" -ForegroundColor Cyan
+
     $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -TemplateFile $tempJsonFile `
-        -Verbose `
-        -Debug `
+        -Verbose:$detail `
+        -TemplateParameterObject $templateParameters `
+        -Debug:$detail `
         -Mode $mode
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
         start-job -ScriptBlock {
-            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode)
-            $VerbosePreference = 'continue'
+            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters)
+            if($detail){
+                $VerbosePreference = 'continue'
+            }
+
             write-host "using file: $tempJsonFile"
             write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel All `
+                -DeploymentDebugLogLevel $debuglevel `
                 -TemplateFile $tempJsonFile `
-                -Verbose `
+                -TemplateParameterObject $templateParameters `
+                -Verbose:$detail `
                 -Mode $mode" -ForegroundColor Cyan
 
             New-AzResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel All `
+                -DeploymentDebugLogLevel $debugLevel `
                 -TemplateFile $tempJsonFile `
-                -Verbose `
+                -TemplateParameterObject $templateParameters `
+                -Verbose:$detail `
                 -Mode $mode
-        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode
+        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters
     }
     else {
         write-host "template validation failed: $($error |out-string) $($result | out-string)"
@@ -444,7 +484,9 @@ function write-progressInfo() {
         $error.RemoveRange($errorCount - 1, $error.Count - $errorCount)
     }
 
-    $ErrorActionPreference = $VerbosePreference = 'continue'
+    if($detail){
+        $ErrorActionPreference = $VerbosePreference = 'continue'
+    }
 }
 
 main
