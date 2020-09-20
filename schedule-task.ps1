@@ -7,7 +7,6 @@
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/schedule-task.ps1" -outFile "$pwd\schedule-task.ps1";
     .\schedule-task.ps1 -start -scriptFile https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/task.ps1 -overwrite
-    .\schedule-task.ps1 -weekly -parameters @{weeksinterval=1;daysofweek=1} -scriptFile https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/task.ps1 -overwrite
 #>
 
 param(
@@ -86,10 +85,22 @@ $taskAction = New-ScheduledTaskAction -execute $action -argument "$actionParamet
 
 $taskTrigger = $null
 switch ($triggerFrequency) {
-    "startup" { $taskTrigger = New-ScheduledTaskTrigger -AtStartup}
-    "once" { $taskTrigger = New-ScheduledTaskTrigger -once -At $triggerTime}
-    "daily" { $taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime -DaysInterval $daysInterval}
-    "weekly" { $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime -DaysOfWeek $daysOfweek}
+    "startup" { 
+        write-output "`$taskTrigger = New-ScheduledTaskTrigger -AtStartup"
+        $taskTrigger = New-ScheduledTaskTrigger -AtStartup
+    }
+    "once" { 
+        write-output "`$taskTrigger = New-ScheduledTaskTrigger -once -At $triggerTime"
+        $taskTrigger = New-ScheduledTaskTrigger -once -At $triggerTime
+    }
+    "daily" { 
+        write-output "`$taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime -DaysInterval $daysInterval"
+        $taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime -DaysInterval $daysInterval
+    }
+    "weekly" { 
+        write-output "`$taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime -DaysOfWeek $daysOfweek"
+        $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime -DaysOfWeek $daysOfweek
+    }
 }
 
 write-output "trigger:`r`n$($taskTrigger | convertto-json -depth 1)"
