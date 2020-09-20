@@ -81,6 +81,7 @@ if ($scriptFile) {
 
     if (!(test-path $scriptFile)) {
         write-error "$scriptFile does not exist"
+        throw [InvalidArgumentException]::new("$scriptFile does not exist")
     }
 
     $scriptFile = " -File `"$($scriptFileStoragePath)\$($scriptFileName)`""
@@ -170,7 +171,7 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
 write-output "finished. returning:$result log location: $transcriptLog"
 
 Stop-Transcript
-if(!$success -and $error.Count) {
+if(!$success) {
     throw [exception]
 }
 return $error.Count
