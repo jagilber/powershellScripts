@@ -27,9 +27,12 @@ param(
     [string]$runLevel = 'limited'
 )
 
-$error.Clear()
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = $VerbosePreference = $DebugPreference = 'continue'
+Start-Transcript -Path $PSScriptRoot
+$error.Clear()
+
+
 $global:currentTask = $null
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
@@ -37,6 +40,8 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (!$isAdmin) {
     write-error "not administrator"
 }
+
+write-host (whoami /groups)
 
 if ($scriptFile) {
     if (!(Test-Path $scriptFileStoragePath -PathType Container)) { 
@@ -124,3 +129,5 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
         "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))", 
         "start results:`r`n$(($startResults | convertto-json -Depth 1))`r`ncurrent task:`r`n$(($global:currentTask | convertto-json -Depth 1))`r`nerror:`r`n$(($error | convertto-json -Depth 1))"
     )
+
+Stop-Transcript
