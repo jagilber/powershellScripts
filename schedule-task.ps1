@@ -86,6 +86,8 @@ switch ($triggerFrequency) {
     "weekly" { $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime }
 }
 
+write-output "trigger:`r`n$($taskTrigger | convertto-json -depth 1)"
+
 $taskPrincipal = $null
 if ($principalLogonType -ieq 'group') {
     write-output "`$taskPrincipal = New-ScheduledTaskPrincipal -GroupId $principal -RunLevel $runLevel"
@@ -96,10 +98,14 @@ else {
     $taskPrincipal = New-ScheduledTaskPrincipal -UserId $principal -LogonType $principalLogonType -RunLevel $runLevel
 }
 
+write-output "principal:`r`n$($taskPrincipal | convertto-json -depth 1)"
+
 Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
 
-write-output "$result = Register-ScheduledTask -TaskName $taskName `
+write-output "settings:`r`n$($settings | convertto-json -depth 1)"
+
+write-output "`$result = Register-ScheduledTask -TaskName $taskName `
     -Action $taskAction `
     -Trigger $taskTrigger `
     -Settings $settings `
