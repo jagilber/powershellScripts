@@ -72,7 +72,7 @@ $global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction Silentl
 $error.clear()
 
 if ($global:currentTask -and $overwrite) {
-    write-output "deleting current task $taskname" -ForegroundColor Red
+    write-output "deleting current task $taskname"
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
@@ -101,27 +101,27 @@ else {
 
 write-output "principal:`r`n$($taskPrincipal | convertto-json -depth 1)"
 
-Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
-$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
+#Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
+#$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
 
 write-output "settings:`r`n$($settings | convertto-json -depth 1)"
 
-write-output "`$result = Register-ScheduledTask -TaskName $taskName `
-    -Action $taskAction `
-    -Trigger $taskTrigger `
-    -Settings $settings `
-    -Principal $taskPrincipal `
-    -Force:$overwrite
+write-output "`$result = Register-ScheduledTask -TaskName $taskName
+    -Action $taskAction
+    -Trigger $taskTrigger
+    -Principal $taskPrincipal
 "
 
 $result = Register-ScheduledTask -TaskName $taskName `
     -Action $taskAction `
     -Trigger $taskTrigger `
-    -Settings $settings `
-    -Principal $taskPrincipal `
-    -Force:$overwrite
+    -Principal $taskPrincipal
 
-write-output ($result | convertto-json) -ForegroundColor Green
+if($error){
+    write-output "error:$($error | fl * | out-string)"
+}
+
+write-output ($result | convertto-json)
 write-output ($MyInvocation | convertto-json)
 
 $global:currentTask = Get-ScheduledTask -TaskName $taskName
