@@ -33,7 +33,8 @@ param(
 
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = $VerbosePreference = $DebugPreference = 'continue'
-Start-Transcript -Path "$PSScriptRoot\transcript.log"
+$transcriptlog = "$PSScriptRoot\transcript.log"
+Start-Transcript -Path $transcriptlog
 $error.Clear()
 
 
@@ -140,9 +141,11 @@ write-output ($startResults | convertto-json)
 New-WinEvent -ProviderName Microsoft-Windows-Powershell `
     -id 4103 `
     -Payload @(
-        "context:`r`n$(($MyInvocation | convertto-json -Depth 1))", 
+        "context:`r`n$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))", 
         "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))", 
         "start results:`r`n$(($startResults | convertto-json -Depth 1))`r`ncurrent task:`r`n$(($global:currentTask | convertto-json -Depth 1))`r`nerror:`r`n$(($error | convertto-json -Depth 1))"
     )
+
+write-output "log location: $transcriptLog"
 
 Stop-Transcript
