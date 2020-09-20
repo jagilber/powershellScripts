@@ -29,7 +29,7 @@ param(
 
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = $VerbosePreference = $DebugPreference = 'continue'
-Start-Transcript -Path "$PSScriptRoot\trasncript.log"
+Start-Transcript -Path "$PSScriptRoot\transcript.log"
 $error.Clear()
 
 
@@ -67,7 +67,8 @@ if ($scriptFile) {
     $scriptFile = " -File `"$($scriptFileStoragePath)\$($scriptFileName)`""
 }
 
-$global:currentTask = Get-ScheduledTask -TaskName $taskName
+$global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+$error.clear()
 
 if ($global:currentTask -and $overwrite) {
     write-output "deleting current task $taskname" -ForegroundColor Red
@@ -87,12 +88,15 @@ switch ($triggerFrequency) {
 
 $taskPrincipal = $null
 if ($principalLogonType -ieq 'group') {
+    write-output "`$taskPrincipal = New-ScheduledTaskPrincipal -GroupId $principal -RunLevel $runLevel"
     $taskPrincipal = New-ScheduledTaskPrincipal -GroupId $principal -RunLevel $runLevel
 }
 else {
+    write-output "`$taskPrincipal = New-ScheduledTaskPrincipal -UserId $principal -LogonType $principalLogonType -RunLevel $runLevel"
     $taskPrincipal = New-ScheduledTaskPrincipal -UserId $principal -LogonType $principalLogonType -RunLevel $runLevel
 }
 
+Write-Output "`$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel"
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
 
 write-output "$result = Register-ScheduledTask -TaskName $taskName `
