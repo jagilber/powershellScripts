@@ -152,7 +152,7 @@ write-output ($startResults | convertto-json)
 New-WinEvent -ProviderName Microsoft-Windows-Powershell `
     -id 4103 `
     -Payload @(
-        "context:`r`n$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))", 
+        "context:`r`nfile://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))", 
         "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))", 
         "start results:`r`n$(($startResults | convertto-json -Depth 1))`r`ncurrent task:`r`n$(($global:currentTask | convertto-json -Depth 1))`r`nerror:`r`n$(($error | convertto-json -Depth 1))"
     )
@@ -160,3 +160,7 @@ New-WinEvent -ProviderName Microsoft-Windows-Powershell `
 write-output "log location: $transcriptLog"
 
 Stop-Transcript
+
+if(!$global:currentTask) {
+    return 1
+}
