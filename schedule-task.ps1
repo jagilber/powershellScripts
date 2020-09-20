@@ -37,7 +37,6 @@ $ErrorActionPreference = $VerbosePreference = $DebugPreference = 'continue'
 $transcriptlog = "$PSScriptRoot\transcript.log"
 Start-Transcript -Path $transcriptlog
 $global:currentTask = $null
-$error.Clear()
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -48,7 +47,6 @@ if (!$isAdmin) {
 write-output (whoami /user)
 write-output (whoami /groups)
 
-$error.clear()
 $global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
 if ($global:currentTask -and ($overwrite -or $remove)) {
@@ -61,6 +59,8 @@ if ($remove) {
     Stop-Transcript
     return $error.Count
 }
+
+$error.clear()
 
 if ($scriptFile) {
     if (!(Test-Path $scriptFileStoragePath -PathType Container)) { 
@@ -157,7 +157,7 @@ if ($start) {
 write-output ($startResults | convertto-json)
 
 $success = $global:currentTask -ne $null
-$context = "context:`r`nsuccess:$success`r`nlog:file://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))"
+$context = "context:`r`nsuccess:$success`r`nfailures:$($error.count)`r`nlog:file://$transcriptLog`r`n$(($MyInvocation | convertto-json -Depth 1))"
 $userData = "user data:`r`n$(([environment]::GetEnvironmentVariables() | convertto-json))"
 $startResults = "start results:`r`n$(($startResults | convertto-json -Depth 1))
     current task:`r`n$(($global:currentTask | convertto-json -Depth 1))
