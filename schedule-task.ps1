@@ -86,8 +86,8 @@ $taskTrigger = $null
 switch ($triggerFrequency) {
     "startup" { $taskTrigger = New-ScheduledTaskTrigger -AtStartup}
     "once" { $taskTrigger = New-ScheduledTaskTrigger -once -At $triggerTime}
-    "daily" { $taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime $daysInterval}
-    "weekly" { $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime $daysOfweek}
+    "daily" { $taskTrigger = New-ScheduledTaskTrigger -daily -At $triggerTime -DaysInterval $daysInterval}
+    "weekly" { $taskTrigger = New-ScheduledTaskTrigger -weekly -At $triggerTime -DaysOfWeek $daysOfweek}
 }
 
 write-output "trigger:`r`n$($taskTrigger | convertto-json -depth 1)"
