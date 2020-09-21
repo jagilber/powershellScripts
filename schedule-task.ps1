@@ -10,7 +10,7 @@
 #>
 
 param(
-    [string]$scriptFileStoragePath = 'c:\taskscripts', #$pwd, #$PSScriptRoot,
+    [string]$scriptFileStoragePath = 'c:\task-scripts', #$pwd, #$PSScriptRoot,
     [string]$scriptFile = '',
     [string]$taskName = 'az-vmss-cse-task',
     [string]$action = 'powershell.exe',
@@ -18,10 +18,9 @@ param(
     [string]$triggerTime = '3am',
     [ValidateSet('startup', 'once', 'daily', 'weekly')]
     [string]$triggerFrequency = 'startup',
-    [string]$principal = 'BUILTIN\ADMINISTRATORS', #'SYSTEM',
+    [string]$principal = 'SYSTEM',
     [ValidateSet('none', 'password', 's4u', 'interactive', 'serviceaccount', 'interactiveorpassword', 'group')]
-    [string]$principalLogonType = 'group',
-    [switch]$overwrite,
+    [string]$principalLogonType = 's4u',
     [switch]$start,
     [ValidateSet('highest', 'limited')]
     [string]$runLevel = 'limited',
@@ -49,7 +48,7 @@ write-output (whoami /groups)
 
 $global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
-if ($global:currentTask -and ($overwrite -or $remove)) {
+if ($global:currentTask) {
     write-output "deleting current task $taskname"
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
@@ -136,7 +135,7 @@ write-output "`$result = Register-ScheduledTask -TaskName $taskName `
     -Trigger $taskTrigger `
     -Settings $settings `
     -Principal $taskPrincipal `
-    -Force:$overwrite
+    -Force
 "
 
 $result = Register-ScheduledTask -TaskName $taskName `
@@ -144,7 +143,7 @@ $result = Register-ScheduledTask -TaskName $taskName `
     -Trigger $taskTrigger `
     -Settings $settings `
     -Principal $taskPrincipal `
-    -Force:$overwrite
+    -Force
 
 write-output ($result | convertto-json)
 write-output ($MyInvocation | convertto-json)
@@ -175,4 +174,5 @@ Stop-Transcript
 if(!$success) {
     throw [exception]::new("task not created $taskName")
 }
+
 return $error.Count
