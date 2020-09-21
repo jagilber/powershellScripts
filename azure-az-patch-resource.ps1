@@ -65,7 +65,7 @@ $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
 $global:configuredRGResources = [collections.arraylist]::new()
-
+$env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
