@@ -1,4 +1,4 @@
-Out-File -InputObject "$(get-date)" -FilePath c:\taskscripts\test.log
+Out-File -InputObject "$(get-date)" -FilePath c:\task-scripts\test.log
 
 New-WinEvent -ProviderName Microsoft-Windows-Powershell `
     -id 4102 `
