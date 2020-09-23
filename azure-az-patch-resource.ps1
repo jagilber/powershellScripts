@@ -316,20 +316,7 @@ function export-template($configuredResources) {
     
     
     foreach ($azResource in $configuredResources) {
-        # convert az resource to arm template
-        # bug where depending on arguments sent to get-azresource. using rg name and type will return correct name for extensions vm/extension
-        # ex: 2019-dc/AzureNetworkWatcherExtension
-        # querying by resource id returns incorrect name
-        # ex: AzureNetworkWatcherExtension
-        # so query again for just name using type and rg
-
-        # get validation of rg name and type
-        #$azResource = get-azresource -Id $resourceId
-        write-debug "azresource by id: $($azResource | fl * | out-string)"
-        # requery for correct name
-        $azResourceName = (get-azresource -ResourceGroupName $azResource.ResourceGroupName -ResourceType $azResource.ResourceType | where ResourceId -eq $azResource.ResourceId | select Name).Name
-        write-debug ("azresourcename fix: $azResourceName")
-        
+        write-verbose "azresource by id: $($azResource | fl * | out-string)"
         $resourceApiVersion = $null
 
         if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
@@ -346,7 +333,7 @@ function export-template($configuredResources) {
         }
 
         $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
-        write-debug "azresource by id and version: $($azResource | fl * | out-string)"
+        write-verbose "azresource by id and version: $($azResource | fl * | out-string)"
 
         [void]$resources.Add(@{
                 apiVersion = $resourceApiVersion
@@ -354,7 +341,7 @@ function export-template($configuredResources) {
                 type       = $azResource.ResourceType
                 location   = $azResource.Location
                 id         = $azResource.ResourceId
-                name       = $azResourceName # $azResource.Name 
+                name       = $azResource.Name 
                 tags       = $azResource.Tags
                 properties = $azResource.properties
             })
