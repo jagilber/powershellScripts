@@ -105,7 +105,7 @@ function main () {
         write-host "getting resource group resource ids $resourceGroupName"
         $resources = @((get-azresource -ResourceGroupName $resourceGroupName))
         if ($excludeResourceNames) {
-            $resources = $resources | where Name -NotMatch "$($excludeResourceNames -join "|")"
+            $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
         }
 
         $global:configuredRGResources.AddRange($resources)
@@ -114,7 +114,7 @@ function main () {
     display-settings -resources $global:configuredRGResources
 
     if ($global:configuredRGResources.count -lt 1) {
-        Write-Warning "error enumerating resource $($error | fl * | out-string)"
+        Write-Warning "error enumerating resource $($error | format-list * | out-string)"
         return
     }
 
@@ -141,7 +141,7 @@ function main () {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
 
         if ($DebugPreference -ieq 'continue') {
-            write-host "errors: $($error | sort -Descending | out-string)"
+            write-host "errors: $($error | sort-object -Descending | out-string)"
         }
     }
 
@@ -229,7 +229,7 @@ function deploy-template($configuredResources) {
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where Id -imatch ($configuredResources.ResourceId -join '|'))
+    $resources = @($json.resources | where-object Id -imatch ($configuredResources.ResourceId -join '|'))
     $parameters = $json.parameters | convertto-json | convertfrom-json -AsHashtable
     $variables = $json.variables | convertto-json | convertfrom-json -AsHashtable
     $outputs = $json.outputs | convertto-json | convertfrom-json -AsHashtable
@@ -310,30 +310,30 @@ function export-template($configuredResources) {
     write-host "getting configured api versions" -ForegroundColor green
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
     $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
-    $currentApiVersions = $currentConfig.resources | select type, apiversion | sort -Unique type
-    write-host ($currentApiVersions | fl * | out-string)
+    $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
+    write-host ($currentApiVersions | format-list * | out-string)
     remove-item $templateJsonFile -Force
     
     
     foreach ($azResource in $configuredResources) {
-        write-verbose "azresource by id: $($azResource | fl * | out-string)"
+        write-verbose "azresource by id: $($azResource | format-list * | out-string)"
         $resourceApiVersion = $null
 
         if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
-            $rpType = $currentApiVersions | where type -ieq $azResource.ResourceType | select apiversion
+            $rpType = $currentApiVersions | where-object type -ieq $azResource.ResourceType | select-object apiversion
             $resourceApiVersion = $rpType.ApiVersion
             write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
         }
 
         if ($useLatestApiVersion -or !$resourceApiVersion) {
-            $resourceProvider = $resourceProviders | where ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
-            $rpType = $resourceProvider.ResourceTypes | where ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+            $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
+            $rpType = $resourceProvider.ResourceTypes | where-object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
             $resourceApiVersion = $rpType.ApiVersions[0]
             write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
         }
 
         $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
-        write-verbose "azresource by id and version: $($azResource | fl * | out-string)"
+        write-verbose "azresource by id and version: $($azResource | format-list * | out-string)"
 
         [void]$resources.Add(@{
                 apiVersion = $resourceApiVersion
@@ -418,13 +418,13 @@ function write-log($data) {
             if ($job.Warning) {
                 write-warning (@($job.Warning.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | fl * | out-string))
+                $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceWarnings++
             }
             if ($job.Error) {
                 write-error (@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | fl * | out-string))
+                $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceErrors++
             }
             if ($stringData.tostring().Trim().Length -lt 1) {
@@ -433,7 +433,7 @@ function write-log($data) {
         }
     }
     else {
-        $stringData = "$(get-date):$($data | fl * | out-string)"
+        $stringData = "$(get-date):$($data | format-list * | out-string)"
     }
 
     write-host $stringData

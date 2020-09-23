@@ -3,19 +3,19 @@
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-patch-resource.ps1" -outFile "$pwd\azure-rm-patch-resource.ps1"
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-rm-patch-resource.ps1" -outFile "$pwd\azure-rm-patch-resource.ps1";
     .\azure-rm-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
 .DESCRIPTION  
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com.
     useful for environments where resources.azure.com is not an option.
-    PRECAUTION: there is no method to query current api versions being used. when script queries the arm resources, 
-        the latest api version for that resource will be written to the template.json for each resource.
+    PRECAUTION: when script queries the arm resources, if unable to determine configured api version, 
+     the latest api version for that resource will be written to the template.json.
 
 .NOTES  
     File Name  : azure-rm-patch-resource.ps1
     Author     : jagilber
-    Version    : 200714
+    Version    : 200917
     History    : 
 
 .EXAMPLE 
@@ -43,37 +43,52 @@
     patch all resources in resource group 'clusteresourcegroup' using existing clusterresourcegroup.json
 #>
 
+[cmdletbinding()]
 param (
     [string]$resourceGroupName = '',
     [string[]]$resourceNames = '',
+    [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = '.\template.json', 
+    [string]$templateJsonFile = './template.json', 
+    [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [ValidateSet('Incremental', 'Complete')]
-    [string]$mode = 'Incremental'
+    [string]$mode = 'Incremental',
+    [switch]$useLatestApiVersion,
+    [switch]$detail
 )
 
 set-strictMode -Version 3.0
 $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
-
+$global:configuredRGResources = [collections.arraylist]::new()
+$env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
+$debugLevel = 'none'
 
 function main () {
-    $ErrorActionPreference = 'continue'
-    $VerbosePreference = 'continue'
+    write-host "starting"
+    if($detail){
+        $ErrorActionPreference = 'continue'
+        $VerbosePreference = 'continue'
+        $debugLevel = 'all'
+    }
 
     if (!(check-module)) {
         return
     }
 
+    if (!(Get-AzureRmContext)) {
+        write-host "connecting to azure"
+        Connect-AzureRmAccount
+    }
+
     $global:startTime = get-date
-    $resourceIds = [collections.arraylist]::new()
 
     if (!$resourceGroupName -or !$templateJsonFile) {
         write-error 'specify resourceGroupName'
@@ -82,22 +97,24 @@ function main () {
 
     if ($resourceNames) {
         foreach ($resourceName in $resourceNames) {
-            $resourceIds.AddRange(@((get-azurermresource -resourceName $resourceName).Id))
+            write-host "getting resource $resourceName"
+            $global:configuredRGResources.AddRange(@((get-AzureRmresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
         }
     }
     else {
-        $resourceIds.AddRange(@((get-azurermresource -resourceGroupName $resourceGroupName).Id))
+        write-host "getting resource group resource ids $resourceGroupName"
+        $resources = @((get-AzureRmresource -ResourceGroupName $resourceGroupName))
+        if ($excludeResourceNames) {
+            $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
+        }
+
+        $global:configuredRGResources.AddRange($resources)
     }
 
-    if (!(Get-azurermContext)) {
-        Connect-azurermAccount
-    }
+    display-settings -resources $global:configuredRGResources
 
-    $error.Clear()
-    display-settings -resourceIds $resourceIds
-
-    if ($error) {
-        Write-Warning "error enumerating resource"
+    if ($global:configuredRGResources.count -lt 1) {
+        Write-Warning "error enumerating resource $($error | format-list * | out-string)"
         return
     }
 
@@ -105,23 +122,30 @@ function main () {
 
     if ($patch) {
         remove-jobs
-        if (!(deploy-template -resourceIds $resourceIds)) { return }
+        if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
         wait-jobs
     }
     else {
-        export-template -resourceIds $resourceIds
+        export-template -configuredResources $global:configuredRGResources
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
-        . $templateJsonFile
 
+        $error.clear()
+        code $templateJsonFile
+        if ($error) {
+            . $templateJsonFile
+        }
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
-        write-host "errors: $($error | sort-object -Descending | out-string)"
+
+        if ($DebugPreference -ieq 'continue') {
+            write-host "errors: $($error | sort-object -Descending | out-string)"
+        }
     }
 
-    $deployment = Get-azurermResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
+    $deployment = Get-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
 
     write-host "deployment:`r`n$($deployment | format-list * | out-string)"
     Write-Progress -Completed -Activity "complete"
@@ -130,19 +154,19 @@ function main () {
 }
 
 function check-module() {
-    $error.Clear()
-    get-command Connect-azurermAccount -ErrorAction SilentlyContinue
+    $error.clear()
+    get-command Connect-AzureRmAccount -ErrorAction SilentlyContinue
     
     if ($error) {
         $error.clear()
-        write-warning "Azure Connect-azurermAccount module is not installed."
+        write-warning "azure module for Connect-AzureRmAccount not installed."
 
-        if ((read-host "is it ok to install latest Azure azurerm module?[y|n]") -imatch "y") {
+        if ((read-host "is it ok to install latest azure azure rm module?[y|n]") -imatch "y") {
             $error.clear()
-            install-module azurerm.profile
+            install-module azurerm.profiles
             install-module azurerm.resources
 
-            import-module azurerm.profile
+            import-module azurerm.profiles
             import-module azurerm.resources
         }
         else {
@@ -157,15 +181,20 @@ function check-module() {
     return $true
 }
 
-function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFile) {
+function create-jsonTemplate([collections.arraylist]$resources, 
+    [string]$jsonFile, 
+    [hashtable]$parameters = @{},
+    [hashtable]$variables = @{},
+    [hashtable]$outputs = @{}
+    ) {
     try {
         $resourceTemplate = @{ 
             resources      = $resources
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
-            outputs        = @{}
-            parameters     = @{}
-            variables      = @{}
+            outputs        = $outputs
+            parameters     = $parameters
+            variables      = $variables
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
@@ -178,46 +207,75 @@ function create-jsonTemplate([collections.arraylist]$resources, [string]$jsonFil
         return $false
     }
 }
-function deploy-template($resourceIds) {
+
+function deploy-template($configuredResources) {
+    $templateParameters = @{}
     $json = get-content -raw $templateJsonFile | convertfrom-json
-    if ($error -or !$json -or !$json.resources) {
+    
+    if (!$json -or !$json.resources) {
         write-error "invalid template file $templateJsonFile"
         return
     }
 
+    if((test-path $templateParameterFile)) {
+        $jsonParameters = get-content -raw $templateParameterFile | convertfrom-json
+        # convert pscustom object to hashtable
+        $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
+        foreach($jsonParameter in $jsonParameters) {
+            $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+        }
+     
+    }
+
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where-object Id -imatch ($resourceIds -join '|'))
+    $resources = @($json.resources | where-object Id -imatch ($configuredResources.ResourceId -join '|'))
+    $parameters = $json.parameters | convertto-json | convertfrom-json -AsHashtable
+    $variables = $json.variables | convertto-json | convertfrom-json -AsHashtable
+    $outputs = $json.outputs | convertto-json | convertfrom-json -AsHashtable
 
-    create-jsonTemplate -resources $resources -jsonFile $tempJsonFile | Out-Null
+    create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
+
     $error.Clear()
-    write-host "validating template: Test-azurermResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $tempJsonFile -Verbose -Debug -Mode $mode" -ForegroundColor Cyan
-    $result = Test-azurermResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+    write-host "validating template: Test-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -TemplateFile $tempJsonFile `
-        -Verbose `
-        -Debug `
+        -Verbose:$detail `
+        -TemplateParameterObject $templateParameters `
+        -Debug:$detail `
+        -Mode $mode" -ForegroundColor Cyan
+
+    $result = Test-AzureRmResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+        -TemplateFile $tempJsonFile `
+        -Verbose:$detail `
+        -TemplateParameterObject $templateParameters `
+        -Debug:$detail `
         -Mode $mode
 
     if (!$error -and !$result) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
         start-job -ScriptBlock {
-            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode)
-            $VerbosePreference = 'continue'
+            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters)
+            if($detail){
+                $VerbosePreference = 'continue'
+            }
+
             write-host "using file: $tempJsonFile"
-            write-host "deploying template: New-azurermResourceGroupDeployment -Name $deploymentName `
+            write-host "deploying template: New-AzureRmResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel All `
+                -DeploymentDebugLogLevel $debuglevel `
                 -TemplateFile $tempJsonFile `
-                -Verbose `
+                -TemplateParameterObject $templateParameters `
+                -Verbose:$detail `
                 -Mode $mode" -ForegroundColor Cyan
 
-            New-azurermResourceGroupDeployment -Name $deploymentName `
+            New-AzureRmResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel All `
+                -DeploymentDebugLogLevel $debugLevel `
                 -TemplateFile $tempJsonFile `
-                -Verbose `
+                -TemplateParameterObject $templateParameters `
+                -Verbose:$detail `
                 -Mode $mode
-        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode
+        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters
     }
     else {
         write-host "template validation failed: $($error |out-string) $($result | out-string)"
@@ -229,34 +287,53 @@ function deploy-template($resourceIds) {
         return $false
     }
     else {
-        #Remove-Item $tempJsonFile -Force
         return $true
     }
 }
 
-function display-settings($resourceIds) {
-    foreach ($resourceId in $resourceIds) {
-        $settings += Get-azurermResource -Id $resourceId `
-            -ExpandProperties | convertto-json -depth 99
+function display-settings($resources) {
+    $settings = @()
+    foreach ($resource in $resources) {
+        $settings += $resource | convertto-json -depth 99
     }
     write-host "current settings: `r`n $settings" -ForegroundColor Green
 }
 
-function export-template($resourceIds) {
+function export-template($configuredResources) {
     write-host "exporting template to $templateJsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
-    $azResourceGroupLocation = @(get-azurermresource -ResourceGroupName $resourceGroupName)[0].Location
-    $resourceProviders = Get-azurermResourceProvider -Location $azResourceGroupLocation
+    $azResourceGroupLocation = @($configuredResources)[0].Location
     
-    foreach ($resourceId in $resourceIds) {
-        # convert az resource to arm template
-        $azResource = get-azurermresource -Id $resourceId
-        $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
-        $rpType = $resourceProvider.ResourceTypes | Where-Object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+    write-host "getting latest api versions" -ForegroundColor yellow
+    $resourceProviders = Get-AzureRmResourceProvider -Location $azResourceGroupLocation
 
-        # query again with latest api ver
-        $resourceApiVersion = $rpType.ApiVersions[0]
-        $azResource = get-azurermresource -Id $resourceId -ExpandProperties -ApiVersion $resourceApiVersion
+    write-host "getting configured api versions" -ForegroundColor green
+    Export-AzureRmResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
+    $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
+    $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
+    write-host ($currentApiVersions | format-list * | out-string)
+    remove-item $templateJsonFile -Force
+    
+    
+    foreach ($azResource in $configuredResources) {
+        write-verbose "azresource by id: $($azResource | format-list * | out-string)"
+        $resourceApiVersion = $null
+
+        if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
+            $rpType = $currentApiVersions | where-object type -ieq $azResource.ResourceType | select-object apiversion
+            $resourceApiVersion = $rpType.ApiVersion
+            write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
+        }
+
+        if ($useLatestApiVersion -or !$resourceApiVersion) {
+            $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
+            $rpType = $resourceProvider.ResourceTypes | where-object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+            $resourceApiVersion = $rpType.ApiVersions[0]
+            write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
+        }
+
+        $azResource = get-AzureRmresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
+        write-verbose "azresource by id and version: $($azResource | format-list * | out-string)"
 
         [void]$resources.Add(@{
                 apiVersion = $resourceApiVersion
@@ -264,7 +341,7 @@ function export-template($resourceIds) {
                 type       = $azResource.ResourceType
                 location   = $azResource.Location
                 id         = $azResource.ResourceId
-                name       = $azResource.Name
+                name       = $azResource.Name 
                 tags       = $azResource.Tags
                 properties = $azResource.properties
             })
@@ -311,6 +388,8 @@ function wait-jobs() {
                 write-log -data $job
                 remove-job -Id $job.Id -Force  
             }
+
+            write-progressInfo
             start-sleep -Seconds $sleepSeconds
         }
     }
@@ -339,13 +418,13 @@ function write-log($data) {
             if ($job.Warning) {
                 write-warning (@($job.Warning.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | fl * | out-string))
+                $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceWarnings++
             }
             if ($job.Error) {
                 write-error (@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | fl * | out-string))
+                $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceErrors++
             }
             if ($stringData.tostring().Trim().Length -lt 1) {
@@ -354,20 +433,47 @@ function write-log($data) {
         }
     }
     else {
-        $stringData = "$(get-date):$($data | fl * | out-string)"
+        $stringData = "$(get-date):$($data | format-list * | out-string)"
     }
 
-    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
-    write-host $status
-    
-    $deploymentOperations = Get-azurermResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
-    
-    if ($deploymentOperations) {
-        write-host ($deploymentOperations | out-string)
-    }
-
-    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName->$resourceIds" -Status $status #-id 1
     write-host $stringData
+}
+
+function write-progressInfo() {
+    $ErrorActionPreference = $VerbosePreference = 'silentlycontinue'
+    $errorCount = $error.Count
+    write-verbose "Get-AzureRmResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue"
+    $deploymentOperations = Get-AzureRmResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
+    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
+    write-verbose $status
+
+    $count = 0
+    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName" -Status $status -id ($count++)
+
+    if ($deploymentOperations) {
+        write-verbose ("deployment operations: `r`n`t$($deploymentOperations | out-string)")
+        
+        foreach ($operation in $deploymentOperations) {
+            write-verbose ($operation | convertto-json)
+            $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
+            $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
+            
+            if ($operation.Properties.statusMessage) {
+                $status = "$status $($operation.Properties.statusMessage)"
+            }
+            
+            $activity = "$($operation.Properties.provisioningOperation):$($currentOperation)"
+            Write-Progress -Activity $activity -id ($count++) -Status $status
+        }
+    }
+
+    if ($errorCount -ne $error.Count) {
+        $error.RemoveRange($errorCount - 1, $error.Count - $errorCount)
+    }
+
+    if($detail){
+        $ErrorActionPreference = $VerbosePreference = 'continue'
+    }
 }
 
 main
