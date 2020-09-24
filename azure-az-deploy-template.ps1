@@ -9,7 +9,7 @@
      
 .NOTES
    file name  : azure-az-deploy-template.ps1
-   version    : 190630 original
+   version    : 200924 fix for serialization bug in cmdlet
 
 .EXAMPLE
     .\azure-az-deploy-template.ps1 -adminPassword changeme3240e2938r92 -resourceGroup rdsdeptest
@@ -141,9 +141,8 @@ function main() {
     $jsonParameters | ConvertTo-Json
 
     # convert pscustom object to hashtable
-    $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
-    foreach ($jsonParameter in $jsonParameters) {
-        $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+    foreach($jsonParameter in $jsonParameters.parameters.psobject.properties) {
+        $templateParameters.Add($jsonParameter.name, $jsonParameter.value.value)
     }
 
     if ($error) {

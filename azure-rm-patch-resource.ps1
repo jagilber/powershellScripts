@@ -210,6 +210,10 @@ function create-jsonTemplate([collections.arraylist]$resources,
 
 function deploy-template($configuredResources) {
     $templateParameters = @{}
+    $parameters = @{}
+    $variables = @{}
+    $outputs = @{}
+
     $json = get-content -raw $templateJsonFile | convertfrom-json
     
     if (!$json -or !$json.resources) {
@@ -217,22 +221,29 @@ function deploy-template($configuredResources) {
         return
     }
 
-    if((test-path $templateParameterFile)) {
+    if ((test-path $templateParameterFile)) {
         $jsonParameters = get-content -raw $templateParameterFile | convertfrom-json
         # convert pscustom object to hashtable
-        $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
-        foreach($jsonParameter in $jsonParameters) {
-            $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+        foreach ($jsonParameter in $jsonParameters.parameters.psobject.properties) {
+            $templateParameters.Add($jsonParameter.name, $jsonParameter.value.value)
         }
-     
     }
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
     $resources = @($json.resources | where-object Id -imatch ($configuredResources.ResourceId -join '|'))
-    $parameters = $json.parameters | convertto-json | convertfrom-json -AsHashtable
-    $variables = $json.variables | convertto-json | convertfrom-json -AsHashtable
-    $outputs = $json.outputs | convertto-json | convertfrom-json -AsHashtable
+
+    foreach ($jsonParameter in $json.parameters.psobject.properties) {
+        $parameters.Add($jsonParameter.name, $jsonParameter.value)
+    }
+    
+    foreach ($jsonParameter in $json.variables.psobject.properties) {
+        $variables.Add($jsonParameter.name, $jsonParameter.value)
+    }
+
+    foreach ($jsonParameter in $json.outputs.psobject.properties) {
+        $outputs.Add($jsonParameter.name, $jsonParameter.value)
+    }
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
