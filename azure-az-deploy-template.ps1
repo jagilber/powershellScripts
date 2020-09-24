@@ -63,21 +63,17 @@ param(
 $error.Clear()
 $ErrorActionPreference = "Continue"
 
-function main()
-{
-    if (!$deploymentName)
-    {
+function main() {
+    if (!$deploymentName) {
         $deploymentName = $resourceGroup
     }
 
-    if (!(test-path $templateFile))
-    {
+    if (!(test-path $templateFile)) {
         write-host "unable to find json file $($templateFile)"
         return
     }
 
-    if (!(test-path $templateParameterFile))
-    {
+    if (!(test-path $templateParameterFile)) {
         write-host "unable to find json file $($templateParameterFile)"
         return
     }
@@ -85,32 +81,26 @@ function main()
     write-host "running quickstart:$($quickStartTemplate) for group $($resourceGroup)"
 
     write-host "authenticating to azure"
-    try
-    {
+    try {
         get-command connect-azaccount | Out-Null
     }
-    catch [management.automation.commandNotFoundException]
-    {
-        if ((read-host "az not installed but is required for this script. is it ok to install?[y|n]") -imatch "y")
-        {
+    catch [management.automation.commandNotFoundException] {
+        if ((read-host "az not installed but is required for this script. is it ok to install?[y|n]") -imatch "y") {
             write-host "installing minimum required az modules..."
             install-module az.accounts
             install-module az.resources
             import-module az.accounts
             import-module az.resources
         }
-        else
-        {
+        else {
             return 1
         }
     }
 
-    if (!(get-azResourceGroup))
-    {
+    if (!(get-azResourceGroup)) {
         connect-azaccount
 
-        if (!(get-azResourceGroup))
-        {
+        if (!(get-azResourceGroup)) {
             Write-Warning "unable to authenticate to az. returning..."
             return 1
         }
@@ -118,16 +108,14 @@ function main()
 
     write-host "checking resource group"
 
-    if (!$resourceGroup)
-    {
+    if (!$resourceGroup) {
         write-warning "resourcegroup is a mandatory argument. supply -resourceGroup argument and restart script."
         return 1
     }
 
     write-host "checking location"
 
-    if (!(get-azLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location))
-    {
+    if (!(get-azLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location)) {
         (get-azLocation).Location
         write-warning "location: $($location) not found. supply -location using one of the above locations and restart script."
         return 1
@@ -139,53 +127,51 @@ function main()
     # checking json format
     $error.clear()
     write-host "reading template file $($templateFile)"
-    $ujson = ConvertFrom-Json (get-content -Raw -Path $templateFile)
-    $ujson | ConvertTo-Json
+    $jsonTemplate = ConvertFrom-Json (get-content -Raw -Path $templateFile)
+    $jsonTemplate | ConvertTo-Json
     
-    if($error)
-    {
+    if ($error) {
         write-error "error json format: $templateFile"
         return 1
     }
 
     write-host "reading parameter file $($templateParameterFile)"
-    $ujson = ConvertFrom-Json (get-content -Raw -Path $templateParameterFile)
-    $ujson | ConvertTo-Json
+    $templateParameters = @{}
+    $jsonParameters = ConvertFrom-Json (get-content -Raw -Path $templateParameterFile)
+    $jsonParameters | ConvertTo-Json
 
-    if($error)
-    {
+    # convert pscustom object to hashtable
+    $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
+    foreach ($jsonParameter in $jsonParameters) {
+        $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+    }
+
+    if ($error) {
         write-error "error json format: $templateParameterFile"
         return 1
     }
 
-    if ($ujson.parameters.adminUserName -and $ujson.parameters.adminPassword -and !$test)
-    {
+    if ($jsonParameters.parameters.adminUserName -and $jsonParameters.parameters.adminPassword -and !$test) {
         write-host "checking password"
 
-        if (!$credentials)
-        {
-            if(!$adminPassword)
-            {
-                $adminPassword = $ujson.parameters.adminPassword.value
+        if (!$credentials) {
+            if (!$adminPassword) {
+                $adminPassword = $jsonParameters.parameters.adminPassword.value
             }
 
-            if(!$adminUsername)
-            {
-                $adminUsername = $ujson.parameters.adminUserName.value
+            if (!$adminUsername) {
+                $adminUsername = $jsonParameters.parameters.adminUserName.value
             }
 
-            if (!$adminPassword)
-            {
+            if (!$adminPassword) {
                 $global:credential = get-Credential
             }
-            else
-            {
+            else {
                 $SecurePassword = $adminPassword | ConvertTo-SecureString -AsPlainText -Force  
                 $global:credential = new-object Management.Automation.PSCredential -ArgumentList $adminUsername, $SecurePassword
             }
         }
-        else
-        {
+        else {
             $global:credential = $credentials
         }
 
@@ -194,28 +180,23 @@ function main()
 
         $count = 0
         # uppercase check
-        if ($adminPassword -match "[A-Z]")
-        {
+        if ($adminPassword -match "[A-Z]") {
             $count++ 
         }
         # lowercase check
-        if ($adminPassword -match "[a-z]")
-        {
+        if ($adminPassword -match "[a-z]") {
             $count++ 
         }
         # numeric check
-        if ($adminPassword -match "\d")
-        {
+        if ($adminPassword -match "\d") {
             $count++ 
         }
         # specialKey check
-        if ($adminPassword -match "\W")
-        {
+        if ($adminPassword -match "\W") {
             $count++ 
         } 
 
-        if ($adminPassword.Length -lt 8 -or $adminPassword.Length -gt 123 -or $count -lt 3)
-        {
+        if ($adminPassword.Length -lt 8 -or $adminPassword.Length -gt 123 -or $count -lt 3) {
             Write-warning "
             azure password requirements at time of writing (3/2017):
             The supplied password must be between 8-123 characters long and must satisfy at least 3 of password complreturny requirements from the following: 
@@ -227,55 +208,47 @@ function main()
             correct password and restart script. "
             return 1
         }
+
+        $templateParameters['adminusername'] = $adminUsername
+        $templateParameters['adminpassword'] = $adminPassword
     }
 
     write-host "checking for existing deployment"
 
-    if ((get-azResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName -ErrorAction SilentlyContinue))
-    {
-        if($clean -and $force)
-        {
+    if ((get-azResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName -ErrorAction SilentlyContinue)) {
+        if ($clean -and $force) {
             write-warning "resource group deployment exists! deleting as -clean and -force are specified!"
             Remove-azResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName
         }
-        elseif($clean)
-        {
-            if ((read-host "resource group deployment exists! Do you want to delete?[y|n]") -ilike 'y')
-            {
+        elseif ($clean) {
+            if ((read-host "resource group deployment exists! Do you want to delete?[y|n]") -ilike 'y') {
                 Remove-azResourceGroupDeployment -ResourceGroupName $resourceGroup -Name $deploymentName
             }
         }
-        else
-        {
+        else {
             write-warning "resource group deployment exists!"
         }
     }
 
     write-host "checking for existing resource group"
 
-    if ((get-azResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
-    {
-        if($clean -and $force)
-        {
+    if ((get-azResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue)) {
+        if ($clean -and $force) {
             write-warning "resource group exists! deleting as -clean and -force are specified!"
             Remove-azResourceGroup -ResourceGroupName $resourceGroup -Force
         }
-        elseif($clean)
-        {
-            if ((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y')
-            {
+        elseif ($clean) {
+            if ((read-host "resource group exists! Do you want to delete?[y|n]") -ilike 'y') {
                 Remove-azResourceGroup -ResourceGroupName $resourceGroup -Force
             }
         }
-        else
-        {
+        else {
             write-warning "resource group exists!"
         }
     }
 
     # create resource group if it does not exist
-    if (!(get-azResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue))
-    {
+    if (!(get-azResourceGroup -Name $resourceGroup -ErrorAction SilentlyContinue)) {
         Write-Host "creating resource group $($resourceGroup) in location $($location)"   
         New-azResourceGroup -Name $resourceGroup -Location $location
     }
@@ -284,38 +257,22 @@ function main()
     $error.Clear() 
     $ret = $null
 
-    if ($global:credential.Password.Length)
-    {
-        $ret = Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup `
-            -TemplateFile $templateFile `
-            -Mode Complete `
-            -adminUserName $global:credential.UserName `
-            -adminPassword $global:credential.Password `
-            -TemplateParameterFile $templateParameterFile `
-            @additionalParameters
-    }
-    else
-    {
-        $ret = Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup `
-            -TemplateFile $templateFile `
-            -Mode Complete `
-            -TemplateParameterFile $templateParameterFile `
-            @additionalParameters
-    }
+    $ret = Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup `
+        -TemplateFile $templateFile `
+        -Mode Complete `
+        -TemplateParameterObject $templateParameters `
+        @additionalParameters
 
-    if ($ret)
-    {
+    if ($ret) {
         Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)"
         return 1
     }
 
-    if ($monitor)
-    {
+    if ($monitor) {
         write-host "$([DateTime]::Now) starting monitor"
         $monitorScript = "$(get-location)\azure-az-log-reader.ps1"
         
-        if (![IO.File]::Exists($monitorScript))
-        {
+        if (![IO.File]::Exists($monitorScript)) {
             [IO.File]::WriteAllText($monitorScript, 
                 (Invoke-WebRequest -UseBasicParsing -Uri "https://aka.ms/azure-az-log-reader.ps1").ToString().Replace("???", ""))
         }
@@ -323,34 +280,17 @@ function main()
         Start-Process -FilePath "powershell.exe" -ArgumentList "-WindowStyle Minimized -ExecutionPolicy Bypass $($monitorScript)"
     }
 
-    if (!$test)
-    {
+    if (!$test) {
         write-host "$([DateTime]::Now) creating deployment"
         $error.Clear() 
     
-        if ($global:credential.Password.Length)
-        {
-            New-azResourceGroupDeployment -Name $deploymentName `
-                -ResourceGroupName $resourceGroup `
-                -DeploymentDebugLogLevel All `
-                -TemplateFile $templateFile `
-                -adminUserName $global:credential.UserName `
-                -adminPassword $global:credential.Password `
-                -TemplateParameterFile $templateParameterFile `
-                -Verbose `
-                @additionalParameters
-        }
-        else
-        {
-            New-azResourceGroupDeployment -Name $deploymentName `
-                -ResourceGroupName $resourceGroup `
-                -DeploymentDebugLogLevel All `
-                -TemplateFile $templateFile `
-                -TemplateParameterFile $templateParameterFile `
-                -Verbose `
-                @additionalParameters
-            
-        }
+        New-azResourceGroupDeployment -Name $deploymentName `
+            -ResourceGroupName $resourceGroup `
+            -DeploymentDebugLogLevel All `
+            -TemplateFile $templateFile `
+            -TemplateParameterObject $templateParameters `
+            -Verbose `
+            @additionalParameters
     }
 }
 
