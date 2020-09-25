@@ -25,7 +25,7 @@ param(
 $error.clear()
 $ErrorActionPreference = 'continue'
 $PSModuleAutoLoadingPreference = 2
-$DebugPreference = $VerbosePreference = 'continue'
+$DebugPreference = $VerbosePreference = 'silentlycontinue'
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $startTime = get-date
@@ -40,7 +40,7 @@ import-module az.resources
 
 if (((get-module az.servicefabric).Version -le [version](2.1.0))) {
     write-host "Install-Module az.servicefabric -AllowPrerelease -Force -AllowClobber" -ForegroundColor Yellow
-    Install-Module az.servicefabric -AllowPrerelease -Force -AllowClobber
+    Install-Module az.servicefabric -Force -AllowClobber #-AllowPrerelease
     #Install-Module az.accounts -AllowPrerelease -Force -AllowClobber
     #Install-Module az.resources -AllowPrerelease -Force -AllowClobber
 }
@@ -61,11 +61,15 @@ if (Get-AzServiceFabricManagedCluster -ResourceGroupName $resourceGroup) {
     write-host "remove-azservicefabricmanagedcluster -ResourceGroupName $resourceGroup -name $clustername" -ForegroundColor Yellow
     remove-azservicefabricmanagedcluster -ResourceGroupName $resourceGroup -name $clustername
 
-    write-host "remove-azservicefabricmanagednodetype -ResourceGroupName $resourceGroup -name $nodeTypeName -ClusterName $clustername" -ForegroundColor Yellow
-    remove-azservicefabricmanagednodetype -ResourceGroupName $resourceGroup -name $nodeTypeName -ClusterName $clusterName
+    if(get-azservicefabricmanagednodetype -ResourceGroupName $resourceGroup -name $nodeTypeName -ClusterName $clusterName) {
+        write-host "remove-azservicefabricmanagednodetype -ResourceGroupName $resourceGroup -name $nodeTypeName -ClusterName $clustername" -ForegroundColor Yellow
+        remove-azservicefabricmanagednodetype -ResourceGroupName $resourceGroup -name $nodeTypeName -ClusterName $clusterName
+    }
 
-    write-host "remove-azservicefabricmanagedclusterclientcertificate -ResourceGroupName $resourceGroup -name $clustername -Thumbprint $thumbprint" -ForegroundColor Yellow
-    remove-azservicefabricmanagedclusterclientcertificate -ResourceGroupName $resourceGroup -name $clustername -Thumbprint $thumbprint
+    if(get-azservicefabricmanagedclusterclientcertificate -ResourceGroupName $resourceGroup -name $clustername -Thumbprint $thumbprint) {
+        write-host "remove-azservicefabricmanagedclusterclientcertificate -ResourceGroupName $resourceGroup -name $clustername -Thumbprint $thumbprint" -ForegroundColor Yellow
+        remove-azservicefabricmanagedclusterclientcertificate -ResourceGroupName $resourceGroup -name $clustername -Thumbprint $thumbprint
+    }
 }
 
 write-host "New-AzServiceFabricManagedCluster -ResourceGroupName $resourceGroup `
