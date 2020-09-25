@@ -17,6 +17,7 @@ param(
     #[Parameter(Mandatory=$true)]
     [string]$clusterName = $resourceGroup,
     [string]$nodeTypeName = "nt0",
+    [string]$vmSize = 'Standard_D2',
     [int]$instanceCount = 5, # 5 - 100 for standard 3 for basic
     [bool]$addTags = $true,
     [switch]$export
@@ -40,9 +41,9 @@ import-module az.resources
 
 if (((get-module az.servicefabric).Version -le [version](2.1.0))) {
     write-host "Install-Module az.servicefabric -AllowPrerelease -Force -AllowClobber" -ForegroundColor Yellow
-    Install-Module az.servicefabric -Force -AllowClobber #-AllowPrerelease
-    #Install-Module az.accounts -AllowPrerelease -Force -AllowClobber
-    #Install-Module az.resources -AllowPrerelease -Force -AllowClobber
+    Install-Module az.servicefabric -Force -AllowClobber
+    Install-Module az.accounts -Force -AllowClobber
+    Install-Module az.resources -Force -AllowClobber
 }
 
 if (!(get-azcontext)) {
@@ -111,6 +112,7 @@ write-host "New-AzServiceFabricManagedNodeType -ResourceGroupName $resourceGroup
     -Name $NodeTypeName `
     -Primary `
     -InstanceCount $instanceCount `
+    -VmSize $vmSize `
     -Verbose
     " -ForegroundColor Green
 
@@ -119,6 +121,7 @@ New-AzServiceFabricManagedNodeType -ResourceGroupName $resourceGroup `
     -Name $NodeTypeName `
     -Primary `
     -InstanceCount $instanceCount `
+    -VmSize $vmSize `
     -Verbose
 
 write-host "$cluster = Get-AzServiceFabricManagedCluster -resourcegroupname $resourceGroup -name $clusterName" -ForegroundColor Cyan
