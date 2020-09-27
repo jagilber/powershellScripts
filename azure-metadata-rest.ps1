@@ -94,7 +94,7 @@
     SinglePlacementGroup                        : True
     Identity                                    :
     PrincipalId                               : 542e061b-4ef2-4273-a509-2650f323fc06
-    TenantId                                  : ***REMOVED***
+    TenantId                                  : 72f988bf-86f1-41af-91ab-2d7cd011db47
     Type                                      : SystemAssigned
     Id                                          : /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/sfjagi
     lber1nt1/providers/Microsoft.Compute/virtualMachineScaleSets/nt0
