@@ -5,7 +5,7 @@ param(
     $resourceGroup,
     $clustername = $resourceGroup,
     [ValidateSet('LocalMachine', 'CurrentUser')]
-    $storeLocation = "LocalMachine"
+    $storeLocation = "CurrentUser"
 )
 
 # proxy test
