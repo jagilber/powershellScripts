@@ -11,6 +11,7 @@ param(
     $expirationHours = 8
 )
 
+$PSModuleAutoLoadingPreference = 2
 write-host "Get-AzStorageAccount -ResourceGroupName $resourceGroupName" -ForegroundColor Cyan
 
 $accounts = (Get-AzStorageAccount -ResourceGroupName $resourceGroupName) | where-object StorageAccountName -imatch $storageAccountName
