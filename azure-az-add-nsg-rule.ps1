@@ -17,14 +17,13 @@ param(
 
 function main () {
     $waitCount = 0
-
-    if ($existingNsgNames.Count -lt 1) {
-        $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
-    }
-
     $rulesCount = $existingNsgNames.Count
 
     while ($rulesCount) {
+        if ($existingNsgNames.Count -lt 1) {
+            $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
+        }
+    
         foreach ($nsgName in $existingNsgNames) {
             $nsg = get-nsg $nsgName
             if (!$nsg) {
