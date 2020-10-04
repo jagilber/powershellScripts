@@ -97,6 +97,7 @@ function main() {
         }
     }
 
+    Enable-AzureRmAlias
     if (!(get-azResourceGroup)) {
         connect-azaccount
 

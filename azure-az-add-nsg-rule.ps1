@@ -17,9 +17,8 @@ param(
 
 function main () {
     $waitCount = 0
-    $rulesCount = $existingNsgNames.Count
 
-    while ($rulesCount) {
+    while ($wait -or $waitCount -eq 0) {
         if ($existingNsgNames.Count -lt 1) {
             $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
         }
@@ -32,12 +31,11 @@ function main () {
             }
 
             modify-nsgRule $nsg
-            $rulesCount--
+            $waitCount++
         }
 
-        if ($wait -and $rulesCount -gt 0) {
-            Write-Host "$waitCount waiting for $rulesCount nsg $(get-date)"
-            $waitCount++
+        if ($wait -and $waitCount -eq 0) {
+            Write-Host "$waitCount waiting for nsg $(get-date)"
             Start-Sleep -Seconds 60
         }
         else {

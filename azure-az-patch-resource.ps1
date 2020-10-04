@@ -82,7 +82,8 @@ function main () {
     if (!(check-module)) {
         return
     }
-
+    
+    Enable-AzureRmAlias
     if (!(Get-AzContext)) {
         write-host "connecting to azure"
         Connect-AzAccount
