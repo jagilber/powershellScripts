@@ -9,33 +9,40 @@
 #>
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     $resourceGroupName = '',
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     $vmScaleSetName = '',
     $platformUpdateDomain = ''
 )
 
 $PSModuleAutoLoadingPreference = 2
 
-if(!(get-azcontext)){
+if (!(get-module az.accounts)) {
+    import-module az.accounts
+}
+if (!(get-module az.compute)) {
+    import-module az.compute
+}
+
+if (!(get-azcontext)) {
     Connect-AzAccount
 }
 
 $updateDomains = @($platformUpdateDomain)
 
-if(!$platformUpdateDomain) {
+if (!$platformUpdateDomain) {
     $updateDomains = @(0..(get-azvmss -ResourceGroupName $resourceGroupName -name $vmScaleSetName).Sku.Capacity)
 }
 
-foreach($updateDomain in $updateDomains) {
+foreach ($updateDomain in $updateDomains) {
 
-write-host "Repair-AzVmssServiceFabricUpdateDomain -ResourceGroupName $resourceGroupName `
+    write-host "Repair-AzVmssServiceFabricUpdateDomain -ResourceGroupName $resourceGroupName `
  -VMScaleSetName $vmScaleSetName `
  -PlatformUpdateDomain $updateDomain
 "
-Repair-AzVmssServiceFabricUpdateDomain -ResourceGroupName $resourceGroupName `
- -VMScaleSetName $vmScaleSetName `
- -PlatformUpdateDomain $updateDomain
+    Repair-AzVmssServiceFabricUpdateDomain -ResourceGroupName $resourceGroupName `
+        -VMScaleSetName $vmScaleSetName `
+        -PlatformUpdateDomain $updateDomain
 
 }
