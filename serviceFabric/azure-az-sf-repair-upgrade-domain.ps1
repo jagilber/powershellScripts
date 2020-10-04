@@ -16,6 +16,8 @@ param(
     $platformUpdateDomain = ''
 )
 
+$PSModuleAutoLoadingPreference = 2
+
 if(!(get-azcontext)){
     Connect-AzAccount
 }
