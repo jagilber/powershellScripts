@@ -9,7 +9,9 @@
 #>
 
 param(
+    [Parameter(Mandatory=$true)]
     $resourceGroupName = '',
+    [Parameter(Mandatory=$true)]
     $vmScaleSetName = '',
     $platformUpdateDomain = ''
 )
