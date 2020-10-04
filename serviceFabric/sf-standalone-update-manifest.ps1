@@ -62,7 +62,7 @@ else {
 
     while($true) {
         $status = Get-ServiceFabricClusterUpgrade
-        if($status -inotmatch 'rolling') {
+        if($status -inotmatch 'complete') {
             write-host $status
             return
         }
