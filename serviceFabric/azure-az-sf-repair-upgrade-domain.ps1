@@ -38,9 +38,9 @@ if (!$platformUpdateDomain) {
 foreach ($updateDomain in $updateDomains) {
 
     write-host "Repair-AzVmssServiceFabricUpdateDomain -ResourceGroupName $resourceGroupName `
- -VMScaleSetName $vmScaleSetName `
- -PlatformUpdateDomain $updateDomain
-"
+        -VMScaleSetName $vmScaleSetName `
+        -PlatformUpdateDomain $updateDomain
+    "
     Repair-AzVmssServiceFabricUpdateDomain -ResourceGroupName $resourceGroupName `
         -VMScaleSetName $vmScaleSetName `
         -PlatformUpdateDomain $updateDomain
