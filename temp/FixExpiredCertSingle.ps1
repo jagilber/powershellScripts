@@ -1,12 +1,13 @@
 <#
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/fixExpiredCertSingle.ps1" -outFile "$pwd\fixExpiredCertSingle.ps1";
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/FixExpiredCertSingle.ps1" -outFile "$pwd\FixExpiredCertSingle.ps1";
 #>
 
 param(
     $clusterDataRootPath = "D:\SvcFab", 
     $oldThumbprint = "replace with expired thumbprint", 
     $newThumbprint = "replace with new thumbprint", 
-    $certStoreLocation = 'Cert:\LocalMachine\My\'
+    $certStoreLocation = 'Cert:\LocalMachine\My\',
+    [switch]$startService
 )
 
 Write-Host "$env:computername : Running on $((Get-WmiObject win32_computersystem).DNSHostName)" -ForegroundColor Green
@@ -23,6 +24,7 @@ function StopServiceFabricServices {
 
     $bootstrapService = Get-Service -Name $bootstrapAgent
     if ($bootstrapService.Status -eq "Running") {
+        Set-Service $bootstrapAgent -StartupType Disabled
         Stop-Service $bootstrapAgent -ErrorAction SilentlyContinue 
         Write-Host "$env:computername : Stopping $bootstrapAgent service" -ForegroundColor Green
     }
@@ -40,6 +42,7 @@ function StopServiceFabricServices {
 
     $fabricHostService = Get-Service -Name $fabricHost
     if ($fabricHostService.Status -eq "Running") {
+        Set-Service $fabricHost -StartupType Disabled
         Stop-Service $fabricHost -ErrorAction SilentlyContinue 
         Write-Host "$env:computername : Stopping $fabricHost service" -ForegroundColor Green
     }
@@ -62,6 +65,7 @@ function StartServiceFabricServices {
 
     $fabricHostService = Get-Service -Name $fabricHost
     if ($fabricHostService.Status -eq "Stopped") {
+        Set-Service $fabricHost -StartupType Manual
         Start-Service $fabricHost -ErrorAction SilentlyContinue 
         Write-Host "$env:computername : Starting $fabricHost service" -ForegroundColor Green
     }
@@ -80,6 +84,7 @@ function StartServiceFabricServices {
 
     $bootstrapService = Get-Service -Name $bootstrapAgent
     if ($bootstrapService.Status -eq "Stopped") {
+        Set-Service $bootstrapAgent -StartupType Manual
         Start-Service $bootstrapAgent -ErrorAction SilentlyContinue 
         Write-Host "$env:computername : Starting $bootstrapAgent service" -ForegroundColor Green
     }
@@ -94,6 +99,11 @@ function StartServiceFabricServices {
         }
 
     } While ($bootstrapService.Status -ne "Running")
+}
+
+if($startService) {
+    StartServiceFabricServices
+    return
 }
 
 #config files we need
@@ -211,4 +221,6 @@ Write-Host "$env:computername : Updating Node configuration with new cert: compl
 
 #restart these services
 Write-Host "$env:computername : Starting services " -ForegroundColor Green
-StartServiceFabricServices
+
+#StartServiceFabricServices
+write-host "rerun script second time with -startService switch on each node after executing this script first on all nodes."
