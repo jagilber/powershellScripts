@@ -19,11 +19,11 @@ function main () {
     $waitCount = 0
 
     while ($wait -or $waitCount -eq 0) {
-        if ($existingNsgNames.Count -lt 1) {
-            $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
-        }
+        $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
+
     
         foreach ($nsgName in $existingNsgNames) {
+            if([string]::IsNullOrEmpty($nsgName)) { continue}
             $nsg = get-nsg $nsgName
             if (!$nsg) {
                 Write-Warning "unable to find $nsgName"
