@@ -10,6 +10,7 @@ param(
     [switch]$startService
 )
 
+$ErrorActionPreference = 'continue'
 Write-Host "$env:computername : Running on $((Get-WmiObject win32_computersystem).DNSHostName)" -ForegroundColor Green
 
 function StopServiceFabricServices {
@@ -23,40 +24,52 @@ function StopServiceFabricServices {
     $fabricHost = "FabricHostSvc"
 
     $bootstrapService = Get-Service -Name $bootstrapAgent
-    if ($bootstrapService.Status -eq "Running") {
-        Set-Service $bootstrapAgent -StartupType Disabled
-        Stop-Service $bootstrapAgent -ErrorAction SilentlyContinue 
-        Write-Host "$env:computername : Stopping $bootstrapAgent service" -ForegroundColor Green
+    if ($bootstrapService) {
+        if ($bootstrapService.Status -eq "Running") {
+            Set-Service $bootstrapAgent -StartupType Disabled
+            Stop-Service $bootstrapAgent -ErrorAction SilentlyContinue 
+            Write-Host "$env:computername : Stopping $bootstrapAgent service" -ForegroundColor Green
+        }
+        Do {
+            Start-Sleep -Seconds 1
+            $bootstrapService = Get-Service -Name $bootstrapAgent
+            if ($bootstrapService.Status -eq "Stopped") {
+                Write-Host "$env:computername : $bootstrapAgent now stopped" -ForegroundColor Green
+            }
+            else {
+                Write-Host "$env:computername : $bootstrapAgent current status: $($bootstrapService.Status)" -ForegroundColor Green
+            }
+
+        } While ($bootstrapService.Status -ne "Stopped")
     }
-    Do {
-        Start-Sleep -Seconds 1
-        $bootstrapService = Get-Service -Name $bootstrapAgent
-        if ($bootstrapService.Status -eq "Stopped") {
-            Write-Host "$env:computername : $bootstrapAgent now stopped" -ForegroundColor Green
-        }
-        else {
-            Write-Host "$env:computername : $bootstrapAgent current status: $($bootstrapService.Status)" -ForegroundColor Green
-        }
-
-    } While ($bootstrapService.Status -ne "Stopped")
-
+    else {
+        write-host "bootstrapagent does not exist" -ForegroundColor Yellow
+    }
+    
     $fabricHostService = Get-Service -Name $fabricHost
-    if ($fabricHostService.Status -eq "Running") {
-        Set-Service $fabricHost -StartupType Disabled
-        Stop-Service $fabricHost -ErrorAction SilentlyContinue 
-        Write-Host "$env:computername : Stopping $fabricHost service" -ForegroundColor Green
-    }
-    Do {
-        Start-Sleep -Seconds 1
-        $fabricHostService = Get-Service -Name $fabricHost
-        if ($fabricHostService.Status -eq "Stopped") {
-            Write-Host "$env:computername : $fabricHost now stopped" -ForegroundColor Green
-        }
-        else {
-            Write-Host "$env:computername : $fabricHost current status: $($fabricHostService.Status)" -ForegroundColor Green
-        }
 
-    } While ($fabricHostService.Status -ne "Stopped")
+    if ($fabricHostService) {
+        if ($fabricHostService.Status -eq "Running") {
+            Set-Service $fabricHost -StartupType Disabled
+            Stop-Service $fabricHost -ErrorAction SilentlyContinue 
+            Write-Host "$env:computername : Stopping $fabricHost service" -ForegroundColor Green
+        }
+        Do {
+            Start-Sleep -Seconds 1
+            $fabricHostService = Get-Service -Name $fabricHost
+            if ($fabricHostService.Status -eq "Stopped") {
+                Write-Host "$env:computername : $fabricHost now stopped" -ForegroundColor Green
+            }
+            else {
+                Write-Host "$env:computername : $fabricHost current status: $($fabricHostService.Status)" -ForegroundColor Green
+            }
+
+        } While ($fabricHostService.Status -ne "Stopped")
+    }
+    else {
+        write-host "fabrichostservice does not exist" -ForegroundColor Yellow
+    }
+
 }
 
 function StartServiceFabricServices {
@@ -64,44 +77,56 @@ function StartServiceFabricServices {
     $fabricHost = "FabricHostSvc"
 
     $fabricHostService = Get-Service -Name $fabricHost
-    if ($fabricHostService.Status -eq "Stopped") {
-        Set-Service $fabricHost -StartupType Manual
-        Start-Service $fabricHost -ErrorAction SilentlyContinue 
-        Write-Host "$env:computername : Starting $fabricHost service" -ForegroundColor Green
-    }
-    Do {
-        Start-Sleep -Seconds 1
-        $fabricHostService = Get-Service -Name $fabricHost
-        if ($fabricHostService.Status -eq "Running") {
-            Write-Host "$env:computername : $fabricHost now running" -ForegroundColor Green
-        }
-        else {
-            Write-Host "$env:computername : $fabricHost current status: $($fabricHostService.Status)" -ForegroundColor Green
-        }
 
-    } While ($fabricHostService.Status -ne "Running")
+    if ($fabricHostService) {
+        if ($fabricHostService.Status -eq "Stopped") {
+            Set-Service $fabricHost -StartupType Manual
+            Start-Service $fabricHost -ErrorAction SilentlyContinue 
+            Write-Host "$env:computername : Starting $fabricHost service" -ForegroundColor Green
+        }
+        Do {
+            Start-Sleep -Seconds 1
+            $fabricHostService = Get-Service -Name $fabricHost
+            if ($fabricHostService.Status -eq "Running") {
+                Write-Host "$env:computername : $fabricHost now running" -ForegroundColor Green
+            }
+            else {
+                Write-Host "$env:computername : $fabricHost current status: $($fabricHostService.Status)" -ForegroundColor Green
+            }
+
+        } While ($fabricHostService.Status -ne "Running")
+    }
+    else {
+        write-host "fabrichostservice does not exist" -ForegroundColor Yellow
+    }
 
 
     $bootstrapService = Get-Service -Name $bootstrapAgent
-    if ($bootstrapService.Status -eq "Stopped") {
-        Set-Service $bootstrapAgent -StartupType Manual
-        Start-Service $bootstrapAgent -ErrorAction SilentlyContinue 
-        Write-Host "$env:computername : Starting $bootstrapAgent service" -ForegroundColor Green
-    }
-    Do {
-        Start-Sleep -Seconds 1
-        $bootstrapService = Get-Service -Name $bootstrapAgent
-        if ($bootstrapService.Status -eq "Running") {
-            Write-Host "$env:computername : $bootstrapAgent now running" -ForegroundColor Green
-        }
-        else {
-            Write-Host "$env:computername : $bootstrapAgent current status: $($bootstrapService.Status)" -ForegroundColor Green
-        }
 
-    } While ($bootstrapService.Status -ne "Running")
+    if ($bootstrapService) {
+        if ($bootstrapService.Status -eq "Stopped") {
+            Set-Service $bootstrapAgent -StartupType Manual
+            Start-Service $bootstrapAgent -ErrorAction SilentlyContinue 
+            Write-Host "$env:computername : Starting $bootstrapAgent service" -ForegroundColor Green
+        }
+        Do {
+            Start-Sleep -Seconds 1
+            $bootstrapService = Get-Service -Name $bootstrapAgent
+            if ($bootstrapService.Status -eq "Running") {
+                Write-Host "$env:computername : $bootstrapAgent now running" -ForegroundColor Green
+            }
+            else {
+                Write-Host "$env:computername : $bootstrapAgent current status: $($bootstrapService.Status)" -ForegroundColor Green
+            }
+
+        } While ($bootstrapService.Status -ne "Running")
+    }
+    else {
+        write-host "bootstrapagent does not exist" -ForegroundColor Yellow
+    }
 }
 
-if($startService) {
+if ($startService) {
     StartServiceFabricServices
     return
 }
