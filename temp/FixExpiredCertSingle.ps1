@@ -1,12 +1,12 @@
 <#
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/fixExpiredCertSingle.ps1" -outFile "$pwd\fixExpiredCertSingle.ps1";
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/fixExpiredCertSingle.ps1" -outFile "$pwd\fixExpiredCertSingle.ps1";
 #>
 
 param(
-    $clusterDataRootPath, 
-    $oldThumbprint, 
-    $newThumbprint, 
-    $certStoreLocation
+    $clusterDataRootPath = "D:\SvcFab", 
+    $oldThumbprint = "replace with expired thumbprint", 
+    $newThumbprint = "replace with new thumbprint", 
+    $certStoreLocation = 'Cert:\LocalMachine\My\'
 )
 
 Write-Host "$env:computername : Running on $((Get-WmiObject win32_computersystem).DNSHostName)" -ForegroundColor Green
