@@ -35,7 +35,7 @@ else {
 
     }
     else {
-        #$response = invoke-webrequest -Uri $clusterEndpoint -CertificateThumbprint $publicSettings.certificate.thumbprint
+        write-host "invoke-webrequest -Uri $clusterEndpoint -Certificate (gci Cert:\LocalMachine\My\$($publicSettings.certificate.thumbprint))"
         $response = invoke-webrequest -Uri $clusterEndpoint -Certificate (gci Cert:\LocalMachine\My\"$($publicSettings.certificate.thumbprint)")
         
         write-host "sfrp response" -ForegroundColor Yellow
