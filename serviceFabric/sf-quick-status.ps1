@@ -25,6 +25,8 @@ else {
     $clusterEndpoint = $publicSettings.clusterEndpoint
     $endpointUri = [uri]::new($clusterEndpoint)
     $endpointHost = $endpointUri.Authority
+    $thumb = $publicSettings.certificate.thumbprint
+    $cert = (get-childitem -path Cert:\LocalMachine\my\$thumb)[-1]
 
     $error.Clear()
     write-host "Test-NetConnection -ComputerName $endpointHost -port 443"
@@ -32,20 +34,17 @@ else {
     if (!($results.tcptestsucceeded)) {
         write-error "$($error | out-string)"
         $error.clear()
-
     }
     else {
-        write-host "invoke-webrequest -Uri $clusterEndpoint -Certificate (gci Cert:\LocalMachine\My\$($publicSettings.certificate.thumbprint))"
-        $response = invoke-webrequest -Uri $clusterEndpoint -Certificate (gci Cert:\LocalMachine\My\"$($publicSettings.certificate.thumbprint)")
+        write-host "invoke-webrequest -Uri $clusterEndpoint -Certificate $cert"
+        $response = invoke-webrequest -Uri $clusterEndpoint -Certificate $cert
         
         write-host "sfrp response" -ForegroundColor Yellow
         $response.BaseResponse
-
-        $cert = (get-childitem -path Cert:\LocalMachine\my\$thumb)[-1]
+        
         test-Certificate -Cert $cert -Policy SSL -AllowUntrustedRoot
         test-Certificate -Cert $cert -Policy BASE -AllowUntrustedRoot
         certutil -verifystore MY $thumb
-
     }
 }
 
