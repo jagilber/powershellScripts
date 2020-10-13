@@ -1,6 +1,10 @@
 <#
+.SYNOPSIS
 quick script to enumerate different objects and health in cluster if sfx not available
 this may error depending on configuration and version even if cluster is healthy
+
+.LINK
+iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-quick-status.ps1" -outfile "$pwd\sf-quick-status.ps1";.\sf-quick-status.ps1;
 #>
 
 param(
@@ -17,6 +21,8 @@ else {
     # arm
     $configJson = Get-Content -raw @(dir 'C:\Packages\Plugins\Microsoft.Azure.ServiceFabric.ServiceFabricNode\*\RuntimeSettings\*.settings')[-1].FullName
     $config = $configJson | ConvertFrom-Json
+    $configJson
+
     $publicSettings = $config.runtimeSettings.handlersettings.publicSettings
     $clusterEndpoint = $publicSettings.clusterEndpoint
     $endpointUri = [uri]::new($clusterEndpoint)
@@ -24,15 +30,15 @@ else {
 
     $error.Clear()
     write-host "Test-NetConnection -ComputerName $endpointHost -port 443"
-    Test-NetConnection -ComputerName $endpointHost -port 443
-    if ($error) {
+    $results = Test-NetConnection -ComputerName $endpointHost -port 443
+    if (!($results.tcptestsucceeded)) {
         write-error "$($error | out-string)"
         $error.clear()
-
     }
     else {
-        $response = invoke-webrequest -Uri $clusterEndpoint -CertificateThumbprint $publicSettings.certificate.thumbprint
+        $response = invoke-webrequest -Uri $clusterEndpoint -Certificate (gci Cert:\LocalMachine\My\"$($publicSettings.certificate.thumbprint)")
         $response.BaseResponse
+
         $cert = (get-childitem -path Cert:\LocalMachine\my\$thumb)[-1]
         test-Certificate -Cert $cert -Policy SSL -AllowUntrustedRoot
         test-Certificate -Cert $cert -Policy BASE -AllowUntrustedRoot
