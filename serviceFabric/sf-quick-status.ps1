@@ -21,8 +21,6 @@ else {
     # arm
     $configJson = Get-Content -raw @(dir 'C:\Packages\Plugins\Microsoft.Azure.ServiceFabric.ServiceFabricNode\*\RuntimeSettings\*.settings')[-1].FullName
     $config = $configJson | ConvertFrom-Json
-    $configJson
-
     $publicSettings = $config.runtimeSettings.handlersettings.publicSettings
     $clusterEndpoint = $publicSettings.clusterEndpoint
     $endpointUri = [uri]::new($clusterEndpoint)
@@ -34,9 +32,13 @@ else {
     if (!($results.tcptestsucceeded)) {
         write-error "$($error | out-string)"
         $error.clear()
+
     }
     else {
+        #$response = invoke-webrequest -Uri $clusterEndpoint -CertificateThumbprint $publicSettings.certificate.thumbprint
         $response = invoke-webrequest -Uri $clusterEndpoint -Certificate (gci Cert:\LocalMachine\My\"$($publicSettings.certificate.thumbprint)")
+        
+        write-host "sfrp response" -ForegroundColor Yellow
         $response.BaseResponse
 
         $cert = (get-childitem -path Cert:\LocalMachine\my\$thumb)[-1]
