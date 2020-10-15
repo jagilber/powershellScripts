@@ -12,12 +12,27 @@ param(
     $imagePath = 'ClusterManifest.xml'
 )
 
-$ErrorActionPreference = 'stop'
+$PSModuleAutoLoadingPreference = 2
+$ErrorActionPreference = 'stop'#'continue'
 $xml = [xml]::new()
 
-if (!(Get-ServiceFabricClusterConnection)) {
+if (!(get-command Get-ServiceFabricClusterConnection)) {
     import-module servicefabric
     connect-servicefabriccluster
+}
+
+write-host "image store content:root" -ForegroundColor Yellow
+Get-ServiceFabricImageStoreContent
+write-host "image store content:clusterconfigstore" -ForegroundColor Yellow
+Get-ServiceFabricImageStoreContent -remoteRelativePath ClusterConfigStore
+write-host "image store content:windowsfabricstore" -ForegroundColor Yellow
+Get-ServiceFabricImageStoreContent -remoteRelativePath WindowsFabricStore
+
+if((Get-ServiceFabricClusterUpgrade).upgradestate -inotmatch 'completed') {
+    Get-ServiceFabricClusterUpgrade #| convertto-json
+    (Get-ServiceFabricClusterUpgrade).upgradedomainsstatus
+    write-error "cluster currently upgrading"
+    return
 }
 
 if (!(test-path $newManifest)) {
@@ -28,7 +43,7 @@ if (!(test-path $newManifest)) {
     write-host "current cluster manifest version: $($currentVersion)"
 
     notepad $newManifest
-    
+
     write-host "modify $($newManifest) with changes and use Version=`"$($newVersion)`" in cluster manifest xml schema"
     write-host "restart script to update configuration"
 }
@@ -60,14 +75,23 @@ else {
         -FailureAction Rollback `
         -Monitored
 
+    $status = $null
+
     while($true) {
-        $status = Get-ServiceFabricClusterUpgrade
-        if($status.upgradestate -inotmatch 'complete') {
-            write-host $status
+        $newStatus = Get-ServiceFabricClusterUpgrade
+        if($newStatus.upgradestate -imatch 'complete') {
+            write-host $newStatus | convertto-json
             return
         }
 
-        $status
+        #if($status -and (compare-object -ReferenceObject $status -DifferenceObject $newStatus)){
+        if($status -ne $newStatus){
+            write-host $newStatus
+        }
+        else {
+            write-host "." -NoNewline
+        }
+        $status = $newStatus
         start-sleep -Seconds 1
     }
 }
