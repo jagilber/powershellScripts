@@ -163,7 +163,7 @@ $settings = [xml](Get-Content $SettingsFile)
 $thumbprintPath = $certStoreLocation + $newThumbprint
 If (!(Test-Path $thumbprintPath)) {
     Write-Host "$env:computername : $newThumbprint not installed"
-    Exit-PSSession
+    #Exit-PSSession
 }
 
 #TODO: validate newThumbprint is ACL'd for NETWORK_SERVICE
