@@ -23,6 +23,7 @@ $global:ClusterConnection = $null
 if($resourceGroup -and $clustername)
 {
     $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
+    $clusterendpoint = $cluster
     $thumbprint = $cluster.Certificate.Thumbprint
     $global:cluster | ConvertTo-Json -Depth 99
 }
@@ -32,6 +33,14 @@ if($clusterendpoint -inotmatch ':\d{2,5}$'){
 }
 
 $clusterendpoint = $clusterEndpoint.Replace("19080","19000").Replace("https://","")
+
+write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $clusterendpoint `
+    -ServerCertThumbprint $thumbprint `
+    -StoreLocation $storeLocation `
+    -X509Credential `
+    -FindType FindByThumbprint `
+    -FindValue $thumbprint `
+    -verbose" -ForegroundColor Green
 
 # this sets wellknown local variable $ClusterConnection
 Connect-ServiceFabricCluster `
@@ -43,7 +52,7 @@ Connect-ServiceFabricCluster `
     -FindValue $thumbprint `
     -Verbose
 
-write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $clusterendpoint -ServerCertThumbprint $thumbprint -StoreLocation $storeLocation -X509Credential -FindType FindByThumbprint -FindValue $thumbprint -verbose" -ForegroundColor Green
+
 write-host "Get-ServiceFabricClusterConnection" -ForegroundColor Green
 
 write-host "============================" -ForegroundColor Green
