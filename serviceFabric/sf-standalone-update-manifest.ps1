@@ -28,7 +28,7 @@ Get-ServiceFabricImageStoreContent -remoteRelativePath ClusterConfigStore
 write-host "image store content:windowsfabricstore" -ForegroundColor Yellow
 Get-ServiceFabricImageStoreContent -remoteRelativePath WindowsFabricStore
 
-if((Get-ServiceFabricClusterUpgrade).upgradestate -inotmatch 'completed') {
+if((Get-ServiceFabricClusterUpgrade).upgradestate -inotmatch 'completed|failed') {
     Get-ServiceFabricClusterUpgrade #| convertto-json
     (Get-ServiceFabricClusterUpgrade).upgradedomainsstatus
     write-error "cluster currently upgrading"
@@ -77,15 +77,16 @@ else {
 
     $status = $null
 
+    $ErrorActionPreference = 'continue'
     while($true) {
         $newStatus = Get-ServiceFabricClusterUpgrade
-        if($newStatus.upgradestate -imatch 'complete') {
+        if($newStatus.upgradestate -imatch 'complete|fail') {
             write-host $newStatus | convertto-json
             return
         }
 
-        #if($status -and (compare-object -ReferenceObject $status -DifferenceObject $newStatus)){
-        if($status -ne $newStatus){
+        if($status -and (compare-object -ReferenceObject $status -DifferenceObject $newStatus -Property upgradedomains)){
+            write-host ""
             write-host $newStatus
         }
         else {

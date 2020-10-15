@@ -23,7 +23,7 @@ $global:ClusterConnection = $null
 if($resourceGroup -and $clustername)
 {
     $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
-    $clusterendpoint = $cluster
+    $clusterendpoint = $cluster.ManagementEndpoint
     $thumbprint = $cluster.Certificate.Thumbprint
     $global:cluster | ConvertTo-Json -Depth 99
 }
