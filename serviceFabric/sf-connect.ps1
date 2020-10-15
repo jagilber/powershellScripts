@@ -20,17 +20,18 @@ import-module servicefabric
 $DebugPreference = "continue"
 $global:ClusterConnection = $null
 
+if($resourceGroup -and $clustername)
+{
+    $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
+    $thumbprint = $cluster.Certificate.Thumbprint
+    $global:cluster | ConvertTo-Json -Depth 99
+}
+
 if($clusterendpoint -inotmatch ':\d{2,5}$'){
     $clusterendpoint += ":19000"
 }
 
-if($resourceGroup -and $clustername)
-{
-    $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
-    $clusterendpoint = ($cluster.ManagementEndpoint.Replace("19080","19000").Replace("https://",""))
-    $thumbprint = $cluster.Certificate.Thumbprint
-    $global:cluster | ConvertTo-Json -Depth 99
-}
+$clusterendpoint = $clusterEndpoint.Replace("19080","19000").Replace("https://","")
 
 # this sets wellknown local variable $ClusterConnection
 Connect-ServiceFabricCluster `
