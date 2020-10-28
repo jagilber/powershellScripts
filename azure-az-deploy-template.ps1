@@ -11,6 +11,9 @@
    file name  : azure-az-deploy-template.ps1
    version    : 200924 fix for serialization bug in cmdlet
 
+.LINK
+    iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-deploy-template.ps1 -outFile $pwd\azure-az-deploy-template.ps1
+
 .EXAMPLE
     .\azure-az-deploy-template.ps1 -adminPassword changeme3240e2938r92 -resourceGroup rdsdeptest
     Example command to deploy rds-deployment with 2 instances using A1 machines. the resource group is rdsdeptest and domain fqdn is rdsdeptest.lab
