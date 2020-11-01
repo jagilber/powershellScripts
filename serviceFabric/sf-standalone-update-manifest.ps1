@@ -4,7 +4,7 @@
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-standalone-update-manifest.ps1" -outFile "$pwd\sf-standalone-update-manifest.ps1";
-    .\sf-standalone-update-manifest.ps1 -resourceGroupName {{ resource group name }} -vmScaleSetName {{ vm scaleset name }}
+    .\sf-standalone-update-manifest.ps1 -newManifest "$pwd\ClusterManifest.new.xml"
 #>
 
 param(
