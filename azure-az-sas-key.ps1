@@ -41,5 +41,6 @@ foreach ($account in $accounts) {
     $saskeys.Add("$blobUri$sas")
 }
 
-write-host "saskeys:" -ForegroundColor Yellow
+$global:saskeys = $saskeys
+write-host "`$global:saskeys" -ForegroundColor Yellow
 $saskeys 
