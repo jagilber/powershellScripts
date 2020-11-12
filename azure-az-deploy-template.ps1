@@ -48,8 +48,6 @@ param(
     [pscredential]$credentials,
     [string]$deploymentName = $resourceGroup + (get-date).ToString("yyMMddHHmmss"),
     [string]$location,
-    [switch]$monitor,
-    [switch]$postConnect,
     [Parameter(Mandatory = $true)]
     [string]$resourceGroup,
     [switch]$test,
@@ -65,6 +63,7 @@ param(
 # shouldnt need modification
 $error.Clear()
 $ErrorActionPreference = "Continue"
+$PSModuleAutoLoadingPreference = 2
 
 function main() {
     if (!$deploymentName) {
@@ -269,18 +268,6 @@ function main() {
     if ($ret) {
         Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)"
         return 1
-    }
-
-    if ($monitor) {
-        write-host "$([DateTime]::Now) starting monitor"
-        $monitorScript = "$(get-location)\azure-az-log-reader.ps1"
-        
-        if (![IO.File]::Exists($monitorScript)) {
-            [IO.File]::WriteAllText($monitorScript, 
-                (Invoke-WebRequest -UseBasicParsing -Uri "https://aka.ms/azure-az-log-reader.ps1").ToString().Replace("???", ""))
-        }
-
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-WindowStyle Minimized -ExecutionPolicy Bypass $($monitorScript)"
     }
 
     if (!$test) {
