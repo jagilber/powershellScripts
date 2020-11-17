@@ -1,5 +1,17 @@
 param(
-    [ValidateSet('livekd.exe','psexec.exe','procmon.exe','procdump.exe','procexp.exe','tcpview.exe','rammap.exe','handle.exe','pipelist.exe','winobj.exe','accesschk.exe')]
+    [ValidateSet('livekd.exe',
+        'psexec.exe',
+        'procmon.exe',
+        'procdump.exe',
+        'procexp.exe',
+        'tcpview.exe',
+        'rammap.exe',
+        'handle.exe',
+        'pipelist.exe',
+        'winobj.exe',
+        'accesschk.exe',
+        'disk2vhd.exe'
+    )]
     $sysinternalsExe = "procdump.exe",
     $sysinternalsCustomExe,
     [switch]$noExecute
