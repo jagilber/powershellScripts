@@ -1,1 +1,30 @@
+# vscode rest client extension http file
+# see https://github.com/Huachao/vscode-restclient
+# use ### to separate requests
+
+# sf package download versions
+https://go.microsoft.com/fwlink/?LinkID=824848&clcid=0x409
+###
+
+# collectsfdata releases
+https://github.com/microsoft/collectservicefabricdata/releases/latest
+###
+
+# collectsfdata releases
+https://github.com/microsoft/collectservicefabricdata/releases
+###
+
+# github api urls
 https://api.github.com
+###
+
+# github repo query
+# @name repoQuery
+https://api.github.com/repos/jagilber/powershellscripts
+###
+@forks = {{repoQuery.response.body.$.forks_url}}
+GET {{forks}}
+###
+
+
+
