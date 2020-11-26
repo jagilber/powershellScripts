@@ -3,6 +3,7 @@
 #>
 
 param(
+    [Parameter(Mandatory = $true)]
     [string]$resourceGroup = '',
     [string]$nsgRuleName = "remote-rule",
     [int]$priority = 100,
@@ -19,11 +20,12 @@ function main () {
     $waitCount = 0
 
     while ($wait -or $waitCount -eq 0) {
-        $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
-
+        if (!$existingNsgNames) {
+            $existingNsgNames = @((get-aznetworksecuritygroup -resourcegroupname $resourceGroup).Name)
+        }
     
         foreach ($nsgName in $existingNsgNames) {
-            if([string]::IsNullOrEmpty($nsgName)) { continue}
+            if ([string]::IsNullOrEmpty($nsgName)) { continue }
             $nsg = get-nsg $nsgName
             if (!$nsg) {
                 Write-Warning "unable to find $nsgName"
