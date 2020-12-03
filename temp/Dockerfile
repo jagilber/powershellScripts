@@ -1,4 +1,3 @@
-#FROM lm-devops-docker.artifactory.hiscox.com/lm-ado-agent-base:latest
 FROM ubuntu:18.04
 
 # update apt and get apt-transport-https

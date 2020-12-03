@@ -4,10 +4,6 @@ trigger:
     - '*'
 
 variables:
-#- group: helm-artifactory
-#- group: lm-build-svc
-#- group: lm-devops-docker-artifactory
-#- group: docker-local-artifactory
 - name: DOCKER_REGISTRY
   value: lm-devops-docker.artifactory.com
 - name: major
