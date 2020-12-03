@@ -26,5 +26,10 @@ https://api.github.com/repos/jagilber/powershellscripts
 GET {{forks}}
 ###
 
+https://www.w3.org/services/html2txt?url=https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
+###
+
+###
+POST https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
 
 
