@@ -25,7 +25,9 @@ https://api.github.com/repos/jagilber/powershellscripts
 @forks = {{repoQuery.response.body.$.forks_url}}
 GET {{forks}}
 ###
-
+@downloads = {{repoQuery.response.body.$.downloads_url}}
+GET {{downloads}}
+###
 https://www.w3.org/services/html2txt?url=https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
 ###
 
@@ -33,3 +35,8 @@ https://www.w3.org/services/html2txt?url=https://store.rg-adguard.net/api/GetFil
 POST https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
 
 
+###
+https://www.w3.org/services/html2txt?url=https://jagilber.github.io
+
+###
+https://www.w3.org/services/html2txt?url=https://news.google.com 
