@@ -158,7 +158,7 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
         }
         [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
 
-        if ($force -or !($localPackages -imatch $packageName)) {
+        if ($force -or !($localPackages -imatch "$edition\\$packageName")) {
             write-host "$nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed"
             . $nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed
             $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
@@ -174,13 +174,13 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
 }
 
 if ($global:PSVersionTable.PSEdition -eq "Core") {
-    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp3.1")) {
+    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp2.1")) {
         write-error "unable to add package"
         return $false
     }
 }
 else {
-    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net46")) {
+    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net461")) {
         write-error "unable to add package"
         return $false
     }
