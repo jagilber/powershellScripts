@@ -14,8 +14,8 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 200330
-History    : add createresults
+Version    : 2001217
+History    : add device credentials
 
 .EXAMPLE
 .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
