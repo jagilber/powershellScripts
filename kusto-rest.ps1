@@ -174,13 +174,13 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
 }
 
 if ($global:PSVersionTable.PSEdition -eq "Core") {
-    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp2.1")) {
+    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp3.1")) {
         write-error "unable to add package"
         return $false
     }
 }
 else {
-    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net45")) {
+    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net46")) {
         write-error "unable to add package"
         return $false
     }
@@ -314,7 +314,7 @@ class KustoObj {
     
         if ($this.ViewResults -or $this.CreateResults) {
             $this.CreateResultTable()
-            if($this.ViewResults) {
+            if ($this.ViewResults) {
                 write-host ($this.ResultTable | out-string)
             }
         }
@@ -345,15 +345,15 @@ class KustoObj {
     [KustoObj] ExecFunctionWithTableName([string]$function) {
         $functionObj = ($this.FunctionObjs.getEnumerator() | where-object Name -imatch $function).Value
 
-        if(!$function -or !$functionObj -or $functionObj.parameters.length -lt 1) {
+        if (!$function -or !$functionObj -or $functionObj.parameters.length -lt 1) {
             write-warning "verify function '$function' and number of parameters '$($functionObj.parameters)'"
         }
         else {
             write-host "function:$function$($functionObj.parameters)" -foregroundcolor cyan
         }
 
-        if($this.Table) {
-            $this.Exec([string]::Format("{0}('{1}')",$function, $this.Table))
+        if ($this.Table) {
+            $this.Exec([string]::Format("{0}('{1}')", $function, $this.Table))
         }
         else {
             write-warning "table not set"
@@ -362,11 +362,11 @@ class KustoObj {
     }
 
     [KustoObj] ExecFunction([string]$function, [array]$parameters) {
-        if($parameters) {
-            $this.Exec([string]::Format("{0}('{1}')",$function,$parameters -join "','"))
+        if ($parameters) {
+            $this.Exec([string]::Format("{0}('{1}')", $function, $parameters -join "','"))
         }
         else {
-            $this.Exec([string]::Format("{0}()",$function))
+            $this.Exec([string]::Format("{0}()", $function))
         }
         return $this.Pipe()
     }
@@ -409,7 +409,6 @@ class KustoObj {
             return $this.Pipe()
         }
 
-        $this.Query = [regex]::Replace($this.Query, "//.+\n", "") 
         $this.Exec()
         return $this.Pipe()
     }
@@ -589,7 +588,7 @@ class KustoObj {
             return $false
         }
 
-        if($this.authenticationResult) {
+        if ($this.authenticationResult) {
             $expirationMinutes = $this.authenticationResult.ExpiresOn.Subtract((get-date)).TotalMinutes
         }
         write-verbose "token expires in: $expirationMinutes minutes"
@@ -618,7 +617,7 @@ class KustoObj {
                 $cAppBuilder = $cAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
 
                 if ($global:PSVersionTable.PSEdition -eq "Core") {
-                    $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                    $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback, [Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 }
 
                 $this.confidentialClientApplication = $cAppBuilder.Build()
@@ -638,10 +637,10 @@ class KustoObj {
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 
-                if(!($this.publicClientApplication)) {
+                if (!($this.publicClientApplication)) {
                     if ($global:PSVersionTable.PSEdition -eq "Core") {
                         $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
-                        $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                        $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback, [Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                     }
                     else {
                         $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
@@ -656,17 +655,28 @@ class KustoObj {
                 try {
                     write-host "preauth acquire token silent for account: $account" -foregroundcolor green
                     $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($defaultScope, $account).ExecuteAsync().Result
+                    if (!$this.authenticationResult) { throw }
                 }
                 catch [Exception] {
                     write-host "preauth acquire error: $_`r`n$($error | out-string)" -foregroundColor yellow
                     $error.clear()
-                    write-host "preauth acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $this.publicClientApplication.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
+                    try {
+                        write-host "preauth acquire token interactive" -foregroundcolor yellow
+                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
+                        if (!$this.authenticationResult) { throw }
+                    }
+                    catch [Exception] {
+                        write-host "preauth acquire token device" -foregroundcolor yellow
+                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenWithDeviceCode($defaultScope, $this.MsalDeviceCodeCallback).ExecuteAsync().Result
+                        if (!$this.authenticationResult) { throw }
+                    }
                 }
 
+                write-host "authentication result: $($this.authenticationResult)"
                 $account = $this.publicClientApplication.GetAccountsAsync().Result[0]
+
                 #add kusto scopes after preauth
-                if($scopes) {
+                if ($scopes) {
                     try {
                         write-host "kusto acquire token silent" -foregroundcolor green
                         $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($scopes, $account).ExecuteAsync().Result
@@ -691,7 +701,12 @@ class KustoObj {
         }
     }
 
-    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
+    [Threading.Tasks.Task] MsalDeviceCodeCallback([Microsoft.Identity.Client.DeviceCodeResult] $result) {
+        write-host "MSAL Device code result: $($result | convertto-json)"
+        return [threading.tasks.task]::FromResult(0)
+    }
+
+    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII) {
         write-verbose "MSAL: $level $containsPII $message"
     }
 
@@ -829,9 +844,9 @@ class KustoObj {
         $this.exec('.show functions')
         $this.CreateResultTable()
 
-        foreach($function in $this.ResultTable) {
-            $this.Functions.Add($function.Name,$function.Name)
-            $this.FunctionObjs.Add($function.Name,$function)
+        foreach ($function in $this.ResultTable) {
+            $this.Functions.Add($function.Name, $function.Name)
+            $this.FunctionObjs.Add($function.Name, $function)
         }
         return $this.Pipe()
     }
@@ -841,8 +856,8 @@ class KustoObj {
         $this.exec('.show tables | project TableName')
         $this.CreateResultTable()
 
-        foreach($table in $this.ResultTable) {
-            $this.Tables.Add($table.TableName,$table.TableName)
+        foreach ($table in $this.ResultTable) {
+            $this.Tables.Add($table.TableName, $table.TableName)
         }
         return $this.Pipe()
     }
