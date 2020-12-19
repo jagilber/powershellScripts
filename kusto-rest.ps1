@@ -883,5 +883,3 @@ else {
     write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
     write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
 }
-
-
