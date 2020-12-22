@@ -22,6 +22,7 @@ param(
     [string]$aadDisplayName = "azure-az-rest-logon--$($env:Computername)",
     [string]$certStore = "cert:\CurrentUser\My",
     [string]$uri,
+    [string[]]$replyUrls = @('https://localhost'), # core uses localhost 'https://login.microsoftonline.com/common/oauth2/nativeclient', 
     [switch]$list,
     [string]$pfxPath,
     [ValidateSet('credentials', 'key', 'cert', 'certthumb')]
@@ -124,56 +125,89 @@ function main() {
                 $cert = New-SelfSignedCertificate -CertStoreLocation $certStore `
                     -Subject "CN=$($aadDisplayName)" `
                     -KeyExportPolicy Exportable `
-                    -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+                    -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" `
+                    -KeySpec KeyExchange
             }
             
-            if (!$credentials) {
-                $credentials = (get-credential)
-            }
+            #if (!$credentials) {
+            #    $credentials = (get-credential)
+            #}
 
-            $securePassword = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
+            #$securePassword = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
 
-            if ([io.file]::Exists($pfxPath)) {
-                [io.file]::Delete($pfxPath)
-            }
+            #if ([io.file]::Exists($pfxPath)) {
+            #    [io.file]::Delete($pfxPath)
+            #}
 
-            Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $securePassword
-            $cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $securePassword)
-            $thumbprint = $cert509.thumbprint
-            $keyValue = [convert]::ToBase64String($cert509.GetCertHash())
+            #Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $securePassword
+            #$cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $securePassword)
+            #$thumbprint = $cert509.thumbprint
+            #$keyValue = [convert]::ToBase64String($cert509.GetCertHash())
             $certValue = [convert]::ToBase64String($cert.GetRawCertData())
 
-            if ($oldAdApp = Get-azADApplication -DisplayNameStartWith $aadDisplayName) {
+            if ($oldAdApp = Get-azADApplication -DisplayName $aadDisplayName) {
                 write-host "remove-azADApplication -ObjectId $($oldAdApp.objectId)"
                 remove-azADApplication -ObjectId $oldAdApp.objectId
             }
             
-            if (!$app) {
-                write-host "New-azADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $certValue -EndDate $($cert.NotAfter) -StartDate $($cert.NotBefore) -verbose"
-                $app = New-azADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -CertValue $certValue -EndDate ($cert.NotAfter) -StartDate ($cert.NotBefore) -verbose #-Debug 
-            }
+            write-host "New-azADApplication -DisplayName $aadDisplayName `
+                -HomePage $uri `
+                -IdentifierUris $uri `
+                -CertValue $certValue `
+                -EndDate $($cert.NotAfter) `
+                -StartDate $($cert.NotBefore) `
+                -replyUrls $replyUrls `
+                -verbose"
 
-            $clientSecret = $cert.Thumbprint
+            $app = New-azADApplication -DisplayName $aadDisplayName `
+                -HomePage $uri `
+                -IdentifierUris $uri `
+                -CertValue $certValue `
+                -EndDate ($cert.NotAfter) `
+                -StartDate ($cert.NotBefore) `
+                -replyUrls $replyUrls `
+                -verbose #-Debug 
+
+            $appCredential = New-AzADAppCredential -ObjectId $app.ObjectId `
+                -CertValue $certValue `
+                -EndDate ($cert.NotAfter) `
+                -StartDate ($cert.NotBefore) `
+                -verbose #-Debug 
+
+            $appCredential | convertto-json
+
+            $thumbprint = $cert.thumbprint
+            $clientSecret = [convert]::ToBase64String($cert.GetCertHash())
+            $keyvalue = $clientSecret
             $app | convertto-json
-            #$app = New-azADAppCredential -applicationId ($app.ApplicationId) -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -KeyCredentials $KeyCredential -Verbose
-
         }
         elseif ($logontype -ieq 'certthumb') {
             if (!$cert) {
                 $cert = New-SelfSignedCertificate -CertStoreLocation $certStore `
                     -Subject "$($aadDisplayName)" `
                     -KeyExportPolicy Exportable `
-                    -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider"
+                    -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" `
+                    -KeySpec KeyExchange
             }
 
             $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
             $thumbprint = $cert.Thumbprint
             $clientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
             $securePassword = ConvertTo-SecureString -String $clientSecret -Force -AsPlainText
-            write-host "New-azADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $securePassword -EndDate $($cert.NotAfter)"
+            write-host "New-azADApplication -DisplayName $aadDisplayName `
+                -HomePage $uri `
+                -IdentifierUris $uri `
+                -Password $securePassword `
+                -replyUrls $replyUrls `
+                -EndDate $($cert.NotAfter)"
 
             if (!$app) {
-                $app = New-azADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -Password $securePassword -EndDate ($cert.NotAfter)
+                $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -HomePage $uri `
+                    -IdentifierUris $uri `
+                    -Password $securePassword `
+                    -replyUrls $replyUrls `
+                    -EndDate ($cert.NotAfter)
             }
         }
         elseif ($logontype -ieq 'key') {
@@ -186,7 +220,11 @@ function main() {
             $endDate = [System.DateTime]::Now.AddYears(2)
 
             if (!$app) {
-                $app = New-azADApplication -DisplayName $aadDisplayName -HomePage $URI -IdentifierUris $URI -Password $securePassword -EndDate $endDate
+                $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -HomePage $URI `
+                    -IdentifierUris $URI `
+                    -Password $securePassword `
+                    -EndDate $endDate
             }
 
             write-host "client secret: $($clientSecret)" -ForegroundColor Yellow
@@ -200,7 +238,11 @@ function main() {
             }
             # to use password
             if (!$app) {
-                $app = New-azADApplication -DisplayName $aadDisplayName -HomePage $uri -IdentifierUris $uri -PasswordCredentials $credentials
+                $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -HomePage $uri `
+                    -IdentifierUris $uri `
+                    -replyUrls $replyUrls `
+                    -PasswordCredentials $credentials
             }
         }
 
@@ -212,7 +254,9 @@ function main() {
             $error.clear()
             start-sleep -Seconds 10
             write-host "attempt $count New-azADServicePrincipal -ApplicationId $($app.ApplicationId)" # -DisplayName $aadDisplayName"
+            
             New-azADServicePrincipal -ApplicationId ($app.ApplicationId) #-DisplayName $aadDisplayName
+            
             if (!$error) {
                 break
             }
@@ -231,6 +275,7 @@ function main() {
                 write-host "$($count) -- sleeping 10 seconds while new service principal is created."
                 start-sleep -Seconds 10
                 write-host "attempt $($count) to add role assignments read and contribute"
+                
                 New-azRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
                 
                 if (!$error) {
