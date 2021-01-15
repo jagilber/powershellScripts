@@ -32,10 +32,23 @@ for ($i = 0; $i -lt $downloadLinks.Count; $i++) {
   $outFile = "$outDirectory.appx"
   $zipFile = "$outDirectory.zip"
 
+  if ((test-path $outDirectory)) {
+    remove-item $outDirectory -Force
+  }
+
+  if ((test-path $outFile)) {
+    remove-item $outFile -Force
+  }
+
+  if ((test-path $zipFile)) {
+    remove-item $zipFile -Force
+  }
+
   write-host "Invoke-WebRequest -Uri $downloadLinks[$i] -OutFile $outFile" -ForegroundColor Cyan
   Invoke-WebRequest -Uri $downloadLinks[$i] -OutFile $outFile
+  
   Rename-Item $outFile $zipFile
   expand-archive $zipFile
-
+  get-childItem "$outDirectory\*.exe"
 }
 
