@@ -195,7 +195,7 @@ $scriptBlock = {
             $error.clear()
             Start-Sleep -Seconds 1
             $fabricHostService = Get-Service -Name $fabricHost
-            if(!$bootstrapservice -or $error) {
+            if(!$fabricHostService -or $error) {
                 $error.clear()
                 break
             }
