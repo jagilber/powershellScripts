@@ -31,7 +31,7 @@
 
 .LINK
     iwr https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/FixExpiredCert-AEPCC.ps1 -out $pwd/FixExpiredCert-AEPCC.ps1
-    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/fixexpiredcert.ps1" -outFile "$pwd\perflib.ps1";.\fixexpiredcert.ps1
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/fixexpiredcert.ps1" -outFile "$pwd\fixexpiredcert.ps1";.\fixexpiredcert.ps1
 #>
 
 Param(
@@ -40,7 +40,7 @@ Param(
     [string]$clusterDataRootPath = 'd:\svcfab',
     [ValidateNotNullOrEmpty()]
     [string]$tempPath = 'd:\temp\certwork',
-    [switch]$cacheCredentials,
+    [bool]$cacheCredentials = $true,
     [switch]$localOnly
 )
 
