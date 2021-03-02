@@ -40,3 +40,18 @@ https://www.w3.org/services/html2txt?url=https://jagilber.github.io
 
 ###
 https://www.w3.org/services/html2txt?url=https://news.google.com 
+###
+
+# nuget api test
+@id = https://azuresearch-usnc.nuget.org/query
+@QUERY = Microsoft.ServiceFabric.CollectSFData
+@SKIP = 0
+@TAKE = 10
+@PRERELEASE = false
+#@SEMVERLEVEL = {{}}
+#@PACKAGETYPE = {{}}
+GET {{id}}?q={{QUERY}}&skip={{SKIP}}&take={{TAKE}}&prerelease={{PRERELEASE}}
+#&semVerLevel={SEMVERLEVEL}&packageType={PACKAGETYPE}
+
+###
+GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/latest

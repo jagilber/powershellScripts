@@ -173,7 +173,7 @@ $scriptBlock = {
             $error.clear()
             Start-Sleep -Seconds 1
             $bootstrapService = Get-Service -Name $bootstrapAgent
-            if(!$bootstrapservice -or $error) {
+            if(!$bootstrapService -or $error) {
                 $error.clear()
                 break
             }
