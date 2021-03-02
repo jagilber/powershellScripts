@@ -13,14 +13,16 @@ $WebResponse = Invoke-WebRequest `
   -Method 'POST' `
   -Uri 'https://store.rg-adguard.net/api/GetFiles' `
   -Body `"type=PackageFamilyName&url=$PackageFamilyName&ring=Retail`" `
-  -ContentType 'application/x-www-form-urlencoded'
+  -ContentType 'application/x-www-form-urlencoded' `
+  -UseBasicParsing
 " -ForegroundColor Cyan
 
 $WebResponse = Invoke-WebRequest `
   -Method 'POST' `
   -Uri 'https://store.rg-adguard.net/api/GetFiles' `
   -Body "type=PackageFamilyName&url=$PackageFamilyName&ring=Retail" `
-  -ContentType 'application/x-www-form-urlencoded'
+  -ContentType 'application/x-www-form-urlencoded' `
+  -UseBasicParsing
 
 $global:WebResponse = $WebResponse
 write-verbose $global:WebResponse
