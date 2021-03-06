@@ -10,7 +10,7 @@ $PSModuleAutoLoadingPreference = 2
 $module = "az"
 function main()
 {
-    if(!(get-module Az)){
+    if(!(get-module Az -ListAvailable)){
         if((get-module AzureRm)){
             write-error "azurerm installed. remove azurerm and then install azure az"
             return
