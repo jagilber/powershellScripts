@@ -148,6 +148,7 @@ param(
     [switch]$concurrent
 )
 
+$PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "silentlycontinue"
 $global:jobs = @{ }
 $global:joboutputs = @{ }
@@ -158,7 +159,7 @@ $global:success = 0
 $global:fail = 0
 $global:extensionInstalled = 0
 $global:extensionNotInstalled = 0
-$global:psscommand = $commandId -ieq "RunPowerShellScript"
+$global:pscommand = $commandId -ieq "RunPowerShellScript"
 
 function main() {
     $error.Clear()
