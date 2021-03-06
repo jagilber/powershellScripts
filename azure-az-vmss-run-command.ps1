@@ -509,14 +509,12 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
             -VMScaleSetName $vmssName `
             -InstanceId $instanceId `
-            -ScriptPath $script `
             -CommandId $commandId `
             -AsJob"
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
                 -InstanceId $instanceId `
-                -ScriptPath $script `
                 -CommandId $commandId `
                 -AsJob
         }
