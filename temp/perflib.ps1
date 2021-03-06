@@ -1,4 +1,5 @@
 <#
+  iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/perflib.ps1" -outFile "$pwd\perflib.ps1";.\perflib.ps1
 #>
 param(
     $logFile = "$PSScriptRoot\perf.log",
