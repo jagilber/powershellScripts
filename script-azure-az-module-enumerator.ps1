@@ -6,9 +6,20 @@ param(
     [string]$scriptDir
 )
 
+$PSModuleAutoLoadingPreference = 2
 $module = "az"
 function main()
 {
+    if(!(get-module Az)){
+        if((get-module AzureRm)){
+            write-error "azurerm installed. remove azurerm and then install azure az"
+            return
+        }
+
+        install-module Az -Force -AllowClobber
+    }
+
+    Import-Module Az
 
     if(!$scriptDir -and !$scriptFile)
     {
