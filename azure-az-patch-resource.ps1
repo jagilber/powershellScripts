@@ -346,17 +346,27 @@ function export-template($configuredResources) {
 
         $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
         write-verbose "azresource by id and version: $($azResource | format-list * | out-string)"
+        $resource = @{
+            apiVersion = $resourceApiVersion
+            #dependsOn  = @()
+            type       = $azResource.ResourceType
+            location   = $azResource.Location
+            id         = $azResource.ResourceId
+            name       = $azResource.Name 
+            tags       = $azResource.Tags
+            properties = $azResource.properties
+        }
 
-        [void]$resources.Add(@{
-                apiVersion = $resourceApiVersion
-                #dependsOn  = @()
-                type       = $azResource.ResourceType
-                location   = $azResource.Location
-                id         = $azResource.ResourceId
-                name       = $azResource.Name 
-                tags       = $azResource.Tags
-                properties = $azResource.properties
-            })
+        # add other arm objects. vmss sku is an example
+        foreach($item in $azResource.psobject.properties){
+            write-verbose "searching psobject for resourcemanager objects: item: $item"
+            if($item.TypeNameOfValue -imatch 'Microsoft.Azure.Management.ResourceManager'){
+                write-verbose "adding psobject for resourcemanager objects: item: $item"
+                [void]$resource.Add($item.Name,$azresource."$($item.Name)")
+            }
+        }
+
+        [void]$resources.Add($resource)
     }
 
     if (!(create-jsonTemplate -resources $resources -jsonFile $templateJsonFile)) { return }
