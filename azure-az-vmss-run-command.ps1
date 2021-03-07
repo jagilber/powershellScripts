@@ -397,7 +397,7 @@ function monitor-jobs() {
 
         write-host "." -NoNewline    
         $instances = Get-azVmssVM -ResourceGroupName $resourceGroup -vmscalesetname $vmssName -InstanceView
-        write-verbose "$($instances | convertto-json)"
+        write-verbose "$($instances | convertto-json -WarningAction SilentlyContinue)"
 
         $currentJobsCount = (get-job).count
         $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed:"
