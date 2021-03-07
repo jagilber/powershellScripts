@@ -148,6 +148,7 @@ param(
     [switch]$concurrent
 )
 
+$PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "silentlycontinue"
 $global:jobs = @{ }
 $global:joboutputs = @{ }
@@ -158,7 +159,7 @@ $global:success = 0
 $global:fail = 0
 $global:extensionInstalled = 0
 $global:extensionNotInstalled = 0
-$global:psscommand = $commandId -ieq "RunPowerShellScript"
+$global:pscommand = $commandId -ieq "RunPowerShellScript"
 
 function main() {
     $error.Clear()
@@ -396,7 +397,7 @@ function monitor-jobs() {
 
         write-host "." -NoNewline    
         $instances = Get-azVmssVM -ResourceGroupName $resourceGroup -vmscalesetname $vmssName -InstanceView
-        write-verbose "$($instances | convertto-json)"
+        write-verbose "$($instances | convertto-json -WarningAction SilentlyContinue)"
 
         $currentJobsCount = (get-job).count
         $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed:"
@@ -508,14 +509,12 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
             -VMScaleSetName $vmssName `
             -InstanceId $instanceId `
-            -ScriptPath $script `
             -CommandId $commandId `
             -AsJob"
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
                 -InstanceId $instanceId `
-                -ScriptPath $script `
                 -CommandId $commandId `
                 -AsJob
         }

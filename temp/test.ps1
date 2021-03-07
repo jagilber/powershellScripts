@@ -1,0 +1,3 @@
+ipconfig
+whoami
+dir
