@@ -80,8 +80,6 @@ function main() {
         return
     }
 
-    write-host "running quickstart:$($quickStartTemplate) for group $($resourceGroup)"
-
     write-host "authenticating to azure"
     try {
         get-command connect-azaccount | Out-Null
