@@ -1,46 +1,29 @@
 <#
 .SYNOPSIS
-    powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
+    powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
+
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
     .\azure-az-sf-export-arm-template.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
 .DESCRIPTION  
-    powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com.
-    useful for environments where resources.azure.com is not an option.
+    powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
+    this assumes all resources in same resource group as that is the only way to deploy from portal
+    
     PRECAUTION: when script queries the arm resources, if unable to determine configured api version, 
      the latest api version for that resource will be written to the template.json.
 
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 200917
+    Version    : 210307
     History    : 
 
 .EXAMPLE 
     .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
-    enumerate all resources in resource group 'clusteresourcegroup' and generate template.json
+    export sf resources in resource group 'clusteresourcegroup' and generate template.json
 
-.EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -patch
-    patch all resources in resource group 'clusteresourcegroup' using existing template.json
-
-.EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -resource nt0
-    enumerate resource named 'nt0' in resource group 'clusteresourcegroup' and generate template.json
-
-.EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -resource nt0 -patch
-    patch all resource named 'nt0' in resource group 'clusteresourcegroup' using existing template.json
-
-.EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -templatejsonfile clusterresourcegroup.json
-    enumerate all resources in resource group 'clusteresourcegroup' and generate clusterresourcegroup.json
-
-.EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -patch -templatejsonfile clusterresourcegroup.json
-    patch all resources in resource group 'clusteresourcegroup' using existing clusterresourcegroup.json
 #>
 
 [cmdletbinding()]
@@ -49,7 +32,7 @@ param (
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = './template.json', 
+    [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
@@ -103,13 +86,11 @@ function main () {
         }
     }
     else {
-        write-host "getting resource group resource ids $resourceGroupName"
-        $resources = @((get-azresource -ResourceGroupName $resourceGroupName))
-        if ($excludeResourceNames) {
-            $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
+        $resourceIds = enum-resources
+        foreach ($resourceId in $resourceIds) {
+            $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
+            $global:configuredRGResources.Add($resource)
         }
-
-        $global:configuredRGResources.AddRange($resources)
     }
 
     display-settings -resources $global:configuredRGResources
@@ -378,6 +359,261 @@ function export-template($configuredResources) {
 
     if (!(create-jsonTemplate -resources $resources -jsonFile $templateJsonFile)) { return }
     return
+}
+
+function enum-clusterResource() {
+    $clusters = @(get-azresource -ResourceGroupName $resourceGroupName `
+            -ResourceType 'Microsoft.ServiceFabric/clusters' `
+            -ExpandProperties)
+    $clusterResource = $null
+    $count = 1
+    $number = 0
+
+    write-verbose "all clusters $clusters"
+    if ($clusters.count -gt 1) {
+        foreach ($cluster in $clusters) {
+            write-host "$($count). $($rg.ResourceGroupName)"
+            $count++
+        }
+        
+        $number = [convert]::ToInt32((read-host "enter number of the cluster to query or ctrl-c to exit:"))
+        if ($number -le $count) {
+            $clusterResource = $resourceGroups[$number - 1].ResourceGroupName
+            write-host $clusterResource
+        }
+        else {
+            return $null
+        }
+    }
+    elseif ($clusters.count -lt 1) {
+        return $null
+    }
+    else {
+        $clusterResource = $clusters[0]
+    }
+
+    write-host "using cluster resource $clusterResource" -ForegroundColor Green
+    return $clusterResource
+}
+
+function enum-ipResources($lbResources) {
+    $resources = [collections.arraylist]::new()
+
+    foreach ($lbResource in $lbResources) {
+        write-host "checking lbResource for ip config $lbResource"
+        $lb = get-azresource -ResourceId $lbResource -ExpandProperties
+        foreach ($fec in $lb.Properties.frontendIPConfigurations) {
+            if ($fec.properties.publicIpAddress) {
+                $id = $fec.properties.publicIpAddress.id
+                write-host "adding public ip: $id" -ForegroundColor green
+                [void]$resources.Add($id)
+            }
+        }
+    }
+
+    write-verbose "ip resources $resources)"
+    return $resources.ToArray() | sort-object -Unique
+}
+
+function enum-kvResources($vmssResources) {
+    $resources = [collections.arraylist]::new()
+
+    foreach ($vmssResource in $vmssResources) {
+        write-host "checking vmssResource for key vaults $($vmssResource.Name)"
+        foreach ($id in $vmssResource.Properties.virtualMachineProfile.osProfile.secrets.sourceVault.id) {
+            write-host "adding kv id: $id" -ForegroundColor green
+            [void]$resources.Add($id)
+        }
+    }
+
+    write-verbose "kv resources $resources)"
+    return $resources.ToArray() | sort-object -Unique
+}
+
+function enum-lbResources($vmssResources) {
+    $resources = [collections.arraylist]::new()
+
+    foreach ($vmssResource in $vmssResources) {
+        # get nic for vnet/subnet and lb
+        write-host "checking vmssResource for network config $($vmssResource.Name)"
+        foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
+            foreach ($ipconfig in $nic.properties.ipConfigurations) {
+                $id = [regex]::replace($ipconfig.properties.loadBalancerBackendAddressPools.id, '/backendAddressPools/.+$', '')
+                write-host "adding lb id: $id" -ForegroundColor green
+                [void]$resources.Add($id)
+            }
+        }
+    }
+
+    write-verbose "lb resources $resources)"
+    return $resources.ToArray() | sort-object -Unique
+}
+
+function enum-nsgResources($vmssResources) {
+    $nsgResources = [collections.arraylist]::new()
+
+    foreach ($vnetId in $vnetResources) {
+        $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
+        write-host "checking vnet resource for nsg config $($vnetresource.Name)"
+        foreach ($subnet in $vnetResource.Properties.subnets) {
+            if ($subnet.properties.networkSecurityGroup.id) {
+                $id = $subnet.properties.networkSecurityGroup.id
+                write-host "adding nsg id: $id" -ForegroundColor green
+                [void]$resources.Add($id)
+            }
+        }
+
+    }
+
+    write-verbose "nsg resources $resources"
+    return $resources.ToArray() | sort-object -Unique
+}
+
+function enum-resources() {
+    $resources = [collections.arraylist]::new()
+
+    write-host "getting resource group cluster $resourceGroupName"
+    $clusterResource = @(enum-clusterResource)
+    if (!$clusterResource) {
+        write-error "unable to enumerate cluster. exiting"
+        return $null
+    }
+    [void]$resources.Add($clusterResource.Id)
+
+    write-host "getting scalesets $resourceGroupName"
+    $vmssResources = @(enum-vmssResources $clusterResource)
+    if (!$vmssResources) {
+        write-error "unable to enumerate vmss. exiting"
+        return $null
+    }
+    if ($vmssResources.count -gt 1) {
+        [void]$resources.AddRange($vmssResources.Id)
+    }
+    else {
+        [void]$resources.Add($vmssResources.Id)
+    }
+    
+
+    write-host "getting virtualnetworks $resourceGroupName"
+    $vnetResources = @(enum-vnetResources $vmssResources)
+    if (!$vnetResources) {
+        write-error "unable to enumerate vnets. exiting"
+        return $null
+    }
+    if ($vnetResources.count -gt 1) {
+        [void]$resources.AddRange($vnetResources)
+    }
+    else {
+        [void]$resources.Add($vnetResources)
+    }
+
+    write-host "getting loadbalancers $resourceGroupName"
+    $lbResources = @(enum-lbResources $vmssResources)
+    if (!$lbResources) {
+        write-error "unable to enumerate loadbalancers. exiting"
+        return $null
+    }
+    if ($lbResources.count -gt 1) {
+        [void]$resources.AddRange($lbResources)
+    }
+    else {
+        [void]$resources.Add($lbResources)
+    }
+
+    write-host "getting ip addresses $resourceGroupName"
+    $ipResources = @(enum-ipResources $lbResources)
+    if (!$ipResources) {
+        write-warning "unable to enumerate ips."
+        #return $null
+    }
+    if ($ipResources.count -gt 1) {
+        [void]$resources.AddRange($ipResources)
+    }
+    else {
+        [void]$resources.Add($ipResources)
+    }
+
+    write-host "getting key vaults $resourceGroupName"
+    $kvResources = @(enum-kvResources $vmssResources)
+    if (!$kvResources) {
+        write-warning "unable to enumerate key vaults."
+        #return $null
+    }
+
+    if ($kvResources.count -gt 1) {
+        [void]$resources.AddRange($kvResources)
+    }
+    elseif ($kvResources.count -eq 1) {
+        [void]$resources.Add($kvResources)
+    }
+
+    write-host "getting nsgs $resourceGroupName"
+    $nsgResources = @(enum-nsgResources $vmssResources)
+    if (!$nsgResources) {
+        write-warning "unable to enumerate nsgs."
+        #return $null
+    }
+
+    if ($nsgResources.count -gt 1) {
+        [void]$resources.AddRange($nsgResources)
+    }
+    elseif ($nsgResources.count -eq 1) {
+        [void]$resources.Add($nsgResources)
+    }
+
+    if ($excludeResourceNames) {
+        $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
+    }
+
+    return $resources | sort-object -Unique
+}
+
+function enum-vmssResources($clusterResource) {
+    $nodeTypes = $clusterResource.Properties.nodeTypes
+    write-host "cluster nodetypes $($nodeTypes| convertto-json)"
+    $vmssResources = [collections.arraylist]::new()
+
+    $clusterEndpoint = $clusterResource.Properties.clusterEndpoint
+    write-host "cluster id $clusterEndpoint" -ForegroundColor Green
+    
+    if (!$nodeTypes -or !$clusterEndpoint) {
+        return $null
+    }
+
+    $resources = @(get-azresource -ResourceGroupName $resourceGroupName `
+            -ResourceType 'Microsoft.Compute/virtualMachineScaleSets' `
+            -ExpandProperties)
+
+    write-verbose "vmss resources $resources"
+
+    foreach ($resource in $resources) {
+        if (($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings 
+                | Select-Object clusterEndpoint).clusterEndpoint -ieq $clusterEndpoint) {
+            write-host "adding vmss resource $($resource | convertto-json)"
+            [void]$vmssResources.Add($resource)
+        }
+    }
+
+    return $vmssResources.ToArray() | sort-object -Unique
+}
+
+function enum-vnetResources($vmssResources) {
+    $resources = [collections.arraylist]::new()
+
+    foreach ($vmssResource in $vmssResources) {
+        # get nic for vnet/subnet and lb
+        write-host "checking vmssResource for network config $($vmssResource.Name)"
+        foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
+            foreach ($ipconfig in $nic.properties.ipConfigurations) {
+                $id = [regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
+                write-host "adding vnet id: $id" -ForegroundColor green
+                [void]$resources.Add($id)
+            }
+        }
+    }
+
+    write-verbose "vnet resources $resources"
+    return $resources.ToArray() | sort-object -Unique
 }
 
 function remove-jobs() {
