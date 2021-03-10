@@ -2,6 +2,14 @@
 .SYNOPSIS
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
 
+    dependencies:
+        loadbalancer depends on public ip
+        vmss depends on
+            vnet
+            loadbalancer
+            storage account sflogs
+            storage account diag
+        cluster depends on storage account sflogs
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
@@ -89,7 +97,13 @@ function main () {
         $resourceIds = enum-resources
         foreach ($resourceId in $resourceIds) {
             $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
-            $global:configuredRGResources.Add($resource)
+            if($resource.ResourceGroupName -ieq $resourceGroupName){
+                write-host "adding resource id to configured resources: $($resource.resourceId)" -ForegroundColor Cyan
+                [void]$global:configuredRGResources.Add($resource)
+            }
+            else{
+                write-warning "skipping resource $($resource.resourceid) as it is out of resource group scope $($resource.ResourceGroupName)"
+            }
         }
     }
 
@@ -108,10 +122,68 @@ function main () {
         wait-jobs
     }
     else {
-        export-template -configuredResources $global:configuredRGResources
+        export-template -configuredResources $global:configuredRGResources -jsonFile $templateJsonFile
         write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
 
+        $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
+        # save raw file
+        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".export.json")
+
+        # fix up deploy errors by removing duplicated sub resources on root like lb rules by
+        # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
+        $currentResources = [collections.arraylist]::new() #$currentConfig.resources | convertto-json | convertfrom-json
+
+        $resourceTypes = $global:configuredRGResources.resourceType
+        foreach ($resource in $currentConfig.resources.GetEnumerator()) {
+            write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
+            write-verbose "checking exported resource $($resource | convertto-json)"
+            if ($resourceTypes.Contains($resource.type)) {
+                write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
+                write-verbose "adding exported resource $($resource | convertto-json)"
+                [void]$currentResources.Add($resource)
+            }
+        }
+        $currentConfig.resources = $currentResources
+
+        $lbResources = $currentConfig.resources | ? type -ieq 'Microsoft.Network/loadBalancers'
+        foreach($lbResource in $lbResources){
+            # fix backend pool
+            write-host "fixing exported lb resource $($lbresource | convertto-json)"
+            $parameterName = [regex]::match($lbresource.name, "\[parameters\('(.+?)'\)\]",[text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
+            if($parameterName){
+                $name = $currentConfig.parameters.$parametername.defaultValue
+            }
+
+            if(!$name){
+                $name = $lbResource.name
+            }
+
+            $lb = get-azresource -ResourceGroupName $resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
+            $dependsOn = [collections.arraylist]::new()
+
+            write-host "removing backendpool from lb dependson"
+            foreach($depends in $lbresource.dependsOn){
+                if($depends -inotmatch $lb.Properties.backendAddressPools.Name){
+                    [void]$dependsOn.Add($depends)
+                }
+            }
+            $lbResource.dependsOn = $dependsOn.ToArray()
+            
+            #$lbResource.properties.frontendIPConfigurations = $lb.Properties.frontendIPConfigurations
+            #$lbResource.properties.backendAddressPools = $lb.Properties.backendAddressPools
+            #$lbResource.properties.loadBalancingRules = $lb.Properties.loadBalancingRules
+
+
+            # fix dupe pools and rules
+            if($lbResource.properties.inboundNatPools){
+                write-host "removing natrules: $($lbResource.properties.inboundNatRules | convertto-json)"
+                $lbResource.properties.psobject.Properties.Remove('inboundNatRules')
+            }
+        }
+
+        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".base.json")
+        
         $error.clear()
         code $templateJsonFile
         if ($error) {
@@ -292,8 +364,8 @@ function display-settings($resources) {
     write-host "current settings: `r`n $settings" -ForegroundColor Green
 }
 
-function export-template($configuredResources) {
-    write-host "exporting template to $templateJsonFile" -ForegroundColor Yellow
+function export-template($configuredResources, $jsonFile) {
+    write-host "exporting template to $jsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
     $azResourceGroupLocation = @($configuredResources)[0].Location
     
@@ -305,25 +377,24 @@ function export-template($configuredResources) {
     $resourceIds = @($configuredResources.ResourceId)
     write-host "resource ids: $resourceIds" -ForegroundColor green
 
-    write-host "
-        Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
-            -Path $templateJsonFile `
+    write-host "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
+            -Path $jsonFile `
             -Force `
             -IncludeParameterDefaultValue `
             -Resource $resourceIds
     "
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
-        -Path $templateJsonFile `
+        -Path $jsonFile `
         -Force `
         -IncludeParameterDefaultValue `
         -Resource $resourceIds
     
     return
 
-    $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
+    $currentConfig = Get-Content -raw $jsonFile | convertfrom-json
     $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
     write-host ($currentApiVersions | format-list * | out-string)
-    remove-item $templateJsonFile -Force
+    remove-item $jsonFile -Force
     
     foreach ($azResource in $configuredResources) {
         write-verbose "azresource by id: $($azResource | format-list * | out-string)"
@@ -357,7 +428,7 @@ function export-template($configuredResources) {
             })
     }
 
-    if (!(create-jsonTemplate -resources $resources -jsonFile $templateJsonFile)) { return }
+    if (!(create-jsonTemplate -resources $resources -jsonFile $jsonFile)) { return }
     return
 }
 
@@ -450,7 +521,7 @@ function enum-lbResources($vmssResources) {
 }
 
 function enum-nsgResources($vmssResources) {
-    $nsgResources = [collections.arraylist]::new()
+    $resources = [collections.arraylist]::new()
 
     foreach ($vnetId in $vnetResources) {
         $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
