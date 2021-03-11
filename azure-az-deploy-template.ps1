@@ -53,7 +53,6 @@ param(
     [switch]$test,
     [Parameter(Mandatory = $true)]
     [string]$templateFile,
-    [Parameter(Mandatory = $true)]
     [string]$templateParameterFile,
     [hashtable]$additionalParameters = @{},
     [switch]$clean,
@@ -71,13 +70,13 @@ function main() {
     }
 
     if (!(test-path $templateFile)) {
-        write-host "unable to find json file $($templateFile)"
+        write-host "unable to find template file $($templateFile)"
         return
     }
 
     if (!(test-path $templateParameterFile)) {
-        write-host "unable to find json file $($templateParameterFile)"
-        return
+        Write-Warning "unable to find paramater file $($templateParameterFile)"
+        $templateParameterFile = $null
     }
 
     write-host "authenticating to azure"
@@ -136,14 +135,17 @@ function main() {
         return 1
     }
 
-    write-host "reading parameter file $($templateParameterFile)"
     $templateParameters = @{}
-    $jsonParameters = ConvertFrom-Json (get-content -Raw -Path $templateParameterFile)
-    $jsonParameters | ConvertTo-Json
 
-    # convert pscustom object to hashtable
-    foreach($jsonParameter in $jsonParameters.parameters.psobject.properties) {
-        $templateParameters.Add($jsonParameter.name, $jsonParameter.value.value)
+    if ($templateParameterFile) {
+        write-host "reading parameter file $($templateParameterFile)"
+        $jsonParameters = ConvertFrom-Json (get-content -Raw -Path $templateParameterFile)
+        $jsonParameters | ConvertTo-Json
+
+        # convert pscustom object to hashtable
+        foreach ($jsonParameter in $jsonParameters.parameters.psobject.properties) {
+            $templateParameters.Add($jsonParameter.name, $jsonParameter.value.value)
+        }
     }
 
     if ($error) {
