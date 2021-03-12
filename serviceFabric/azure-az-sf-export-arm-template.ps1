@@ -56,6 +56,8 @@ $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
 $global:configuredRGResources = [collections.arraylist]::new()
+$global:sflogs = $null
+$global:sfdiags = $null
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
@@ -483,7 +485,7 @@ function enum-ipResources($lbResources) {
     }
 
     write-verbose "ip resources $resources)"
-    return $resources.ToArray() | sort-object -Unique
+    return $resources.ToArray() | sort-object name -Unique
 }
 
 function enum-kvResources($vmssResources) {
@@ -498,7 +500,7 @@ function enum-kvResources($vmssResources) {
     }
 
     write-verbose "kv resources $resources)"
-    return $resources.ToArray() | sort-object -Unique
+    return $resources.ToArray() | sort-object name -Unique
 }
 
 function enum-lbResources($vmssResources) {
@@ -517,7 +519,7 @@ function enum-lbResources($vmssResources) {
     }
 
     write-verbose "lb resources $resources)"
-    return $resources.ToArray() | sort-object -Unique
+    return $resources.ToArray() | sort-object name -Unique
 }
 
 function enum-nsgResources($vmssResources) {
@@ -537,7 +539,7 @@ function enum-nsgResources($vmssResources) {
     }
 
     write-verbose "nsg resources $resources"
-    return $resources.ToArray() | sort-object -Unique
+    return $resources.ToArray() | sort-object name -Unique
 }
 
 function enum-resources() {
@@ -557,25 +559,28 @@ function enum-resources() {
         write-error "unable to enumerate vmss. exiting"
         return $null
     }
-    if ($vmssResources.count -gt 1) {
+    if ($vmssResources) {
         [void]$resources.AddRange($vmssResources.Id)
     }
-    else {
-        [void]$resources.Add($vmssResources.Id)
+
+    write-host "getting storage $resourceGroupName"
+    $storageResources = @(enum-storageResources $clusterResource)
+    if (!$storageResources) {
+        write-error "unable to enumerate storage. exiting"
+        return $null
+    }
+    if ($storageResources) {
+        [void]$resources.AddRange($storageResources.Id)
     }
     
-
     write-host "getting virtualnetworks $resourceGroupName"
     $vnetResources = @(enum-vnetResources $vmssResources)
     if (!$vnetResources) {
         write-error "unable to enumerate vnets. exiting"
         return $null
     }
-    if ($vnetResources.count -gt 1) {
+    if ($vnetResources) {
         [void]$resources.AddRange($vnetResources)
-    }
-    else {
-        [void]$resources.Add($vnetResources)
     }
 
     write-host "getting loadbalancers $resourceGroupName"
@@ -584,11 +589,8 @@ function enum-resources() {
         write-error "unable to enumerate loadbalancers. exiting"
         return $null
     }
-    if ($lbResources.count -gt 1) {
+    if ($lbResources) {
         [void]$resources.AddRange($lbResources)
-    }
-    else {
-        [void]$resources.Add($lbResources)
     }
 
     write-host "getting ip addresses $resourceGroupName"
@@ -597,11 +599,8 @@ function enum-resources() {
         write-warning "unable to enumerate ips."
         #return $null
     }
-    if ($ipResources.count -gt 1) {
+    if ($ipResources) {
         [void]$resources.AddRange($ipResources)
-    }
-    else {
-        [void]$resources.Add($ipResources)
     }
 
     write-host "getting key vaults $resourceGroupName"
@@ -611,11 +610,8 @@ function enum-resources() {
         #return $null
     }
 
-    if ($kvResources.count -gt 1) {
+    if ($kvResources) {
         [void]$resources.AddRange($kvResources)
-    }
-    elseif ($kvResources.count -eq 1) {
-        [void]$resources.Add($kvResources)
     }
 
     write-host "getting nsgs $resourceGroupName"
@@ -624,12 +620,8 @@ function enum-resources() {
         write-warning "unable to enumerate nsgs."
         #return $null
     }
-
-    if ($nsgResources.count -gt 1) {
+    if ($nsgResources) {
         [void]$resources.AddRange($nsgResources)
-    }
-    elseif ($nsgResources.count -eq 1) {
-        [void]$resources.Add($nsgResources)
     }
 
     if ($excludeResourceNames) {
@@ -637,6 +629,31 @@ function enum-resources() {
     }
 
     return $resources | sort-object -Unique
+}
+
+function enum-storageResources($clusterResource) {
+    $resources = [collections.arraylist]::new()
+    
+    $sflogs = $clusterResource.Properties.diagnosticsStorageAccountConfig.storageAccountName
+    write-host "cluster sflogs storage account $sflogs"
+
+    $scalesets = enum-vmssResources($clusterResource)
+    $sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties 
+        | where-object type -eq 'IaaSDiagnostics').settings.storageAccount)
+    write-host "cluster sfdiags storage account $sfdiags"
+  
+    $storageResources = @(get-azresource -ResourceGroupName $resourceGroupName `
+            -ResourceType 'Microsoft.Storage/storageAccounts' `
+            -ExpandProperties)
+
+    $global:sflogs = $storageResources | where-object name -ieq $sflogs
+    $global:sfdiags = $storageResources | where-object name -ieq $sfdiags
+    
+    [void]$resources.add($global:sflogs)
+    [void]$resources.add($global:sfdiags)
+    
+    write-verbose "storage resources $resources"
+    return $resources.ToArray() | sort-object name -Unique
 }
 
 function enum-vmssResources($clusterResource) {
@@ -665,7 +682,7 @@ function enum-vmssResources($clusterResource) {
         }
     }
 
-    return $vmssResources.ToArray() | sort-object -Unique
+    return $vmssResources.ToArray() | sort-object name -Unique
 }
 
 function enum-vnetResources($vmssResources) {
@@ -684,7 +701,7 @@ function enum-vnetResources($vmssResources) {
     }
 
     write-verbose "vnet resources $resources"
-    return $resources.ToArray() | sort-object -Unique
+    return $resources.ToArray() | sort-object name -Unique
 }
 
 function remove-jobs() {
