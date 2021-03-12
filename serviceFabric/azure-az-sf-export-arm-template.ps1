@@ -58,6 +58,7 @@ $global:resourceWarnings = 0
 $global:configuredRGResources = [collections.arraylist]::new()
 $global:sflogs = $null
 $global:sfdiags = $null
+$global:startTime = get-date
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
@@ -82,8 +83,6 @@ function main () {
         Connect-AzAccount
     }
 
-    $global:startTime = get-date
-
     if (!$resourceGroupName -or !$templateJsonFile) {
         write-error 'specify resourceGroupName'
         return
@@ -96,14 +95,14 @@ function main () {
         }
     }
     else {
-        $resourceIds = enum-resources
+        $resourceIds = enum-allResources
         foreach ($resourceId in $resourceIds) {
             $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
-            if($resource.ResourceGroupName -ieq $resourceGroupName){
+            if ($resource.ResourceGroupName -ieq $resourceGroupName) {
                 write-host "adding resource id to configured resources: $($resource.resourceId)" -ForegroundColor Cyan
                 [void]$global:configuredRGResources.Add($resource)
             }
-            else{
+            else {
                 write-warning "skipping resource $($resource.resourceid) as it is out of resource group scope $($resource.ResourceGroupName)"
             }
         }
@@ -129,62 +128,36 @@ function main () {
         write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
 
         $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
+        
         # save raw file
         $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".export.json")
 
-        # fix up deploy errors by removing duplicated sub resources on root like lb rules by
-        # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
-        $currentResources = [collections.arraylist]::new() #$currentConfig.resources | convertto-json | convertfrom-json
+        # create base /current template
+        remove-duplicateResources($currentConfig)
+        modify-lbResources($currentConfig)
+        modify-vmssResources($currentConfig)
 
-        $resourceTypes = $global:configuredRGResources.resourceType
-        foreach ($resource in $currentConfig.resources.GetEnumerator()) {
-            write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
-            write-verbose "checking exported resource $($resource | convertto-json)"
-            if ($resourceTypes.Contains($resource.type)) {
-                write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
-                write-verbose "adding exported resource $($resource | convertto-json)"
-                [void]$currentResources.Add($resource)
-            }
-        }
-        $currentConfig.resources = $currentResources
+        add-paramaters($currentConfig)
+        verify-config($clusterResource)
+        
+        # save base / current json
+        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
 
-        $lbResources = $currentConfig.resources | ? type -ieq 'Microsoft.Network/loadBalancers'
-        foreach($lbResource in $lbResources){
-            # fix backend pool
-            write-host "fixing exported lb resource $($lbresource | convertto-json)"
-            $parameterName = [regex]::match($lbresource.name, "\[parameters\('(.+?)'\)\]",[text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
-            if($parameterName){
-                $name = $currentConfig.parameters.$parametername.defaultValue
-            }
+        # create redeploy template
+        modify-clusterResourcesForReDeploy($currentConfig)
+        modify-vmssResourcesForReDeploy($currentConfig)
+        
+        # save redeploy json
+        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
 
-            if(!$name){
-                $name = $lbResource.name
-            }
-
-            $lb = get-azresource -ResourceGroupName $resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
-            $dependsOn = [collections.arraylist]::new()
-
-            write-host "removing backendpool from lb dependson"
-            foreach($depends in $lbresource.dependsOn){
-                if($depends -inotmatch $lb.Properties.backendAddressPools.Name){
-                    [void]$dependsOn.Add($depends)
-                }
-            }
-            $lbResource.dependsOn = $dependsOn.ToArray()
-            
-            #$lbResource.properties.frontendIPConfigurations = $lb.Properties.frontendIPConfigurations
-            #$lbResource.properties.backendAddressPools = $lb.Properties.backendAddressPools
-            #$lbResource.properties.loadBalancingRules = $lb.Properties.loadBalancingRules
-
-
-            # fix dupe pools and rules
-            if($lbResource.properties.inboundNatPools){
-                write-host "removing natrules: $($lbResource.properties.inboundNatRules | convertto-json)"
-                $lbResource.properties.psobject.Properties.Remove('inboundNatRules')
-            }
-        }
-
-        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".base.json")
+        # create deploy / new / add template
+        modify-clusterResourcesForDeploy($currentConfig)
+        modify-vmssResourcesForDeploy($currentConfig)
+        modify-ipResourcesForDeploy($currentConfig)
+        modify-storageResourcesForDeploy($currentConfig)
+        
+        # save add json
+        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
         
         $error.clear()
         code $templateJsonFile
@@ -388,6 +361,7 @@ function export-template($configuredResources, $jsonFile) {
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
         -Path $jsonFile `
         -Force `
+        -IncludeComments `
         -IncludeParameterDefaultValue `
         -Resource $resourceIds
     
@@ -434,6 +408,93 @@ function export-template($configuredResources, $jsonFile) {
     return
 }
 
+function enum-allResources() {
+    $resources = [collections.arraylist]::new()
+
+    write-host "getting resource group cluster $resourceGroupName"
+    $clusterResource = @(enum-clusterResource)
+    if (!$clusterResource) {
+        write-error "unable to enumerate cluster. exiting"
+        return $null
+    }
+    [void]$resources.Add($clusterResource.Id)
+
+    write-host "getting scalesets $resourceGroupName"
+    $vmssResources = enum-vmssResources $clusterResource
+    if (!$vmssResources) {
+        write-error "unable to enumerate vmss. exiting"
+        return $null
+    }
+    else {
+        [void]$resources.AddRange(@($vmssResources.Id))
+    }
+
+    write-host "getting storage $resourceGroupName"
+    $storageResources = enum-storageResources $clusterResource
+    if (!$storageResources) {
+        write-error "unable to enumerate storage. exiting"
+        return $null
+    }
+    else {
+        [void]$resources.AddRange(@($storageResources.Id))
+    }
+    
+    write-host "getting virtualnetworks $resourceGroupName"
+    $vnetResources = enum-vnetResources $vmssResources
+    if (!$vnetResources) {
+        write-error "unable to enumerate vnets. exiting"
+        return $null
+    }
+    else {
+        [void]$resources.AddRange(@($vnetResources))
+    }
+
+    write-host "getting loadbalancers $resourceGroupName"
+    $lbResources = enum-lbResources $vmssResources
+    if (!$lbResources) {
+        write-error "unable to enumerate loadbalancers. exiting"
+        return $null
+    }
+    else {
+        [void]$resources.AddRange(@($lbResources))
+    }
+
+    write-host "getting ip addresses $resourceGroupName"
+    $ipResources = enum-ipResources $lbResources
+    if (!$ipResources) {
+        write-warning "unable to enumerate ips."
+        #return $null
+    }
+    else {
+        [void]$resources.AddRange(@($ipResources))
+    }
+
+    write-host "getting key vaults $resourceGroupName"
+    $kvResources = enum-kvResources $vmssResources
+    if (!$kvResources) {
+        write-warning "unable to enumerate key vaults."
+        #return $null
+    }
+    else {
+        [void]$resources.AddRange(@($kvResources))
+    }
+
+    write-host "getting nsgs $resourceGroupName"
+    $nsgResources = enum-nsgResources $vmssResources
+    if (!$nsgResources) {
+        write-warning "unable to enumerate nsgs."
+        #return $null
+    }
+    else {
+        [void]$resources.AddRange(@($nsgResources))
+    }
+
+    if ($excludeResourceNames) {
+        $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
+    }
+
+    return $resources | sort-object -Unique
+}
 function enum-clusterResource() {
     $clusters = @(get-azresource -ResourceGroupName $resourceGroupName `
             -ResourceType 'Microsoft.ServiceFabric/clusters' `
@@ -542,95 +603,6 @@ function enum-nsgResources($vmssResources) {
     return $resources.ToArray() | sort-object name -Unique
 }
 
-function enum-resources() {
-    $resources = [collections.arraylist]::new()
-
-    write-host "getting resource group cluster $resourceGroupName"
-    $clusterResource = @(enum-clusterResource)
-    if (!$clusterResource) {
-        write-error "unable to enumerate cluster. exiting"
-        return $null
-    }
-    [void]$resources.Add($clusterResource.Id)
-
-    write-host "getting scalesets $resourceGroupName"
-    $vmssResources = @(enum-vmssResources $clusterResource)
-    if (!$vmssResources) {
-        write-error "unable to enumerate vmss. exiting"
-        return $null
-    }
-    if ($vmssResources) {
-        [void]$resources.AddRange($vmssResources.Id)
-    }
-
-    write-host "getting storage $resourceGroupName"
-    $storageResources = @(enum-storageResources $clusterResource)
-    if (!$storageResources) {
-        write-error "unable to enumerate storage. exiting"
-        return $null
-    }
-    if ($storageResources) {
-        [void]$resources.AddRange($storageResources.Id)
-    }
-    
-    write-host "getting virtualnetworks $resourceGroupName"
-    $vnetResources = @(enum-vnetResources $vmssResources)
-    if (!$vnetResources) {
-        write-error "unable to enumerate vnets. exiting"
-        return $null
-    }
-    if ($vnetResources) {
-        [void]$resources.AddRange($vnetResources)
-    }
-
-    write-host "getting loadbalancers $resourceGroupName"
-    $lbResources = @(enum-lbResources $vmssResources)
-    if (!$lbResources) {
-        write-error "unable to enumerate loadbalancers. exiting"
-        return $null
-    }
-    if ($lbResources) {
-        [void]$resources.AddRange($lbResources)
-    }
-
-    write-host "getting ip addresses $resourceGroupName"
-    $ipResources = @(enum-ipResources $lbResources)
-    if (!$ipResources) {
-        write-warning "unable to enumerate ips."
-        #return $null
-    }
-    if ($ipResources) {
-        [void]$resources.AddRange($ipResources)
-    }
-
-    write-host "getting key vaults $resourceGroupName"
-    $kvResources = @(enum-kvResources $vmssResources)
-    if (!$kvResources) {
-        write-warning "unable to enumerate key vaults."
-        #return $null
-    }
-
-    if ($kvResources) {
-        [void]$resources.AddRange($kvResources)
-    }
-
-    write-host "getting nsgs $resourceGroupName"
-    $nsgResources = @(enum-nsgResources $vmssResources)
-    if (!$nsgResources) {
-        write-warning "unable to enumerate nsgs."
-        #return $null
-    }
-    if ($nsgResources) {
-        [void]$resources.AddRange($nsgResources)
-    }
-
-    if ($excludeResourceNames) {
-        $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
-    }
-
-    return $resources | sort-object -Unique
-}
-
 function enum-storageResources($clusterResource) {
     $resources = [collections.arraylist]::new()
     
@@ -639,7 +611,7 @@ function enum-storageResources($clusterResource) {
 
     $scalesets = enum-vmssResources($clusterResource)
     $sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties 
-        | where-object type -eq 'IaaSDiagnostics').settings.storageAccount)
+            | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
     write-host "cluster sfdiags storage account $sfdiags"
   
     $storageResources = @(get-azresource -ResourceGroupName $resourceGroupName `
@@ -647,10 +619,12 @@ function enum-storageResources($clusterResource) {
             -ExpandProperties)
 
     $global:sflogs = $storageResources | where-object name -ieq $sflogs
-    $global:sfdiags = $storageResources | where-object name -ieq $sfdiags
+    $global:sfdiags = @($storageResources | where-object name -ieq $sfdiags)
     
     [void]$resources.add($global:sflogs)
-    [void]$resources.add($global:sfdiags)
+    foreach ($sfdiag in $global:sfdiags) {
+        [void]$resources.add($sfdiag)
+    }
     
     write-verbose "storage resources $resources"
     return $resources.ToArray() | sort-object name -Unique
@@ -702,6 +676,105 @@ function enum-vnetResources($vmssResources) {
 
     write-verbose "vnet resources $resources"
     return $resources.ToArray() | sort-object name -Unique
+}
+
+function modify-lbResources($currenConfig) {
+    $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
+    foreach ($lbResource in $lbResources) {
+        # fix backend pool
+        write-host "fixing exported lb resource $($lbresource | convertto-json)"
+        $parameterName = [regex]::match($lbresource.name, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
+        if ($parameterName) {
+            $name = $currentConfig.parameters.$parametername.defaultValue
+        }
+
+        if (!$name) {
+            $name = $lbResource.name
+        }
+
+        $lb = get-azresource -ResourceGroupName $resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
+        $dependsOn = [collections.arraylist]::new()
+
+        write-host "removing backendpool from lb dependson"
+        foreach ($depends in $lbresource.dependsOn) {
+            if ($depends -inotmatch $lb.Properties.backendAddressPools.Name) {
+                [void]$dependsOn.Add($depends)
+            }
+        }
+        $lbResource.dependsOn = $dependsOn.ToArray()
+        write-host "lbResource modified dependson: $($lbResource.dependson | converto-json)" -ForegroundColor Yellow
+        
+        # fix dupe pools and rules
+        if ($lbResource.properties.inboundNatPools) {
+            write-host "removing natrules: $($lbResource.properties.inboundNatRules | convertto-json)" -ForegroundColor Yellow
+            [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
+        }
+    }
+}
+
+function modify-vmssResources($currenConfig) {
+    $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+    foreach ($vmssResource in $vmssResources) {
+        # add protected settings
+        foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
+            if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
+                    StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', '$($global:sflogs.Name)'),'2015-05-01-preview').key1]"
+                    StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', '$($global:sflogs.Name)'),'2015-05-01-preview').key2]"
+                }
+                write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+            }
+
+            if ($extension.properties.type -ieq 'IaaSDiagnostics') {
+                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
+                    storageAccountName     = "$($global:sfdiags.Name)"
+                    storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', '$($global:sfdiags.Name)'),'2015-05-01-preview').key1]"
+                    storageAccountEndPoint = "https://core.windows.net/"                  
+                }
+                write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+            }
+        }
+
+        $dependsOn = [collections.arraylist]::new()
+        $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
+
+        write-host "modifying dependson"
+        foreach ($depends in $vmssResource.dependsOn) {
+            if ($depends -imatch 'backendAddressPools') { continue }
+
+            if ($depends -imatch 'Microsoft.Network/loadBalancers') {
+                [void]$dependsOn.Add($depends)
+            }
+            # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
+            if ($subnetIds.contains($depends)) {
+                write-host 'cleaning subnet dependson' -ForegroundColor Yellow
+                $depends = $depends.replace("/subnets'", "/'")
+                $depends = [regex]::replace($depends, "\), '.+?'\)\]", ")]")
+                [void]$dependsOn.Add($depends)
+            }
+        }
+        $vmssResource.dependsOn = $dependsOn.ToArray()
+        write-host "vmssResource modified dependson: $($vmssResource.dependson | converto-json)" -ForegroundColor Yellow
+    }
+}
+
+function remove-duplicateResources($currentConfig){
+            # fix up deploy errors by removing duplicated sub resources on root like lb rules by
+        # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
+        $currentResources = [collections.arraylist]::new() #$currentConfig.resources | convertto-json | convertfrom-json
+
+        $resourceTypes = $global:configuredRGResources.resourceType
+        foreach ($resource in $currentConfig.resources.GetEnumerator()) {
+            write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
+            write-verbose "checking exported resource $($resource | convertto-json)"
+            if ($resourceTypes.Contains($resource.type)) {
+                write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
+                write-verbose "adding exported resource $($resource | convertto-json)"
+                [void]$currentResources.Add($resource)
+            }
+        }
+        $currentConfig.resources = $currentResources
+
 }
 
 function remove-jobs() {
