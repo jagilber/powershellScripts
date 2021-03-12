@@ -137,28 +137,29 @@ function main () {
         modify-lbResources($currentConfig)
         modify-vmssResources($currentConfig)
 
-        add-paramaters($currentConfig)
-        verify-config($clusterResource)
+        # add-paramaters($currentConfig)
+        # verify-config($clusterResource)
         
         # save base / current json
         $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
 
-        # create redeploy template
-        modify-clusterResourcesForReDeploy($currentConfig)
-        modify-vmssResourcesForReDeploy($currentConfig)
+        # # create redeploy template
+        # modify-clusterResourcesForReDeploy($currentConfig)
+        # modify-vmssResourcesForReDeploy($currentConfig)
         
-        # save redeploy json
-        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
+        # # save redeploy json
+        # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
 
-        # create deploy / new / add template
-        modify-clusterResourcesForDeploy($currentConfig)
-        modify-vmssResourcesForDeploy($currentConfig)
-        modify-ipResourcesForDeploy($currentConfig)
-        modify-storageResourcesForDeploy($currentConfig)
+        # # create deploy / new / add template
+        # modify-clusterResourcesForDeploy($currentConfig)
+        # modify-vmssResourcesForDeploy($currentConfig)
+        # modify-ipResourcesForDeploy($currentConfig)
+        # modify-storageResourcesForDeploy($currentConfig)
         
-        # save add json
-        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
+        # # save add json
+        # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
         
+        $templateJsonFile = $templateJsonFile.Replace(".json", ".current.json")
         $error.clear()
         code $templateJsonFile
         if ($error) {
@@ -649,10 +650,13 @@ function enum-vmssResources($clusterResource) {
     write-verbose "vmss resources $resources"
 
     foreach ($resource in $resources) {
-        if (($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings 
-                | Select-Object clusterEndpoint).clusterEndpoint -ieq $clusterEndpoint) {
-            write-host "adding vmss resource $($resource | convertto-json)"
+        $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
+        if ($vmsscep -ieq $clusterEndpoint) {
+            write-host "adding vmss resource $($resource | convertto-json)" -ForegroundColor Cyan
             [void]$vmssResources.Add($resource)
+        }
+        else{
+            write-warning "vmss assigned to different cluster $vmsscep"
         }
     }
 
@@ -749,12 +753,12 @@ function modify-vmssResources($currenConfig) {
             if ($subnetIds.contains($depends)) {
                 write-host 'cleaning subnet dependson' -ForegroundColor Yellow
                 $depends = $depends.replace("/subnets'", "/'")
-                $depends = [regex]::replace($depends, "\), '.+?'\)\]", ")]")
+                $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
                 [void]$dependsOn.Add($depends)
             }
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
-        write-host "vmssResource modified dependson: $($vmssResource.dependson | converto-json)" -ForegroundColor Yellow
+        write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
     }
 }
 
