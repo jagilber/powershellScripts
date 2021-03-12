@@ -149,6 +149,14 @@ function main () {
         
         # # save redeploy json
         # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
+        # # save redeploy readme
+        # $redeployReadme = 'redeploy modifications:
+        #     - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+        #     - adminPassword required parameter added (needs to be set or one will be generated)
+        #     - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
+        #     - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+        #     '
+        # $redeployReadme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
 
         # # create deploy / new / add template
         # modify-clusterResourcesForDeploy($currentConfig)
@@ -158,7 +166,18 @@ function main () {
         
         # # save add json
         # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
-        
+        # # save add readme
+        # $addReadme = 'new / add modifications:
+        #     - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+        #     - adminPassword required parameter added (needs to be set or one will be generated)
+        #     - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
+        #     - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+        #     - dnsSettings for public Ip Address
+        #     - storageAccountNames required paramaters (needs to be unique or will be generated)
+        #     - if adding new vmss, each vmms resource needs a cluster nodetype resource added
+        #     '
+        # $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
+
         $templateJsonFile = $templateJsonFile.Replace(".json", ".current.json")
         $error.clear()
         code $templateJsonFile
