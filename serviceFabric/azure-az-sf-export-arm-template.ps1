@@ -137,11 +137,19 @@ function main () {
         modify-lbResources($currentConfig)
         modify-vmssResources($currentConfig)
 
-        # add-paramaters($currentConfig)
-        # verify-config($clusterResource)
+        add-parameters($currentConfig)
+        verify-config($currentConfig)
         
         # save base / current json
         $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
+        # save current readme
+        $currentReadme = 'current modifications:
+            - additional parameters have been added
+            - extra / duplicate child resources removed from root
+            - dependsOn modified to remove conflicting / unneeded resources
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            '
+        $currentReadme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
 
         # # create redeploy template
         # modify-clusterResourcesForReDeploy($currentConfig)
@@ -149,7 +157,7 @@ function main () {
         
         # # save redeploy json
         # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
-        # # save redeploy readme
+        # save redeploy readme
         $redeployReadme = 'redeploy modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set or one will be generated)
@@ -174,7 +182,8 @@ function main () {
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - dnsSettings for public Ip Address needs to be unique
             - storageAccountNames required parameters (needs to be unique or will be generated)
-            - if adding new vmss, each vmms resource needs a cluster nodetype resource added
+            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
+            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
             '
         $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
 
@@ -200,6 +209,10 @@ function main () {
     Write-Progress -Completed -Activity "complete"
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
+}
+
+function add-parameters($currentConfig){
+
 }
 
 function check-module() {
@@ -813,6 +826,24 @@ function remove-jobs() {
         write-host "error:$($Error | out-string)"
         $error.Clear()
     }
+}
+
+function verify-config($currentConfig){
+    $json = '.\verify-config.json'
+    $currentConfig | convertto-json -depth 99 | out-file -FilePath $json -Force
+
+    write-host "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+    -Mode Incremental `
+    -Templatefile $json `
+    -Verbose
+    " -ForegroundColor Green
+
+    Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+        -Mode Incremental `
+        -TemplateFile $json `
+        -Verbose
+
+    remove-item $json
 }
 
 function wait-jobs() {
