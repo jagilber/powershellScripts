@@ -133,59 +133,9 @@ function main () {
         # save raw file
         $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".export.json")
 
-        # create base /current template
-        remove-duplicateResources($currentConfig)
-        remove-unusedParameters($currentConfig)
-        verify-config($currentConfig)
-        
-        # save base / current json
-        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
-        # save current readme
-        $currentReadme = 'current modifications:
-            - additional parameters have been added
-            - extra / duplicate child resources removed from root
-            - dependsOn modified to remove conflicting / unneeded resources
-            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            '
-        $currentReadme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
-
-        # create redeploy template
-        modify-clusterResourceRedeploy($currentConfig)
-        modify-lbResourcesRedeploy($currentConfig)
-        modify-vmssResourcesRedeploy($currentConfig)
-        modify-ipAddressesRedeploy($currentConfig)
-        
-        # # save redeploy json
-        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
-        # save redeploy readme
-        $redeployReadme = 'redeploy modifications:
-            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
-            - adminPassword required parameter added (needs to be set or one will be generated)
-            - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
-            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            '
-        $redeployReadme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
-
-        # # create deploy / new / add template
-        # modify-clusterResourcesForDeploy($currentConfig)
-        # modify-vmssResourcesForDeploy($currentConfig)
-        # modify-ipResourcesForDeploy($currentConfig)
-        # modify-storageResourcesForDeploy($currentConfig)
-        
-        # # save add json
-        # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
-        # save add readme
-        $addReadme = 'new / add modifications:
-            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
-            - adminPassword required parameter added (needs to be set or one will be generated)
-            - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
-            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            - dnsSettings for public Ip Address needs to be unique
-            - storageAccountNames required parameters (needs to be unique or will be generated)
-            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
-            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
-            '
-        $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
+        create-currentTemplate($currentConfig)
+        create-redeployTemplate($currentConfig)
+        create-newTemplate($currentConfig)
 
         $templateJsonFile = $templateJsonFile.Replace(".json", ".current.json")
         $error.clear()
@@ -224,8 +174,22 @@ function add-parameter($currentConfig, $parameterName, $parameterValue, $type = 
         defaultValue = $parameterValue 
     }
 }
+function add-parameterName($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource) {
+    $parameterName = create-parametersName -name $aliasName -resource $resource
+    $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
+    $parameterNameValue = find-parameterName -resource $resourceObject -name $name -parameterizedName $parameterizedName
 
-function add-parameterName($currentConfig, $type, $name) {
+    if ($parameterNameValue) {
+        write-host "parameter name $parameterName"
+        if (!(get-parameter -currentConfig $currentConfig -parameterName $parameterName)) {
+            add-parameter -currentConfig $currentConfig `
+                -parameterName $parameterName `
+                -parameterValue $parameterNameValue
+        }
+    }
+}
+
+function add-parameterNameByResourceType($currentConfig, $type, $name) {
     
     $resources = @($currentConfig.resources | where-object 'type' -eq $type)
     $parameterNames = @{}
@@ -233,7 +197,7 @@ function add-parameterName($currentConfig, $type, $name) {
     foreach ($resource in $resources) {
         $parameterName = create-parametersName -name $name -resource $resource
         $parameterizedName = create-parameterizedName -parameterName $name -resource $resource -withbrackets
-        $parameterNameValue = (find-parameterName -resource $resource -name $name -parameterizedName $parameterizedName)
+        $parameterNameValue = find-parameterName -resource $resource -name $name -parameterizedName $parameterizedName
 
         if ($parameterNameValue) {
             [void]$parameterNames.Add($parameterName, $parameterNameValue)
@@ -307,6 +271,72 @@ function check-module() {
     }
 
     return $true
+}
+
+function create-currentTemplate($currentConfig) {
+    # create base /current template
+    remove-duplicateResources($currentConfig)
+    remove-unusedParameters($currentConfig)
+    verify-config($currentConfig)
+        
+    # save base / current json
+    $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
+    # save current readme
+    $currentReadme = 'current modifications:
+            - additional parameters have been added
+            - extra / duplicate child resources removed from root
+            - dependsOn modified to remove conflicting / unneeded resources
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            '
+    $currentReadme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
+}
+
+function create-newTemplate($currentConfig) {
+    # create deploy / new / add template
+    # nodetype info
+    # modify-clusterResourcesForDeploy($currentConfig)
+    # os, sku, capacity, durability?
+    # modify-vmssResourcesForDeploy($currentConfig)
+    # GEN-UNIQUE dns, fqdn
+    # modify-ipResourcesForDeploy($currentConfig)
+    # GEN-UNIQUE name
+    # modify-storageResourcesForDeploy($currentConfig)
+    # verify-config($currentConfig)
+
+    # # save add json
+    $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
+    # save add readme
+    $addReadme = 'new / add modifications:
+            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+            - adminPassword required parameter added (needs to be set or one will be generated)
+            - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            - dnsSettings for public Ip Address needs to be unique
+            - storageAccountNames required parameters (needs to be unique or will be generated)
+            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
+            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
+            '
+    $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
+}
+
+function create-redeployTemplate($currentConfig) {
+    # create redeploy template
+    modify-clusterResourceRedeploy($currentConfig)
+    modify-lbResourcesRedeploy($currentConfig)
+    modify-vmssResourcesRedeploy($currentConfig)
+    modify-ipAddressesRedeploy($currentConfig)
+    verify-config($currentConfig)
+
+    # # save redeploy json
+    $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
+    # save redeploy readme
+    $redeployReadme = 'redeploy modifications:
+            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+            - adminPassword required parameter added (needs to be set or one will be generated)
+            - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            '
+    $redeployReadme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
 }
 
 function create-parametersName($name, $resource) {
@@ -851,8 +881,8 @@ function modify-clusterResourceRedeploy($currentConfig) {
 
 function modify-ipAddressesRedeploy($currentConfig) {
     # add ip address dns parameter
-    $dnsSettings = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
-    $fqdn = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+    $dnsSettings = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
+    $fqdn = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
     # add-parameterNames -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
 
     #add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
@@ -929,27 +959,22 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
         write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
+            
+        write-host "parameterizing hardware sku"
+        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
+            
+        write-host "parameterizing hardware capacity"
+        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku
 
-        # add sku parameter
-    # },
-    # "sku": {
-    #   "name": "Standard_D2_v2",
-    #   "tier": "Standard",
-    #   "capacity": 3
-    # },
-        #$sku = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'sku'
-        # ,
-        # "imageReference": {
-        #   "publisher": "MicrosoftWindowsServer",
-        #   "offer": "WindowsServer",
-        #   "sku": "2019-Datacenter-with-containers",
-        #   "version": "latest"
-        # add os parameter
-        #$os = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'sku'
-    
-        # add count parameter
-        #$capacity = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'capacity'
-    
+        write-host "parameterizing os sku"
+        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
+
+        #if (!($vmssResource.properties.virtualMachineProfile.osProfile.adminPassword)) {
+        if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
+            write-host "adding admin password"
+            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN-UNIQUE'
+            add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'adminPassword' -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile
+        }
     }
 }
 
