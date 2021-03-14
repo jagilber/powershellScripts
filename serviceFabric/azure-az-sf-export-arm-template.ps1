@@ -12,7 +12,7 @@
         cluster depends on storage account sflogs
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
     .\azure-az-sf-export-arm-template.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
 .DESCRIPTION  
@@ -164,10 +164,11 @@ function main () {
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
 }
 
-function add-parameter($currentConfig, $parameterName, $parameterValue, $type = "string") {
+function add-parameter($currentConfig, $parameterName, $parameterValue, $type = "string", $metadataDescription = "") {
     $parameterObject = @{
         type         = $type
         defaultValue = $parameterValue 
+        metadata     = @{description = $metadataDescription }
     }
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
@@ -354,8 +355,6 @@ function create-newTemplate($currentConfig) {
 }
 
 function create-parameterFile($currentConfig, $parameterFileName) {
-    #$parameters = [collections.arraylist]::new()
-
     $parameterTemplate = [ordered]@{ 
         '$schema'      = $parametersSchema
         contentVersion = "1.0.0.0"
@@ -365,8 +364,14 @@ function create-parameterFile($currentConfig, $parameterFileName) {
     $parameterTemplate | Add-Member -TypeName System.Management.Automation.PSCustomObject -NotePropertyMembers @{ parameters = @{} }
     
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties.GetEnumerator()) {
+        $metadata = $null
+        write-verbose "value properties:$($psObjectProperty.Value.psobject.Properties.Name)"
         $parameterItem = @{
-            value = $psObjectProperty.Value.defaultValue
+            value    = $psObjectProperty.Value.defaultValue
+        }
+
+        if ($psObjectProperty.Value.GetType().name -ieq 'hashtable' -and $psObjectProperty.Value['metadata']) {
+            $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description}
         }
         $parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
     }
@@ -995,12 +1000,14 @@ function modify-storageResourcesDeploy($currentConfig) {
 
     add-parameter -currentConfig $currentConfig `
         -parameterName (create-parametersName -resource $global:sflogs) `
-        -parameterValue $global:defaultSflogsValue
+        -parameterValue $global:defaultSflogsValue `
+        -metadataDescription 'this name must be unique in deployment region.'
 
     foreach ($sfdiag in $global:sfdiags) {
         add-parameter -currentConfig $currentConfig `
             -parameterName (create-parametersName -resource $sfdiag) `
-            -parameterValue $global:defaultSfdiagsValue
+            -parameterValue $global:defaultSfdiagsValue `
+            -metadataDescription 'this name must be unique in deployment region.'
     }
 }
 
