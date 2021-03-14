@@ -25,7 +25,7 @@ if (!(get-module az.compute)) {
     import-module az.compute
 }
 
-if (!(Get-AzResourceGroup | out-null)) {
+if (!(@(Get-AzResourceGroup).Count)) {
     Connect-AzAccount
 }
 

@@ -38,7 +38,7 @@ function main () {
         return
     }
 
-    if (!(Get-AzResourceGroup | out-null)) {
+    if (!(@(Get-AzResourceGroup).Count)) {
         Connect-AzAccount
     }
 

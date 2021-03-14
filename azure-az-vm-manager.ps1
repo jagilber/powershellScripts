@@ -358,7 +358,7 @@ function authenticate-az()
     #Disable-azContextAutosave -scope Process -ErrorAction SilentlyContinue | Out-Null
 
     # authenticate
-    if(!(Get-azResourceGroup))
+    if(!(@(Get-AzResourceGroup).Count))
     {
         $error.Clear()
 
