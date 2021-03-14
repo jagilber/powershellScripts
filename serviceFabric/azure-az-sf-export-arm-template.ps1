@@ -79,7 +79,7 @@ function main () {
     }
     
     Enable-AzureRmAlias
-    if (!(Get-AzContext)) {
+    if (!(Get-AzResourceGroup | out-null)) {
         write-host "connecting to azure"
         Connect-AzAccount
     }
@@ -119,9 +119,9 @@ function main () {
     $deploymentName = "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
     if ($patch) {
-        remove-jobs
-        if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
-        wait-jobs
+        #remove-jobs
+        #if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
+        #wait-jobs
     }
     else {
         export-template -configuredResources $global:configuredRGResources -jsonFile $templateJsonFile
@@ -293,7 +293,7 @@ function create-currentTemplate($currentConfig) {
 
 function create-newTemplate($currentConfig) {
     # create deploy / new / add template
-    # nodetype info
+    # nodetype info, isPrimary
     # modify-clusterResourcesForDeploy($currentConfig)
     # os, sku, capacity, durability?
     # modify-vmssResourcesForDeploy($currentConfig)
@@ -301,7 +301,7 @@ function create-newTemplate($currentConfig) {
     # modify-ipResourcesForDeploy($currentConfig)
     # GEN-UNIQUE name
     # modify-storageResourcesForDeploy($currentConfig)
-    # verify-config($currentConfig)
+    verify-config($currentConfig)
 
     # # save add json
     $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
@@ -315,6 +315,7 @@ function create-newTemplate($currentConfig) {
             - storageAccountNames required parameters (needs to be unique or will be generated)
             - if adding new vmss, each vmss resource needs a cluster nodetype resource added
             - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
+            - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
             '
     $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
 }
@@ -883,9 +884,6 @@ function modify-ipAddressesRedeploy($currentConfig) {
     # add ip address dns parameter
     $dnsSettings = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
     $fqdn = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
-    # add-parameterNames -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
-
-    #add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
 }
 
 function modify-lbResourcesRedeploy($currenConfig) {
@@ -969,11 +967,13 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         write-host "parameterizing os sku"
         add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
 
-        #if (!($vmssResource.properties.virtualMachineProfile.osProfile.adminPassword)) {
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
             write-host "adding admin password"
             $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN-UNIQUE'
             add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'adminPassword' -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile
+            $currentConfig.outputs | Add-Member -MemberType NoteProperty `
+                -Name 'adminPassword' `
+                -Value @{value = "$(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource -withbrackets)"; type = "object"}
         }
     }
 }
