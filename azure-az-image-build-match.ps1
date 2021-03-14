@@ -96,7 +96,7 @@ function connect-az() {
         }
     }
 
-    if(!($null = get-azcontext)) {
+    if(!(Get-AzResourceGroup | out-null)) {
         $error.clear()
         Connect-AzAccount
 
