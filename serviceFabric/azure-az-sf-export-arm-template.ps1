@@ -59,6 +59,7 @@ $global:configuredRGResources = [collections.arraylist]::new()
 $global:sflogs = $null
 $global:sfdiags = $null
 $global:startTime = get-date
+$global:storageKeyApi = '2015-05-01-preview'
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
@@ -134,12 +135,7 @@ function main () {
 
         # create base /current template
         remove-duplicateResources($currentConfig)
-        modify-lbResources($currentConfig)
-        modify-vmssResources($currentConfig)
-
-        add-parameters($currentConfig)
         remove-unusedParameters($currentConfig)
-
         verify-config($currentConfig)
         
         # save base / current json
@@ -153,12 +149,14 @@ function main () {
             '
         $currentReadme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
 
-        # # create redeploy template
-        # modify-clusterResourcesForReDeploy($currentConfig)
-        # modify-vmssResourcesForReDeploy($currentConfig)
+        # create redeploy template
+        modify-clusterResourceRedeploy($currentConfig)
+        modify-lbResourcesRedeploy($currentConfig)
+        modify-vmssResourcesRedeploy($currentConfig)
+        modify-ipAddressesRedeploy($currentConfig)
         
         # # save redeploy json
-        # $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
+        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
         # save redeploy readme
         $redeployReadme = 'redeploy modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
@@ -222,20 +220,19 @@ function add-parameter($currentConfig, $parameterName, $parameterValue, $type = 
     }
 
     $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value @{
-            type = $type
-            defaultValue = $parameterValue 
-        }
+        type         = $type
+        defaultValue = $parameterValue 
+    }
 }
 
 function add-parameterName($currentConfig, $type, $name) {
-    $resourceSubType = [regex]::replace($type, '^.+?/', '')
+    
     $resources = @($currentConfig.resources | where-object 'type' -eq $type)
     $parameterNames = @{}
 
     foreach ($resource in $resources) {
-        $resourceName = [regex]::Match($resource.comments, ".+/([^/]+)'.$").Groups[1].Value
-        $parameterName = $resourceSubType + '_' + $resourceName + '_' + $name
-        $parameterizedName = "[parameters('$parameterName')]"
+        $parameterName = create-parametersName -name $name -resource $resource
+        $parameterizedName = create-parameterizedName -parameterName $name -resource $resource -withbrackets
         $parameterNameValue = (find-parameterName -resource $resource -name $name -parameterizedName $parameterizedName)
 
         if ($parameterNameValue) {
@@ -253,15 +250,32 @@ function add-parameterName($currentConfig, $type, $name) {
     }
 }
 
-function add-parameters($currentConfig) {
-    # add ip address dns parameter
-    $dnsSettings = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
-    $fqdn = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
-    # add-parameterNames -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+function add-vmssProtectedSettings($vmssResource) {
+    $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs
 
-    #add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
+    foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
+        if ($extension.properties.type -ieq 'ServiceFabricNode') {
+            $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
+                StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key1]"
+                StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key2]"
+            }
+            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+        }
+
+        if ($extension.properties.type -ieq 'IaaSDiagnostics') {
+            $saname = $extension.properties.settings.storageAccount
+            $sfdiagsParameter = create-parameterizedName -parameterName 'name' -resource ($global:sfdiags | where-object name -imatch $saname)
+            $extension.properties.settings.storageAccount = "[$sfdiagsParameter]"
+
+            $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
+                storageAccountName     = "$sfdiagsParameter"
+                storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$storageKeyApi').key1]"
+                storageAccountEndPoint = "https://core.windows.net/"                  
+            }
+            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+        }
+    }
 }
-
 
 function add-parameterValue($currentConfig, $type, $name) {
 
@@ -294,6 +308,29 @@ function check-module() {
 
     return $true
 }
+
+function create-parametersName($name, $resource) {
+    $resourceSubType = [regex]::replace($resource.type, '^.+?/', '')
+    if ($resource.name.contains('[')) {
+        $resourceName = [regex]::Match($resource.comments, ".+/([^/]+)'.$").Groups[1].Value
+    }
+    else {
+        $resourceName = $resource.name
+    }
+    
+    $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
+    write-host "returning $parametersName"
+    return $parametersName
+}
+
+function create-parameterizedName($parameterName, $resource, [switch]$withbrackets) {
+    if ($withbrackets) {
+        return "[parameters('$(create-parametersName $parameterName $resource)')]"
+    }
+
+    return "parameters('$(create-parametersName $parameterName $resource)')"
+}
+
 
 function create-jsonTemplate([collections.arraylist]$resources, 
     [string]$jsonFile, 
@@ -801,8 +838,27 @@ function get-parameter($currentConfig, $parameterName) {
     }
 }
 
+function modify-clusterResourceRedeploy($currentConfig) {
+    $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
+    $clusterResource = $currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters'
+    
+    write-host "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
+    $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
+    
+    write-host "setting `$clusterResource.properties.upgradeMode = Manual"
+    $clusterResource.properties.upgradeMode = "Manual"
+}
 
-function modify-lbResources($currenConfig) {
+function modify-ipAddressesRedeploy($currentConfig) {
+    # add ip address dns parameter
+    $dnsSettings = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
+    $fqdn = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+    # add-parameterNames -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+
+    #add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
+}
+
+function modify-lbResourcesRedeploy($currenConfig) {
     $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
     foreach ($lbResource in $lbResources) {
         # fix backend pool
@@ -836,33 +892,27 @@ function modify-lbResources($currenConfig) {
     }
 }
 
-function modify-vmssResources($currenConfig) {
+function modify-vmssResourcesRedeploy($currenConfig) {
     $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+   
     foreach ($vmssResource in $vmssResources) {
         # add protected settings
-        foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
-            if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
-                    StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', '$($global:sflogs.Name)'),'2015-05-01-preview').key1]"
-                    StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', '$($global:sflogs.Name)'),'2015-05-01-preview').key2]"
-                }
-                write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
-            }
+        add-vmssProtectedSettings($vmssResource)
 
-            if ($extension.properties.type -ieq 'IaaSDiagnostics') {
-                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
-                    storageAccountName     = "$($global:sfdiags.Name)"
-                    storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', '$($global:sfdiags.Name)'),'2015-05-01-preview').key1]"
-                    storageAccountEndPoint = "https://core.windows.net/"                  
-                }
-                write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+        # remove mma
+        $extensions = [collections.arraylist]::new()
+        foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
+            if ($extension.properties.type -ieq 'MicrosoftMonitoringAgent') {
+                continue
             }
-        }
+            [void]$extensions.Add($extension)
+        }    
+        $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions = $extensions
 
+        write-host "modifying dependson"
         $dependsOn = [collections.arraylist]::new()
         $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
 
-        write-host "modifying dependson"
         foreach ($depends in $vmssResource.dependsOn) {
             if ($depends -imatch 'backendAddressPools') { continue }
 
@@ -879,6 +929,27 @@ function modify-vmssResources($currenConfig) {
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
         write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
+
+        # add sku parameter
+    # },
+    # "sku": {
+    #   "name": "Standard_D2_v2",
+    #   "tier": "Standard",
+    #   "capacity": 3
+    # },
+        #$sku = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'sku'
+        # ,
+        # "imageReference": {
+        #   "publisher": "MicrosoftWindowsServer",
+        #   "offer": "WindowsServer",
+        #   "sku": "2019-Datacenter-with-containers",
+        #   "version": "latest"
+        # add os parameter
+        #$os = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'sku'
+    
+        # add count parameter
+        #$capacity = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'capacity'
+    
     }
 }
 
@@ -916,22 +987,20 @@ function remove-jobs() {
     }
 }
 
-function remove-unusedParameters($currentConfig){
+function remove-unusedParameters($currentConfig) {
     $parametersRemoveList = [collections.arraylist]::new()
     $currentConfigResourcejson = $currentConfig.resources | convertto-json -depth 99
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
-
-        $parameterizedName = "\[parameters\('$($psObjectProperty.name)'\)\]"
+        $parameterizedName = "parameters\('$($psObjectProperty.name)'\)"
         write-host "checking to see if $parameterizedName is being used"
-        if([regex]::IsMatch($currentConfigResourcejson, $parameterizedName, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)){
-        #if (($currentConfigResourcejson | select-string $parameterizedName -quiet)) {
+        if ([regex]::IsMatch($currentConfigResourcejson, $parameterizedName, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
             continue
         }
         [void]$parametersRemoveList.Add($psObjectProperty)
     }
 
-    foreach($parameter in $parametersRemoveList){
+    foreach ($parameter in $parametersRemoveList) {
         write-warning "removing $($parameter.name)"
         $currentConfig.parameters.psobject.Properties.Remove($parameter.name)
     }
