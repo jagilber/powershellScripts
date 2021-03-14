@@ -63,7 +63,7 @@ function main() {
         }
     }
     
-    if (!(Get-azResourceGroup)) {
+    if (!(@(Get-AzResourceGroup).Count)) {
         connect-azaccount
     
         if (!(Get-azResourceGroup)) {

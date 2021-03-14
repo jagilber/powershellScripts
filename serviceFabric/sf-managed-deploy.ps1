@@ -46,7 +46,7 @@ if (((get-module az.servicefabric).Version -le [version](2.1.0))) {
     Install-Module az.resources -Force -AllowClobber
 }
 
-if (!(Get-AzResourceGroup | out-null)) {
+if (!(@(Get-AzResourceGroup).Count)) {
     Connect-AzAccount
 }
 
