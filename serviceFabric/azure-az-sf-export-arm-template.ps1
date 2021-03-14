@@ -127,15 +127,13 @@ function main () {
         #wait-jobs
     }
     else {
-        export-template -configuredResources $global:configuredRGResources -jsonFile $templateJsonFile
-        write-host "template exported to $templateJsonFile" -ForegroundColor Yellow
-        write-host "to update arm resource, modify $templateJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
-
-        $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
-        
         # save raw file
-        $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".export.json")
+        $exportJsonFile = $templateJsonFile.Replace(".json", ".export.json")
+        export-template -configuredResources $global:configuredRGResources -jsonFile $exportJsonFile
+        write-host "template exported to $exportJsonFile" -ForegroundColor Yellow
+        write-host "to update arm resource, modify $exportJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
 
+        $currentConfig = Get-Content -raw $exportJsonFile | convertfrom-json
         create-currentTemplate($currentConfig)
         create-redeployTemplate($currentConfig)
         create-newTemplate($currentConfig)
