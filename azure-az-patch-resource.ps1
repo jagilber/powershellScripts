@@ -84,7 +84,7 @@ function main () {
     }
     
     Enable-AzureRmAlias
-    if (!(Get-AzContext)) {
+    if (!(Get-AzResourceGroup | out-null)) {
         write-host "connecting to azure"
         Connect-AzAccount
     }

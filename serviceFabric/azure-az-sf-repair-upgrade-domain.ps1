@@ -25,7 +25,7 @@ if (!(get-module az.compute)) {
     import-module az.compute
 }
 
-if (!(get-azcontext)) {
+if (!(Get-AzResourceGroup | out-null)) {
     Connect-AzAccount
 }
 

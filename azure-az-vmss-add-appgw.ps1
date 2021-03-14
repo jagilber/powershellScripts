@@ -49,7 +49,7 @@ function main() {
         return
     }
 
-    if (!(Get-AzContext)) {
+    if (!(Get-AzResourceGroup | out-null)) {
         if (!(Connect-AzAccount)) { return }
     }
 

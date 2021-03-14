@@ -32,7 +32,7 @@ function main () {
         return
     }
 
-    if (!(Get-AzContext)) {
+    if (!(Get-AzResourceGroup | out-null)) {
         Connect-AzAccount
     }
 
