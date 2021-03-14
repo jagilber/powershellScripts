@@ -43,12 +43,13 @@ param (
     [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
-    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental',
     [switch]$useLatestApiVersion,
-    [switch]$detail
+    [switch]$detail,
+    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
+    [string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
 )
 
 set-strictMode -Version 3.0
@@ -60,6 +61,8 @@ $global:sflogs = $null
 $global:sfdiags = $null
 $global:startTime = get-date
 $global:storageKeyApi = '2015-05-01-preview'
+$global:defaultSflogsValue = "[toLower( concat('sflogs', uniqueString(resourceGroup().id),'2'))]"
+$global:defaultSfdiagsValue = "[toLower(concat(uniqueString(resourceGroup().id), '3' ))]"
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
@@ -79,7 +82,7 @@ function main () {
     }
     
     Enable-AzureRmAlias
-    if (!(Get-AzResourceGroup | out-null)) {
+    if (!(@(Get-AzResourceGroup).Count)) {
         write-host "connecting to azure"
         Connect-AzAccount
     }
@@ -162,30 +165,54 @@ function main () {
 }
 
 function add-parameter($currentConfig, $parameterName, $parameterValue, $type = "string") {
+    $parameterObject = @{
+        type         = $type
+        defaultValue = $parameterValue 
+    }
+
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
         if (($psObjectProperty.Name -imatch $parameterName)) {
-            $psObjectProperty.Value = $parameterValue
+            $psObjectProperty.Value = $parameterObject
             return
         }
     }
 
-    $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value @{
-        type         = $type
-        defaultValue = $parameterValue 
-    }
+    $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
 }
-function add-parameterName($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource) {
-    $parameterName = create-parametersName -name $aliasName -resource $resource
+function add-parameterName($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $type = 'string') {
+    $parameterName = create-parametersName -resource $resource -name $aliasName
     $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
-    $parameterNameValue = find-parameterName -resource $resourceObject -name $name -parameterizedName $parameterizedName
+    $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
+    set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
     if ($parameterNameValue) {
         write-host "parameter name $parameterName"
         if (!(get-parameter -currentConfig $currentConfig -parameterName $parameterName)) {
             add-parameter -currentConfig $currentConfig `
                 -parameterName $parameterName `
-                -parameterValue $parameterNameValue
+                -parameterValue $parameterNameValue `
+                -type $type
         }
+    }
+}
+
+function add-outputs($currentConfig, $name, $value, $type) {
+    $outputs = $currentConfig.psobject.Properties | where-object name -ieq 'outputs'
+    $outputItem = @{
+        value = $value
+        type  = $type
+    }
+
+    if (!$outputs) {
+        # create pscustomobject
+        $currentConfig | Add-Member -TypeName System.Management.Automation.PSCustomObject -NotePropertyMembers @{
+            outputs = @{
+                $name = $outputItem
+            }
+        }
+    }
+    else {
+        $currentConfig.outputs.add($name, $outputItem)
     }
 }
 
@@ -195,9 +222,10 @@ function add-parameterNameByResourceType($currentConfig, $type, $name) {
     $parameterNames = @{}
 
     foreach ($resource in $resources) {
-        $parameterName = create-parametersName -name $name -resource $resource
+        $parameterName = create-parametersName -resource $resource -name $name
         $parameterizedName = create-parameterizedName -parameterName $name -resource $resource -withbrackets
-        $parameterNameValue = find-parameterName -resource $resource -name $name -parameterizedName $parameterizedName
+        $parameterNameValue = get-resourceParameterValue -resource $resource -name $name
+        set-resourceParameterValue -resource $resource -name $name -newValue $parameterizedName
 
         if ($parameterNameValue) {
             [void]$parameterNames.Add($parameterName, $parameterNameValue)
@@ -241,10 +269,6 @@ function add-vmssProtectedSettings($vmssResource) {
     }
 }
 
-function add-parameterValue($currentConfig, $type, $name) {
-
-}
-
 function check-module() {
     $error.clear()
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
@@ -275,12 +299,17 @@ function check-module() {
 
 function create-currentTemplate($currentConfig) {
     # create base /current template
-    remove-duplicateResources($currentConfig)
-    remove-unusedParameters($currentConfig)
-    verify-config($currentConfig)
+    $templateFile = $templateJsonFile.Replace(".json", ".current.json")
+    remove-duplicateResources $currentConfig
+    remove-unusedParameters $currentConfig
+    modify-lbResources $currentConfig
+    modify-vmssResources $currentConfig
+    verify-config $currentConfig
         
     # save base / current json
-    $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
+    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    create-parameterFile $currentConfig  $templateFile
+
     # save current readme
     $currentReadme = 'current modifications:
             - additional parameters have been added
@@ -293,18 +322,22 @@ function create-currentTemplate($currentConfig) {
 
 function create-newTemplate($currentConfig) {
     # create deploy / new / add template
+    $templateFile = $templateJsonFile.Replace(".json", ".new.json")
     # nodetype info, isPrimary
-    # modify-clusterResourcesForDeploy($currentConfig)
+    # modify-clusterResourcesDeploy $currentConfig
     # os, sku, capacity, durability?
-    # modify-vmssResourcesForDeploy($currentConfig)
+    # modify-vmssResourcesDeploy $currentConfig
     # GEN-UNIQUE dns, fqdn
-    # modify-ipResourcesForDeploy($currentConfig)
+    # modify-ipResourcesDeploy $currentConfig
     # GEN-UNIQUE name
-    # modify-storageResourcesForDeploy($currentConfig)
-    verify-config($currentConfig)
+    modify-storageResourcesDeploy $currentConfig
+    verify-config $currentConfig
+
 
     # # save add json
-    $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".new.json")
+    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    create-parameterFile $currentConfig  $templateFile
+
     # save add readme
     $addReadme = 'new / add modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
@@ -320,16 +353,46 @@ function create-newTemplate($currentConfig) {
     $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
 }
 
+function create-parameterFile($currentConfig, $parameterFileName) {
+    #$parameters = [collections.arraylist]::new()
+
+    $parameterTemplate = [ordered]@{ 
+        '$schema'      = $parametersSchema
+        contentVersion = "1.0.0.0"
+    } 
+
+    # create pscustomobject
+    $parameterTemplate | Add-Member -TypeName System.Management.Automation.PSCustomObject -NotePropertyMembers @{ parameters = @{} }
+    
+    foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties.GetEnumerator()) {
+        $parameterItem = @{
+            value = $psObjectProperty.Value.defaultValue
+        }
+        $parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
+    }
+
+    if (!($parameterFileName.tolower().contains('parameters'))) {
+        $parameterFileName = $parameterFileName.tolower().replace('.json', '.parameters.json')
+    }
+
+    write-host "creating parameterfile $parameterFileName" -ForegroundColor Green
+    $parameterTemplate | convertto-json -depth 99 | out-file -FilePath $parameterFileName
+}
+
 function create-redeployTemplate($currentConfig) {
     # create redeploy template
-    modify-clusterResourceRedeploy($currentConfig)
-    modify-lbResourcesRedeploy($currentConfig)
-    modify-vmssResourcesRedeploy($currentConfig)
-    modify-ipAddressesRedeploy($currentConfig)
-    verify-config($currentConfig)
+    $templateFile = $templateJsonFile.Replace(".json", ".redeploy.json")
+
+    modify-clusterResourceRedeploy $currentConfig
+    modify-lbResourcesRedeploy $currentConfig
+    modify-vmssResourcesRedeploy $currentConfig
+    modify-ipAddressesRedeploy $currentConfig
+    verify-config $currentConfig
 
     # # save redeploy json
-    $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".redeploy.json")
+    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    create-parameterFile $currentConfig  $templateFile
+
     # save redeploy readme
     $redeployReadme = 'redeploy modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
@@ -340,7 +403,7 @@ function create-redeployTemplate($currentConfig) {
     $redeployReadme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
 }
 
-function create-parametersName($name, $resource) {
+function create-parametersName($resource, $name = 'name') {
     $resourceSubType = [regex]::replace($resource.type, '^.+?/', '')
     if ($resource.name.contains('[')) {
         $resourceName = [regex]::Match($resource.comments, ".+/([^/]+)'.$").Groups[1].Value
@@ -356,10 +419,10 @@ function create-parametersName($name, $resource) {
 
 function create-parameterizedName($parameterName, $resource, [switch]$withbrackets) {
     if ($withbrackets) {
-        return "[parameters('$(create-parametersName $parameterName $resource)')]"
+        return "[parameters('$(create-parametersName -resource $resource -name $parameterName)')]"
     }
 
-    return "parameters('$(create-parametersName $parameterName $resource)')"
+    return "parameters('$(create-parametersName -resource $resource -name $parameterName)')"
 }
 
 
@@ -835,31 +898,6 @@ function enum-vnetResources($vmssResources) {
     return $resources.ToArray() | sort-object name -Unique
 }
 
-function find-parameterName($resource, $name, $parameterizedName) {
-    $retval = $null
-    foreach ($psObjectProperty in $resource.psobject.Properties) {
-        Write-Verbose "checking parameter name $psobjectProperty"
-
-        if (($psObjectProperty.Name -imatch $name)) {
-            $parameterValues = @($psObjectProperty.Name)
-            if ($parameterValues.Count -eq 1) {
-                $parameterValue = $psObjectProperty.Value
-                $psObjectProperty.Value = $parameterizedName
-                return $parameterValue
-            }
-            else {
-                write-error "multiple parameter names found in resource. returning"
-                return $null
-            }
-        }
-        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-            $retval = find-parameterName -resource $psObjectProperty.Value -name $name -parameterizedName $parameterizedName
-        }
-    }
-
-    return $retval
-}
-
 function get-parameter($currentConfig, $parameterName) {
     $parameters = @($currentConfig.parameters)
     foreach ($psObjectProperty in $parameters.psobject.Properties) {
@@ -868,6 +906,31 @@ function get-parameter($currentConfig, $parameterName) {
         }
     }
 }
+
+function get-resourceParameterValue($resource, $name) {
+    $retval = $null
+    foreach ($psObjectProperty in $resource.psobject.Properties) {
+        Write-Verbose "checking parameter name $psobjectProperty"
+
+        if (($psObjectProperty.Name -imatch $name)) {
+            $parameterValues = @($psObjectProperty.Name)
+            if ($parameterValues.Count -eq 1) {
+                $parameterValue = $psObjectProperty.Value
+                return $parameterValue
+            }
+            else {
+                write-error "multiple parameter names found in resource. returning"
+                return $null
+            }
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
+            $retval = get-resourceParameterValue -resource $psObjectProperty.Value -name $name
+        }
+    }
+
+    return $retval
+}
+
 
 function modify-clusterResourceRedeploy($currentConfig) {
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
@@ -878,6 +941,8 @@ function modify-clusterResourceRedeploy($currentConfig) {
     
     write-host "setting `$clusterResource.properties.upgradeMode = Manual"
     $clusterResource.properties.upgradeMode = "Manual"
+    $reference = "[reference($(create-parameterizedName -parameterName 'name' -resource $clusterResource))]"
+    add-outputs -currentConfig $currentConfig -name 'clusterProperties' -value $reference -type 'object'
 }
 
 function modify-ipAddressesRedeploy($currentConfig) {
@@ -886,7 +951,7 @@ function modify-ipAddressesRedeploy($currentConfig) {
     $fqdn = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
 }
 
-function modify-lbResourcesRedeploy($currenConfig) {
+function modify-lbResources($currenConfig) {
     $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
     foreach ($lbResource in $lbResources) {
         # fix backend pool
@@ -912,11 +977,58 @@ function modify-lbResourcesRedeploy($currenConfig) {
         $lbResource.dependsOn = $dependsOn.ToArray()
         write-host "lbResource modified dependson: $($lbResource.dependson | convertto-json)" -ForegroundColor Yellow
         
+    }
+}
+
+function modify-lbResourcesRedeploy($currenConfig) {
+    $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
+    foreach ($lbResource in $lbResources) {
         # fix dupe pools and rules
         if ($lbResource.properties.inboundNatPools) {
             write-host "removing natrules: $($lbResource.properties.inboundNatRules | convertto-json)" -ForegroundColor Yellow
             [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
         }
+    }
+}
+
+function modify-storageResourcesDeploy($currentConfig) {
+
+    add-parameter -currentConfig $currentConfig `
+        -parameterName (create-parametersName -resource $global:sflogs) `
+        -parameterValue $global:defaultSflogsValue
+
+    foreach ($sfdiag in $global:sfdiags) {
+        add-parameter -currentConfig $currentConfig `
+            -parameterName (create-parametersName -resource $sfdiag) `
+            -parameterValue $global:defaultSfdiagsValue
+    }
+}
+
+function modify-vmssResources($currenConfig) {
+    $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+   
+    foreach ($vmssResource in $vmssResources) {
+
+        write-host "modifying dependson"
+        $dependsOn = [collections.arraylist]::new()
+        $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
+
+        foreach ($depends in $vmssResource.dependsOn) {
+            if ($depends -imatch 'backendAddressPools') { continue }
+
+            if ($depends -imatch 'Microsoft.Network/loadBalancers') {
+                [void]$dependsOn.Add($depends)
+            }
+            # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
+            if ($subnetIds.contains($depends)) {
+                write-host 'cleaning subnet dependson' -ForegroundColor Yellow
+                $depends = $depends.replace("/subnets'", "/'")
+                $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                [void]$dependsOn.Add($depends)
+            }
+        }
+        $vmssResource.dependsOn = $dependsOn.ToArray()
+        write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
     }
 }
 
@@ -962,7 +1074,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
             
         write-host "parameterizing hardware capacity"
-        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku
+        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku -type 'int'
 
         write-host "parameterizing os sku"
         add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
@@ -971,9 +1083,8 @@ function modify-vmssResourcesRedeploy($currenConfig) {
             write-host "adding admin password"
             $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN-UNIQUE'
             add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'adminPassword' -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile
-            $currentConfig.outputs | Add-Member -MemberType NoteProperty `
-                -Name 'adminPassword' `
-                -Value @{value = "$(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource -withbrackets)"; type = "object"}
+            $referenceName = "[reference($(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource))]"
+            add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $referenceName -type 'object'
         }
     }
 }
@@ -1029,6 +1140,31 @@ function remove-unusedParameters($currentConfig) {
         write-warning "removing $($parameter.name)"
         $currentConfig.parameters.psobject.Properties.Remove($parameter.name)
     }
+}
+
+function set-resourceParameterValue($resource, $name, $newValue) {
+    $retval = $false
+    foreach ($psObjectProperty in $resource.psobject.Properties) {
+        Write-Verbose "checking parameter name $psobjectProperty"
+
+        if (($psObjectProperty.Name -imatch $name)) {
+            $parameterValues = @($psObjectProperty.Name)
+            if ($parameterValues.Count -eq 1) {
+                $parameterValue = $psObjectProperty.Value
+                $psObjectProperty.Value = $newValue
+                return $true
+            }
+            else {
+                write-error "multiple parameter names found in resource. returning"
+                return $false
+            }
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
+            $retval = set-resourceParameterValue -resource $psObjectProperty.Value -name $name -newValue $newValue
+        }
+    }
+
+    return $retval
 }
 
 function verify-config($currentConfig) {
