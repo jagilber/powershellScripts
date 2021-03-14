@@ -139,6 +139,7 @@ function main () {
 
         add-parameters($currentConfig)
         verify-config($currentConfig)
+        remove-unusedParameters($currentConfig)
         
         # save base / current json
         $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
@@ -211,7 +212,57 @@ function main () {
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
 }
 
-function add-parameters($currentConfig){
+function add-parameter($currentConfig, $parameterName, $parameterValue, $type = "string") {
+    foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
+        if (($psObjectProperty.Name -imatch $parameterName)) {
+            $psObjectProperty.Value = $parameterValue
+            return
+        }
+    }
+
+    $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value @{
+            type = $type
+            defaultValue = $parameterValue 
+        }
+}
+
+function add-parameterName($currentConfig, $type, $name) {
+    $resourceSubType = [regex]::replace($type, '^.+?/', '')
+    $resources = @($currentConfig.resources | where-object 'type' -eq $type)
+    $parameterNames = @{}
+
+    foreach ($resource in $resources) {
+        $resourceName = [regex]::Match($resource.comments, ".+/([^/]+)'.$").Groups[1].Value
+        $parameterName = $resourceSubType + '_' + $resourceName + '_' + $name
+        $parameterizedName = "[parameters('$parameterName')]"
+        $parameterNameValue = (find-parameterName -resource $resource -name $name -parameterizedName $parameterizedName)
+
+        if ($parameterNameValue) {
+            [void]$parameterNames.Add($parameterName, $parameterNameValue)
+        }
+    }
+
+    write-host "parameter names $parameterNames"
+    foreach ($parameterName in $parameterNames.GetEnumerator()) {
+        if (!(get-parameter -currentConfig $currentConfig -parameterName $parameterName.key)) {
+            add-parameter -currentConfig $currentConfig `
+                -parameterName $parameterName.key `
+                -parameterValue $parameterName.value
+        }
+    }
+}
+
+function add-parameters($currentConfig) {
+    # add ip address dns parameter
+    $dnsSettings = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
+    $fqdn = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+    # add-parameterNames -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+
+    add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
+}
+
+
+function add-parameterValue($currentConfig, $type, $name) {
 
 }
 
@@ -388,6 +439,7 @@ function export-template($configuredResources, $jsonFile) {
     write-host "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
             -Path $jsonFile `
             -Force `
+            -IncludeComments `
             -IncludeParameterDefaultValue `
             -Resource $resourceIds
     "
@@ -687,7 +739,7 @@ function enum-vmssResources($clusterResource) {
             write-host "adding vmss resource $($resource | convertto-json)" -ForegroundColor Cyan
             [void]$vmssResources.Add($resource)
         }
-        else{
+        else {
             write-warning "vmss assigned to different cluster $vmsscep"
         }
     }
@@ -714,6 +766,41 @@ function enum-vnetResources($vmssResources) {
     return $resources.ToArray() | sort-object name -Unique
 }
 
+function find-parameterName($resource, $name, $parameterizedName) {
+    $retval = $null
+    foreach ($psObjectProperty in $resource.psobject.Properties) {
+        Write-Verbose "checking parameter name $psobjectProperty"
+
+        if (($psObjectProperty.Name -imatch $name)) {
+            $parameterValues = @($psObjectProperty.Name)
+            if ($parameterValues.Count -eq 1) {
+                $parameterValue = $psObjectProperty.Value
+                $psObjectProperty.Value = $parameterizedName
+                return $parameterValue
+            }
+            else {
+                write-error "multiple parameter names found in resource. returning"
+                return $null
+            }
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
+            $retval = find-parameterName -resource $psObjectProperty.Value -name $name -parameterizedName $parameterizedName
+        }
+    }
+
+    return $retval
+}
+
+function get-parameter($currentConfig, $parameterName) {
+    $parameters = @($currentConfig.parameters)
+    foreach ($psObjectProperty in $parameters.psobject.Properties) {
+        if (($psObjectProperty.Name -imatch $parameterName)) {
+            return $psObjectProperty.Value
+        }
+    }
+}
+
+
 function modify-lbResources($currenConfig) {
     $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
     foreach ($lbResource in $lbResources) {
@@ -738,7 +825,7 @@ function modify-lbResources($currenConfig) {
             }
         }
         $lbResource.dependsOn = $dependsOn.ToArray()
-        write-host "lbResource modified dependson: $($lbResource.dependson | converto-json)" -ForegroundColor Yellow
+        write-host "lbResource modified dependson: $($lbResource.dependson | convertto-json)" -ForegroundColor Yellow
         
         # fix dupe pools and rules
         if ($lbResource.properties.inboundNatPools) {
@@ -794,22 +881,22 @@ function modify-vmssResources($currenConfig) {
     }
 }
 
-function remove-duplicateResources($currentConfig){
-            # fix up deploy errors by removing duplicated sub resources on root like lb rules by
-        # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
-        $currentResources = [collections.arraylist]::new() #$currentConfig.resources | convertto-json | convertfrom-json
+function remove-duplicateResources($currentConfig) {
+    # fix up deploy errors by removing duplicated sub resources on root like lb rules by
+    # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
+    $currentResources = [collections.arraylist]::new() #$currentConfig.resources | convertto-json | convertfrom-json
 
-        $resourceTypes = $global:configuredRGResources.resourceType
-        foreach ($resource in $currentConfig.resources.GetEnumerator()) {
-            write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
-            write-verbose "checking exported resource $($resource | convertto-json)"
-            if ($resourceTypes.Contains($resource.type)) {
-                write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
-                write-verbose "adding exported resource $($resource | convertto-json)"
-                [void]$currentResources.Add($resource)
-            }
+    $resourceTypes = $global:configuredRGResources.resourceType
+    foreach ($resource in $currentConfig.resources.GetEnumerator()) {
+        write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
+        write-verbose "checking exported resource $($resource | convertto-json)"
+        if ($resourceTypes.Contains($resource.type)) {
+            write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
+            write-verbose "adding exported resource $($resource | convertto-json)"
+            [void]$currentResources.Add($resource)
         }
-        $currentConfig.resources = $currentResources
+    }
+    $currentConfig.resources = $currentResources
 
 }
 
@@ -828,7 +915,7 @@ function remove-jobs() {
     }
 }
 
-function verify-config($currentConfig){
+function verify-config($currentConfig) {
     $json = '.\verify-config.json'
     $currentConfig | convertto-json -depth 99 | out-file -FilePath $json -Force
 
