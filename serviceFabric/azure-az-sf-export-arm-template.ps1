@@ -138,8 +138,9 @@ function main () {
         modify-vmssResources($currentConfig)
 
         add-parameters($currentConfig)
-        verify-config($currentConfig)
         remove-unusedParameters($currentConfig)
+
+        verify-config($currentConfig)
         
         # save base / current json
         $currentConfig | convertto-json -depth 99 | out-file $templateJsonFile.Replace(".json", ".current.json")
@@ -258,7 +259,7 @@ function add-parameters($currentConfig) {
     $fqdn = add-parameterName -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
     # add-parameterNames -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
 
-    add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
+    #add-parameterValue -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name $dnsSettings
 }
 
 
@@ -912,6 +913,27 @@ function remove-jobs() {
     catch {
         write-host "error:$($Error | out-string)"
         $error.Clear()
+    }
+}
+
+function remove-unusedParameters($currentConfig){
+    $parametersRemoveList = [collections.arraylist]::new()
+    $currentConfigResourcejson = $currentConfig.resources | convertto-json -depth 99
+
+    foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
+
+        $parameterizedName = "\[parameters\('$($psObjectProperty.name)'\)\]"
+        write-host "checking to see if $parameterizedName is being used"
+        if([regex]::IsMatch($currentConfigResourcejson, $parameterizedName, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)){
+        #if (($currentConfigResourcejson | select-string $parameterizedName -quiet)) {
+            continue
+        }
+        [void]$parametersRemoveList.Add($psObjectProperty)
+    }
+
+    foreach($parameter in $parametersRemoveList){
+        write-warning "removing $($parameter.name)"
+        $currentConfig.parameters.psobject.Properties.Remove($parameter.name)
     }
 }
 
