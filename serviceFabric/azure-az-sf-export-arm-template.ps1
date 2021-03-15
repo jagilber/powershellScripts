@@ -1052,13 +1052,19 @@ function modify-vmssResources($currenConfig) {
 
 function modify-vmssResourcesDeploy($currenConfig) {
     $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
-   
+    #$parameterizedName = create-parameterizedName -name 'clusterEndpoint' -parameterName -resource -withbrackets
+    #add-parameter -currentConfig $currentConfig -parameterName
+
     foreach ($vmssResource in $vmssResources) {
         $extensions = [collections.arraylist]::new()
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                # todo not right parameter name
-                $extension.properties.settings.clusterEndpoint = "[reference(parameters('clusterName')).clusterEndpoint]"
+                $clusterResource = $currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters'
+                $parameterizedName = create-parameterizedName -parameterName 'name' -resource $clusterResource
+                $newName = "[reference($parameterizedName).clusterEndpoint]"
+                write-host "setting cluster endpoint to $newName"
+                set-resourceParameterValue -resource $extension.properties.settings -name 'clusterEndpoint' -newValue $newName
+                remove-unusedParameters -currentConfig $currentConfig
             }
         }    
     }
@@ -1123,8 +1129,8 @@ function modify-vmssResourcesRedeploy($currenConfig) {
                 -name 'adminPassword' `
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
                 -metadataDescription 'password must be set before deploying template or one will be generated.'
-            $referenceName = "[$(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource)]"
-            add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $referenceName -type 'string'
+            $parameterizedName = create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource -withbrackets
+            add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $parameterizedName -type 'string'
         }
     }
 }
