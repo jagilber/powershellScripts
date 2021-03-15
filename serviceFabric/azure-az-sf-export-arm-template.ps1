@@ -1097,7 +1097,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
                 -resource $vmssResource `
                 -name 'adminPassword' `
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
-                -metadataDescription 'password must be set before deploying template or one will be generated'
+                -metadataDescription 'password must be set before deploying template.'
             $referenceName = "[$(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource)]"
             add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $referenceName -type 'string'
         }
