@@ -61,8 +61,8 @@ $global:sflogs = $null
 $global:sfdiags = $null
 $global:startTime = get-date
 $global:storageKeyApi = '2015-05-01-preview'
-$global:defaultSflogsValue = "[toLower( concat('sflogs', uniqueString(resourceGroup().id),'2'))]"
-$global:defaultSfdiagsValue = "[toLower(concat(uniqueString(resourceGroup().id), '3' ))]"
+$global:defaultSflogsValue = "[toLower(concat('sflogs',uniqueString(resourceGroup().id),'2'))]"
+$global:defaultSfdiagsValue = "[toLower(concat(uniqueString(resourceGroup().id),'3'))]"
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
@@ -81,7 +81,6 @@ function main () {
         return
     }
     
-    Enable-AzureRmAlias
     if (!(@(Get-AzResourceGroup).Count)) {
         write-host "connecting to azure"
         Connect-AzAccount
@@ -276,6 +275,7 @@ function add-vmssProtectedSettings($vmssResource) {
 
 function check-module() {
     $error.clear()
+    enable-azureRmAlias
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
     
     if ($error) {
