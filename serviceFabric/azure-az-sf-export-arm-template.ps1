@@ -40,7 +40,7 @@ param (
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = "$psscriptroot/template.json", 
+    [string]$templateJsonFile = "$psscriptroot\templates\template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [int]$sleepSeconds = 1, 
@@ -144,7 +144,8 @@ function main () {
 
         $templateJsonFile = $templateJsonFile.Replace(".json", ".current.json")
         $error.clear()
-        code $templateJsonFile
+        write-host "finished. files stored in $templateDirectory" -ForegroundColor Green
+        code $templateDirectory
         if ($error) {
             . $templateJsonFile
         }
