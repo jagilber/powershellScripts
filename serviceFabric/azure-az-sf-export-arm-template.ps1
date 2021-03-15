@@ -40,7 +40,7 @@ param (
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = "$psscriptroot/templates/template.json", 
+    [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [int]$sleepSeconds = 1, 
