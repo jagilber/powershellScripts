@@ -1009,17 +1009,17 @@ function modify-lbResourcesRedeploy($currenConfig) {
 }
 
 function modify-storageResourcesDeploy($currentConfig) {
-
+$metadataDescription = 'this name must be unique in deployment region. remove this parameter from *parameter file* to have account name generated.'
     add-parameter -currentConfig $currentConfig `
         -parameterName (create-parametersName -resource $global:sflogs) `
         -parameterValue $global:defaultSflogsValue `
-        -metadataDescription 'this name must be unique in deployment region. remove this parameter to have account name generated.'
+        -metadataDescription $metadataDescription
 
     foreach ($sfdiag in $global:sfdiags) {
         add-parameter -currentConfig $currentConfig `
             -parameterName (create-parametersName -resource $sfdiag) `
             -parameterValue $global:defaultSfdiagsValue `
-            -metadataDescription 'this name must be unique in deployment region. remove this parameter to have account name generated.'
+            -metadataDescription $metadataDescription
     }
 }
 
