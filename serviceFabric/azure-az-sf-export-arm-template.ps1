@@ -1209,14 +1209,22 @@ function remove-jobs() {
 
 function remove-unusedParameters($currentConfig) {
     $parametersRemoveList = [collections.arraylist]::new()
-    $currentConfigResourcejson = $currentConfig.resources | convertto-json -depth 99
+    #serialize and copy
+    $currentConfigResourcejson = $currentConfig | convertto-json -depth 99
+    $currentConfigJson = $currentConfigResourcejson | convertfrom-json
+
+    # remove parameters section but keep everything else like variables, resources, outputs
+    $currentConfigJson.psobject.properties.remove('Parameters')
+    $currentConfigResourcejson = $currentConfigJson | convertto-json -depth 99
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
         $parameterizedName = "parameters\('$($psObjectProperty.name)'\)"
         write-host "checking to see if $parameterizedName is being used"
         if ([regex]::IsMatch($currentConfigResourcejson, $parameterizedName, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            write-verbose "$parameterizedName is being used"
             continue
         }
+        write-verbose "removing $parameterizedName"
         [void]$parametersRemoveList.Add($psObjectProperty)
     }
 
