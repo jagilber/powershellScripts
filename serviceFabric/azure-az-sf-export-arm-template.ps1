@@ -13,7 +13,7 @@
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName {{ resource group name }}
 
 .DESCRIPTION  
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
@@ -90,6 +90,11 @@ function main () {
     if (!$resourceGroupName -or !$templateJsonFile) {
         write-error 'specify resourceGroupName'
         return
+    }
+
+    $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
+    if (!(test-path $templateDirectory)){
+        mkdir $templateDirectory
     }
 
     if ($resourceNames) {
@@ -178,7 +183,7 @@ function add-parameter($currentConfig, $parameterName, $parameterValue, $type = 
 
     $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
 }
-function add-parameterName($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $type = 'string') {
+function add-parameterName($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $type = 'string', $metadataDescription = '') {
     $parameterName = create-parametersName -resource $resource -name $aliasName
     $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
     $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
@@ -190,12 +195,13 @@ function add-parameterName($currentConfig, $resource, $name, $aliasName = $name,
             add-parameter -currentConfig $currentConfig `
                 -parameterName $parameterName `
                 -parameterValue $parameterNameValue `
-                -type $type
+                -type $type `
+                -metadataDescription $metadataDescription
         }
     }
 }
 
-function add-outputs($currentConfig, $name, $value, $type) {
+function add-outputs($currentConfig, $name, $value, $type = 'string') {
     $outputs = $currentConfig.psobject.Properties | where-object name -ieq 'outputs'
     $outputItem = @{
         value = $value
@@ -326,9 +332,9 @@ function create-newTemplate($currentConfig) {
     # modify-clusterResourcesDeploy $currentConfig
     # os, sku, capacity, durability?
     # modify-vmssResourcesDeploy $currentConfig
-    # GEN-UNIQUE dns, fqdn
+    # GEN_UNIQUE dns, fqdn
     # modify-ipResourcesDeploy $currentConfig
-    # GEN-UNIQUE name
+    # GEN_UNIQUE name
     modify-storageResourcesDeploy $currentConfig
     verify-config $currentConfig
 
@@ -999,13 +1005,13 @@ function modify-storageResourcesDeploy($currentConfig) {
     add-parameter -currentConfig $currentConfig `
         -parameterName (create-parametersName -resource $global:sflogs) `
         -parameterValue $global:defaultSflogsValue `
-        -metadataDescription 'this name must be unique in deployment region.'
+        -metadataDescription 'this name must be unique in deployment region. remove this parameter to have account name generated.'
 
     foreach ($sfdiag in $global:sfdiags) {
         add-parameter -currentConfig $currentConfig `
             -parameterName (create-parametersName -resource $sfdiag) `
             -parameterValue $global:defaultSfdiagsValue `
-            -metadataDescription 'this name must be unique in deployment region.'
+            -metadataDescription 'this name must be unique in deployment region. remove this parameter to have account name generated.'
     }
 }
 
@@ -1086,10 +1092,14 @@ function modify-vmssResourcesRedeploy($currenConfig) {
 
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
             write-host "adding admin password"
-            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN-UNIQUE'
-            add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'adminPassword' -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile
-            $referenceName = "[reference($(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource))]"
-            add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $referenceName -type 'object'
+            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN_UNIQUE'
+            add-parameterName -currentConfig $currentConfig `
+                -resource $vmssResource `
+                -name 'adminPassword' `
+                -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
+                -metadataDescription 'password must be set before deploying template or one will be generated'
+            $referenceName = "[$(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource)]"
+            add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $referenceName -type 'string'
         }
     }
 }
