@@ -40,7 +40,7 @@ param (
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = "$psscriptroot/template.json", 
+    [string]$templateJsonFile = "$psscriptroot/templates/template.json", # for cloudshell
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [int]$sleepSeconds = 1, 
@@ -93,7 +93,7 @@ function main () {
 
     $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
     if (!(test-path $templateDirectory)) {
-        mkdir $templateDirectory
+        mkdir "./$templateDirectory" # for cloudshell
     }
 
     if ($resourceNames) {
@@ -135,10 +135,11 @@ function main () {
         create-currentTemplate $currentConfig
         create-redeployTemplate $currentConfig
         create-newTemplate $currentConfig
+        create-addNodeTypeTemplate $currentConfig
 
         $error.clear()
         write-host "finished. files stored in $templateDirectory" -ForegroundColor Green
-        code $templateDirectory
+        code $templateDirectory # for cloudshell and local
         if ($error) {
             . $templateJsonFile.Replace(".json", ".current.json")
         }
@@ -160,7 +161,7 @@ function main () {
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
 }
 
-function add-parameter($currentConfig, $parameterName, $parameterValue, $type = "string", $metadataDescription = "") {
+function add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = "string", $metadataDescription = "") {
     $parameterObject = @{
         type         = $type
         defaultValue = $parameterValue 
@@ -175,23 +176,6 @@ function add-parameter($currentConfig, $parameterName, $parameterValue, $type = 
     }
 
     $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
-}
-function add-parameterName($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $type = 'string', $metadataDescription = '') {
-    $parameterName = create-parametersName -resource $resource -name $aliasName
-    $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
-    $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
-    set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
-
-    if ($parameterNameValue) {
-        write-host "parameter name $parameterName"
-        if (!(get-parameter -currentConfig $currentConfig -parameterName $parameterName)) {
-            add-parameter -currentConfig $currentConfig `
-                -parameterName $parameterName `
-                -parameterValue $parameterNameValue `
-                -type $type `
-                -metadataDescription $metadataDescription
-        }
-    }
 }
 
 function add-outputs($currentConfig, $name, $value, $type = 'string') {
@@ -232,10 +216,28 @@ function add-parameterNameByResourceType($currentConfig, $type, $name) {
 
     write-host "parameter names $parameterNames"
     foreach ($parameterName in $parameterNames.GetEnumerator()) {
-        if (!(get-parameter -currentConfig $currentConfig -parameterName $parameterName.key)) {
-            add-parameter -currentConfig $currentConfig `
+        if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName.key)) {
+            add-toParametersSection -currentConfig $currentConfig `
                 -parameterName $parameterName.key `
                 -parameterValue $parameterName.value
+        }
+    }
+}
+
+function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $type = 'string', $metadataDescription = '') {
+    $parameterName = create-parametersName -resource $resource -name $aliasName
+    $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
+    $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
+    set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
+
+    if ($parameterNameValue) {
+        write-host "parameter name $parameterName"
+        if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName)) {
+            add-toParametersSection -currentConfig $currentConfig `
+                -parameterName $parameterName `
+                -parameterValue $parameterNameValue `
+                -type $type `
+                -metadataDescription $metadataDescription
         }
     }
 }
@@ -294,6 +296,9 @@ function check-module() {
     }
 
     return $true
+}
+
+function create-addNodeTypeTemplate($currentConfig) {
 }
 
 function create-currentTemplate($currentConfig) {
@@ -468,8 +473,7 @@ function create-jsonTemplate([collections.arraylist]$resources,
     [string]$jsonFile, 
     [hashtable]$parameters = @{},
     [hashtable]$variables = @{},
-    [hashtable]$outputs = @{}
-) {
+    [hashtable]$outputs = @{}) {
     try {
         $resourceTemplate = @{ 
             resources      = $resources
@@ -935,7 +939,7 @@ function enum-vnetResources($vmssResources) {
     return $resources.ToArray() | sort-object name -Unique
 }
 
-function get-parameter($currentConfig, $parameterName) {
+function get-fromParametersSection($currentConfig, $parameterName) {
     $parameters = @($currentConfig.parameters)
     foreach ($psObjectProperty in $parameters.psobject.Properties) {
         if (($psObjectProperty.Name -imatch $parameterName)) {
@@ -1034,7 +1038,7 @@ function modify-storageResourcesDeploy($currentConfig) {
     $sflogsParameter = create-parametersName -resource $global:sflogs
     [void]$parameterExclusions.Add($sflogsParameter)
 
-    add-parameter -currentConfig $currentConfig `
+    add-toParametersSection -currentConfig $currentConfig `
         -parameterName $sflogsParameter `
         -parameterValue $global:defaultSflogsValue `
         -metadataDescription $metadataDescription
@@ -1042,7 +1046,7 @@ function modify-storageResourcesDeploy($currentConfig) {
     foreach ($sfdiag in $global:sfdiags) {
         $sfdiagParameter = create-parametersName -resource $sfdiag
         [void]$parameterExclusions.Add($sfdiagParameter)
-        add-parameter -currentConfig $currentConfig `
+        add-toParametersSection -currentConfig $currentConfig `
             -parameterName $sfdiagParameter `
             -parameterValue $global:defaultSfdiagsValue `
             -metadataDescription $metadataDescription
@@ -1112,7 +1116,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
             }
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
                 write-host "parameterizing cluster endpoint"
-                add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'clusterEndpoint' -resourceObject $extension.properties.settings
+                add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'clusterEndpoint' -resourceObject $extension.properties.settings
             }
             [void]$extensions.Add($extension)
         }    
@@ -1140,18 +1144,18 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
             
         write-host "parameterizing hardware sku"
-        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
+        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
             
         write-host "parameterizing hardware capacity"
-        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku -type 'int'
+        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku -type 'int'
 
         write-host "parameterizing os sku"
-        add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
+        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
 
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
             write-host "adding admin password"
             $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN_PASSWORD'
-            add-parameterName -currentConfig $currentConfig `
+            add-parameter -currentConfig $currentConfig `
                 -resource $vmssResource `
                 -name 'adminPassword' `
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
@@ -1373,6 +1377,3 @@ function write-progressInfo() {
 main
 $ErrorActionPreference = $currentErrorActionPreference
 $VerbosePreference = $currentVerbosePreference
-
-
-
