@@ -408,7 +408,9 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
         }
 
         if ($psObjectProperty.Value.GetType().name -ieq 'hashtable' -and $psObjectProperty.Value['metadata']) {
-            $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
+            if ($psObjectProperty.value.metadata.description) {
+                $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
+            }
         }
         $parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
     }
@@ -959,7 +961,7 @@ function get-resourceParameterValue($resource, $name) {
             $parameterValues = @($psObjectProperty.Name)
             if ($parameterValues.Count -eq 1) {
                 $parameterValue = $psObjectProperty.Value
-                if(!($parameterValue)){
+                if (!($parameterValue)) {
                     return [string]::Empty
                 }
                 return $parameterValue
