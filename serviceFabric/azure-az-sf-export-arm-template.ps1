@@ -354,10 +354,10 @@ function create-newTemplate($currentConfig) {
     # GEN_UNIQUE dns, fqdn
     # modify-ipResourcesDeploy $currentConfig
     # GEN_UNIQUE name
-    modify-storageResourcesDeploy $currentConfig
+    $parameterExclusions = modify-storageResourcesDeploy $currentConfig
     modify-vmssResourcesDeploy $currentConfig
 
-    create-parameterFile $currentConfig  $templateParameterFile
+    create-parameterFile -currentConfig $currentConfig -parameterFileName $templateParameterFile -ignoreParameters $parameterExclusions
     verify-config $currentConfig $templateParameterFile
 
     # # save add json
@@ -378,7 +378,7 @@ function create-newTemplate($currentConfig) {
     $readme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
 }
 
-function create-parameterFile($currentConfig, $parameterFileName) {
+function create-parameterFile($currentConfig, $parameterFileName, $ignoreParameters = @()) {
     $parameterTemplate = [ordered]@{ 
         '$schema'      = $parametersSchema
         contentVersion = "1.0.0.0"
@@ -389,6 +389,12 @@ function create-parameterFile($currentConfig, $parameterFileName) {
     
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties.GetEnumerator()) {
         $metadata = $null
+
+        if ($ignoreParameters.Contains($psObjectProperty.name)) {
+            write-host "skipping parameter $($psobjectProperty.name)"
+            continue
+        }
+
         write-verbose "value properties:$($psObjectProperty.Value.psobject.Properties.Name)"
         $parameterItem = @{
             value = $psObjectProperty.Value.defaultValue
@@ -1023,18 +1029,26 @@ function modify-lbResourcesRedeploy($currenConfig) {
 }
 
 function modify-storageResourcesDeploy($currentConfig) {
-$metadataDescription = 'this name must be unique in deployment region. remove this parameter from *parameter file* to have account name generated.'
+    $metadataDescription = 'this name must be unique in deployment region. remove this parameter from *parameter file* to have account name generated.'
+    $parameterExclusions = [collections.arraylist]::new()
+    $sflogsParameter = create-parametersName -resource $global:sflogs
+    [void]$parameterExclusions.Add($sflogsParameter)
+
     add-parameter -currentConfig $currentConfig `
-        -parameterName (create-parametersName -resource $global:sflogs) `
+        -parameterName $sflogsParameter `
         -parameterValue $global:defaultSflogsValue `
         -metadataDescription $metadataDescription
 
     foreach ($sfdiag in $global:sfdiags) {
+        $sfdiagParameter = create-parametersName -resource $sfdiag
+        [void]$parameterExclusions.Add($sfdiagParameter)
         add-parameter -currentConfig $currentConfig `
-            -parameterName (create-parametersName -resource $sfdiag) `
+            -parameterName $sfdiagParameter `
             -parameterValue $global:defaultSfdiagsValue `
             -metadataDescription $metadataDescription
     }
+
+    return $parameterExclusions.ToArray()
 }
 
 function modify-vmssResources($currenConfig) {
@@ -1067,9 +1081,6 @@ function modify-vmssResources($currenConfig) {
 
 function modify-vmssResourcesDeploy($currenConfig) {
     $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
-    #$parameterizedName = create-parameterizedName -name 'clusterEndpoint' -parameterName -resource -withbrackets
-    #add-parameter -currentConfig $currentConfig -parameterName
-
     foreach ($vmssResource in $vmssResources) {
         $extensions = [collections.arraylist]::new()
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
@@ -1079,6 +1090,7 @@ function modify-vmssResourcesDeploy($currenConfig) {
                 $newName = "[reference($parameterizedName).clusterEndpoint]"
                 write-host "setting cluster endpoint to $newName"
                 set-resourceParameterValue -resource $extension.properties.settings -name 'clusterEndpoint' -newValue $newName
+                # remove clusterendpoint parameter
                 remove-unusedParameters -currentConfig $currentConfig
             }
         }    
