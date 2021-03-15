@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
+    works with cloudshell https://shell.azure.com/
 
     dependencies:
         loadbalancer depends on public ip
@@ -13,7 +14,7 @@
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName {{ resource group name }}
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName 
 
 .DESCRIPTION  
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
@@ -25,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 210307
+    Version    : 210315
     History    : 
 
 .EXAMPLE 
@@ -37,6 +38,7 @@
 [cmdletbinding()]
 param (
     [string]$resourceGroupName = '',
+    [string]$adminPassword = '', #'GEN_PASSWORD',
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
@@ -209,7 +211,7 @@ function add-parameterNameByResourceType($currentConfig, $type, $name) {
         $parameterNameValue = get-resourceParameterValue -resource $resource -name $name
         set-resourceParameterValue -resource $resource -name $name -newValue $parameterizedName
 
-        if ($parameterNameValue) {
+        if ($parameterNameValue -ne $null) {
             [void]$parameterNames.Add($parameterName, $parameterNameValue)
         }
     }
@@ -230,7 +232,7 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
     $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
     set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
-    if ($parameterNameValue) {
+    if ($parameterNameValue -ne $null) {
         write-host "parameter name $parameterName"
         if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName)) {
             add-toParametersSection -currentConfig $currentConfig `
@@ -371,7 +373,7 @@ function create-newTemplate($currentConfig) {
     # save add readme
     $readme = "new / add modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
-            - adminPassword required parameter added (needs to be set or one will be generated)
+            - adminPassword required parameter added (needs to be set)
             - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - dnsSettings for public Ip Address needs to be unique
@@ -438,7 +440,7 @@ function create-redeployTemplate($currentConfig) {
     # save redeploy readme
     $readme = "redeploy modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
-            - adminPassword required parameter added (needs to be set or one will be generated)
+            - adminPassword required parameter added (needs to be set)
             - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - clusterendpoint is parameterized
@@ -957,6 +959,9 @@ function get-resourceParameterValue($resource, $name) {
             $parameterValues = @($psObjectProperty.Name)
             if ($parameterValues.Count -eq 1) {
                 $parameterValue = $psObjectProperty.Value
+                if(!($parameterValue)){
+                    return [string]::Empty
+                }
                 return $parameterValue
             }
             else {
@@ -1154,12 +1159,12 @@ function modify-vmssResourcesRedeploy($currenConfig) {
 
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
             write-host "adding admin password"
-            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN_PASSWORD'
+            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value $adminPassword
             add-parameter -currentConfig $currentConfig `
                 -resource $vmssResource `
                 -name 'adminPassword' `
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
-                -metadataDescription 'password must be set before deploying template or one will be generated.'
+                -metadataDescription 'password must be set before deploying template.'
             $parameterizedName = create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource -withbrackets
             add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $parameterizedName -type 'string'
         }
