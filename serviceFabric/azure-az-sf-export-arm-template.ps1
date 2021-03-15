@@ -131,23 +131,16 @@ function main () {
         #wait-jobs
     }
     else {
-        # save raw file
-        $exportJsonFile = $templateJsonFile.Replace(".json", ".export.json")
-        export-template -configuredResources $global:configuredRGResources -jsonFile $exportJsonFile
-        write-host "template exported to $exportJsonFile" -ForegroundColor Yellow
-        write-host "to update arm resource, modify $exportJsonFile.  when finished, execute script with -patch to update resource" -ForegroundColor Yellow
+        $currentConfig = create-exportTemplate
+        create-currentTemplate $currentConfig
+        create-redeployTemplate $currentConfig
+        create-newTemplate $currentConfig
 
-        $currentConfig = Get-Content -raw $exportJsonFile | convertfrom-json
-        create-currentTemplate($currentConfig)
-        create-redeployTemplate($currentConfig)
-        create-newTemplate($currentConfig)
-
-        $templateJsonFile = $templateJsonFile.Replace(".json", ".current.json")
         $error.clear()
         write-host "finished. files stored in $templateDirectory" -ForegroundColor Green
         code $templateDirectory
         if ($error) {
-            . $templateJsonFile
+            . $templateJsonFile.Replace(".json", ".current.json")
         }
     }
 
@@ -320,13 +313,34 @@ function create-currentTemplate($currentConfig) {
     $currentConfig | convertto-json -depth 99 | out-file $templateFile
 
     # save current readme
-    $currentReadme = 'current modifications:
+    $readme = "current modifications:
             - additional parameters have been added
             - extra / duplicate child resources removed from root
             - dependsOn modified to remove conflicting / unneeded resources
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            '
-    $currentReadme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
+}
+
+function create-exportTemplate() {
+    # create base /current template
+    $templateFile = $templateJsonFile.Replace(".json", ".export.json")
+    $null = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
+    write-host "template exported to $templateFile" -ForegroundColor Yellow
+
+    # save base / current json
+    $currentConfig = Get-Content -raw $templateFile | convertfrom-json
+    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+
+    # save current readme
+    $readme = "export:
+            - this is raw export from ps cmdlet export-azresourcegroup
+            - $templateFile will not be usable to recreate / create new cluster in this state
+            - use 'current' to modify existing cluster
+            - use 'redeploy' or 'new' to recreate / create cluster
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".export.readme.txt")
+    return $currentConfig
 }
 
 function create-newTemplate($currentConfig) {
@@ -350,7 +364,7 @@ function create-newTemplate($currentConfig) {
     $currentConfig | convertto-json -depth 99 | out-file $templateFile
 
     # save add readme
-    $addReadme = 'new / add modifications:
+    $readme = "new / add modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set or one will be generated)
             - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
@@ -360,8 +374,8 @@ function create-newTemplate($currentConfig) {
             - if adding new vmss, each vmss resource needs a cluster nodetype resource added
             - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
             - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
-            '
-    $addReadme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
 }
 
 function create-parameterFile($currentConfig, $parameterFileName) {
@@ -411,14 +425,14 @@ function create-redeployTemplate($currentConfig) {
     $currentConfig | convertto-json -depth 99 | out-file $templateFile
 
     # save redeploy readme
-    $redeployReadme = 'redeploy modifications:
+    $readme = "redeploy modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set or one will be generated)
             - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - clusterendpoint is parameterized
-            '
-    $redeployReadme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
 }
 
 function create-parametersName($resource, $name = 'name') {
