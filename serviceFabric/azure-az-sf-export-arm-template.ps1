@@ -93,7 +93,7 @@ function main () {
     }
 
     $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
-    if (!(test-path $templateDirectory)){
+    if (!(test-path $templateDirectory)) {
         mkdir $templateDirectory
     }
 
@@ -305,15 +305,18 @@ function check-module() {
 function create-currentTemplate($currentConfig) {
     # create base /current template
     $templateFile = $templateJsonFile.Replace(".json", ".current.json")
+    $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
+
     remove-duplicateResources $currentConfig
     remove-unusedParameters $currentConfig
     modify-lbResources $currentConfig
     modify-vmssResources $currentConfig
-    verify-config $currentConfig
-        
+    
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
+
     # save base / current json
     $currentConfig | convertto-json -depth 99 | out-file $templateFile
-    create-parameterFile $currentConfig  $templateFile
 
     # save current readme
     $currentReadme = 'current modifications:
@@ -328,6 +331,7 @@ function create-currentTemplate($currentConfig) {
 function create-newTemplate($currentConfig) {
     # create deploy / new / add template
     $templateFile = $templateJsonFile.Replace(".json", ".new.json")
+    $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
     # nodetype info, isPrimary
     # modify-clusterResourcesDeploy $currentConfig
     # os, sku, capacity, durability?
@@ -336,12 +340,13 @@ function create-newTemplate($currentConfig) {
     # modify-ipResourcesDeploy $currentConfig
     # GEN_UNIQUE name
     modify-storageResourcesDeploy $currentConfig
-    verify-config $currentConfig
+    modify-vmssResourcesDeploy $currentConfig
 
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
 
     # # save add json
     $currentConfig | convertto-json -depth 99 | out-file $templateFile
-    create-parameterFile $currentConfig  $templateFile
 
     # save add readme
     $addReadme = 'new / add modifications:
@@ -371,11 +376,11 @@ function create-parameterFile($currentConfig, $parameterFileName) {
         $metadata = $null
         write-verbose "value properties:$($psObjectProperty.Value.psobject.Properties.Name)"
         $parameterItem = @{
-            value    = $psObjectProperty.Value.defaultValue
+            value = $psObjectProperty.Value.defaultValue
         }
 
         if ($psObjectProperty.Value.GetType().name -ieq 'hashtable' -and $psObjectProperty.Value['metadata']) {
-            $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description}
+            $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
         }
         $parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
     }
@@ -391,16 +396,18 @@ function create-parameterFile($currentConfig, $parameterFileName) {
 function create-redeployTemplate($currentConfig) {
     # create redeploy template
     $templateFile = $templateJsonFile.Replace(".json", ".redeploy.json")
+    $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
     modify-clusterResourceRedeploy $currentConfig
     modify-lbResourcesRedeploy $currentConfig
     modify-vmssResourcesRedeploy $currentConfig
     modify-ipAddressesRedeploy $currentConfig
-    verify-config $currentConfig
+
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
 
     # # save redeploy json
     $currentConfig | convertto-json -depth 99 | out-file $templateFile
-    create-parameterFile $currentConfig  $templateFile
 
     # save redeploy readme
     $redeployReadme = 'redeploy modifications:
@@ -408,6 +415,7 @@ function create-redeployTemplate($currentConfig) {
             - adminPassword required parameter added (needs to be set or one will be generated)
             - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            - clusterendpoint is parameterized
             '
     $redeployReadme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
 }
@@ -1043,6 +1051,20 @@ function modify-vmssResources($currenConfig) {
     }
 }
 
+function modify-vmssResourcesDeploy($currenConfig) {
+    $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+   
+    foreach ($vmssResource in $vmssResources) {
+        $extensions = [collections.arraylist]::new()
+        foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
+            if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                # todo not right parameter name
+                $extension.properties.settings.clusterEndpoint = "[reference(parameters('clusterName')).clusterEndpoint]"
+            }
+        }    
+    }
+}
+
 function modify-vmssResourcesRedeploy($currenConfig) {
     $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
    
@@ -1055,6 +1077,10 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
             if ($extension.properties.type -ieq 'MicrosoftMonitoringAgent') {
                 continue
+            }
+            if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                write-host "parameterizing cluster endpoint"
+                add-parameterName -currentConfig $currentConfig -resource $vmssResource -name 'clusterEndpoint' -resourceObject $extension.properties.settings
             }
             [void]$extensions.Add($extension)
         }    
@@ -1182,19 +1208,21 @@ function set-resourceParameterValue($resource, $name, $newValue) {
     return $retval
 }
 
-function verify-config($currentConfig) {
+function verify-config($currentConfig, $templateParameterFile) {
     $json = '.\verify-config.json'
     $currentConfig | convertto-json -depth 99 | out-file -FilePath $json -Force
 
     write-host "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
-    -Mode Incremental `
-    -Templatefile $json `
-    -Verbose
+        -Mode Incremental `
+        -Templatefile $json `
+        -TemplateParameterFile $templateParameterFile `
+        -Verbose
     " -ForegroundColor Green
 
     Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -Mode Incremental `
         -TemplateFile $json `
+        -TemplateParameterFile $templateParameterFile `
         -Verbose
 
     remove-item $json
