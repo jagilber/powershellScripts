@@ -844,8 +844,7 @@ function enum-storageResources($clusterResource) {
     write-host "cluster sflogs storage account $sflogs"
 
     $scalesets = enum-vmssResources($clusterResource)
-    $sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties 
-            | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
+    $sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
     write-host "cluster sfdiags storage account $sfdiags"
   
     $storageResources = @(get-azresource -ResourceGroupName $resourceGroupName `
