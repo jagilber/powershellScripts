@@ -1092,12 +1092,12 @@ function modify-vmssResourcesRedeploy($currenConfig) {
 
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
             write-host "adding admin password"
-            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN_UNIQUE'
+            $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value 'GEN_PASSWORD'
             add-parameterName -currentConfig $currentConfig `
                 -resource $vmssResource `
                 -name 'adminPassword' `
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
-                -metadataDescription 'password must be set before deploying template.'
+                -metadataDescription 'password must be set before deploying template or one will be generated.'
             $referenceName = "[$(create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource)]"
             add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $referenceName -type 'string'
         }
