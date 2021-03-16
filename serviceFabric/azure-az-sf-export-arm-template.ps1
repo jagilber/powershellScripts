@@ -147,7 +147,7 @@ function main () {
         create-addNodeTypeTemplate $currentConfig
         create-newTemplate $currentConfig
 
-
+        $global:resourceTemplateObj = $currentConfig
         $error.clear()
         write-host "finished. files stored in $templateDirectory" -ForegroundColor Green
         code $templateDirectory # for cloudshell and local
@@ -1279,7 +1279,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
                 -metadataDescription 'password must be set before deploying template.'
             $parameterizedName = create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource -withbrackets
-            add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $parameterizedName -type 'string'
+            # add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $parameterizedName -type 'string'
         }
     }
 }
