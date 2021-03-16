@@ -751,7 +751,7 @@ function enum-allResources() {
         return $null
     }
     else {
-        [void]$resources.AddRange($vmssResources.Id)
+        [void]$resources.AddRange(@($vmssResources.Id))
     }
 
     write-host "getting storage $resourceGroupName"
@@ -761,7 +761,7 @@ function enum-allResources() {
         return $null
     }
     else {
-        [void]$resources.AddRange($storageResources.Id)
+        [void]$resources.AddRange(@($storageResources.Id))
     }
     
     write-host "getting virtualnetworks $resourceGroupName"
