@@ -44,7 +44,8 @@ param (
     [string]$adminPassword = '', #'GEN_PASSWORD',
     [string]$templateJsonFile = "$psscriptroot/templates-$resourceGroupName/template.json", # for cloudshell
     [string]$useExportedJsonFile = '',
-    [switch]$detail
+    [switch]$detail,
+    [string]$logFile = "./azure-az-sf-export-arm-template.log"
 )
 
 # todo unused params need cleanup
@@ -80,7 +81,7 @@ $currentVerbosePreference = $VerbosePreference
 $debugLevel = 'none'
 
 function main () {
-    write-host "starting"
+    write-log "starting"
     if ($detail) {
         $ErrorActionPreference = 'continue'
         $VerbosePreference = 'continue'
@@ -92,25 +93,25 @@ function main () {
     }
     
     if (!(@(Get-AzResourceGroup).Count)) {
-        write-host "connecting to azure"
+        write-log "connecting to azure"
         Connect-AzAccount
     }
 
     if (!$resourceGroupName -or !$templateJsonFile) {
-        write-error 'specify resourceGroupName'
+        write-error 'specify resourceGroupName' -isError
         return
     }
 
     $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
     if (!(test-path $templateDirectory)) {
-        write-host "making directory $templateDirectory"
+        write-log "making directory $templateDirectory"
         # test local and for cloudshell
         mkdir $templateDirectory 
     }
 
     if ($resourceNames) {
         foreach ($resourceName in $resourceNames) {
-            write-host "getting resource $resourceName"
+            write-log "getting resource $resourceName"
             $global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
         }
     }
@@ -119,11 +120,11 @@ function main () {
         foreach ($resourceId in $resourceIds) {
             $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
             if ($resource.ResourceGroupName -ieq $resourceGroupName) {
-                write-host "adding resource id to configured resources: $($resource.resourceId)" -ForegroundColor Cyan
+                write-log "adding resource id to configured resources: $($resource.resourceId)" -ForegroundColor Cyan
                 [void]$global:configuredRGResources.Add($resource)
             }
             else {
-                write-warning "skipping resource $($resource.resourceid) as it is out of resource group scope $($resource.ResourceGroupName)"
+                write-log "skipping resource $($resource.resourceid) as it is out of resource group scope $($resource.ResourceGroupName)" -ForegroundColor darkyellow
             }
         }
     }
@@ -131,7 +132,7 @@ function main () {
     display-settings -resources $global:configuredRGResources
 
     if ($global:configuredRGResources.count -lt 1) {
-        Write-Warning "error enumerating resource $($error | format-list * | out-string)"
+        write-log "error enumerating resource $($error | format-list * | out-string)" -ForegroundColor darkyellow
         return
     }
 
@@ -151,7 +152,7 @@ function main () {
 
         $global:resourceTemplateObj = $currentConfig
         $error.clear()
-        write-host "finished. files stored in $templateDirectory" -ForegroundColor Green
+        write-log "finished. files stored in $templateDirectory" -ForegroundColor Green
         code $templateDirectory # for cloudshell and local
         if ($error) {
             . $templateJsonFile.Replace(".json", ".current.json")
@@ -159,19 +160,22 @@ function main () {
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
-        write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
+        write-log "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings" -ForegroundColor darkyellow
 
         if ($DebugPreference -ieq 'continue') {
-            write-host "errors: $($error | sort-object -Descending | out-string)"
+            write-log "errors: $($error | sort-object -Descending | out-string)"
         }
     }
 
     $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
 
-    write-host "deployment:`r`n$($deployment | format-list * | out-string)"
+    write-log "deployment:`r`n$($deployment | format-list * | out-string)"
     Write-Progress -Completed -Activity "complete"
-    write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
-    write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
+    write-log "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
+    write-log 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
+    if($logFile){
+        write-log "log file saved to $logFile"
+    }
 }
 
 function add-outputs($currentConfig, $name, $value, $type = 'string') {
@@ -210,7 +214,7 @@ function add-parameterNameByResourceType($currentConfig, $type, $name, $metadata
         }
     }
 
-    write-host "parameter names $parameterNames"
+    write-log "parameter names $parameterNames"
     foreach ($parameterName in $parameterNames.GetEnumerator()) {
         if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName.key)) {
             add-toParametersSection -currentConfig $currentConfig `
@@ -233,7 +237,7 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
     set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
     if ($parameterNameValue -ne $null) {
-        write-host "parameter name $parameterName"
+        write-log "parameter name $parameterName"
         if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName)) {
             add-toParametersSection -currentConfig $currentConfig `
                 -parameterName $parameterName `
@@ -270,7 +274,7 @@ function add-vmssProtectedSettings($vmssResource) {
                 StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key1]"
                 StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key2]"
             }
-            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
+            write-log "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
         }
 
         if ($extension.properties.type -ieq 'IaaSDiagnostics') {
@@ -283,7 +287,7 @@ function add-vmssProtectedSettings($vmssResource) {
                 storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$storageKeyApi').key1]"
                 storageAccountEndPoint = "https://core.windows.net/"                  
             }
-            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
+            write-log "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
         }
     }
 }
@@ -294,11 +298,11 @@ function check-module() {
     
     if ($error) {
         $error.clear()
-        write-warning "azure module for Connect-AzAccount not installed."
+        write-log "azure module for Connect-AzAccount not installed." -ForegroundColor darkyellow
 
         get-command Connect-AzureRmAccount -ErrorAction SilentlyContinue
         if (!$error) {
-            write-warning "azure module for Connect-AzureRmAccount is installed. use cloud shell to run script instead https://shell.azure.com/"
+            write-log "azure module for Connect-AzureRmAccount is installed. use cloud shell to run script instead https://shell.azure.com/" -ForegroundColor darkyellow
             return $false
         }
         
@@ -389,13 +393,13 @@ function create-exportTemplate() {
     $templateFile = $templateJsonFile.Replace(".json", ".export.json")
 
     if ($useExportedJsonFile -and (test-path $useExportedJsonFile)) {
-        write-host "using existing export file $useExportedJsonFile" -ForegroundColor Green
+        write-log "using existing export file $useExportedJsonFile" -ForegroundColor Green
         $templateFile = $useExportedJsonFile
     }
     else {
         $exportResult = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
-        write-host "template exported to $templateFile" -ForegroundColor Yellow
-        write-host "template export result $($exportResult|out-string)" -ForegroundColor Yellow
+        write-log "template exported to $templateFile" -ForegroundColor Yellow
+        write-log "template export result $($exportResult|out-string)" -ForegroundColor Yellow
     }
 
     # save base / current json
@@ -445,12 +449,12 @@ function create-jsonTemplate([collections.arraylist]$resources,
         } | create-json
 
         $resourceTemplate | out-file $jsonFile
-        write-host $resourceTemplate -ForegroundColor Cyan
+        write-log $resourceTemplate -ForegroundColor Cyan
         $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
         return $true
     }
     catch { 
-        write-error "$($_)`r`n$($error | out-string)"
+        write-error "$($_)`r`n$($error | out-string)" -isError
         return $false
     }
 }
@@ -503,7 +507,7 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
         $metadata = $null
 
         if ($ignoreParameters.Contains($psObjectProperty.name)) {
-            write-host "skipping parameter $($psobjectProperty.name)"
+            write-log "skipping parameter $($psobjectProperty.name)"
             continue
         }
 
@@ -524,7 +528,7 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
         $parameterFileName = $parameterFileName.tolower().replace('.json', '.parameters.json')
     }
 
-    write-host "creating parameterfile $parameterFileName" -ForegroundColor Green
+    write-log "creating parameterfile $parameterFileName" -ForegroundColor Green
     $parameterTemplate | create-json | out-file -FilePath $parameterFileName
 }
 
@@ -546,7 +550,7 @@ function create-parametersName($resource, $name = 'name') {
     }
     
     $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
-    write-host "returning $parametersName"
+    write-log "returning $parametersName"
     return $parametersName
 }
 
@@ -586,7 +590,7 @@ function deploy-template($configuredResources) {
     $json = get-content -raw $templateJsonFile | convertfrom-json
     
     if (!$json -or !$json.resources) {
-        write-error "invalid template file $templateJsonFile"
+        write-error "invalid template file $templateJsonFile" -isError
         return
     }
 
@@ -617,7 +621,7 @@ function deploy-template($configuredResources) {
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
     $error.Clear()
-    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+    write-log "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -TemplateFile $tempJsonFile `
         -Verbose:$detail `
         -TemplateParameterObject $templateParameters `
@@ -632,15 +636,15 @@ function deploy-template($configuredResources) {
         -Mode $mode
 
     if (!$error -and !$result) {
-        write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
+        write-log "patching resource with $tempJsonFile" -ForegroundColor Yellow
         start-job -ScriptBlock {
             param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters)
             if ($detail) {
                 $VerbosePreference = 'continue'
             }
 
-            write-host "using file: $tempJsonFile"
-            write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
+            write-log "using file: $tempJsonFile"
+            write-log "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
                 -DeploymentDebugLogLevel $debuglevel `
                 -TemplateFile $tempJsonFile `
@@ -658,8 +662,8 @@ function deploy-template($configuredResources) {
         } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters
     }
     else {
-        write-host "template validation failed: $($error |out-string) $($result | out-string)"
-        write-error "template validation failed`r`n$($error | create-json)`r`n$($result | create-json)"
+        write-log "template validation failed: $($error |out-string) $($result | out-string)"
+        write-error "template validation failed`r`n$($error | create-json)`r`n$($result | create-json)" -isError
         return $false
     }
 
@@ -676,21 +680,21 @@ function display-settings($resources) {
     foreach ($resource in $resources) {
         $settings += $resource | create-json
     }
-    write-host "current settings: `r`n $settings" -ForegroundColor Green
+    write-log "current settings: `r`n $settings" -ForegroundColor Green
 }
 
 function export-template($configuredResources, $jsonFile) {
-    write-host "exporting template to $jsonFile" -ForegroundColor Yellow
+    write-log "exporting template to $jsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
     $azResourceGroupLocation = @($configuredResources)[0].Location
     $resourceIds = @($configuredResources.ResourceId)
 
     # todo issue
     new-item -ItemType File -path $jsonFile
-    write-host "file exists:$((test-path $JsonFile))"
-    write-host "resource ids: $resourceIds" -ForegroundColor green
+    write-log "file exists:$((test-path $JsonFile))"
+    write-log "resource ids: $resourceIds" -ForegroundColor green
 
-    write-host "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
+    write-log "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
             -Path $jsonFile `
             -Force `
             -IncludeComments `
@@ -707,14 +711,14 @@ function export-template($configuredResources, $jsonFile) {
     return
 
     # todo cleanup if not implementing latest api
-    write-host "getting latest api versions" -ForegroundColor yellow
+    write-log "getting latest api versions" -ForegroundColor yellow
     $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
 
-    write-host "getting configured api versions" -ForegroundColor green
+    write-log "getting configured api versions" -ForegroundColor green
 
     $currentConfig = Get-Content -raw $jsonFile | convertfrom-json
     $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
-    write-host ($currentApiVersions | format-list * | out-string)
+    write-log ($currentApiVersions | format-list * | out-string)
     remove-item $jsonFile -Force
     
     foreach ($azResource in $configuredResources) {
@@ -724,14 +728,14 @@ function export-template($configuredResources, $jsonFile) {
         if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
             $rpType = $currentApiVersions | where-object type -ieq $azResource.ResourceType | select-object apiversion
             $resourceApiVersion = $rpType.ApiVersion
-            write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
+            write-log "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
         }
 
         if ($useLatestApiVersion -or !$resourceApiVersion) {
             $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
             $rpType = $resourceProvider.ResourceTypes | where-object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
             $resourceApiVersion = $rpType.ApiVersions[0]
-            write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
+            write-log "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
         }
 
         $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
@@ -757,78 +761,78 @@ function export-template($configuredResources, $jsonFile) {
 function enum-allResources() {
     $resources = [collections.arraylist]::new()
 
-    write-host "getting resource group cluster $resourceGroupName"
+    write-log "getting resource group cluster $resourceGroupName"
     $clusterResource = enum-clusterResource
     if (!$clusterResource) {
-        write-error "unable to enumerate cluster. exiting"
+        write-error "unable to enumerate cluster. exiting" -isError
         return $null
     }
     [void]$resources.Add($clusterResource.Id)
 
-    write-host "getting scalesets $resourceGroupName"
+    write-log "getting scalesets $resourceGroupName"
     $vmssResources = @(enum-vmssResources $clusterResource)
     if ($vmssResources.Count -lt 1) {
-        write-error "unable to enumerate vmss. exiting"
+        write-error "unable to enumerate vmss. exiting" -isError
         return $null
     }
     else {
         [void]$resources.AddRange(@($vmssResources.Id))
     }
 
-    write-host "getting storage $resourceGroupName"
+    write-log "getting storage $resourceGroupName"
     $storageResources = @(enum-storageResources $clusterResource)
     if ($storageResources.count -lt 1) {
-        write-error "unable to enumerate storage. exiting"
+        write-error "unable to enumerate storage. exiting" -isError
         return $null
     }
     else {
         [void]$resources.AddRange(@($storageResources.Id))
     }
     
-    write-host "getting virtualnetworks $resourceGroupName"
+    write-log "getting virtualnetworks $resourceGroupName"
     $vnetResources = @(enum-vnetResourceIds $vmssResources)
     if ($vnetResources.count -lt 1) {
-        write-error "unable to enumerate vnets. exiting"
+        write-error "unable to enumerate vnets. exiting" -isError
         return $null
     }
     else {
         [void]$resources.AddRange($vnetResources)
     }
 
-    write-host "getting loadbalancers $resourceGroupName"
+    write-log "getting loadbalancers $resourceGroupName"
     $lbResources = @(enum-lbResourceIds $vmssResources)
     if ($lbResources.count -lt 1) {
-        write-error "unable to enumerate loadbalancers. exiting"
+        write-error "unable to enumerate loadbalancers. exiting" -isError
         return $null
     }
     else {
         [void]$resources.AddRange($lbResources)
     }
 
-    write-host "getting ip addresses $resourceGroupName"
+    write-log "getting ip addresses $resourceGroupName"
     $ipResources = @(enum-ipResourceIds $lbResources)
     if ($ipResources.count -lt 1) {
-        write-warning "unable to enumerate ips."
+        write-log "unable to enumerate ips." -ForegroundColor darkyellow
         #return $null
     }
     else {
         [void]$resources.AddRange($ipResources)
     }
 
-    write-host "getting key vaults $resourceGroupName"
+    write-log "getting key vaults $resourceGroupName"
     $kvResources = @(enum-kvResourceIds $vmssResources)
     if ($kvResources.count -lt 1) {
-        write-warning "unable to enumerate key vaults."
+        write-log "unable to enumerate key vaults." -ForegroundColor darkyellow
         #return $null
     }
     else {
         [void]$resources.AddRange($kvResources)
     }
 
-    write-host "getting nsgs $resourceGroupName"
+    write-log "getting nsgs $resourceGroupName"
     $nsgResources = @(enum-nsgResourceIds $vmssResources)
     if ($nsgResources.count -lt 1) {
-        write-warning "unable to enumerate nsgs."
+        write-log "unable to enumerate nsgs." -ForegroundColor darkyellow
         #return $null
     }
     else {
@@ -852,14 +856,14 @@ function enum-clusterResource() {
     write-verbose "all clusters $clusters"
     if ($clusters.count -gt 1) {
         foreach ($cluster in $clusters) {
-            write-host "$($count). $($cluster.name)"
+            write-log "$($count). $($cluster.name)"
             $count++
         }
         
         $number = [convert]::ToInt32((read-host "enter number of the cluster to query or ctrl-c to exit:"))
         if ($number -le $count) {
             $clusterResource = $cluster[$number - 1].Name
-            write-host $clusterResource
+            write-log $clusterResource
         }
         else {
             return $null
@@ -872,7 +876,7 @@ function enum-clusterResource() {
         $clusterResource = $clusters[0]
     }
 
-    write-host "using cluster resource $clusterResource" -ForegroundColor Green
+    write-log "using cluster resource $clusterResource" -ForegroundColor Green
     return $clusterResource
 }
 
@@ -880,12 +884,12 @@ function enum-ipResourceIds($lbResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($lbResource in $lbResources) {
-        write-host "checking lbResource for ip config $lbResource"
+        write-log "checking lbResource for ip config $lbResource"
         $lb = get-azresource -ResourceId $lbResource -ExpandProperties
         foreach ($fec in $lb.Properties.frontendIPConfigurations) {
             if ($fec.properties.publicIpAddress) {
                 $id = $fec.properties.publicIpAddress.id
-                write-host "adding public ip: $id" -ForegroundColor green
+                write-log "adding public ip: $id" -ForegroundColor green
                 [void]$resources.Add($id)
             }
         }
@@ -899,9 +903,9 @@ function enum-kvResourceIds($vmssResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($vmssResource in $vmssResources) {
-        write-host "checking vmssResource for key vaults $($vmssResource.Name)"
+        write-log "checking vmssResource for key vaults $($vmssResource.Name)"
         foreach ($id in $vmssResource.Properties.virtualMachineProfile.osProfile.secrets.sourceVault.id) {
-            write-host "adding kv id: $id" -ForegroundColor green
+            write-log "adding kv id: $id" -ForegroundColor green
             [void]$resources.Add($id)
         }
     }
@@ -915,11 +919,11 @@ function enum-lbResourceIds($vmssResources) {
 
     foreach ($vmssResource in $vmssResources) {
         # get nic for vnet/subnet and lb
-        write-host "checking vmssResource for network config $($vmssResource.Name)"
+        write-log "checking vmssResource for network config $($vmssResource.Name)"
         foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
             foreach ($ipconfig in $nic.properties.ipConfigurations) {
                 $id = [regex]::replace($ipconfig.properties.loadBalancerBackendAddressPools.id, '/backendAddressPools/.+$', '')
-                write-host "adding lb id: $id" -ForegroundColor green
+                write-log "adding lb id: $id" -ForegroundColor green
                 [void]$resources.Add($id)
             }
         }
@@ -934,11 +938,11 @@ function enum-nsgResourceIds($vmssResources) {
 
     foreach ($vnetId in $vnetResources) {
         $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
-        write-host "checking vnet resource for nsg config $($vnetresource.Name)"
+        write-log "checking vnet resource for nsg config $($vnetresource.Name)"
         foreach ($subnet in $vnetResource.Properties.subnets) {
             if ($subnet.properties.networkSecurityGroup.id) {
                 $id = $subnet.properties.networkSecurityGroup.id
-                write-host "adding nsg id: $id" -ForegroundColor green
+                write-log "adding nsg id: $id" -ForegroundColor green
                 [void]$resources.Add($id)
             }
         }
@@ -953,11 +957,11 @@ function enum-storageResources($clusterResource) {
     $resources = [collections.arraylist]::new()
     
     $sflogs = $clusterResource.Properties.diagnosticsStorageAccountConfig.storageAccountName
-    write-host "cluster sflogs storage account $sflogs"
+    write-log "cluster sflogs storage account $sflogs"
 
     $scalesets = enum-vmssResources($clusterResource)
     $sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
-    write-host "cluster sfdiags storage account $sfdiags"
+    write-log "cluster sfdiags storage account $sfdiags"
   
     $storageResources = @(get-azresource -ResourceGroupName $resourceGroupName `
             -ResourceType 'Microsoft.Storage/storageAccounts' `
@@ -977,11 +981,11 @@ function enum-storageResources($clusterResource) {
 
 function enum-vmssResources($clusterResource) {
     $nodeTypes = $clusterResource.Properties.nodeTypes
-    write-host "cluster nodetypes $($nodeTypes| create-json)"
+    write-log "cluster nodetypes $($nodeTypes| create-json)"
     $vmssResources = [collections.arraylist]::new()
 
     $clusterEndpoint = $clusterResource.Properties.clusterEndpoint
-    write-host "cluster id $clusterEndpoint" -ForegroundColor Green
+    write-log "cluster id $clusterEndpoint" -ForegroundColor Green
     
     if (!$nodeTypes -or !$clusterEndpoint) {
         return $null
@@ -996,11 +1000,11 @@ function enum-vmssResources($clusterResource) {
     foreach ($resource in $resources) {
         $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
         if ($vmsscep -ieq $clusterEndpoint) {
-            write-host "adding vmss resource $($resource | create-json)" -ForegroundColor Cyan
+            write-log "adding vmss resource $($resource | create-json)" -ForegroundColor Cyan
             [void]$vmssResources.Add($resource)
         }
         else {
-            write-warning "vmss assigned to different cluster $vmsscep"
+            write-log "vmss assigned to different cluster $vmsscep" -ForegroundColor darkyellow
         }
     }
 
@@ -1012,11 +1016,11 @@ function enum-vnetResourceIds($vmssResources) {
 
     foreach ($vmssResource in $vmssResources) {
         # get nic for vnet/subnet and lb
-        write-host "checking vmssResource for network config $($vmssResource.Name)"
+        write-log "checking vmssResource for network config $($vmssResource.Name)"
         foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
             foreach ($ipconfig in $nic.properties.ipConfigurations) {
                 $id = [regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
-                write-host "adding vnet id: $id" -ForegroundColor green
+                write-log "adding vnet id: $id" -ForegroundColor green
                 [void]$resources.Add($id)
             }
         }
@@ -1030,7 +1034,7 @@ function get-clusterResource($currentConfig) {
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters')
     
     if ($resources.count -ne 1) {
-        write-error "unable to find cluster resource"
+        write-error "unable to find cluster resource" -isError
     }
 
     write-verbose "returning cluster resource $resources"
@@ -1041,7 +1045,7 @@ function get-lbResources($currentConfig) {
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers')
     
     if ($resources.count -eq 0) {
-        write-error "unable to find lb resource"
+        write-error "unable to find lb resource" -isError
     }
 
     write-verbose "returning lb resource $resources"
@@ -1079,7 +1083,7 @@ function get-resourceParameterValue($resource, $name) {
                 return $parameterValue
             }
             else {
-                write-error "multiple parameter names found in resource. returning"
+                write-error "multiple parameter names found in resource. returning" -isError
                 return $null
             }
         }
@@ -1094,7 +1098,7 @@ function get-resourceParameterValue($resource, $name) {
 function get-vmssResources($currentConfig) {
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets')
     if ($resources.count -eq 0) {
-        write-error "unable to find vmss resource"
+        write-error "unable to find vmss resource" -isError
     }
     write-verbose "returning vmss resource $resources"
     return $resources
@@ -1103,10 +1107,10 @@ function get-vmssResources($currentConfig) {
 function modify-clusterResourceAddNodeType($currentConfig) {
     $clusterResource = get-clusterResource $currentConfig
     
-    write-host "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
+    write-log "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
     $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
     
-    write-host "setting `$clusterResource.properties.upgradeMode = Manual"
+    write-log "setting `$clusterResource.properties.upgradeMode = Manual"
     $clusterResource.properties.upgradeMode = "Manual"
     $reference = "[reference($(create-parameterizedName -parameterName 'name' -resource $clusterResource))]"
     add-outputs -currentConfig $currentConfig -name 'clusterProperties' -value $reference -type 'object'
@@ -1117,11 +1121,11 @@ function modify-clusterResourceRedeploy($currentConfig) {
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
     $clusterResource = get-clusterResource $currentConfig
     
-    write-host "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
+    write-log "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
     $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
     
     if ($clusterResource.properties.upgradeMode -ieq 'Automatic') {
-        write-host "removing value cluster code version $($clusterResource.properties.clusterCodeVersion)" -ForegroundColor Yellow
+        write-log "removing value cluster code version $($clusterResource.properties.clusterCodeVersion)" -ForegroundColor Yellow
         $clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
     }
     
@@ -1140,7 +1144,7 @@ function modify-lbResources($currenConfig) {
     $lbResources = get-lbResources $currentConfig
     foreach ($lbResource in $lbResources) {
         # fix backend pool
-        write-host "fixing exported lb resource $($lbresource | create-json)"
+        write-log "fixing exported lb resource $($lbresource | create-json)"
         $parameterName = get-parameterizedNameFromValue $lbresource.name
         if ($parameterName) {
             $name = $currentConfig.parameters.$parametername.defaultValue
@@ -1153,14 +1157,14 @@ function modify-lbResources($currenConfig) {
         $lb = get-azresource -ResourceGroupName $resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
         $dependsOn = [collections.arraylist]::new()
 
-        write-host "removing backendpool from lb dependson"
+        write-log "removing backendpool from lb dependson"
         foreach ($depends in $lbresource.dependsOn) {
             if ($depends -inotmatch $lb.Properties.backendAddressPools.Name) {
                 [void]$dependsOn.Add($depends)
             }
         }
         $lbResource.dependsOn = $dependsOn.ToArray()
-        write-host "lbResource modified dependson: $($lbResource.dependson | create-json)" -ForegroundColor Yellow
+        write-log "lbResource modified dependson: $($lbResource.dependson | create-json)" -ForegroundColor Yellow
         
     }
 }
@@ -1170,7 +1174,7 @@ function modify-lbResourcesRedeploy($currenConfig) {
     foreach ($lbResource in $lbResources) {
         # fix dupe pools and rules
         if ($lbResource.properties.inboundNatPools) {
-            write-host "removing natrules: $($lbResource.properties.inboundNatRules | create-json)" -ForegroundColor Yellow
+            write-log "removing natrules: $($lbResource.properties.inboundNatRules | create-json)" -ForegroundColor Yellow
             [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
         }
     }
@@ -1204,7 +1208,7 @@ function modify-vmssResources($currenConfig) {
    
     foreach ($vmssResource in $vmssResources) {
 
-        write-host "modifying dependson"
+        write-log "modifying dependson"
         $dependsOn = [collections.arraylist]::new()
         $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
 
@@ -1216,14 +1220,14 @@ function modify-vmssResources($currenConfig) {
             }
             # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
             if ($subnetIds.contains($depends)) {
-                write-host 'cleaning subnet dependson' -ForegroundColor Yellow
+                write-log 'cleaning subnet dependson' -ForegroundColor Yellow
                 $depends = $depends.replace("/subnets'", "/'")
                 $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
                 [void]$dependsOn.Add($depends)
             }
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
-        write-host "vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
+        write-log "vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
     }
 }
 
@@ -1237,7 +1241,7 @@ function modify-vmssResourcesDeploy($currenConfig) {
                 $parameterizedName = create-parameterizedName -parameterName 'name' -resource $clusterResource
                 $newName = "[reference($parameterizedName).clusterEndpoint]"
 
-                write-host "setting cluster endpoint to $newName"
+                write-log "setting cluster endpoint to $newName"
                 set-resourceParameterValue -resource $extension.properties.settings -name 'clusterEndpoint' -newValue $newName
                 # remove clusterendpoint parameter
                 remove-unusedParameters -currentConfig $currentConfig
@@ -1260,14 +1264,14 @@ function modify-vmssResourcesRedeploy($currenConfig) {
                 continue
             }
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                write-host "parameterizing cluster endpoint"
+                write-log "parameterizing cluster endpoint"
                 add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'clusterEndpoint' -resourceObject $extension.properties.settings
             }
             [void]$extensions.Add($extension)
         }    
         $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions = $extensions
 
-        write-host "modifying dependson"
+        write-log "modifying dependson"
         $dependsOn = [collections.arraylist]::new()
         $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
 
@@ -1279,26 +1283,26 @@ function modify-vmssResourcesRedeploy($currenConfig) {
             }
             # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
             if ($subnetIds.contains($depends)) {
-                write-host 'cleaning subnet dependson' -ForegroundColor Yellow
+                write-log 'cleaning subnet dependson' -ForegroundColor Yellow
                 $depends = $depends.replace("/subnets'", "/'")
                 $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
                 [void]$dependsOn.Add($depends)
             }
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
-        write-host "vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
+        write-log "vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
             
-        write-host "parameterizing hardware sku"
+        write-log "parameterizing hardware sku"
         add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
             
-        write-host "parameterizing hardware capacity"
+        write-log "parameterizing hardware capacity"
         add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku -type 'int'
 
-        write-host "parameterizing os sku"
+        write-log "parameterizing os sku"
         add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
 
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
-            write-host "adding admin password"
+            write-log "adding admin password"
             $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value $adminPassword
             add-parameter -currentConfig $currentConfig `
                 -resource $vmssResource `
@@ -1315,13 +1319,13 @@ function parameterize-durabilityLevel($currentConfig) {
     # how many nodetypes
     $clusterResource = get-clusterResource $currentConfig
     $nodetypes = @($clusterResource.properties.nodetypes)
-    write-host "current nodetypes $($nodetypes.name)" -ForegroundColor Green
+    write-log "current nodetypes $($nodetypes.name)" -ForegroundColor Green
     $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
     if ($primarynodetypes.count -eq 0) {
-        write-error "unable to find primary nodetype"
+        write-error "unable to find primary nodetype" -isError
     }
     elseif ($primarynodetypes.count -gt 1) {
-        write-error "more than one primary node type detected!"
+        write-error "more than one primary node type detected!" -isError
     }
     
     $scalesets = get-vmssResources $currentConfig
@@ -1347,7 +1351,7 @@ function parameterize-durabilityLevel($currentConfig) {
                         $nodetype = $extension.properties.settings.nodetyperef
                     }
                     if ($nodetype -ieq $primarynodetype.name) {
-                        write-host "found scaleset by nodetyperef"
+                        write-log "found scaleset by nodetyperef"
                         add-parameter -currentConfig $currentConfig `
                             -resource $clusterResource `
                             -name $durabilityLevelName `
@@ -1365,13 +1369,13 @@ function parameterize-primaryDurabilityLevel($currentConfig) {
     # how many nodetypes
     $clusterResource = get-clusterResource $currentConfig
     $nodetypes = @($clusterResource.properties.nodetypes)
-    write-host "current nodetypes $($nodetypes.name)" -ForegroundColor Green
+    write-log "current nodetypes $($nodetypes.name)" -ForegroundColor Green
     $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
     if ($primarynodetypes.count -eq 0) {
-        write-error "unable to find primary nodetype"
+        write-error "unable to find primary nodetype" -isError
     }
     elseif ($primarynodetypes.count -gt 1) {
-        write-error "more than one primary node type detected!"
+        write-error "more than one primary node type detected!" -isError
     }
     
     $scalesets = get-vmssResources $currentConfig
@@ -1397,7 +1401,7 @@ function parameterize-primaryDurabilityLevel($currentConfig) {
                         $nodetype = $extension.properties.settings.nodetyperef
                     }
                     if ($nodetype -ieq $primarynodetype.name) {
-                        write-host "found scaleset by nodetyperef"
+                        write-log "found scaleset by nodetyperef"
                         add-parameter -currentConfig $currentConfig `
                             -resource $clusterResource `
                             -name $durabilityLevelName `
@@ -1418,10 +1422,10 @@ function remove-duplicateResources($currentConfig) {
 
     $resourceTypes = $global:configuredRGResources.resourceType
     foreach ($resource in $currentConfig.resources.GetEnumerator()) {
-        write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
+        write-log "checking exported resource $($resource.name)" -ForegroundColor Magenta
         write-verbose "checking exported resource $($resource | create-json)"
         if ($resourceTypes.Contains($resource.type)) {
-            write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
+            write-log "adding exported resource $($resource.name)" -ForegroundColor Cyan
             write-verbose "adding exported resource $($resource | create-json)"
             [void]$currentResources.Add($resource)
         }
@@ -1433,14 +1437,14 @@ function remove-duplicateResources($currentConfig) {
 function remove-jobs() {
     try {
         foreach ($job in get-job) {
-            write-host "removing job $($job.Name)" -report $global:scriptName
-            write-host $job -report $global:scriptName
+            write-log "removing job $($job.Name)" -report $global:scriptName
+            write-log $job -report $global:scriptName
             $job.StopJob()
             Remove-Job $job -Force
         }
     }
     catch {
-        write-host "error:$($Error | out-string)"
+        write-log "error:$($Error | out-string)"
         $error.Clear()
     }
 }
@@ -1457,7 +1461,7 @@ function remove-unusedParameters($currentConfig) {
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
         $parameterizedName = "parameters\('$($psObjectProperty.name)'\)"
-        write-host "checking to see if $parameterizedName is being used"
+        write-log "checking to see if $parameterizedName is being used"
         if ([regex]::IsMatch($currentConfigResourcejson, $parameterizedName, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
             write-verbose "$parameterizedName is being used"
             continue
@@ -1467,7 +1471,7 @@ function remove-unusedParameters($currentConfig) {
     }
 
     foreach ($parameter in $parametersRemoveList) {
-        write-warning "removing $($parameter.name)"
+        write-log "removing $($parameter.name)" -ForegroundColor darkyellow
         $currentConfig.parameters.psobject.Properties.Remove($parameter.name)
     }
 }
@@ -1485,7 +1489,7 @@ function set-resourceParameterValue($resource, $name, $newValue) {
                 return $true
             }
             else {
-                write-error "multiple parameter names found in resource. returning"
+                write-error "multiple parameter names found in resource. returning" -isError
                 return $false
             }
         }
@@ -1501,7 +1505,7 @@ function verify-config($currentConfig, $templateParameterFile) {
     $json = '.\verify-config.json'
     $currentConfig | create-json | out-file -FilePath $json -Force
 
-    write-host "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+    write-log "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -Mode Incremental `
         -Templatefile $json `
         -TemplateParameterFile $templateParameterFile `
@@ -1548,7 +1552,7 @@ function wait-jobs() {
     write-log "finished jobs"
 }
 
-function write-log($data) {
+function write-log($data,$foregroundcolor = 'white',[switch]$isError) {
     if (!$data) { return }
     [text.stringbuilder]$stringData = New-Object text.stringbuilder
     
@@ -1567,13 +1571,13 @@ function write-log($data) {
                 $stringData.appendline(@($job.Output.ReadAll()) -join "`r`n")
             }
             if ($job.Warning) {
-                write-warning (@($job.Warning.ReadAll()) -join "`r`n")
+                write-log (@($job.Warning.ReadAll()) -join "`r`n") -ForegroundColor darkyellow
                 $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
                 $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceWarnings++
             }
             if ($job.Error) {
-                write-error (@($job.Error.ReadAll()) -join "`r`n")
+                write-error (@($job.Error.ReadAll()) -join "`r`n") -isError
                 $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceErrors++
@@ -1584,10 +1588,19 @@ function write-log($data) {
         }
     }
     else {
-        $stringData = "$(get-date):$($data | format-list * | out-string)"
+        $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$($data | format-list * | out-string)").trim()
     }
 
-    write-host $stringData
+    if($isError){
+        write-error $stringData
+    }
+    else{
+        write-host $stringData -ForegroundColor $foregroundcolor
+    }
+
+    if($logFile){
+        out-file -Append -inputobject $stringData -filepath $logFile
+    }
 }
 
 function write-progressInfo() {
