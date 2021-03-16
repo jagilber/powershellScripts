@@ -664,6 +664,9 @@ function export-template($configuredResources, $jsonFile) {
     $azResourceGroupLocation = @($configuredResources)[0].Location
     $resourceIds = @($configuredResources.ResourceId)
 
+    # todo issue
+    new-item -ItemType File -path $jsonFile
+    write-host "file exists:$((test-path $JsonFile))"
     write-host "resource ids: $resourceIds" -ForegroundColor green
 
     write-host "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
