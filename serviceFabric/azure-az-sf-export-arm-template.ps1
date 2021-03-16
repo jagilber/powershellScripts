@@ -270,7 +270,7 @@ function add-vmssProtectedSettings($vmssResource) {
                 StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key1]"
                 StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key2]"
             }
-            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
         }
 
         if ($extension.properties.type -ieq 'IaaSDiagnostics') {
@@ -283,7 +283,7 @@ function add-vmssProtectedSettings($vmssResource) {
                 storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$storageKeyApi').key1]"
                 storageAccountEndPoint = "https://core.windows.net/"                  
             }
-            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | convertto-json)" -ForegroundColor Magenta
+            write-host "added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
         }
     }
 }
@@ -336,7 +336,7 @@ create-parameterFile $currentConfig  $templateParameterFile
 verify-config $currentConfig $templateParameterFile
 
 # save base / current json
-$currentConfig | convertto-json -depth 99 | out-file $templateFile
+$currentConfig | create-json | out-file $templateFile
 
 # save current readme
 $readme = "addnodetype modifications:
@@ -372,7 +372,7 @@ function create-currentTemplate($currentConfig) {
     verify-config $currentConfig $templateParameterFile
 
     # save base / current json
-    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    $currentConfig | create-json | out-file $templateFile
 
     # save current readme
     $readme = "current modifications:
@@ -400,7 +400,7 @@ function create-exportTemplate() {
 
     # save base / current json
     $currentConfig = Get-Content -raw $templateFile | convertfrom-json
-    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    $currentConfig | create-json | out-file $templateFile
 
     # save current readme
     $readme = "export:
@@ -411,6 +411,22 @@ function create-exportTemplate() {
             "
     $readme | out-file $templateJsonFile.Replace(".json", ".export.readme.txt")
     return $currentConfig
+}
+
+function create-json{
+    param(
+    [Parameter(Position = 0, ValueFromPipeline = $true, ValueByName = $true)]
+    [object]$inputObject,
+    [int]$depth = 99)
+    
+    $currentWarningPreference = $WarningPreference
+    $WarningPreference = 'SilentlyContinue'
+    
+    # to fix \u0027 single quote issue
+    $result = $inputObject | convertto-json -depth $depth | foreach-object { [regex]::unescape($_) }
+    $WarningPreference = $currentWarningPreference
+
+    return $result
 }
 
 function create-newTemplate($currentConfig) {
@@ -431,7 +447,7 @@ function create-newTemplate($currentConfig) {
     verify-config $currentConfig $templateParameterFile
 
     # # save add json
-    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    $currentConfig | create-json | out-file $templateFile
 
     # save add readme
     $readme = "new / add modifications:
@@ -483,7 +499,7 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
     }
 
     write-host "creating parameterfile $parameterFileName" -ForegroundColor Green
-    $parameterTemplate | convertto-json -depth 99 | out-file -FilePath $parameterFileName
+    $parameterTemplate | create-json | out-file -FilePath $parameterFileName
 }
 
 function create-redeployTemplate($currentConfig) {
@@ -500,7 +516,7 @@ function create-redeployTemplate($currentConfig) {
     verify-config $currentConfig $templateParameterFile
 
     # # save redeploy json
-    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+    $currentConfig | create-json | out-file $templateFile
 
     # save redeploy readme
     $readme = "redeploy modifications:
@@ -549,7 +565,7 @@ function create-jsonTemplate([collections.arraylist]$resources,
             outputs        = $outputs
             parameters     = $parameters
             variables      = $variables
-        } | convertto-json -depth 99
+        } | create-json
 
         $resourceTemplate | out-file $jsonFile
         write-host $resourceTemplate -ForegroundColor Cyan
@@ -644,7 +660,7 @@ function deploy-template($configuredResources) {
     }
     else {
         write-host "template validation failed: $($error |out-string) $($result | out-string)"
-        write-error "template validation failed`r`n$($error | convertto-json)`r`n$($result | convertto-json)"
+        write-error "template validation failed`r`n$($error | create-json)`r`n$($result | create-json)"
         return $false
     }
 
@@ -659,7 +675,7 @@ function deploy-template($configuredResources) {
 function display-settings($resources) {
     $settings = @()
     foreach ($resource in $resources) {
-        $settings += $resource | convertto-json -depth 99
+        $settings += $resource | create-json
     }
     write-host "current settings: `r`n $settings" -ForegroundColor Green
 }
@@ -962,7 +978,7 @@ function enum-storageResources($clusterResource) {
 
 function enum-vmssResources($clusterResource) {
     $nodeTypes = $clusterResource.Properties.nodeTypes
-    write-host "cluster nodetypes $($nodeTypes| convertto-json)"
+    write-host "cluster nodetypes $($nodeTypes| create-json)"
     $vmssResources = [collections.arraylist]::new()
 
     $clusterEndpoint = $clusterResource.Properties.clusterEndpoint
@@ -981,7 +997,7 @@ function enum-vmssResources($clusterResource) {
     foreach ($resource in $resources) {
         $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
         if ($vmsscep -ieq $clusterEndpoint) {
-            write-host "adding vmss resource $($resource | convertto-json)" -ForegroundColor Cyan
+            write-host "adding vmss resource $($resource | create-json)" -ForegroundColor Cyan
             [void]$vmssResources.Add($resource)
         }
         else {
@@ -1125,7 +1141,7 @@ function modify-lbResources($currenConfig) {
     $lbResources = get-lbResources $currentConfig
     foreach ($lbResource in $lbResources) {
         # fix backend pool
-        write-host "fixing exported lb resource $($lbresource | convertto-json)"
+        write-host "fixing exported lb resource $($lbresource | create-json)"
         $parameterName = get-parameterizedNameFromValue $lbresource.name
         if ($parameterName) {
             $name = $currentConfig.parameters.$parametername.defaultValue
@@ -1145,7 +1161,7 @@ function modify-lbResources($currenConfig) {
             }
         }
         $lbResource.dependsOn = $dependsOn.ToArray()
-        write-host "lbResource modified dependson: $($lbResource.dependson | convertto-json)" -ForegroundColor Yellow
+        write-host "lbResource modified dependson: $($lbResource.dependson | create-json)" -ForegroundColor Yellow
         
     }
 }
@@ -1155,7 +1171,7 @@ function modify-lbResourcesRedeploy($currenConfig) {
     foreach ($lbResource in $lbResources) {
         # fix dupe pools and rules
         if ($lbResource.properties.inboundNatPools) {
-            write-host "removing natrules: $($lbResource.properties.inboundNatRules | convertto-json)" -ForegroundColor Yellow
+            write-host "removing natrules: $($lbResource.properties.inboundNatRules | create-json)" -ForegroundColor Yellow
             [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
         }
     }
@@ -1208,7 +1224,7 @@ function modify-vmssResources($currenConfig) {
             }
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
-        write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
+        write-host "vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
     }
 }
 
@@ -1271,7 +1287,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
             }
         }
         $vmssResource.dependsOn = $dependsOn.ToArray()
-        write-host "vmssResource modified dependson: $($vmssResource.dependson | convertto-json)" -ForegroundColor Yellow
+        write-host "vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
             
         write-host "parameterizing hardware sku"
         add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
@@ -1399,15 +1415,15 @@ function parameterize-primaryDurabilityLevel($currentConfig) {
 function remove-duplicateResources($currentConfig) {
     # fix up deploy errors by removing duplicated sub resources on root like lb rules by
     # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
-    $currentResources = [collections.arraylist]::new() #$currentConfig.resources | convertto-json | convertfrom-json
+    $currentResources = [collections.arraylist]::new() #$currentConfig.resources | create-json | convertfrom-json
 
     $resourceTypes = $global:configuredRGResources.resourceType
     foreach ($resource in $currentConfig.resources.GetEnumerator()) {
         write-host "checking exported resource $($resource.name)" -ForegroundColor Magenta
-        write-verbose "checking exported resource $($resource | convertto-json)"
+        write-verbose "checking exported resource $($resource | create-json)"
         if ($resourceTypes.Contains($resource.type)) {
             write-host "adding exported resource $($resource.name)" -ForegroundColor Cyan
-            write-verbose "adding exported resource $($resource | convertto-json)"
+            write-verbose "adding exported resource $($resource | create-json)"
             [void]$currentResources.Add($resource)
         }
     }
@@ -1433,12 +1449,12 @@ function remove-jobs() {
 function remove-unusedParameters($currentConfig) {
     $parametersRemoveList = [collections.arraylist]::new()
     #serialize and copy
-    $currentConfigResourcejson = $currentConfig | convertto-json -depth 99
+    $currentConfigResourcejson = $currentConfig | create-json
     $currentConfigJson = $currentConfigResourcejson | convertfrom-json
 
     # remove parameters section but keep everything else like variables, resources, outputs
     $currentConfigJson.psobject.properties.remove('Parameters')
-    $currentConfigResourcejson = $currentConfigJson | convertto-json -depth 99
+    $currentConfigResourcejson = $currentConfigJson | create-json
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
         $parameterizedName = "parameters\('$($psObjectProperty.name)'\)"
@@ -1484,7 +1500,7 @@ function set-resourceParameterValue($resource, $name, $newValue) {
 
 function verify-config($currentConfig, $templateParameterFile) {
     $json = '.\verify-config.json'
-    $currentConfig | convertto-json -depth 99 | out-file -FilePath $json -Force
+    $currentConfig | create-json | out-file -FilePath $json -Force
 
     write-host "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -Mode Incremental `
@@ -1590,7 +1606,7 @@ function write-progressInfo() {
         write-verbose ("deployment operations: `r`n`t$($deploymentOperations | out-string)")
         
         foreach ($operation in $deploymentOperations) {
-            write-verbose ($operation | convertto-json)
+            write-verbose ($operation | create-json)
             $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
             $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
             
