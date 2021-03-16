@@ -104,7 +104,8 @@ function main () {
     $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
     if (!(test-path $templateDirectory)) {
         write-host "making directory $templateDirectory"
-        mkdir "./$templateDirectory" # for cloudshell
+        # test local and for cloudshell
+        mkdir $templateDirectory 
     }
 
     if ($resourceNames) {
