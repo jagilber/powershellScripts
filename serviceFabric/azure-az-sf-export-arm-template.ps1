@@ -42,7 +42,7 @@
 param (
     [string]$resourceGroupName = '',
     [string]$adminPassword = '', #'GEN_PASSWORD',
-    [string]$templateJsonFile = "$psscriptroot/templates/template.json", # for cloudshell
+    [string]$templateJsonFile = "$psscriptroot/templates-$resourceGroupName/template.json", # for cloudshell
     [string]$useExportedJsonFile = '',
     [switch]$detail
 )
@@ -174,23 +174,6 @@ function main () {
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
 }
 
-function add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = "string", $metadataDescription = "") {
-    $parameterObject = @{
-        type         = $type
-        defaultValue = $parameterValue 
-        metadata     = @{description = $metadataDescription }
-    }
-
-    foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
-        if (($psObjectProperty.Name -imatch $parameterName)) {
-            $psObjectProperty.Value = $parameterObject
-            return
-        }
-    }
-
-    $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
-}
-
 function add-outputs($currentConfig, $name, $value, $type = 'string') {
     $outputs = $currentConfig.psobject.Properties | where-object name -ieq 'outputs'
     $outputItem = @{
@@ -261,6 +244,23 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
     }
 }
 
+function add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = "string", $metadataDescription = "") {
+    $parameterObject = @{
+        type         = $type
+        defaultValue = $parameterValue 
+        metadata     = @{description = $metadataDescription }
+    }
+
+    foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
+        if (($psObjectProperty.Name -imatch $parameterName)) {
+            $psObjectProperty.Value = $parameterObject
+            return
+        }
+    }
+
+    $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
+}
+
 function add-vmssProtectedSettings($vmssResource) {
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs
 
@@ -304,8 +304,8 @@ function check-module() {
         
         if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
             $error.clear()
-            install-module az.accounts
-            install-module az.resources
+            install-module az.accounts -AllowClobber -Force
+            install-module az.resources -AllowClobber -Force
 
             import-module az.accounts
             import-module az.resources
@@ -429,6 +429,32 @@ function create-json(
     return $result
 }
 
+function create-jsonTemplate([collections.arraylist]$resources, 
+    [string]$jsonFile, 
+    [hashtable]$parameters = @{},
+    [hashtable]$variables = @{},
+    [hashtable]$outputs = @{}) {
+    try {
+        $resourceTemplate = @{ 
+            resources      = $resources
+            '$schema'      = $schema
+            contentVersion = "1.0.0.0"
+            outputs        = $outputs
+            parameters     = $parameters
+            variables      = $variables
+        } | create-json
+
+        $resourceTemplate | out-file $jsonFile
+        write-host $resourceTemplate -ForegroundColor Cyan
+        $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
+        return $true
+    }
+    catch { 
+        write-error "$($_)`r`n$($error | out-string)"
+        return $false
+    }
+}
+
 function create-newTemplate($currentConfig) {
     # create deploy / new / add template
     $templateFile = $templateJsonFile.Replace(".json", ".new.json")
@@ -502,6 +528,28 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
     $parameterTemplate | create-json | out-file -FilePath $parameterFileName
 }
 
+function create-parameterizedName($parameterName, $resource, [switch]$withbrackets) {
+    if ($withbrackets) {
+        return "[parameters('$(create-parametersName -resource $resource -name $parameterName)')]"
+    }
+
+    return "parameters('$(create-parametersName -resource $resource -name $parameterName)')"
+}
+
+function create-parametersName($resource, $name = 'name') {
+    $resourceSubType = [regex]::replace($resource.type, '^.+?/', '')
+    if ($resource.name.contains('[')) {
+        $resourceName = [regex]::Match($resource.comments, ".+/([^/]+)'.$").Groups[1].Value
+    }
+    else {
+        $resourceName = $resource.name
+    }
+    
+    $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
+    write-host "returning $parametersName"
+    return $parametersName
+}
+
 function create-redeployTemplate($currentConfig) {
     # create redeploy template
     $templateFile = $templateJsonFile.Replace(".json", ".redeploy.json")
@@ -527,55 +575,6 @@ function create-redeployTemplate($currentConfig) {
             - clusterendpoint is parameterized
             "
     $readme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
-}
-
-function create-parametersName($resource, $name = 'name') {
-    $resourceSubType = [regex]::replace($resource.type, '^.+?/', '')
-    if ($resource.name.contains('[')) {
-        $resourceName = [regex]::Match($resource.comments, ".+/([^/]+)'.$").Groups[1].Value
-    }
-    else {
-        $resourceName = $resource.name
-    }
-    
-    $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
-    write-host "returning $parametersName"
-    return $parametersName
-}
-
-function create-parameterizedName($parameterName, $resource, [switch]$withbrackets) {
-    if ($withbrackets) {
-        return "[parameters('$(create-parametersName -resource $resource -name $parameterName)')]"
-    }
-
-    return "parameters('$(create-parametersName -resource $resource -name $parameterName)')"
-}
-
-
-function create-jsonTemplate([collections.arraylist]$resources, 
-    [string]$jsonFile, 
-    [hashtable]$parameters = @{},
-    [hashtable]$variables = @{},
-    [hashtable]$outputs = @{}) {
-    try {
-        $resourceTemplate = @{ 
-            resources      = $resources
-            '$schema'      = $schema
-            contentVersion = "1.0.0.0"
-            outputs        = $outputs
-            parameters     = $parameters
-            variables      = $variables
-        } | create-json
-
-        $resourceTemplate | out-file $jsonFile
-        write-host $resourceTemplate -ForegroundColor Cyan
-        $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
-        return $true
-    }
-    catch { 
-        write-error "$($_)`r`n$($error | out-string)"
-        return $false
-    }
 }
 
 function deploy-template($configuredResources) {
@@ -1049,15 +1048,6 @@ function get-lbResources($currentConfig) {
     return $resources
 }
 
-function get-vmssResources($currentConfig) {
-    $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets')
-    if ($resources.count -eq 0) {
-        write-error "unable to find vmss resource"
-    }
-    write-verbose "returning vmss resource $resources"
-    return $resources
-}
-
 function get-fromParametersSection($currentConfig, $parameterName) {
     $parameters = @($currentConfig.parameters)
     foreach ($psObjectProperty in $parameters.psobject.Properties) {
@@ -1099,6 +1089,15 @@ function get-resourceParameterValue($resource, $name) {
     }
 
     return $retval
+}
+
+function get-vmssResources($currentConfig) {
+    $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets')
+    if ($resources.count -eq 0) {
+        write-error "unable to find vmss resource"
+    }
+    write-verbose "returning vmss resource $resources"
+    return $resources
 }
 
 function modify-clusterResourceAddNodeType($currentConfig) {
