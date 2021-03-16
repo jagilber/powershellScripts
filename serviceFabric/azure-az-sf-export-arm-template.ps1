@@ -296,6 +296,12 @@ function check-module() {
         $error.clear()
         write-warning "azure module for Connect-AzAccount not installed."
 
+        get-command Connect-AzureRmAccount -ErrorAction SilentlyContinue
+        if(!$error){
+            write-warning "azure module for Connect-AzureRmAccount is installed. use cloud shell to run script instead https://shell.azure.com/"
+            return $false
+        }
+        
         if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
             $error.clear()
             install-module az.accounts
