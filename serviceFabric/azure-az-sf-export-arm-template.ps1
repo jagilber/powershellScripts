@@ -290,7 +290,6 @@ function add-vmssProtectedSettings($vmssResource) {
 
 function check-module() {
     $error.clear()
-    enable-azureRmAlias
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
     
     if ($error) {
