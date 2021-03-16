@@ -315,62 +315,16 @@ function create-addNodeTypeTemplate($currentConfig) {
 
     # addprimarynodetype from primarynodetype
     # addsecondarynodetype from secondarynodetype
+    parameterize-durabilityLevel $currentConfig
 
-    # how many nodetypes
-    $clusterResource = get-clusterResource $currentConfig
-    $nodetypes = @($clusterResource.properties.nodetypes)
-    write-host "current nodetypes $($nodetypes.name)" -ForegroundColor Green
-    $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
-    if ($primarynodetypes.count -eq 0) {
-        write-error "unable to find primary nodetype"
-    }
-    elseif ($primarynodetypes.count -gt 1) {
-        write-error "more than one primary node type detected!"
-    }
+create-parameterFile $currentConfig  $templateParameterFile
+verify-config $currentConfig $templateParameterFile
 
-    $scalesets = get-vmssResources $currentConfig
-    $durabilityLevelName = 'durabilityLevel'
-    $durabilityLevelAlias = 'primaryDurability'
-    
-    foreach ($primarynodetype in $primarynodetypes) {
-        $primaryDurability = get-resourceParameterValue -resource $primarynodetype -name $durabilityLevelName
-        add-parameter -currentConfig $currentConfig `
-            -resource $clusterResource `
-            -name $durabilityLevelName `
-            -aliasName $durabilityLevelAlias `
-            -resourceObject $primarynodetype
+# save base / current json
+$currentConfig | convertto-json -depth 99 | out-file $templateFile
 
-        foreach ($scaleset in $scalesets) {
-            foreach ($extension in $scaleset.properties.virtualMachineProfile.extensionProfile.extensions) {
-                if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                    $parameterName = get-parameterizedNameFromValue $extension.properties.settings.nodetyperef
-                    if ($parameterName) {
-                        $nodetype = get-fromParametersSection $currentConfig -parameterName $parameterName
-                    }
-                    else {
-                        $nodetype = $extension.properties.settings.nodetyperef
-                    }
-                    if ($nodetype -ieq $primarynodetype.name) {
-                        write-host "found scaleset by nodetyperef"
-                        add-parameter -currentConfig $currentConfig `
-                            -resource $clusterResource `
-                            -name $durabilityLevelName `
-                            -aliasName $durabilityLevelAlias `
-                            -resourceObject $sfextension.properties.settings `
-                            -value $primaryDurability
-                    }
-                }
-            }
-        }
-    }
-    create-parameterFile $currentConfig  $templateParameterFile
-    verify-config $currentConfig $templateParameterFile
-
-    # save base / current json
-    $currentConfig | convertto-json -depth 99 | out-file $templateFile
-
-    # save current readme
-    $readme = "addnodetype modifications:
+# save current readme
+$readme = "addnodetype modifications:
             - additional parameters have been added
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set)
@@ -385,7 +339,7 @@ function create-addNodeTypeTemplate($currentConfig) {
             - isPrimary is a parameter
             - additional nodetype resource has been added to cluster resource
             "
-    $readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
+$readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
 
 }
 
@@ -1123,7 +1077,7 @@ function modify-clusterResourceRedeploy($currentConfig) {
     write-host "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
     $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
     
-    if($clusterResource.properties.upgradeMode -ieq 'Automatic'){
+    if ($clusterResource.properties.upgradeMode -ieq 'Automatic') {
         write-host "removing value cluster code version $($clusterResource.properties.clusterCodeVersion)" -ForegroundColor Yellow
         $clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
     }
@@ -1312,6 +1266,56 @@ function modify-vmssResourcesRedeploy($currenConfig) {
             add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $parameterizedName -type 'string'
         }
     }
+}
+
+function parameterize-durabilityLevel($currentConfig) {
+    # how many nodetypes
+    $clusterResource = get-clusterResource $currentConfig
+    $nodetypes = @($clusterResource.properties.nodetypes)
+    write-host "current nodetypes $($nodetypes.name)" -ForegroundColor Green
+    $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
+    if ($primarynodetypes.count -eq 0) {
+        write-error "unable to find primary nodetype"
+    }
+    elseif ($primarynodetypes.count -gt 1) {
+        write-error "more than one primary node type detected!"
+    }
+    
+    $scalesets = get-vmssResources $currentConfig
+    $durabilityLevelName = 'durabilityLevel'
+    $durabilityLevelAlias = 'primaryDurability'
+        
+    foreach ($primarynodetype in $primarynodetypes) {
+        $primaryDurability = get-resourceParameterValue -resource $primarynodetype -name $durabilityLevelName
+        add-parameter -currentConfig $currentConfig `
+            -resource $clusterResource `
+            -name $durabilityLevelName `
+            -aliasName $durabilityLevelAlias `
+            -resourceObject $primarynodetype
+    
+        foreach ($scaleset in $scalesets) {
+            foreach ($extension in $scaleset.properties.virtualMachineProfile.extensionProfile.extensions) {
+                if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                    $parameterName = get-parameterizedNameFromValue $extension.properties.settings.nodetyperef
+                    if ($parameterName) {
+                        $nodetype = get-fromParametersSection $currentConfig -parameterName $parameterName
+                    }
+                    else {
+                        $nodetype = $extension.properties.settings.nodetyperef
+                    }
+                    if ($nodetype -ieq $primarynodetype.name) {
+                        write-host "found scaleset by nodetyperef"
+                        add-parameter -currentConfig $currentConfig `
+                            -resource $clusterResource `
+                            -name $durabilityLevelName `
+                            -aliasName $durabilityLevelAlias `
+                            -resourceObject $sfextension.properties.settings `
+                            -value $primaryDurability
+                    }
+                }
+            }
+        }
+    } 
 }
 
 function remove-duplicateResources($currentConfig) {
