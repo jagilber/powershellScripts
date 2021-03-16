@@ -2,8 +2,18 @@
 .SYNOPSIS
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
     works with cloudshell https://shell.azure.com/
+    >help .\azure-az-sf-export-arm-template.ps1 -full
 
-    dependencies:
+.LINK
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
+
+.DESCRIPTION  
+    powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
+    this assumes all resources in same resource group as that is the only way to deploy from portal.
+    uses az cmdlet export-azresourcegroup -includecomments -includeparameterdefaults to generate raw export
+
+    base cluster dependencies:
         loadbalancer depends on public ip
         vmss depends on
             vnet
@@ -12,28 +22,19 @@
             storage account diag
         cluster depends on storage account sflogs
 
-.LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName 
-
-.DESCRIPTION  
-    powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
-    this assumes all resources in same resource group as that is the only way to deploy from portal.
-    uses az cmdlet export-azresourcegroup -includecomments -includeparameterdefaults to generate raw export
-    
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 210315
+    Version    : 210316
     History    : 
 
 .EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName [cluster resource group]
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
     export sf resources in resource group 'clusteresourcegroup' and generate template.json
 
 .EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName [cluster resource group] -useExportedJsonFile [existing exported Json File]
-    export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file 
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
+    export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file .\template.export.json
 
 #>
 
