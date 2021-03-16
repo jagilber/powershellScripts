@@ -83,7 +83,6 @@ function main () {
         return
     }
     
-    Enable-AzureRmAlias
     if (!(@(Get-AzResourceGroup).Count)) {
         write-host "connecting to azure"
         Connect-AzAccount
