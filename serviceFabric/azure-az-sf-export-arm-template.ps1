@@ -297,7 +297,7 @@ function check-module() {
         write-warning "azure module for Connect-AzAccount not installed."
 
         get-command Connect-AzureRmAccount -ErrorAction SilentlyContinue
-        if(!$error){
+        if (!$error) {
             write-warning "azure module for Connect-AzureRmAccount is installed. use cloud shell to run script instead https://shell.azure.com/"
             return $false
         }
@@ -332,14 +332,14 @@ function create-addNodeTypeTemplate($currentConfig) {
     # addsecondarynodetype from secondarynodetype
     parameterize-durabilityLevel $currentConfig
 
-create-parameterFile $currentConfig  $templateParameterFile
-verify-config $currentConfig $templateParameterFile
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
 
-# save base / current json
-$currentConfig | create-json | out-file $templateFile
+    # save base / current json
+    $currentConfig | create-json | out-file $templateFile
 
-# save current readme
-$readme = "addnodetype modifications:
+    # save current readme
+    $readme = "addnodetype modifications:
             - additional parameters have been added
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set)
@@ -354,7 +354,7 @@ $readme = "addnodetype modifications:
             - isPrimary is a parameter
             - additional nodetype resource has been added to cluster resource
             "
-$readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
+    $readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
 
 }
 
@@ -388,11 +388,11 @@ function create-exportTemplate() {
     # create base /current template
     $templateFile = $templateJsonFile.Replace(".json", ".export.json")
 
-    if($useExportedJsonFile -and (test-path $useExportedJsonFile)){
+    if ($useExportedJsonFile -and (test-path $useExportedJsonFile)) {
         write-host "using existing export file $useExportedJsonFile" -ForegroundColor Green
         $templateFile = $useExportedJsonFile
     }
-    else{
+    else {
         $exportResult = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
         write-host "template exported to $templateFile" -ForegroundColor Yellow
         write-host "template export result $($exportResult|out-string)" -ForegroundColor Yellow
@@ -413,11 +413,11 @@ function create-exportTemplate() {
     return $currentConfig
 }
 
-function create-json{
-    param(
-    [Parameter(Position = 0, ValueFromPipeline = $true, ValueByName = $true)]
+function create-json(
+    [Parameter(Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
     [object]$inputObject,
-    [int]$depth = 99)
+    [int]$depth = 99
+) {
     
     $currentWarningPreference = $WarningPreference
     $WarningPreference = 'SilentlyContinue'
