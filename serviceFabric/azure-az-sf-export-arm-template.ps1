@@ -18,11 +18,9 @@
 
 .DESCRIPTION  
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
-    this assumes all resources in same resource group as that is the only way to deploy from portal
+    this assumes all resources in same resource group as that is the only way to deploy from portal.
+    uses az cmdlet export-azresourcegroup -includecomments -includeparameterdefaults to generate raw export
     
-    PRECAUTION: when script queries the arm resources, if unable to determine configured api version, 
-     the latest api version for that resource will be written to the template.json.
-
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
@@ -30,8 +28,12 @@
     History    : 
 
 .EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName [cluster resource group]
     export sf resources in resource group 'clusteresourcegroup' and generate template.json
+
+.EXAMPLE 
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName [cluster resource group] -useExportedJsonFile [existing exported Json File]
+    export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file 
 
 #>
 
@@ -39,20 +41,25 @@
 param (
     [string]$resourceGroupName = '',
     [string]$adminPassword = '', #'GEN_PASSWORD',
-    [string[]]$resourceNames = '',
-    [string[]]$excludeResourceNames = '',
-    [switch]$patch,
     [string]$templateJsonFile = "$psscriptroot/templates/template.json", # for cloudshell
-    [string]$templateParameterFile = '', 
-    [string]$apiVersion = '' ,
-    [int]$sleepSeconds = 1, 
-    [ValidateSet('Incremental', 'Complete')]
-    [string]$mode = 'Incremental',
-    [switch]$useLatestApiVersion,
-    [switch]$detail,
-    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
-    [string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
+    [string]$useExportedJsonFile = '',
+    [switch]$detail
 )
+
+# todo unused params need cleanup
+[string[]]$resourceNames = ''
+[string[]]$excludeResourceNames = ''
+[bool]$patch = $false # [switch]
+[string]$templateParameterFile = ''
+[string]$apiVersion = '' 
+[int]$sleepSeconds = 1 
+#[ValidateSet('Incremental', 'Complete')]
+[string]$mode = 'Incremental'
+[switch]$useLatestApiVersion
+# end todo unused params need cleanup
+
+[string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
+[string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
 
 set-strictMode -Version 3.0
 $global:resourceTemplateObj = @{ }
@@ -372,8 +379,14 @@ function create-currentTemplate($currentConfig) {
 function create-exportTemplate() {
     # create base /current template
     $templateFile = $templateJsonFile.Replace(".json", ".export.json")
-    $null = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
-    write-host "template exported to $templateFile" -ForegroundColor Yellow
+
+    if($useExportedJsonFile -and (test-path $useExportedJsonFile)){
+        $templateFile = $useExportedJsonFile
+    }
+    else{
+        $null = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
+        write-host "template exported to $templateFile" -ForegroundColor Yellow
+    }
 
     # save base / current json
     $currentConfig = Get-Content -raw $templateFile | convertfrom-json
@@ -381,7 +394,7 @@ function create-exportTemplate() {
 
     # save current readme
     $readme = "export:
-            - this is raw export from ps cmdlet export-azresourcegroup
+            - this is raw export from ps cmdlet export-azresourcegroup -includecomments -includeparameterdefaults
             - $templateFile will not be usable to recreate / create new cluster in this state
             - use 'current' to modify existing cluster
             - use 'redeploy' or 'new' to recreate / create cluster
@@ -645,13 +658,8 @@ function export-template($configuredResources, $jsonFile) {
     write-host "exporting template to $jsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
     $azResourceGroupLocation = @($configuredResources)[0].Location
-    
-    write-host "getting latest api versions" -ForegroundColor yellow
-    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
-
-    write-host "getting configured api versions" -ForegroundColor green
-
     $resourceIds = @($configuredResources.ResourceId)
+
     write-host "resource ids: $resourceIds" -ForegroundColor green
 
     write-host "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
@@ -669,6 +677,12 @@ function export-template($configuredResources, $jsonFile) {
         -Resource $resourceIds
     
     return
+
+    # todo cleanup if not implementing latest api
+    write-host "getting latest api versions" -ForegroundColor yellow
+    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
+
+    write-host "getting configured api versions" -ForegroundColor green
 
     $currentConfig = Get-Content -raw $jsonFile | convertfrom-json
     $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
@@ -709,6 +723,7 @@ function export-template($configuredResources, $jsonFile) {
 
     if (!(create-jsonTemplate -resources $resources -jsonFile $jsonFile)) { return }
     return
+    # end todo cleanup
 }
 
 function enum-allResources() {
