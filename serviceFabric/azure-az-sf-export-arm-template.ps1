@@ -136,8 +136,9 @@ function main () {
         $currentConfig = create-exportTemplate
         create-currentTemplate $currentConfig
         create-redeployTemplate $currentConfig
-        create-newTemplate $currentConfig
         create-addNodeTypeTemplate $currentConfig
+        create-newTemplate $currentConfig
+
 
         $error.clear()
         write-host "finished. files stored in $templateDirectory" -ForegroundColor Green
@@ -200,7 +201,7 @@ function add-outputs($currentConfig, $name, $value, $type = 'string') {
     }
 }
 
-function add-parameterNameByResourceType($currentConfig, $type, $name) {
+function add-parameterNameByResourceType($currentConfig, $type, $name, $metadataDescription = '') {
     
     $resources = @($currentConfig.resources | where-object 'type' -eq $type)
     $parameterNames = @{}
@@ -221,15 +222,21 @@ function add-parameterNameByResourceType($currentConfig, $type, $name) {
         if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName.key)) {
             add-toParametersSection -currentConfig $currentConfig `
                 -parameterName $parameterName.key `
-                -parameterValue $parameterName.value
+                -parameterValue $parameterName.value `
+                -metadataDescription $metadataDescription
         }
     }
 }
 
-function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $type = 'string', $metadataDescription = '') {
+function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '') {
     $parameterName = create-parametersName -resource $resource -name $aliasName
     $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
-    $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
+    $parameterNameValue = $value
+
+    if (!$parameterNameValue) {
+        $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
+    }
+
     set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
     if ($parameterNameValue -ne $null) {
@@ -301,6 +308,85 @@ function check-module() {
 }
 
 function create-addNodeTypeTemplate($currentConfig) {
+    # create add node type templates for primary os / hardware sku change
+    # create secondary for additional secondary nodetypes
+    $templateFile = $templateJsonFile.Replace(".json", ".addnodetype.json")
+    $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
+
+    # addprimarynodetype from primarynodetype
+    # addsecondarynodetype from secondarynodetype
+
+    # how many nodetypes
+    $clusterResource = get-clusterResource $currentConfig
+    $nodetypes = @($clusterResource.properties.nodetypes)
+    write-host "current nodetypes $($nodetypes.name)" -ForegroundColor Green
+    $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
+    if ($primarynodetypes.count -eq 0) {
+        write-error "unable to find primary nodetype"
+    }
+    elseif ($primarynodetypes.count -gt 1) {
+        write-error "more than one primary node type detected!"
+    }
+
+    $scalesets = get-vmssResources $currentConfig
+    $durabilityLevelName = 'durabilityLevel'
+    $durabilityLevelAlias = 'primaryDurability'
+    
+    foreach ($primarynodetype in $primarynodetypes) {
+        $primaryDurability = get-resourceParameterValue -resource $primarynodetype -name $durabilityLevelName
+        add-parameter -currentConfig $currentConfig `
+            -resource $clusterResource `
+            -name $durabilityLevelName `
+            -aliasName $durabilityLevelAlias `
+            -resourceObject $primarynodetype
+
+        foreach ($scaleset in $scalesets) {
+            foreach ($extension in $scaleset.properties.virtualMachineProfile.extensionProfile.extensions) {
+                if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                    $parameterName = get-parameterizedNameFromValue $extension.properties.settings.nodetyperef
+                    if ($parameterName) {
+                        $nodetype = get-fromParametersSection $currentConfig -parameterName $parameterName
+                    }
+                    else {
+                        $nodetype = $extension.properties.settings.nodetyperef
+                    }
+                    if ($nodetype -ieq $primarynodetype.name) {
+                        write-host "found scaleset by nodetyperef"
+                        add-parameter -currentConfig $currentConfig `
+                            -resource $clusterResource `
+                            -name $durabilityLevelName `
+                            -aliasName $durabilityLevelAlias `
+                            -resourceObject $sfextension.properties.settings `
+                            -value $primaryDurability
+                    }
+                }
+            }
+        }
+    }
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
+
+    # save base / current json
+    $currentConfig | convertto-json -depth 99 | out-file $templateFile
+
+    # save current readme
+    $readme = "addnodetype modifications:
+            - additional parameters have been added
+            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+            - adminPassword required parameter added (needs to be set)
+            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            - dnsSettings for public Ip Address needs to be unique
+            - storageAccountNames required parameters (needs to be unique or will be generated)
+            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
+            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
+            - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
+            - primarydurability is a parameter
+            - isPrimary is a parameter
+            - additional nodetype resource has been added to cluster resource
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
+
 }
 
 function create-currentTemplate($currentConfig) {
@@ -374,7 +460,7 @@ function create-newTemplate($currentConfig) {
     $readme = "new / add modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set)
-            - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
+            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - dnsSettings for public Ip Address needs to be unique
             - storageAccountNames required parameters (needs to be unique or will be generated)
@@ -443,7 +529,7 @@ function create-redeployTemplate($currentConfig) {
     $readme = "redeploy modifications:
             - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
             - adminPassword required parameter added (needs to be set)
-            - upgradeMode for cluster resource is set to manual with clusterCodeVersion set to current version
+            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - clusterendpoint is parameterized
             "
@@ -943,6 +1029,37 @@ function enum-vnetResources($vmssResources) {
     return $resources.ToArray() | sort-object name -Unique
 }
 
+function get-clusterResource($currentConfig) {
+    $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters')
+    
+    if ($resources.count -ne 1) {
+        write-error "unable to find cluster resource"
+    }
+
+    write-verbose "returning cluster resource $resources"
+    return $resources[0]
+}
+
+function get-lbResources($currentConfig) {
+    $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers')
+    
+    if ($resources.count -eq 0) {
+        write-error "unable to find lb resource"
+    }
+
+    write-verbose "returning lb resource $resources"
+    return $resources
+}
+
+function get-vmssResources($currentConfig) {
+    $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets')
+    if ($resources.count -eq 0) {
+        write-error "unable to find vmss resource"
+    }
+    write-verbose "returning vmss resource $resources"
+    return $resources
+}
+
 function get-fromParametersSection($currentConfig, $parameterName) {
     $parameters = @($currentConfig.parameters)
     foreach ($psObjectProperty in $parameters.psobject.Properties) {
@@ -950,6 +1067,13 @@ function get-fromParametersSection($currentConfig, $parameterName) {
             return $psObjectProperty.Value
         }
     }
+}
+
+function get-parameterizedNameFromValue($resourceObject) {
+    if ([regex]::IsMatch($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase)) {
+        return [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
+    }
+    return $null
 }
 
 function get-resourceParameterValue($resource, $name) {
@@ -979,10 +1103,8 @@ function get-resourceParameterValue($resource, $name) {
     return $retval
 }
 
-
-function modify-clusterResourceRedeploy($currentConfig) {
-    $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
-    $clusterResource = $currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters'
+function modify-clusterResourceAddNodeType($currentConfig) {
+    $clusterResource = get-clusterResource $currentConfig
     
     write-host "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
     $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
@@ -993,18 +1115,36 @@ function modify-clusterResourceRedeploy($currentConfig) {
     add-outputs -currentConfig $currentConfig -name 'clusterProperties' -value $reference -type 'object'
 }
 
+
+function modify-clusterResourceRedeploy($currentConfig) {
+    $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
+    $clusterResource = get-clusterResource $currentConfig
+    
+    write-host "setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
+    $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
+    
+    if($clusterResource.properties.upgradeMode -ieq 'Automatic'){
+        write-host "removing value cluster code version $($clusterResource.properties.clusterCodeVersion)" -ForegroundColor Yellow
+        $clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
+    }
+    
+    $reference = "[reference($(create-parameterizedName -parameterName 'name' -resource $clusterResource))]"
+    add-outputs -currentConfig $currentConfig -name 'clusterProperties' -value $reference -type 'object'
+}
+
 function modify-ipAddressesRedeploy($currentConfig) {
     # add ip address dns parameter
-    $dnsSettings = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel'
-    $fqdn = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn'
+    $metadataDescription = 'this name must be unique in deployment region.'
+    $dnsSettings = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'domainNameLabel' -metadataDescription $metadataDescription
+    $fqdn = add-parameterNameByResourceType -currentConfig $currentConfig -type "Microsoft.Network/publicIPAddresses" -name 'fqdn' -metadataDescription $metadataDescription
 }
 
 function modify-lbResources($currenConfig) {
-    $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
+    $lbResources = get-lbResources $currentConfig
     foreach ($lbResource in $lbResources) {
         # fix backend pool
         write-host "fixing exported lb resource $($lbresource | convertto-json)"
-        $parameterName = [regex]::match($lbresource.name, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
+        $parameterName = get-parameterizedNameFromValue $lbresource.name
         if ($parameterName) {
             $name = $currentConfig.parameters.$parametername.defaultValue
         }
@@ -1029,7 +1169,7 @@ function modify-lbResources($currenConfig) {
 }
 
 function modify-lbResourcesRedeploy($currenConfig) {
-    $lbResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers'
+    $lbResources = get-lbResources $currentConfig
     foreach ($lbResource in $lbResources) {
         # fix dupe pools and rules
         if ($lbResource.properties.inboundNatPools) {
@@ -1040,7 +1180,7 @@ function modify-lbResourcesRedeploy($currenConfig) {
 }
 
 function modify-storageResourcesDeploy($currentConfig) {
-    $metadataDescription = 'this name must be unique in deployment region. remove this parameter from *parameter file* to have account name generated.'
+    $metadataDescription = 'this name must be unique in deployment region.'
     $parameterExclusions = [collections.arraylist]::new()
     $sflogsParameter = create-parametersName -resource $global:sflogs
     [void]$parameterExclusions.Add($sflogsParameter)
@@ -1063,7 +1203,7 @@ function modify-storageResourcesDeploy($currentConfig) {
 }
 
 function modify-vmssResources($currenConfig) {
-    $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+    $vmssResources = get-vmssResources $currentConfig
    
     foreach ($vmssResource in $vmssResources) {
 
@@ -1091,14 +1231,15 @@ function modify-vmssResources($currenConfig) {
 }
 
 function modify-vmssResourcesDeploy($currenConfig) {
-    $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+    $vmssResources = get-vmssResources $currentConfig
     foreach ($vmssResource in $vmssResources) {
         $extensions = [collections.arraylist]::new()
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                $clusterResource = $currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters'
+                $clusterResource = get-clusterResource $currentConfig
                 $parameterizedName = create-parameterizedName -parameterName 'name' -resource $clusterResource
                 $newName = "[reference($parameterizedName).clusterEndpoint]"
+
                 write-host "setting cluster endpoint to $newName"
                 set-resourceParameterValue -resource $extension.properties.settings -name 'clusterEndpoint' -newValue $newName
                 # remove clusterendpoint parameter
@@ -1109,7 +1250,7 @@ function modify-vmssResourcesDeploy($currenConfig) {
 }
 
 function modify-vmssResourcesRedeploy($currenConfig) {
-    $vmssResources = $currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets'
+    $vmssResources = get-vmssResources $currentConfig
    
     foreach ($vmssResource in $vmssResources) {
         # add protected settings
