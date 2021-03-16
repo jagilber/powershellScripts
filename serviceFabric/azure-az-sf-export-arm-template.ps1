@@ -56,7 +56,7 @@ param (
 [int]$sleepSeconds = 1 
 #[ValidateSet('Incremental', 'Complete')]
 [string]$mode = 'Incremental'
-[switch]$useLatestApiVersion
+[bool]$useLatestApiVersion = $false # [swtich]
 # end todo unused params need cleanup
 
 [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
@@ -103,6 +103,7 @@ function main () {
 
     $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
     if (!(test-path $templateDirectory)) {
+        write-host "making directory $templateDirectory"
         mkdir "./$templateDirectory" # for cloudshell
     }
 
@@ -382,11 +383,13 @@ function create-exportTemplate() {
     $templateFile = $templateJsonFile.Replace(".json", ".export.json")
 
     if($useExportedJsonFile -and (test-path $useExportedJsonFile)){
+        write-host "using existing export file $useExportedJsonFile" -ForegroundColor Green
         $templateFile = $useExportedJsonFile
     }
     else{
-        $null = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
+        $exportResult = export-template -configuredResources $global:configuredRGResources -jsonFile $templateFile
         write-host "template exported to $templateFile" -ForegroundColor Yellow
+        write-host "template export result $($exportResult|out-string)" -ForegroundColor Yellow
     }
 
     # save base / current json
@@ -731,7 +734,7 @@ function enum-allResources() {
     $resources = [collections.arraylist]::new()
 
     write-host "getting resource group cluster $resourceGroupName"
-    $clusterResource = @(enum-clusterResource)
+    $clusterResource = enum-clusterResource
     if (!$clusterResource) {
         write-error "unable to enumerate cluster. exiting"
         return $null
@@ -739,73 +742,73 @@ function enum-allResources() {
     [void]$resources.Add($clusterResource.Id)
 
     write-host "getting scalesets $resourceGroupName"
-    $vmssResources = enum-vmssResources $clusterResource
-    if (!$vmssResources) {
+    $vmssResources = @(enum-vmssResources $clusterResource)
+    if ($vmssResources.Count -lt 1) {
         write-error "unable to enumerate vmss. exiting"
         return $null
     }
     else {
-        [void]$resources.AddRange(@($vmssResources.Id))
+        [void]$resources.AddRange($vmssResources.Id)
     }
 
     write-host "getting storage $resourceGroupName"
-    $storageResources = enum-storageResources $clusterResource
-    if (!$storageResources) {
+    $storageResources = @(enum-storageResources $clusterResource)
+    if ($storageResources.count -lt 1) {
         write-error "unable to enumerate storage. exiting"
         return $null
     }
     else {
-        [void]$resources.AddRange(@($storageResources.Id))
+        [void]$resources.AddRange($storageResources.Id)
     }
     
     write-host "getting virtualnetworks $resourceGroupName"
-    $vnetResources = enum-vnetResources $vmssResources
-    if (!$vnetResources) {
+    $vnetResources = @(enum-vnetResourceIds $vmssResources)
+    if ($vnetResources.count -lt 1) {
         write-error "unable to enumerate vnets. exiting"
         return $null
     }
     else {
-        [void]$resources.AddRange(@($vnetResources))
+        [void]$resources.AddRange($vnetResources)
     }
 
     write-host "getting loadbalancers $resourceGroupName"
-    $lbResources = enum-lbResources $vmssResources
-    if (!$lbResources) {
+    $lbResources = @(enum-lbResourceIds $vmssResources)
+    if ($lbResources.count -lt 1) {
         write-error "unable to enumerate loadbalancers. exiting"
         return $null
     }
     else {
-        [void]$resources.AddRange(@($lbResources))
+        [void]$resources.AddRange($lbResources)
     }
 
     write-host "getting ip addresses $resourceGroupName"
-    $ipResources = enum-ipResources $lbResources
-    if (!$ipResources) {
+    $ipResources = @(enum-ipResourceIds $lbResources)
+    if ($ipResources.count -lt 1) {
         write-warning "unable to enumerate ips."
         #return $null
     }
     else {
-        [void]$resources.AddRange(@($ipResources))
+        [void]$resources.AddRange($ipResources)
     }
 
     write-host "getting key vaults $resourceGroupName"
-    $kvResources = enum-kvResources $vmssResources
-    if (!$kvResources) {
+    $kvResources = @(enum-kvResourceIds $vmssResources)
+    if ($kvResources.count -lt 1) {
         write-warning "unable to enumerate key vaults."
         #return $null
     }
     else {
-        [void]$resources.AddRange(@($kvResources))
+        [void]$resources.AddRange($kvResources)
     }
 
     write-host "getting nsgs $resourceGroupName"
-    $nsgResources = enum-nsgResources $vmssResources
-    if (!$nsgResources) {
+    $nsgResources = @(enum-nsgResourceIds $vmssResources)
+    if ($nsgResources.count -lt 1) {
         write-warning "unable to enumerate nsgs."
         #return $null
     }
     else {
-        [void]$resources.AddRange(@($nsgResources))
+        [void]$resources.AddRange($nsgResources)
     }
 
     if ($excludeResourceNames) {
@@ -825,13 +828,13 @@ function enum-clusterResource() {
     write-verbose "all clusters $clusters"
     if ($clusters.count -gt 1) {
         foreach ($cluster in $clusters) {
-            write-host "$($count). $($rg.ResourceGroupName)"
+            write-host "$($count). $($cluster.name)"
             $count++
         }
         
         $number = [convert]::ToInt32((read-host "enter number of the cluster to query or ctrl-c to exit:"))
         if ($number -le $count) {
-            $clusterResource = $resourceGroups[$number - 1].ResourceGroupName
+            $clusterResource = $cluster[$number - 1].Name
             write-host $clusterResource
         }
         else {
@@ -849,7 +852,7 @@ function enum-clusterResource() {
     return $clusterResource
 }
 
-function enum-ipResources($lbResources) {
+function enum-ipResourceIds($lbResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($lbResource in $lbResources) {
@@ -865,10 +868,10 @@ function enum-ipResources($lbResources) {
     }
 
     write-verbose "ip resources $resources)"
-    return $resources.ToArray() | sort-object name -Unique
+    return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-kvResources($vmssResources) {
+function enum-kvResourceIds($vmssResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($vmssResource in $vmssResources) {
@@ -880,10 +883,10 @@ function enum-kvResources($vmssResources) {
     }
 
     write-verbose "kv resources $resources)"
-    return $resources.ToArray() | sort-object name -Unique
+    return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-lbResources($vmssResources) {
+function enum-lbResourceIds($vmssResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($vmssResource in $vmssResources) {
@@ -899,10 +902,10 @@ function enum-lbResources($vmssResources) {
     }
 
     write-verbose "lb resources $resources)"
-    return $resources.ToArray() | sort-object name -Unique
+    return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-nsgResources($vmssResources) {
+function enum-nsgResourceIds($vmssResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($vnetId in $vnetResources) {
@@ -919,7 +922,7 @@ function enum-nsgResources($vmssResources) {
     }
 
     write-verbose "nsg resources $resources"
-    return $resources.ToArray() | sort-object name -Unique
+    return $resources.ToArray() | sort-object -Unique
 }
 
 function enum-storageResources($clusterResource) {
@@ -980,7 +983,7 @@ function enum-vmssResources($clusterResource) {
     return $vmssResources.ToArray() | sort-object name -Unique
 }
 
-function enum-vnetResources($vmssResources) {
+function enum-vnetResourceIds($vmssResources) {
     $resources = [collections.arraylist]::new()
 
     foreach ($vmssResource in $vmssResources) {
@@ -996,7 +999,7 @@ function enum-vnetResources($vmssResources) {
     }
 
     write-verbose "vnet resources $resources"
-    return $resources.ToArray() | sort-object name -Unique
+    return $resources.ToArray() | sort-object -Unique
 }
 
 function get-clusterResource($currentConfig) {
