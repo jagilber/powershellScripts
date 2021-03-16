@@ -1334,6 +1334,56 @@ function parameterize-durabilityLevel($currentConfig) {
     } 
 }
 
+function parameterize-primaryDurabilityLevel($currentConfig) {
+    # how many nodetypes
+    $clusterResource = get-clusterResource $currentConfig
+    $nodetypes = @($clusterResource.properties.nodetypes)
+    write-host "current nodetypes $($nodetypes.name)" -ForegroundColor Green
+    $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
+    if ($primarynodetypes.count -eq 0) {
+        write-error "unable to find primary nodetype"
+    }
+    elseif ($primarynodetypes.count -gt 1) {
+        write-error "more than one primary node type detected!"
+    }
+    
+    $scalesets = get-vmssResources $currentConfig
+    $durabilityLevelName = 'durabilityLevel'
+    $durabilityLevelAlias = 'primaryDurability'
+        
+    foreach ($primarynodetype in $primarynodetypes) {
+        $primaryDurability = get-resourceParameterValue -resource $primarynodetype -name $durabilityLevelName
+        add-parameter -currentConfig $currentConfig `
+            -resource $clusterResource `
+            -name $durabilityLevelName `
+            -aliasName $durabilityLevelAlias `
+            -resourceObject $primarynodetype
+    
+        foreach ($scaleset in $scalesets) {
+            foreach ($extension in $scaleset.properties.virtualMachineProfile.extensionProfile.extensions) {
+                if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                    $parameterName = get-parameterizedNameFromValue $extension.properties.settings.nodetyperef
+                    if ($parameterName) {
+                        $nodetype = get-fromParametersSection $currentConfig -parameterName $parameterName
+                    }
+                    else {
+                        $nodetype = $extension.properties.settings.nodetyperef
+                    }
+                    if ($nodetype -ieq $primarynodetype.name) {
+                        write-host "found scaleset by nodetyperef"
+                        add-parameter -currentConfig $currentConfig `
+                            -resource $clusterResource `
+                            -name $durabilityLevelName `
+                            -aliasName $durabilityLevelAlias `
+                            -resourceObject $sfextension.properties.settings `
+                            -value $primaryDurability
+                    }
+                }
+            }
+        }
+    } 
+}
+
 function remove-duplicateResources($currentConfig) {
     # fix up deploy errors by removing duplicated sub resources on root like lb rules by
     # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
