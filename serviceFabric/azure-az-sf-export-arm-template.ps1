@@ -246,7 +246,7 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
     if (!$parameterNameValue) {
         $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
     }
-
+    write-log "add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '')"
     set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
     if ($parameterNameValue -ne $null) {
@@ -562,7 +562,11 @@ function create-parametersName($resource, $name = 'name') {
         $resourceName = $resource.name
     }
     
+    # prevent dupes
+    #$parametersNamePrefix = "$($resourceSubType)_$($resourceName)_"
+    #$parametersName = "$parametersNamePrefix$($name.trimstart($parametersNamePrefix))"
     $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
+       
     write-log "returning $parametersName"
     return $parametersName
 }
@@ -1066,6 +1070,7 @@ function get-lbResources($currentConfig) {
 }
 
 function get-fromParametersSection($currentConfig, $parameterName) {
+    $results = $null
     $parameters = @($currentConfig.parameters)
     $currentErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'silentlycontinue'
@@ -1074,13 +1079,13 @@ function get-fromParametersSection($currentConfig, $parameterName) {
     $ErrorActionPreference = $currentErrorPreference
     
     if(!$results){
-        write-warning "no matching values found in parameters section for $parameterName"
+        write-log "no matching values found in parameters section for $parameterName"
     }
     if(@($results).count -gt 1){
-        write-warning "multiple matching values found in parameters section for $parameterName `r`n $($results |create-json)"
+        write-log "multiple matching values found in parameters section for $parameterName `r`n $($results |create-json)"
     }
 
-    write-host "get-fromParametersSection: returning: $($results | create-json)" -ForegroundColor Magenta
+    write-log "get-fromParametersSection: returning: $($results | create-json)" -ForegroundColor Magenta
     return $results
 }
 
@@ -1417,7 +1422,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
 function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string') {
     $clusterResource = get-clusterResource $currentConfig
     #$vmssResources = get-vmssResources $currentConfig
-    write-host "parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue, $type)"
+    write-log "parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue, $type)"
 
     if (!$parameterValue) {
         $parameterValue = get-resourceParameterValue -resource $nodetype -name $parameterName
@@ -1444,6 +1449,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
             -value $parameterValue `
             -type $type
         "
+
         add-parameter -currentConfig $currentConfig `
             -resource $vmssResource `
             -name $parameterName `
@@ -1460,6 +1466,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
             -value $parameterValue `
             -type $type
         "
+
         add-parameter -currentConfig $currentConfig `
             -resource $clusterResource `
             -name $parameterName `
@@ -1513,8 +1520,9 @@ function parameterize-nodeTypes($currentConfig) {
 
     if (!$parameterizedName) {
         $newNodeTypeExistingName = get-resourceParameterValue -resource $newPrimaryNodeType -name 'name'
-        $parameterizedName = create-parameterizedName -parameterName $newNodeTypeExistingName -resource $existingVmssNodeTypeRef[0]
-        add-toParametersSection -currentConfig $currentConfig -parameterName $parameterizedName -parameterValue $newNodeTypeExistingName
+        $parameterName = create-parametersName -resource $existingVmssNodeTypeRef[0] -name 'name'
+        $parameterizedName = create-parameterizedName -parameterName 'name' -resource $existingVmssNodeTypeRef[0]
+        add-toParametersSection -currentConfig $currentConfig -parameterName $parameterName -parameterValue $newNodeTypeExistingName
 
         write-log "parameterizing new nodetype name" -foregroundcolor Cyan
         parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name' -parameterValue $parameterizedName
@@ -1587,6 +1595,7 @@ function remove-unusedParameters($currentConfig) {
 
 function set-resourceParameterValue($resource, $name, $newValue) {
     $retval = $false
+    write-log "set-resourceParameterValue($resource, $name, $newValue)"
     foreach ($psObjectProperty in $resource.psobject.Properties) {
         write-log "checking parameter name $psobjectProperty" -verbose
 
