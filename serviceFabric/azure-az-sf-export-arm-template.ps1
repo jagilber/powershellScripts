@@ -1104,10 +1104,40 @@ function get-resourceParameterValue($resource, $name) {
             $retval = get-resourceParameterValue -resource $psObjectProperty.Value -name $name
         }
         else{
-            write-log "get-resourceParameterValue: skipping name: $($psObjectProperty.Name) type: $($psObjectProperty.TypeNameOfValue)" -verbose
+            write-log "get-resourceParameterValue: skipping. property name:$($psObjectProperty.Name) name:$name type:$($psObjectProperty.TypeNameOfValue)" -verbose
         }
     }
 
+    write-log "get-resourceParameterValue: returning $retval" -verbose
+    return $retval
+}
+function get-resourceParameterValueObject($resource, $name) {
+    $retval = $null
+    foreach ($psObjectProperty in $resource.psobject.Properties) {
+        write-log "checking parameter object $psobjectProperty" -verbose
+
+        if (($psObjectProperty.Name -imatch $name)) {
+            $parameterValues = @($psObjectProperty.Name)
+            if ($parameterValues.Count -eq 1) {
+                write-log "returning parameter object $psobjectProperty" -verbose
+                $retval = $resource.psobject.Properties[$psObjectProperty.name]
+                break
+            }
+            else {
+                write-error "multiple parameter names found in resource. returning" -isError
+                $retval = $null
+                break
+            }
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
+            $retval = get-resourceParameterValueObject -resource $psObjectProperty.Value -name $name
+        }
+        else{
+            write-log "get-resourceParameterValueObject: skipping. property name:$($psObjectProperty.Name) name:$name type:$($psObjectProperty.TypeNameOfValue)" -verbose
+        }
+    }
+
+    write-log "get-resourceParameterValueObject: returning $retval" -verbose
     return $retval
 }
 
@@ -1350,12 +1380,15 @@ function modify-vmssResourcesRedeploy($currenConfig) {
     }
 }
 
-function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null){
+function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string'){
     $clusterResource = get-clusterResource $currentConfig
     $vmssResources = get-vmssResources $currentConfig
 
     if(!$parameterValue){
         $parameterValue = get-resourceParameterValue -resource $nodetype -name $parameterName
+        #$parameterValueObject = get-resourceParameterValueObject -resource $nodetype -name $parameterName
+        #$parameterValue = $parameterValueObject.Value
+        #$type = $parameterValueObject.TypeNameOfValue
     }
     
     write-log "setting $parameterName to $parameterValue for $($nodetype.name)" -foregroundcolor Magenta
@@ -1363,7 +1396,8 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
     add-parameter -currentConfig $currentConfig `
         -resource $clusterResource `
         -name $parameterName `
-        -resourceObject $nodetype
+        -resourceObject $nodetype `
+        -type $type
 
     foreach ($vmssResource in $vmssResources) {
         $extension = get-vmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
@@ -1382,7 +1416,8 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
                 -resource $clusterResource `
                 -name $parameterName `
                 -resourceObject $sfextension.properties.settings `
-                -value $parameterValue
+                -value $parameterValue `
+                -type $type
         }
     }
 }
@@ -1403,7 +1438,7 @@ function parameterize-nodeTypes($currentConfig) {
     
     foreach ($nodetype in $nodetypes) {
         parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'durabilityLevel'
-        parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'isPrimary'
+        parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'isPrimary' -type 'bool'
         # todo parameterize name? only the new nodetype name should be parameterized
         # this will be a copy of existing nodetype that will be used with new associated scaleset by nodetyperef
         # existing nodetypes / scalesets should *not* have nodetype.name parameterized
@@ -1587,6 +1622,8 @@ function wait-jobs() {
 function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError,[switch]$isWarning, [switch]$verbose) {
     if (!$data) { return }
     $stringData = [text.stringbuilder]::new()
+    $verboseTag = ''
+    if($verbose){$verboseTag = 'verbose:'}
     
     if ($data.GetType().Name -eq "PSRemotingJob") {
         foreach ($job in $data.childjobs) {
@@ -1620,7 +1657,7 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
         }
     }
     else {
-        $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$($data | format-list * | out-string)").trim()
+        $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$verboseTag$($data | format-list * | out-string)").trim()
     }
 
     if ($isError) {
@@ -1631,8 +1668,6 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
     }
     elseif($verbose){
         write-verbose $stringData
-        $verboseStringData = "verbose:" + $stringData.ToString()
-        $stringData = [text.stringbuilder]::new($verboseStringData)
     }
     else {
         write-host $stringData -ForegroundColor $foregroundcolor
