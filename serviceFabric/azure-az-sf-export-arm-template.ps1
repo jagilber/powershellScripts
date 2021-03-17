@@ -40,12 +40,15 @@
 
 [cmdletbinding()]
 param (
+    [Parameter(Mandatory = $true)]
     [string]$resourceGroupName = '',
-    [string]$adminPassword = '', #'GEN_PASSWORD',
-    [string]$templateJsonFile = "$psscriptroot/templates-$resourceGroupName/template.json", # for cloudshell
+    [string]$templatePath = "$psscriptroot/templates-$resourceGroupName", # for cloudshell
     [string]$useExportedJsonFile = '',
+    [string]$adminPassword = '', #'GEN_PASSWORD',
     [switch]$detail,
-    [string]$logFile = "./azure-az-sf-export-arm-template.log"
+    [string]$logFile = "$templatePath/azure-az-sf-export-arm-template.log",
+    [switch]$compress,
+    [switch]$noUpdateCheck
 )
 
 # todo unused params need cleanup
@@ -60,10 +63,12 @@ param (
 [bool]$useLatestApiVersion = $false # [swtich]
 # end todo unused params need cleanup
 
+set-strictMode -Version 3.0
 [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
 [string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
+$updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
 
-set-strictMode -Version 3.0
+$global:templateJsonFile = "$templatePath/template.json"
 $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
@@ -91,22 +96,20 @@ function main () {
     if (!(check-module)) {
         return
     }
+
+    if (!(test-path $templatePath)) {
+        write-log "making directory $templatePath"
+        # test local and for cloudshell
+        mkdir $templatePath
+    }
+
+    if (!$noUpdateCheck -and (get-update -updateUrl $updateUrl)) {
+        return
+    }
     
     if (!(@(Get-AzResourceGroup).Count)) {
         write-log "connecting to azure"
         Connect-AzAccount
-    }
-
-    if (!$resourceGroupName -or !$templateJsonFile) {
-        write-error 'specify resourceGroupName' -isError
-        return
-    }
-
-    $templateDirectory = [io.path]::GetDirectoryName($templateJsonFile)
-    if (!(test-path $templateDirectory)) {
-        write-log "making directory $templateDirectory"
-        # test local and for cloudshell
-        mkdir $templateDirectory 
     }
 
     if ($resourceNames) {
@@ -150,10 +153,19 @@ function main () {
         create-addNodeTypeTemplate $currentConfig
         create-newTemplate $currentConfig
 
+        if ($compress) {
+            $zipFile = "$templatePath.zip"
+            compress-archive $templatePath $zipFile -Force
+            # only works in ps5.6
+            set-clipboard -path $zipFile 
+        }
+
         $global:resourceTemplateObj = $currentConfig
         $error.clear()
-        write-log "finished. files stored in $templateDirectory" -ForegroundColor Green
-        code $templateDirectory # for cloudshell and local
+
+        write-host "finished. files stored in $templatePath" -ForegroundColor Green
+        code $templatePath # for cloudshell and local
+        
         if ($error) {
             . $templateJsonFile.Replace(".json", ".current.json")
         }
@@ -173,7 +185,7 @@ function main () {
     Write-Progress -Completed -Activity "complete"
     write-log "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-log 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
-    if($logFile){
+    if ($logFile) {
         write-log "log file saved to $logFile"
     }
 }
@@ -690,8 +702,8 @@ function export-template($configuredResources, $jsonFile) {
     $resourceIds = @($configuredResources.ResourceId)
 
     # todo issue
-    new-item -ItemType File -path $jsonFile
-    write-log "file exists:$((test-path $JsonFile))"
+    new-item -ItemType File -path $jsonFile -ErrorAction SilentlyContinue
+    write-log "file exists:$((test-path $jsonFile))"
     write-log "resource ids: $resourceIds" -ForegroundColor green
 
     write-log "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
@@ -1501,6 +1513,40 @@ function set-resourceParameterValue($resource, $name, $newValue) {
     return $retval
 }
 
+function get-update($updateUrl) {
+    write-log "get-update:checking for updated script: $($updateUrl)"
+    $gitScript = $null
+    $scriptFile = $MyInvocation.ScriptName
+
+    $error.Clear()
+    $gitScript = Invoke-RestMethod -Uri $updateUrl 
+
+    if (!$error -and $gitScript) {
+        write-log "reading $scriptFile"
+        $currentScript = get-content -raw $scriptFile
+    
+        write-verbose "comparing export and current functions"
+        if ([string]::Compare([regex]::replace($gitScript, "\s", ""), [regex]::replace($currentScript, "\s", "")) -eq 0) {
+            write-log "no change to $scriptFile. skipping update." -ForegroundColor Cyan
+            return $false
+        }
+
+        $error.clear()
+        out-file -inputObject $gitScript -FilePath $scriptFile -Force
+
+        if (!$error) {
+            write-log "$scriptFile has been updated. restart script." -ForegroundColor yellow
+            return $true
+        }
+
+        write-log "$scriptFile has not been updated." -ForegroundColor darkyellow
+    }
+    else {
+        write-log "error checking for updated script $error" -foregroundcolor darkyellow
+        return $false
+    }
+}
+
 function verify-config($currentConfig, $templateParameterFile) {
     $json = '.\verify-config.json'
     $currentConfig | create-json | out-file -FilePath $json -Force
@@ -1552,7 +1598,7 @@ function wait-jobs() {
     write-log "finished jobs"
 }
 
-function write-log($data,$foregroundcolor = 'white',[switch]$isError) {
+function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError) {
     if (!$data) { return }
     [text.stringbuilder]$stringData = New-Object text.stringbuilder
     
@@ -1591,14 +1637,14 @@ function write-log($data,$foregroundcolor = 'white',[switch]$isError) {
         $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$($data | format-list * | out-string)").trim()
     }
 
-    if($isError){
+    if ($isError) {
         write-error $stringData
     }
-    else{
+    else {
         write-host $stringData -ForegroundColor $foregroundcolor
     }
 
-    if($logFile){
+    if ($logFile) {
         out-file -Append -inputobject $stringData -filepath $logFile
     }
 }
