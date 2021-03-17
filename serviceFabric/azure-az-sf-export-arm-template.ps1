@@ -48,7 +48,7 @@ param (
     [switch]$detail,
     [string]$logFile = "$templatePath/azure-az-sf-export-arm-template.log",
     [switch]$compress,
-    [switch]$noUpdateCheck
+    [switch]$updateScript
 )
 
 # todo unused params need cleanup
@@ -64,8 +64,8 @@ param (
 # end todo unused params need cleanup
 
 set-strictMode -Version 3.0
-[string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
-[string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
+$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
+$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
 $updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
 
 $global:templateJsonFile = "$templatePath/template.json"
@@ -103,7 +103,7 @@ function main () {
         mkdir $templatePath
     }
 
-    if (!$noUpdateCheck -and (get-update -updateUrl $updateUrl)) {
+    if ($updateScript -and (get-update -updateUrl $updateUrl)) {
         return
     }
     
