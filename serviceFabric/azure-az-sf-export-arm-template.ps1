@@ -1528,6 +1528,7 @@ function get-update($updateUrl) {
         write-verbose "comparing export and current functions"
         if ([string]::Compare([regex]::replace($gitScript, "\s", ""), [regex]::replace($currentScript, "\s", "")) -eq 0) {
             write-log "no change to $scriptFile. skipping update." -ForegroundColor Cyan
+            $error.Clear()
             return $false
         }
 
@@ -1543,6 +1544,7 @@ function get-update($updateUrl) {
     }
     else {
         write-log "error checking for updated script $error" -foregroundcolor darkyellow
+        $error.Clear()
         return $false
     }
 }
