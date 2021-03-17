@@ -712,7 +712,7 @@ function export-template($configuredResources, $jsonFile) {
             -IncludeComments `
             -IncludeParameterDefaultValue `
             -Resource $resourceIds
-    "
+    " -foregroundcolor Blue
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
         -Path $jsonFile `
         -Force `
@@ -1647,7 +1647,7 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
     }
 
     if ($logFile) {
-        out-file -Append -inputobject $stringData -filepath $logFile
+        out-file -Append -inputobject $stringData.ToString() -filepath $logFile
     }
 }
 
