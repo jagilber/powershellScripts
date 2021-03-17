@@ -467,7 +467,7 @@ function create-jsonTemplate([collections.arraylist]$resources,
         return $true
     }
     catch { 
-        write-error "$($_)`r`n$($error | out-string)" -isError
+        write-log "$($_)`r`n$($error | out-string)" -isError
         return $false
     }
 }
@@ -603,7 +603,7 @@ function deploy-template($configuredResources) {
     $json = get-content -raw $templateJsonFile | convertfrom-json
     
     if (!$json -or !$json.resources) {
-        write-error "invalid template file $templateJsonFile" -isError
+        write-log "invalid template file $templateJsonFile" -isError
         return
     }
 
@@ -676,7 +676,7 @@ function deploy-template($configuredResources) {
     }
     else {
         write-log "template validation failed: $($error |out-string) $($result | out-string)"
-        write-error "template validation failed`r`n$($error | create-json)`r`n$($result | create-json)" -isError
+        write-log "template validation failed`r`n$($error | create-json)`r`n$($result | create-json)" -isError
         return $false
     }
 
@@ -777,7 +777,7 @@ function enum-allResources() {
     write-log "getting resource group cluster $resourceGroupName"
     $clusterResource = enum-clusterResource
     if (!$clusterResource) {
-        write-error "unable to enumerate cluster. exiting" -isError
+        write-log "unable to enumerate cluster. exiting" -isError
         return $null
     }
     [void]$resources.Add($clusterResource.Id)
@@ -785,7 +785,7 @@ function enum-allResources() {
     write-log "getting scalesets $resourceGroupName"
     $vmssResources = @(enum-vmssResources $clusterResource)
     if ($vmssResources.Count -lt 1) {
-        write-error "unable to enumerate vmss. exiting" -isError
+        write-log "unable to enumerate vmss. exiting" -isError
         return $null
     }
     else {
@@ -795,7 +795,7 @@ function enum-allResources() {
     write-log "getting storage $resourceGroupName"
     $storageResources = @(enum-storageResources $clusterResource)
     if ($storageResources.count -lt 1) {
-        write-error "unable to enumerate storage. exiting" -isError
+        write-log "unable to enumerate storage. exiting" -isError
         return $null
     }
     else {
@@ -805,7 +805,7 @@ function enum-allResources() {
     write-log "getting virtualnetworks $resourceGroupName"
     $vnetResources = @(enum-vnetResourceIds $vmssResources)
     if ($vnetResources.count -lt 1) {
-        write-error "unable to enumerate vnets. exiting" -isError
+        write-log "unable to enumerate vnets. exiting" -isError
         return $null
     }
     else {
@@ -815,7 +815,7 @@ function enum-allResources() {
     write-log "getting loadbalancers $resourceGroupName"
     $lbResources = @(enum-lbResourceIds $vmssResources)
     if ($lbResources.count -lt 1) {
-        write-error "unable to enumerate loadbalancers. exiting" -isError
+        write-log "unable to enumerate loadbalancers. exiting" -isError
         return $null
     }
     else {
@@ -1047,7 +1047,7 @@ function get-clusterResource($currentConfig) {
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters')
     
     if ($resources.count -ne 1) {
-        write-error "unable to find cluster resource" -isError
+        write-log "unable to find cluster resource" -isError
     }
 
     write-log "returning cluster resource $resources" -verbose
@@ -1058,7 +1058,7 @@ function get-lbResources($currentConfig) {
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers')
     
     if ($resources.count -eq 0) {
-        write-error "unable to find lb resource" -isError
+        write-log "unable to find lb resource" -isError
     }
 
     write-log "returning lb resource $resources" -verbose
@@ -1067,11 +1067,21 @@ function get-lbResources($currentConfig) {
 
 function get-fromParametersSection($currentConfig, $parameterName) {
     $parameters = @($currentConfig.parameters)
-    foreach ($psObjectProperty in $parameters.psobject.Properties) {
-        if (($psObjectProperty.Name -imatch $parameterName)) {
-            return $psObjectProperty.Value
-        }
+    $currentErrorPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'silentlycontinue'
+
+    $results = @($parameters.$parameterName.defaultValue)
+    $ErrorActionPreference = $currentErrorPreference
+    
+    if(!$results){
+        write-warning "no matching values found in parameters section for $parameterName"
     }
+    if(@($results).count -gt 1){
+        write-warning "multiple matching values found in parameters section for $parameterName `r`n $($results |create-json)"
+    }
+
+    write-host "get-fromParametersSection: returning: $($results | create-json)" -ForegroundColor Magenta
+    return $results
 }
 
 function get-parameterizedNameFromValue($resourceObject) {
@@ -1096,14 +1106,14 @@ function get-resourceParameterValue($resource, $name) {
                 return $parameterValue
             }
             else {
-                write-error "multiple parameter names found in resource. returning" -isError
+                write-log "multiple parameter names found in resource. returning" -isError
                 return $null
             }
         }
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
             $retval = get-resourceParameterValue -resource $psObjectProperty.Value -name $name
         }
-        else{
+        else {
             write-log "get-resourceParameterValue: skipping. property name:$($psObjectProperty.Name) name:$name type:$($psObjectProperty.TypeNameOfValue)" -verbose
         }
     }
@@ -1124,7 +1134,7 @@ function get-resourceParameterValueObject($resource, $name) {
                 break
             }
             else {
-                write-error "multiple parameter names found in resource. returning" -isError
+                write-log "multiple parameter names found in resource. returning" -isError
                 $retval = $null
                 break
             }
@@ -1132,7 +1142,7 @@ function get-resourceParameterValueObject($resource, $name) {
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
             $retval = get-resourceParameterValueObject -resource $psObjectProperty.Value -name $name
         }
-        else{
+        else {
             write-log "get-resourceParameterValueObject: skipping. property name:$($psObjectProperty.Name) name:$name type:$($psObjectProperty.TypeNameOfValue)" -verbose
         }
     }
@@ -1166,10 +1176,34 @@ function get-vmssExtensions($vmssResource, $extensionType = $null) {
 function get-vmssResources($currentConfig) {
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets')
     if ($resources.count -eq 0) {
-        write-error "unable to find vmss resource" -isError
+        write-log "unable to find vmss resource" -isError
     }
     write-log "returning vmss resource $resources" -verbose
     return $resources
+}
+
+function get-vmssResourcesByNodeType($currentConfig, $nodetypeResource) {
+    $vmssResources = get-vmssResources -currentConfig $currentConfig
+    $vmssByNodeType = [collections.arraylist]::new()
+
+    foreach ($vmssResource in $vmssResources) {
+        $extension = get-vmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
+        $parameterizedName = get-parameterizedNameFromValue $extension.properties.settings.nodetyperef
+
+        if ($parameterizedName) {
+            $nodetypeName = get-fromParametersSection $currentConfig -parameterName $parameterizedName
+        }
+        else {
+            $nodetypeName = $extension.properties.settings.nodetyperef
+        }
+
+        if ($nodetypeName -ieq $nodetypeResource.name) {
+            write-log "found scaleset by nodetyperef $nodetypeName" -foregroundcolor Cyan
+            [void]$vmssByNodeType.add($vmssResource)
+        }
+    }
+
+    return $vmssByNodeType.ToArray()
 }
 
 function modify-clusterResourceAddNodeType($currentConfig) {
@@ -1380,11 +1414,12 @@ function modify-vmssResourcesRedeploy($currenConfig) {
     }
 }
 
-function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string'){
+function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string') {
     $clusterResource = get-clusterResource $currentConfig
-    $vmssResources = get-vmssResources $currentConfig
+    #$vmssResources = get-vmssResources $currentConfig
+    write-host "parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue, $type)"
 
-    if(!$parameterValue){
+    if (!$parameterValue) {
         $parameterValue = get-resourceParameterValue -resource $nodetype -name $parameterName
         #$parameterValueObject = get-resourceParameterValueObject -resource $nodetype -name $parameterName
         #$parameterValue = $parameterValueObject.Value
@@ -1393,47 +1428,66 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
     
     write-log "setting $parameterName to $parameterValue for $($nodetype.name)" -foregroundcolor Magenta
 
-    add-parameter -currentConfig $currentConfig `
-        -resource $clusterResource `
-        -name $parameterName `
-        -resourceObject $nodetype `
-        -type $type
+    # add-parameter -currentConfig $currentConfig `
+    #     -resource $clusterResource `
+    #     -name $parameterName `
+    #     -resourceObject $nodetype `
+    #     -type $type
+
+    $vmssResources = get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $nodetype
 
     foreach ($vmssResource in $vmssResources) {
+        write-log "add-parameter -currentConfig $currentConfig `
+            -resource $vmssResource `
+            -name $parameterName `
+            -resourceObject $nodetype `
+            -value $parameterValue `
+            -type $type
+        "
+        add-parameter -currentConfig $currentConfig `
+            -resource $vmssResource `
+            -name $parameterName `
+            -resourceObject $nodetype `
+            -value $parameterValue `
+            -type $type
+
         $extension = get-vmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
-        $parameterizedName = get-parameterizedNameFromValue $extension.properties.settings.nodetyperef
 
-        if ($parameterizedName) {
-            $nodetypeName = get-fromParametersSection $currentConfig -parameterName $parameterizedName
-        }
-        else {
-            $nodetypeName = $extension.properties.settings.nodetyperef
-        }
-
-        if ($nodetypeName -ieq $nodetype.name) {
-            write-log "found scaleset by nodetyperef $nodetypeName" -foregroundcolor Cyan
-            add-parameter -currentConfig $currentConfig `
-                -resource $clusterResource `
-                -name $parameterName `
-                -resourceObject $sfextension.properties.settings `
-                -value $parameterValue `
-                -type $type
-        }
+        write-log "add-parameter -currentConfig $currentConfig `
+            -resource $clusterResource `
+            -name $parameterName `
+            -resourceObject $($extension.properties.settings) `
+            -value $parameterValue `
+            -type $type
+        "
+        add-parameter -currentConfig $currentConfig `
+            -resource $clusterResource `
+            -name $parameterName `
+            -resourceObject $extension.properties.settings `
+            -value $parameterValue `
+            -type $type
     }
 }
 
 function parameterize-nodeTypes($currentConfig) {
     # todo. should validation be here? how many nodetypes
     $clusterResource = get-clusterResource $currentConfig
-    $nodetypes = @($clusterResource.properties.nodetypes)
+    $nodetypes = [collections.arraylist]::new()
+    $nodetypes.AddRange(@($clusterResource.properties.nodetypes))
+
+    if ($nodetypes.Count -lt 1) {
+        write-log "no nodetypes detected!" -isError
+        return
+    }
+
     write-log "current nodetypes $($nodetypes.name)" -ForegroundColor Green
     $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
 
     if ($primarynodetypes.count -eq 0) {
-        write-error "unable to find primary nodetype" -isError
+        write-log "unable to find primary nodetype" -isError
     }
     elseif ($primarynodetypes.count -gt 1) {
-        write-error "more than one primary node type detected!" -isError
+        write-log "more than one primary node type detected!" -isError
     }
     
     foreach ($nodetype in $nodetypes) {
@@ -1444,6 +1498,30 @@ function parameterize-nodeTypes($currentConfig) {
         # existing nodetypes / scalesets should *not* have nodetype.name parameterized
         #parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'name'
     } 
+
+    write-log "adding new nodetype" -foregroundcolor Cyan
+    $newPrimaryNodeType = $primarynodetypes.clone()[0]
+    $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $newPrimaryNodeType)
+
+    if($existingVmssNodeTypeRef.count -lt 1){
+        write-log "unable to find existing nodetypes by nodetyperef" -isError
+        return
+    }
+
+    #$newSecondaryNodeType = $nodetypes.clone()[0]
+    $parameterizedName = get-parameterizedNameFromValue -resourceObject $newPrimaryNodeType.name
+
+    if (!$parameterizedName) {
+        $newNodeTypeExistingName = get-resourceParameterValue -resource $newPrimaryNodeType -name 'name'
+        $parameterizedName = create-parameterizedName -parameterName $newNodeTypeExistingName -resource $existingVmssNodeTypeRef[0]
+        add-toParametersSection -currentConfig $currentConfig -parameterName $parameterizedName -parameterValue $newNodeTypeExistingName
+
+        write-log "parameterizing new nodetype name" -foregroundcolor Cyan
+        parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name' -parameterValue $parameterizedName
+    }
+    
+    $nodetypes.Add($newPrimaryNodeType)
+    $clusterResource.properties.nodetypes = $nodetypes
 }
 
 function remove-duplicateResources($currentConfig) {
@@ -1520,7 +1598,7 @@ function set-resourceParameterValue($resource, $name, $newValue) {
                 return $true
             }
             else {
-                write-error "multiple parameter names found in resource. returning" -isError
+                write-log "multiple parameter names found in resource. returning" -isError
                 return $false
             }
         }
@@ -1619,11 +1697,11 @@ function wait-jobs() {
     write-log "finished jobs"
 }
 
-function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError,[switch]$isWarning, [switch]$verbose) {
+function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError, [switch]$isWarning, [switch]$verbose) {
     if (!$data) { return }
     $stringData = [text.stringbuilder]::new()
     $verboseTag = ''
-    if($verbose){$verboseTag = 'verbose:'}
+    if ($verbose) { $verboseTag = 'verbose:' }
     
     if ($data.GetType().Name -eq "PSRemotingJob") {
         foreach ($job in $data.childjobs) {
@@ -1646,7 +1724,7 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
                 $global:resourceWarnings++
             }
             if ($job.Error) {
-                write-error (@($job.Error.ReadAll()) -join "`r`n") -isError
+                write-log (@($job.Error.ReadAll()) -join "`r`n") -isError
                 $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceErrors++
@@ -1663,10 +1741,10 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
     if ($isError) {
         write-error $stringData
     }
-    elseif($isWarning){
+    elseif ($isWarning) {
         Write-Warning $stringData
     }
-    elseif($verbose){
+    elseif ($verbose) {
         write-verbose $stringData
     }
     else {
