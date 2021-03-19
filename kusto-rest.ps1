@@ -196,7 +196,7 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
         }
     }
     
-    $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "$edition.$packageName\.dll" | select-object FullName)[-1].FullName
+    $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "lib.$edition.$packageName\.dll" | select-object FullName)[-1].FullName
     write-host "identityDll: $($global:identityPackageLocation)" -ForegroundColor Green
     add-type -literalPath $global:identityPackageLocation
     return $true
