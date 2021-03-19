@@ -133,7 +133,6 @@ $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "continue"
 $global:kusto = $null
 $global:identityPackageLocation  
-$global:nuget = "nuget.exe"
 
 if ($updateScript) {
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1" -outFile  "$psscriptroot/kusto-rest.ps1";
@@ -177,7 +176,8 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
             remove-item "$pwd/obj" -re -fo
             remove-item -path $tempProjectFile
         }
-        else {    
+        else {
+            $nuget = "nuget.exe"    
             if (!(test-path $nuget)) {
                 $nuget = "$env:temp/nuget.exe"
                 if (!(test-path $nuget)) {
