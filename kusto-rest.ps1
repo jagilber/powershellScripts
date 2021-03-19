@@ -142,29 +142,58 @@ if ($updateScript) {
 }
 
 function AddIdentityPackageType([string]$packageName, [string] $edition) {
-    [string]$nugetPackageDirectory = "$($env:USERPROFILE)\.nuget\packages"
+    # support ps core on linux
+    if ($IsLinux) { 
+        $env:USERPROFILE = $env:HOME
+    }
+    [string]$nugetPackageDirectory = "$($env:USERPROFILE)/.nuget/packages"
     [string]$nugetSource = "https://api.nuget.org/v3/index.json"
     [string]$nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
     [io.directory]::createDirectory($nugetPackageDirectory)
-    [string]$packageDirectory = "$nugetPackageDirectory\$packageName"
-    $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "lib\\$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
+    [string]$packageDirectory = "$nugetPackageDirectory/$packageName"
+    
+    $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "lib.$edition.$packageName\.dll" | select-object FullName)[-1].FullName
 
     if (!$global:identityPackageLocation) {
-        if (!(test-path $nuget)) {
-            $nuget = "$env:temp\nuget.exe"
-            if (!(test-path $nuget)) {
-                invoke-webRequest $nugetDownloadUrl -outFile  $nuget
-            }
-        }
-        [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
+        if ($psedition -ieq 'core') {
+            $packageVersion = "4.28.0"
+            $tempProjectFile = './temp.csproj'
+    
+            #dotnet new console 
+            $csproj = "<Project Sdk=`"Microsoft.NET.Sdk`">
+                    <PropertyGroup>
+                        <OutputType>Exe</OutputType>
+                        <TargetFramework>$edition</TargetFramework>
+                    </PropertyGroup>
+                    <ItemGroup>
+                        <PackageReference Include=`"$packageName`" Version=`"$packageVersion`" />
+                    </ItemGroup>
+                </Project>
+            "
 
-        if ($force -or !($localPackages -imatch "$edition\\$packageName")) {
-            write-host "$nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed"
-            . $nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed
-            $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
+            out-file -InputObject $csproj -FilePath $tempProjectFile
+            dotnet restore --packages $packageDirectory --no-cache --no-dependencies $tempProjectFile
+    
+            remove-item "$pwd/obj" -re -fo
+            remove-item -path $tempProjectFile
         }
-        else {
-            write-host "$packageName already installed" -ForegroundColor green
+        else {    
+            if (!(test-path $nuget)) {
+                $nuget = "$env:temp/nuget.exe"
+                if (!(test-path $nuget)) {
+                    invoke-webRequest $nugetDownloadUrl -outFile  $nuget
+                }
+            }
+            [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
+
+            if ($force -or !($localPackages -imatch "$edition.$packageName")) {
+                write-host "$nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed"
+                . $nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed
+                $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "$edition.$packageName\.dll" | select-object FullName)[-1].FullName
+            }
+            else {
+                write-host "$packageName already installed" -ForegroundColor green
+            }
         }
     }
     
