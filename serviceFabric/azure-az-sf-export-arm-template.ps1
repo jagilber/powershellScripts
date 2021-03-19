@@ -97,7 +97,7 @@ function main () {
         return
     }
 
-    if(!$resourceGroupName){
+    if (!$resourceGroupName) {
         write-log "resource group name is required." -isError
         return
     }
@@ -229,11 +229,11 @@ function add-parameterNameByResourceType($currentConfig, $type, $name, $metadata
 
         if ($parameterNameValue -ne $null) {
             [void]$parameterNames.Add($parameterName, $parameterNameValue)
-            write-log "add-parameterNameByResourceType parametername added $parameterName : $parameterNameValue"
+            write-log "add-parameterNameByResourceType:parametername added $parameterName : $parameterNameValue"
         }
     }
 
-    write-log "parameter names $parameterNames"
+    write-log "add-parameterNameByResourceType:parameter names $parameterNames"
     foreach ($parameterName in $parameterNames.GetEnumerator()) {
         if (!(get-fromParametersSection -currentConfig $currentConfig -parameterName $parameterName.key)) {
             add-toParametersSection -currentConfig $currentConfig `
@@ -242,6 +242,7 @@ function add-parameterNameByResourceType($currentConfig, $type, $name, $metadata
                 -metadataDescription $metadataDescription
         }
     }
+    write-log "exit:add-parameterNameByResourceType"
 }
 
 function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '') {
@@ -265,6 +266,7 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
                 -metadataDescription $metadataDescription
         }
     }
+    write-log "exit:add-parameter"
 }
 
 function add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = 'string', $metadataDescription = '') {
@@ -284,10 +286,11 @@ function add-toParametersSection ($currentConfig, $parameterName, $parameterValu
     }
 
     $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
+    write-log "exit:add-toParametersSection"
 }
 
 function add-vmssProtectedSettings($vmssResource) {
-    write-log "enter:add-vmssProtectedSettings($vmssResource.name)"
+    write-log "enter:add-vmssProtectedSettings$($vmssResource.name)"
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs
 
     foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
@@ -312,6 +315,7 @@ function add-vmssProtectedSettings($vmssResource) {
             write-log "add-vmssProtectedSettings:added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | create-json)" -ForegroundColor Magenta
         }
     }
+    write-log "exit:add-vmssProtectedSettings"
 }
 
 function check-module() {
@@ -949,6 +953,12 @@ function enum-ipResourceIds($lbResources) {
 }
 
 function enum-kvResourceIds($vmssResources) {
+    <#
+    .DESCRIPTION enumerate keyvault resource ids from vmss resource
+    .PARAMETER vmssResources 
+    .INPUTS vmss resource array
+    .OUTPUTS keyvault id array
+    #>
     write-log "enter:enum-kvResourceIds"
     $resources = [collections.arraylist]::new()
 
@@ -1128,10 +1138,10 @@ function get-fromParametersSection($currentConfig, $parameterName) {
     $results = @($parameters.$parameterName.defaultValue)
     $ErrorActionPreference = $currentErrorPreference
     
-    if(!$results){
+    if (!$results) {
         write-log "get-fromParametersSection:no matching values found in parameters section for $parameterName"
     }
-    if(@($results).count -gt 1){
+    if (@($results).count -gt 1) {
         write-log "get-fromParametersSection:multiple matching values found in parameters section for $parameterName `r`n $($results |create-json)"
     }
 
@@ -1143,7 +1153,7 @@ function get-parameterizedNameFromValue($resourceObject) {
     write-log "enter:get-parameterizedNameFromValue($resourceObject)"
     $retval = $null
     if ([regex]::IsMatch($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase)) {
-        $retval =  [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
+        $retval = [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
     }
 
     write-log "exit:get-parameterizedNameFromValue:returning $retval"
@@ -1575,7 +1585,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
         $extension = get-vmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
 
         write-log "parameterize-nodetype:add-parameter -currentConfig $currentConfig `
-            -resource $clusterResource `
+            -resource $vmssResource `
             -name $parameterName `
             -resourceObject $($extension.properties.settings) `
             -value $parameterValue `
@@ -1583,7 +1593,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
         "
 
         add-parameter -currentConfig $currentConfig `
-            -resource $clusterResource `
+            -resource $vmssResource `
             -name $parameterName `
             -resourceObject $extension.properties.settings `
             -value $parameterValue `
@@ -1627,7 +1637,7 @@ function parameterize-nodeTypes($currentConfig) {
     $newPrimaryNodeType = $primarynodetypes.clone()[0]
     $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $newPrimaryNodeType)
 
-    if($existingVmssNodeTypeRef.count -lt 1){
+    if ($existingVmssNodeTypeRef.count -lt 1) {
         write-log "exit:parameterize-nodetypes:unable to find existing nodetypes by nodetyperef" -isError
         return
     }
