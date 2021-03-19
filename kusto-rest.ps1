@@ -189,7 +189,6 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
             if ($force -or !($localPackages -imatch "$edition.$packageName")) {
                 write-host "$nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed"
                 . $nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed
-                $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "$edition.$packageName\.dll" | select-object FullName)[-1].FullName
             }
             else {
                 write-host "$packageName already installed" -ForegroundColor green
@@ -197,6 +196,7 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
         }
     }
     
+    $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "$edition.$packageName\.dll" | select-object FullName)[-1].FullName
     write-host "identityDll: $($global:identityPackageLocation)" -ForegroundColor Green
     add-type -literalPath $global:identityPackageLocation
     return $true
