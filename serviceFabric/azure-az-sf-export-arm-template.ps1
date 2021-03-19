@@ -270,7 +270,7 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
 }
 
 function add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = 'string', $metadataDescription = '') {
-    write-log "enter:add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = 'string', $metadataDescription = '')"
+    write-log "enter:add-toParametersSection:parameterName:$parameterName, parameterValue:$parameterValue, $type = 'string', $metadataDescription"
     $parameterObject = @{
         type         = $type
         defaultValue = $parameterValue 
@@ -278,15 +278,15 @@ function add-toParametersSection ($currentConfig, $parameterName, $parameterValu
     }
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
-        if (($psObjectProperty.Name -imatch $parameterName)) {
+        if (($psObjectProperty.Name -ieq $parameterName)) {
             $psObjectProperty.Value = $parameterObject
-            write-log "exit:add-toParametersSection parameterObject added:$parameterObject"
+            write-log "exit:add-toParametersSection:parameterObject value added to existing parameter:$parameterObject"
             return
         }
     }
 
     $currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
-    write-log "exit:add-toParametersSection"
+    write-log "exit:add-toParametersSection:new parameter name:$parameterName added"
 }
 
 function add-vmssProtectedSettings($vmssResource) {
@@ -1166,7 +1166,7 @@ function get-resourceParameterValue($resource, $name) {
     foreach ($psObjectProperty in $resource.psobject.Properties) {
         write-log "get-resourceParameterValue:checking parameter name $psobjectProperty" -verbose
 
-        if (($psObjectProperty.Name -imatch $name)) {
+        if (($psObjectProperty.Name -ieq $name)) {
             $parameterValues = @($psObjectProperty.Name)
             if ($parameterValues.Count -eq 1) {
                 $parameterValue = $psObjectProperty.Value
@@ -1197,7 +1197,7 @@ function get-resourceParameterValueObject($resource, $name) {
     foreach ($psObjectProperty in $resource.psobject.Properties) {
         write-log "get-resourceParameterValueObject:checking parameter object $psobjectProperty" -verbose
 
-        if (($psObjectProperty.Name -imatch $name)) {
+        if (($psObjectProperty.Name -ieq $name)) {
             $parameterValues = @($psObjectProperty.Name)
             if ($parameterValues.Count -eq 1) {
                 write-log "get-resourceParameterValueObject:returning parameter object $psobjectProperty" -verbose
@@ -1730,7 +1730,7 @@ function set-resourceParameterValue($resource, $name, $newValue) {
     foreach ($psObjectProperty in $resource.psobject.Properties) {
         write-log "set-resourceParameterValuechecking parameter name $psobjectProperty" -verbose
 
-        if (($psObjectProperty.Name -imatch $name)) {
+        if (($psObjectProperty.Name -ieq $name)) {
             $parameterValues = @($psObjectProperty.Name)
             if ($parameterValues.Count -eq 1) {
                 $parameterValue = $psObjectProperty.Value
