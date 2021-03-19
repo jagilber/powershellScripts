@@ -1171,12 +1171,14 @@ function get-resourceParameterValue($resource, $name) {
             if ($parameterValues.Count -eq 1) {
                 $parameterValue = $psObjectProperty.Value
                 if (!($parameterValue)) {
+                    write-log "exit:get-resourceParameterValue:returning:string::empty"
                     return [string]::Empty
                 }
+                write-log "exit:get-resourceParameterValue:returning:$parameterValue"
                 return $parameterValue
             }
             else {
-                write-log "get-resourceParameterValue:multiple parameter names found in resource. returning" -isError
+                write-log "exit:get-resourceParameterValue:multiple parameter names found in resource. returning" -isError
                 return $null
             }
         }
@@ -1188,7 +1190,7 @@ function get-resourceParameterValue($resource, $name) {
         }
     }
 
-    write-log "get-resourceParameterValue: returning $retval" -verbose
+    write-log "exit:get-resourceParameterValue:returning:$retval"
     return $retval
 }
 function get-resourceParameterValueObject($resource, $name) {
@@ -1517,6 +1519,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
                 [void]$dependsOn.Add($depends)
             }
         }
+
         $vmssResource.dependsOn = $dependsOn.ToArray()
         write-log "modify-vmssResourcesReDeploy:vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
             
@@ -1532,46 +1535,43 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
             write-log "modify-vmssResourcesReDeploy:adding admin password"
             $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value $adminPassword
+            
             add-parameter -currentConfig $currentConfig `
                 -resource $vmssResource `
                 -name 'adminPassword' `
                 -resourceObject $vmssResource.properties.virtualMachineProfile.osProfile `
                 -metadataDescription 'password must be set before deploying template.'
-            $parameterizedName = create-parameterizedName -parameterName 'adminPassword' -resource $vmssResource -withbrackets
-            # add-outputs -currentConfig $currentConfig -name 'adminPassword' -value $parameterizedName -type 'string'
         }
     }
     write-log "exit:modify-vmssResourcesReDeploy"
 }
 
 function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string') {
-    write-log "enter:parameterize-nodetype:parameterName:$parameterName,parameterValue:$parameterValue,type:$type)"
-    $clusterResource = get-clusterResource $currentConfig
-    #$vmssResources = get-vmssResources $currentConfig
-    
+    write-log "enter:parameterize-nodetype:parameterName:$parameterName,parameterValue:$parameterValue,type:$type"
+    $vmssResources = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $nodetype)
+    $parameterizedName = $null
+
     if (!$parameterValue) {
         $parameterValue = get-resourceParameterValue -resource $nodetype -name $parameterName
-        #$parameterValueObject = get-resourceParameterValueObject -resource $nodetype -name $parameterName
-        #$parameterValue = $parameterValueObject.Value
-        #$type = $parameterValueObject.TypeNameOfValue
     }
-    
-    write-log "parameterize-nodetype:setting $parameterName to $parameterValue for $($nodetype.name)" -foregroundcolor Magenta
-
-    # add-parameter -currentConfig $currentConfig `
-    #     -resource $clusterResource `
-    #     -name $parameterName `
-    #     -resourceObject $nodetype `
-    #     -type $type
-
-    $vmssResources = get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $nodetype
-
     foreach ($vmssResource in $vmssResources) {
+        $parametersName = create-parametersName -resource $vmssResource -name $parameterName
+
+        $parameterizedName = get-parameterizedNameFromValue -resourceObject (get-resourceParameterValue -resource $nodetype -name $parameterName)
+        if (!$parameterizedName) {
+            #$newNodeTypeExistingName = get-resourceParameterValue -resource $nodeType -name 'name'
+
+            $parameterizedName = create-parameterizedName -resource $vmssResource -parameterName $parameterName
+        }
+
+        add-toParametersSection -currentConfig $currentConfig -parameterName $parametersName -parameterValue $parameterValue -type $type
+        write-log "parameterize-nodetype:setting $parametersName to $parameterValue for $($nodetype.name)" -foregroundcolor Magenta
+
         write-log "parameterize-nodetype:add-parameter -currentConfig $currentConfig `
             -resource $vmssResource `
             -name $parameterName `
             -resourceObject $nodetype `
-            -value $parameterValue `
+            -value $parameterizedName `
             -type $type
         "
 
@@ -1579,7 +1579,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
             -resource $vmssResource `
             -name $parameterName `
             -resourceObject $nodetype `
-            -value $parameterValue `
+            -value $parameterizedName `
             -type $type
 
         $extension = get-vmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
@@ -1588,7 +1588,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
             -resource $vmssResource `
             -name $parameterName `
             -resourceObject $($extension.properties.settings) `
-            -value $parameterValue `
+            -value $parameterizedName `
             -type $type
         "
 
@@ -1596,7 +1596,7 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
             -resource $vmssResource `
             -name $parameterName `
             -resourceObject $extension.properties.settings `
-            -value $parameterValue `
+            -value $parameterizedName `
             -type $type
     }
     write-log "exit:parameterize-nodetype"
@@ -1624,17 +1624,8 @@ function parameterize-nodeTypes($currentConfig) {
         write-log "parameterize-nodetypes:more than one primary node type detected!" -isError
     }
     
-    foreach ($nodetype in $nodetypes) {
-        parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'durabilityLevel'
-        parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'isPrimary' -type 'bool'
-        # todo parameterize name? only the new nodetype name should be parameterized
-        # this will be a copy of existing nodetype that will be used with new associated scaleset by nodetyperef
-        # existing nodetypes / scalesets should *not* have nodetype.name parameterized
-        #parameterize-nodetype -currentConfig $currentConfig -nodetype $nodetype -parameterName 'name'
-    } 
-
     write-log "parameterize-nodetypes:adding new nodetype" -foregroundcolor Cyan
-    $newPrimaryNodeType = $primarynodetypes.clone()[0]
+    $newPrimaryNodeType = $primarynodetypes[0].psobject.copy()
     $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $newPrimaryNodeType)
 
     if ($existingVmssNodeTypeRef.count -lt 1) {
@@ -1642,22 +1633,19 @@ function parameterize-nodeTypes($currentConfig) {
         return
     }
 
-    #$newSecondaryNodeType = $nodetypes.clone()[0]
-    $parameterizedName = get-parameterizedNameFromValue -resourceObject $newPrimaryNodeType.name
+    write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
+####    $instanceCount = get-resourceParameterValue
+####    add-parameter -currentConfig $currentConfig -resource $newPrimaryNodeType -name 'capacity' -aliasname 'vmInstanceCount' -resourceObject $existingVmssNodeTypeRef[0].sku -type 'int'
 
-    if (!$parameterizedName) {
-        $newNodeTypeExistingName = get-resourceParameterValue -resource $newPrimaryNodeType -name 'name'
-        $parameterName = create-parametersName -resource $existingVmssNodeTypeRef[0] -name 'name'
-        $parameterizedName = create-parameterizedName -parameterName 'name' -resource $existingVmssNodeTypeRef[0]
-        add-toParametersSection -currentConfig $currentConfig -parameterName $parameterName -parameterValue $newNodeTypeExistingName
-
-        write-log "parameterize-nodetypes:parameterizing new nodetype name" -foregroundcolor Cyan
-        parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name' -parameterValue $parameterizedName
-    }
+    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
+    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool'
+    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'vmInstanceCount' -type 'int'
+    # todo: currently name has to be parameterized last
+    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name'
     
     $nodetypes.Add($newPrimaryNodeType)
     $clusterResource.properties.nodetypes = $nodetypes
-    write-log "exit:parameterize-nodetypes"
+    write-log "exit:parameterize-nodetypes:result:`r`n$($nodetypes | create-json)"
 }
 
 function remove-duplicateResources($currentConfig) {
@@ -1670,6 +1658,7 @@ function remove-duplicateResources($currentConfig) {
     foreach ($resource in $currentConfig.resources.GetEnumerator()) {
         write-log "remove-duplicateResources:checking exported resource $($resource.name)" -ForegroundColor Magenta
         write-log "remove-duplicateResources:checking exported resource $($resource | create-json)" -verbose
+        
         if ($resourceTypes.Contains($resource.type)) {
             write-log "remove-duplicateResources:adding exported resource $($resource.name)" -ForegroundColor Cyan
             write-log "remove-duplicateResources:adding exported resource $($resource | create-json)" -verbose
