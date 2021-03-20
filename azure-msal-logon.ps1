@@ -3,8 +3,7 @@
     powershell script to download and import microsoft.identity.client.dll for aad logon
 
 .LINK
-    iwr "https://aka.ms/azure-msal-logon.ps1" | iex
-    $msal.logon
+    iwr "https://aka.ms/azure-msal-logon.ps1" | iex; $msal.logon
 
 .DESCRIPTION  
     powershell script to download and import microsoft.identity.client.dll for aad logon
