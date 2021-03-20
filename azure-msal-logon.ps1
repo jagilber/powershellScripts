@@ -1,6 +1,27 @@
 <#
-https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent#accessing-v10-resources
+.SYNOPSIS
+    powershell script to download and import microsoft.identity.client.dll and logon
+
+.LINK
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-msal-logon.ps1" -outFile "$pwd\azure-msal-logon.ps1";
+    .\azure-msal-logon.ps1
+
+.DESCRIPTION  
+    powershell script to download and import microsoft.identity.client.dll and logon
+
+.NOTES  
+    File Name  : azure-msal-logon.ps1
+    Author     : jagilber
+    Version    : 210320
+    History    : 
+
+    https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent#accessing-v10-resources
+
+.EXAMPLE 
+    .\azure-msal-logon.ps1
+
 #>
+
 [cmdletbinding()]
 param(
     [string]$identityPackageLocation,
@@ -103,10 +124,7 @@ class MsalLogon {
     hidden [string]$clientSecret = $clientSecret
     [bool]$Force = $force
     hidden [Microsoft.Identity.Client.PublicClientApplication] $publicClientApplication = $null
-    [bool]$PipeLine = $null
     [string]$redirectUri = $redirectUri
-    [object]$Result = $null
-    [object]$ResultObject = $null
     [string]$tenantId = $tenantId
     [string]$token = $token
         
