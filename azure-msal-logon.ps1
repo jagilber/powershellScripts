@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    powershell script to download and import microsoft.identity.client.dll and logon
+    powershell script to download and import microsoft.identity.client.dll for aad logon
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-msal-logon.ps1" -outFile "$pwd\azure-msal-logon.ps1";
-    .\azure-msal-logon.ps1
+    iwr "https://aka.ms/azure-msal-logon.ps1" | iex
+    $msal.logon
 
 .DESCRIPTION  
-    powershell script to download and import microsoft.identity.client.dll and logon
+    powershell script to download and import microsoft.identity.client.dll for aad logon
 
 .NOTES  
     File Name  : azure-msal-logon.ps1
@@ -18,8 +18,13 @@
     https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent#accessing-v10-resources
 
 .EXAMPLE 
-    .\azure-msal-logon.ps1
+    .\azure-msal-logon.ps1;$msal.logon()
 
+.EXAMPLE 
+    .\azure-msal-logon.ps1;$msal.logon($resourceUri)
+
+.EXAMPLE 
+    .\azure-msal-logon.ps1;$msal.logon($resourceUri, $scopes)
 #>
 
 [cmdletbinding()]
@@ -143,11 +148,6 @@ class MsalLogon {
         [int]$expirationRefreshMinutes = 15
         [int]$expirationMinutes = 0
 
-        # if (!$resourceUrl) {
-        #     write-warning "-resourceUrl required. example: https://{{ kusto cluster }}.kusto.windows.net"
-        #     return $false
-        # }
-
         if ($this.authenticationResult) {
             $expirationMinutes = $this.authenticationResult.ExpiresOn.Subtract((get-date)).TotalMinutes
         }
@@ -157,10 +157,7 @@ class MsalLogon {
             write-verbose "token valid: $($this.authenticationResult.ExpiresOn). use -force to force logon"
             return $true
         }
-        return $this.LogonMsal($resourceUrl, $scopes)
-    }
 
-    hidden [bool] LogonMsal([string]$resourceUrl, [string[]]$scopes) {
         try {
             $error.Clear()
             [string[]]$defaultScope = @(".default")
@@ -286,5 +283,6 @@ if ($error) {
 }
 else {
     write-host ($msal | Get-Member | out-string)
+    write-host "to logon, use `$msal.logon" -ForegroundColor Green
     write-host "use `$msal object to get authentication results" -ForegroundColor Green
 }
