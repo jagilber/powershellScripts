@@ -109,11 +109,11 @@ function get-identityPackageLocation($packageDirectory) {
     $pv = [version]::new($pv.Major, $pv.Minor)
 
     $versions = @{} 
-    $files = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "lib.$edition.$packageName\.dll" | select-object FullName).FullName
+    $files = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "lib.$edition.$packageName\.dll")
     write-host "existing identity dlls $($files|out-string)"
 
-    foreach ($file in $files) {
-        $versionString = [regex]::match($file, "\\$packageName\\([0-9.]+?)\\lib\\$edition", [text.regularexpressions.regexoptions]::IgnoreCase).Groups[1].Value
+    foreach ($file in @($files.fullname)) {
+        $versionString = [regex]::match($file, ".$packageName.([0-9.]+?).lib.$edition", [text.regularexpressions.regexoptions]::IgnoreCase).Groups[1].Value
         if (!$versionString) { continue }
 
         $version = [version]::new($versionString)
