@@ -6,7 +6,7 @@
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd/azure-az-sf-export-arm-template.ps1";
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
+    ./azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
 
 .DESCRIPTION  
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
@@ -25,7 +25,7 @@
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 210322
+    Version    : 210322.1
     History    : 
 
 .EXAMPLE 
@@ -1523,10 +1523,10 @@ function modify-vmssResourcesRedeploy($currenConfig) {
         write-log "modify-vmssResourcesReDeploy:vmssResource modified dependson: $($vmssResource.dependson | create-json)" -ForegroundColor Yellow
             
         write-log "modify-vmssResourcesReDeploy:parameterizing hardware sku"
-        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResources.sku
+        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResource.sku
             
         write-log "modify-vmssResourcesReDeploy:parameterizing hardware capacity"
-        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResources.sku -type 'int'
+        add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'capacity' -resourceObject $vmssResource.sku -type 'int'
 
         write-log "modify-vmssResourcesReDeploy:parameterizing os sku"
         add-parameter -currentConfig $currentConfig -resource $vmssResource -name 'sku' -aliasName 'osSku' -resourceObject $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference
@@ -1713,7 +1713,7 @@ function remove-unusedParameters($currentConfig) {
 }
 
 function set-resourceParameterValue($resource, $name, $newValue) {
-    write-log "enter:set-resourceParameterValue:name:$name,newValue:$newValue"
+    write-log "enter:set-resourceParameterValue:resource:$($resource|convertto-json) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
     $retval = $false
     foreach ($psObjectProperty in $resource.psobject.Properties) {
         write-log "set-resourceParameterValuechecking parameter name $psobjectProperty" -verbose
@@ -1721,18 +1721,21 @@ function set-resourceParameterValue($resource, $name, $newValue) {
         if (($psObjectProperty.Name -ieq $name)) {
             $parameterValues = @($psObjectProperty.Name)
             if ($parameterValues.Count -eq 1) {
-                $parameterValue = $psObjectProperty.Value
                 $psObjectProperty.Value = $newValue
-                write-log "exit:set-resourceParameterValue:returning:true"
-                return $true
+                $retval = $true
+                break
             }
             else {
                 write-log "set-resourceParameterValue:multiple parameter names found in resource. returning" -isError
-                return $false
+                $retval = $false
+                break
             }
         }
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
             $retval = set-resourceParameterValue -resource $psObjectProperty.Value -name $name -newValue $newValue
+        }
+        else{
+            write-log "set-resourceParameterValue:skipping type:$($psObjectProperty.TypeNameOfValue)" -verbose
         }
     }
 
