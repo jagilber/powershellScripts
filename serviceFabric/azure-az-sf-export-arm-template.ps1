@@ -5,7 +5,7 @@
     >help .\azure-az-sf-export-arm-template.ps1 -full
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd\azure-az-sf-export-arm-template.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd/azure-az-sf-export-arm-template.ps1";
     .\azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
 
 .DESCRIPTION  
@@ -25,7 +25,7 @@
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 210316
+    Version    : 210322
     History    : 
 
 .EXAMPLE 
@@ -458,7 +458,7 @@ function create-json(
     $WarningPreference = 'SilentlyContinue'
     
     # to fix \u0027 single quote issue
-    $result = $inputObject | convertto-json -depth $depth | foreach-object { [regex]::unescape($_) }
+    $result = $inputObject | convertto-json -depth $depth | foreach-object { $_.replace("\u0027","'"); } #{ [regex]::unescape($_); }
     $WarningPreference = $currentWarningPreference
 
     return $result
