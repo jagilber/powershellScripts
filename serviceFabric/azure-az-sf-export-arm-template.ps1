@@ -457,7 +457,7 @@ function create-json(
     $WarningPreference = 'SilentlyContinue'
     
     # to fix \u0027 single quote issue
-    $result = $inputObject | convertto-json -depth $depth | foreach-object { $_.replace("\u0027","'"); } #{ [regex]::unescape($_); }
+    $result = $inputObject | convertto-json -depth $depth | foreach-object { $_.replace("\u0027", "'"); } #{ [regex]::unescape($_); }
     $WarningPreference = $currentWarningPreference
 
     return $result
@@ -1160,10 +1160,10 @@ function get-parameterizedNameFromValue($resourceObject) {
 }
 
 function get-resourceParameterValue($resource, $name) {
-    write-log "enter:get-resourceParameterValue:name: $name"
+    write-log "enter:get-resourceParameterValue:resource:$($resource|create-json) name:$name"
     $retval = $null
     foreach ($psObjectProperty in $resource.psobject.Properties) {
-        write-log "get-resourceParameterValue:checking parameter name $psobjectProperty" -verbose
+        write-log "get-resourceParameterValue:checking parameter name:$psobjectProperty" -verbose
 
         if (($psObjectProperty.Name -ieq $name)) {
             $parameterValues = @($psObjectProperty.Name)
@@ -1546,7 +1546,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
 }
 
 function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string') {
-    write-log "enter:parameterize-nodetype:parameterName:$parameterName,parameterValue:$parameterValue,type:$type"
+    write-log "enter:parameterize-nodetype:nodetype:$($nodetype |create-json) parameterName:$parameterName parameterValue:$parameterValue type:$type"
     $vmssResources = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $nodetype)
     $parameterizedName = $null
 
@@ -1558,8 +1558,6 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
 
         $parameterizedName = get-parameterizedNameFromValue -resourceObject (get-resourceParameterValue -resource $nodetype -name $parameterName)
         if (!$parameterizedName) {
-            #$newNodeTypeExistingName = get-resourceParameterValue -resource $nodeType -name 'name'
-
             $parameterizedName = create-parameterizedName -resource $vmssResource -parameterName $parameterName
         }
 
@@ -1582,14 +1580,14 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
             -type $type
 
         $extension = get-vmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
-
+            
         write-log "parameterize-nodetype:add-parameter -currentConfig $currentConfig `
-            -resource $vmssResource `
-            -name $parameterName `
-            -resourceObject $($extension.properties.settings) `
-            -value $parameterizedName `
-            -type $type
-        "
+                -resource $vmssResource `
+                -name $parameterName `
+                -resourceObject $($extension.properties.settings) `
+                -value $parameterizedName `
+                -type $type
+            "
 
         add-parameter -currentConfig $currentConfig `
             -resource $vmssResource `
@@ -1633,8 +1631,8 @@ function parameterize-nodeTypes($currentConfig) {
     }
 
     write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
-####    $instanceCount = get-resourceParameterValue
-####    add-parameter -currentConfig $currentConfig -resource $newPrimaryNodeType -name 'capacity' -aliasname 'vmInstanceCount' -resourceObject $existingVmssNodeTypeRef[0].sku -type 'int'
+    ####    $instanceCount = get-resourceParameterValue
+    ####    add-parameter -currentConfig $currentConfig -resource $newPrimaryNodeType -name 'capacity' -aliasname 'vmInstanceCount' -resourceObject $existingVmssNodeTypeRef[0].sku -type 'int'
 
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool'
@@ -1713,7 +1711,7 @@ function remove-unusedParameters($currentConfig) {
 }
 
 function set-resourceParameterValue($resource, $name, $newValue) {
-    write-log "enter:set-resourceParameterValue:resource:$($resource|convertto-json) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
+    write-log "enter:set-resourceParameterValue:resource:$($resource|create-json) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
     $retval = $false
     foreach ($psObjectProperty in $resource.psobject.Properties) {
         write-log "set-resourceParameterValuechecking parameter name $psobjectProperty" -verbose
@@ -1734,7 +1732,7 @@ function set-resourceParameterValue($resource, $name, $newValue) {
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
             $retval = set-resourceParameterValue -resource $psObjectProperty.Value -name $name -newValue $newValue
         }
-        else{
+        else {
             write-log "set-resourceParameterValue:skipping type:$($psObjectProperty.TypeNameOfValue)" -verbose
         }
     }
