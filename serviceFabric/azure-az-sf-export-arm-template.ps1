@@ -161,8 +161,7 @@ function main () {
         if ($compress) {
             $zipFile = "$templatePath.zip"
             compress-archive $templatePath $zipFile -Force
-            # only works in ps5.6
-            set-clipboard -path $zipFile 
+            write-log "zip file located here:$zipFile" -ForegroundColor Cyan
         }
 
         $global:resourceTemplateObj = $currentConfig
