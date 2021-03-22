@@ -1640,7 +1640,7 @@ function parameterize-nodeTypes($currentConfig) {
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool'
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'vmInstanceCount' -type 'int'
-    # todo: currently name has to be parameterized last
+    # todo: currently name has to be parameterized last so parameter names above can be found
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name'
     
     $nodetypes.Add($newPrimaryNodeType)
