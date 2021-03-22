@@ -68,6 +68,9 @@ $schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTempl
 $parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
 $updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
 
+$global:errors = [collections.arraylist]::new()
+$global:warnings = [collections.arraylist]::new()
+$global:functionDepth = 0
 $global:templateJsonFile = "$templatePath/template.json"
 $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
@@ -187,6 +190,17 @@ function main () {
 
     write-log "deployment:`r`n$($deployment | format-list * | out-string)"
     Write-Progress -Completed -Activity "complete"
+
+    if($global:warnings){
+        write-log "global warnings:" -foregroundcolor Yellow
+        write-log ($global:warnings|create-json) -isWarning
+    }
+
+    if($global:errors){
+        write-log "global errors:" -foregroundcolor Red
+        write-log ($global:errors|create-json) -isError
+    }
+
     write-log "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-log 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
     if ($logFile) {
@@ -213,6 +227,7 @@ function add-outputs($currentConfig, $name, $value, $type = 'string') {
     else {
         $currentConfig.outputs.add($name, $outputItem)
     }
+    write-log "exit:add-outputs:added"
 }
 
 function add-parameterNameByResourceType($currentConfig, $type, $name, $metadataDescription = '') {
@@ -752,6 +767,7 @@ function export-template($configuredResources, $jsonFile) {
         -IncludeParameterDefaultValue `
         -Resource $resourceIds
     
+    write-log "exit:export-template:template exported to $jsonFile" -ForegroundColor Yellow
     return
 
     # todo cleanup if not implementing latest api
@@ -1056,6 +1072,7 @@ function enum-vmssResources($clusterResource) {
     write-log "enum-vmssResources:cluster id $clusterEndpoint" -ForegroundColor Green
     
     if (!$nodeTypes -or !$clusterEndpoint) {
+        write-log "exit:enum-vmssResources:nodetypes:$nodeTypes clusterEndpoint:$clusterEndpoint" -isError
         return $null
     }
 
@@ -1063,7 +1080,7 @@ function enum-vmssResources($clusterResource) {
             -ResourceType 'Microsoft.Compute/virtualMachineScaleSets' `
             -ExpandProperties)
 
-    write-log "vmss resources $resources" -verbose
+    write-log "enum-vmssResources:vmss resources $resources" -verbose
 
     foreach ($resource in $resources) {
         $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
@@ -1219,7 +1236,7 @@ function get-resourceParameterValueObject($resource, $name) {
         }
     }
 
-    write-log "get-resourceParameterValueObject: returning $retval" -verbose
+    write-log "exit:get-resourceParameterValueObject: returning $retval"
     return $retval
 }
 
@@ -1832,14 +1849,23 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
         }
     }
     else {
-        $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$verboseTag$($data | format-list * | out-string)").trim()
+        if($data.startswith('enter:')){
+            $global:functionDepth++
+        }
+        elseif($data.startswith('exit:')){
+            $global:functionDepth--
+        }
+
+        $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$([string]::empty.PadLeft($global:functionDepth,'|'))$verboseTag$($data | format-list * | out-string)").trim()
     }
 
     if ($isError) {
         write-error $stringData
+        $global:errors.add($stringData)
     }
     elseif ($isWarning) {
         Write-Warning $stringData
+        $global:warnings.add($stringData)
     }
     elseif ($verbose) {
         write-verbose $stringData
