@@ -8,6 +8,7 @@ this script will setup Microsoft.IdentityModel.Clients Msal for use with powersh
 KustoObj will be created as $global:kusto to hold properties and run methods from
 
 use the following to save and pass arguments:
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1" -outFile "$pwd/kusto-rest.ps1";
 .\kusto-rest.ps1 -cluster %kusto cluster% -database %kusto database%
 

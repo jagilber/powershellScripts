@@ -55,3 +55,7 @@ GET {{id}}?q={{QUERY}}&skip={{SKIP}}&take={{TAKE}}&prerelease={{PRERELEASE}}
 
 ###
 GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/latest
+
+###
+GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powershell/arm-dsc-extension-settings/
+###

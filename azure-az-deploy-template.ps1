@@ -12,6 +12,7 @@
    version    : 200924 fix for serialization bug in cmdlet
 
 .LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-deploy-template.ps1 -outFile $pwd\azure-az-deploy-template.ps1
 
 .EXAMPLE
