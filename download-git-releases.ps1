@@ -4,6 +4,7 @@ downloads a release from git
 
 .LINK
 to run with no arguments:
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:

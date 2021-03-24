@@ -10,6 +10,7 @@ creates $nuget ps object with functions an properties to manage nuget packages
 # -allversions is broken in nuget.exe
 
 .EXAMPLE
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/scripts/nuget-functions.ps1" -outFile "$pwd/nuget-functions.ps1";
 .\nuget-functions.ps1;
 $nuget
