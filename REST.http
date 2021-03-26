@@ -1,3 +1,4 @@
+
 # vscode rest client extension http file
 # see https://github.com/Huachao/vscode-restclient
 # use ### to separate requests
@@ -59,3 +60,23 @@ GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/lat
 ###
 GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powershell/arm-dsc-extension-settings/
 ###
+
+
+###
+@cluster = sfjagilber1nt3
+@location = eastus
+@apiversion = 6.4
+@managementPort = 19080
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/$/BackupRestore/BackupPolicies?api-version={{apiversion}}
+
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/Applications/?api-version={{apiversion}}
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/$/GetClusterManifest?api-version={{apiversion}}
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/$/GetClusterHealth?api-version={{apiversion}}
+GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explorer
+###
+
+###
+@storageAccountName = sflogsbmnjfzoagi7jc2
+@tableSasToken = ?sv=2020-02-10&ss=bfqt&srt=sco&sp=rwdlacupx&se=2021-03-25T10:16:34Z&st=2021-03-25T02:16:34Z&spr=https&sig=DEIyaWBlIKe0Nru1ubEbb6u5t787LwoqQ5UVWgxMoJQ%3D
+@storageObjectToQuery = fabriclog8de7b13a4137454a9ad5a356fa0c3159Api
+https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
