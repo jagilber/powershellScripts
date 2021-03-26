@@ -39,7 +39,6 @@
 .EXAMPLE 
     .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
     export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file .\template.export.json
-
 #>
 
 [cmdletbinding()]
@@ -49,26 +48,15 @@ param (
     [string]$templatePath = "$psscriptroot/templates-$resourceGroupName", # for cloudshell
     [string]$useExportedJsonFile = '',
     [string]$adminPassword = '', #'GEN_PASSWORD',
+    [string[]]$resourceNames = '',
+    [string[]]$excludeResourceNames = '',
     [switch]$detail,
     [string]$logFile = "$templatePath/azure-az-sf-export-arm-template.log",
     [switch]$compress,
     [switch]$updateScript
 )
 
-# todo unused params need cleanup
-[string[]]$resourceNames = ''
-[string[]]$excludeResourceNames = ''
-[bool]$patch = $false # [switch]
-[string]$templateParameterFile = ''
-[string]$apiVersion = '' 
-[int]$sleepSeconds = 1 
-#[ValidateSet('Incremental', 'Complete')]
-[string]$mode = 'Incremental'
-[bool]$useLatestApiVersion = $false # [swtich]
-# end todo unused params need cleanup
-
 set-strictMode -Version 3.0
-$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
 $parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
 $updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
 
@@ -90,7 +78,6 @@ $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
-$debugLevel = 'none'
 
 function main () {
     if (!(test-path $templatePath)) {
@@ -153,33 +140,26 @@ function main () {
 
     $deploymentName = "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
-    if ($patch) {
-        #remove-jobs
-        #if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
-        #wait-jobs
+    $currentConfig = create-exportTemplate
+    create-currentTemplate $currentConfig
+    create-redeployTemplate $currentConfig
+    create-addNodeTypeTemplate $currentConfig
+    create-newTemplate $currentConfig
+
+    if ($compress) {
+        $zipFile = "$templatePath.zip"
+        compress-archive $templatePath $zipFile -Force
+        write-log "zip file located here:$zipFile" -ForegroundColor Cyan
     }
-    else {
-        $currentConfig = create-exportTemplate
-        create-currentTemplate $currentConfig
-        create-redeployTemplate $currentConfig
-        create-addNodeTypeTemplate $currentConfig
-        create-newTemplate $currentConfig
 
-        if ($compress) {
-            $zipFile = "$templatePath.zip"
-            compress-archive $templatePath $zipFile -Force
-            write-log "zip file located here:$zipFile" -ForegroundColor Cyan
-        }
+    $global:resourceTemplateObj = $currentConfig
+    $error.clear()
 
-        $global:resourceTemplateObj = $currentConfig
-        $error.clear()
-
-        write-host "finished. files stored in $templatePath" -ForegroundColor Green
-        code $templatePath # for cloudshell and local
+    write-host "finished. files stored in $templatePath" -ForegroundColor Green
+    code $templatePath # for cloudshell and local
         
-        if ($error) {
-            . $templateJsonFile.Replace(".json", ".current.json")
-        }
+    if ($error) {
+        . $templateJsonFile.Replace(".json", ".current.json")
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
@@ -213,7 +193,7 @@ function main () {
 }
 
 function add-outputs($currentConfig, [string]$name, [string]$value, [string]$type = 'string') {
-<#
+    <#
 .SYNOPSIS
     add element to outputs section of template
     outputs: null
@@ -242,7 +222,7 @@ function add-outputs($currentConfig, [string]$name, [string]$value, [string]$typ
 }
 
 function add-parameterNameByResourceType($currentConfig, [string]$type, [string]$name, [string]$metadataDescription = '') {
-<#
+    <#
 .SYNOPSIS
     add parameter name by resource type
     outputs: null
@@ -278,7 +258,7 @@ function add-parameterNameByResourceType($currentConfig, [string]$type, [string]
 }
 
 function add-parameter($currentConfig, [object]$resource, [string]$name, [string]$aliasName = $name, [object]$resourceObject = $resource, [object]$value = $null, [string]$type = 'string', [string]$metadataDescription = '') {
-<#
+    <#
 .SYNOPSIS
     add a new parameter based on $resource $name/$aliasName $resourceObject
     outputs: null
@@ -309,7 +289,7 @@ function add-parameter($currentConfig, [object]$resource, [string]$name, [string
 }
 
 function add-toParametersSection ($currentConfig, [string]$parameterName, [string]$parameterValue, [string]$type = 'string', [string]$metadataDescription = '') {
-<#
+    <#
 .SYNOPSIS
     add a new parameter based on $parameterName and $parameterValue to parameters Setion
     outputs: null
@@ -336,7 +316,7 @@ function add-toParametersSection ($currentConfig, [string]$parameterName, [strin
 }
 
 function add-vmssProtectedSettings([object]$vmssResource) {
-<#
+    <#
 .SYNOPSIS
     add wellknown protectedSettings section to vmss resource for storageAccounts
     outputs: null
@@ -372,7 +352,7 @@ function add-vmssProtectedSettings([object]$vmssResource) {
 }
 
 function check-module() {
-<#
+    <#
 .SYNOPSIS
     checks for proper azure az modules
     outputs: bool
@@ -413,7 +393,7 @@ function check-module() {
 }
 
 function create-addNodeTypeTemplate($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     creates new addnodetype template with modifications based on redeploy template
     outputs: null
@@ -457,7 +437,7 @@ function create-addNodeTypeTemplate($currentConfig) {
 }
 
 function create-currentTemplate($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     creates new current template with modifications based on raw export template
     outputs: null
@@ -492,7 +472,7 @@ function create-currentTemplate($currentConfig) {
 }
 
 function create-exportTemplate() {
-<#
+    <#
 .SYNOPSIS
     creates new export template from resource group
     outputs: null
@@ -534,7 +514,7 @@ function create-json(
     [object]$inputObject,
     [int]$depth = 99
 ) {
-<#
+    <#
 .SYNOPSIS
     creates json string compatible with ps 5.6 - 7.x '\u0027' issue
     inputs: object
@@ -555,7 +535,7 @@ function create-json(
 }
 
 function create-newTemplate($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     creates new new template from based on addnodetype template
     outputs: null
@@ -597,7 +577,7 @@ function create-parameterFile($currentConfig, [string]$parameterFileName, [strin
         '$schema'      = $parametersSchema
         contentVersion = "1.0.0.0"
     } 
-<#
+    <#
 .SYNOPSIS
     creates new template parameters files based on $currentConfig
     outputs: null
@@ -636,7 +616,7 @@ function create-parameterFile($currentConfig, [string]$parameterFileName, [strin
 }
 
 function create-parameterizedName([string]$parameterName, [object]$resource, [switch]$withbrackets) {
-<#
+    <#
 .SYNOPSIS
     creates parameterized name for variables, resources, and outputs section based on $paramterName and $resource
     outputs: string
@@ -651,7 +631,7 @@ function create-parameterizedName([string]$parameterName, [object]$resource, [sw
 }
 
 function create-parametersName([object]$resource, [string]$name = 'name') {
-<#
+    <#
 .SYNOPSIS
     creates parameter name for parameters, variables, resources, and outputs section based on $resource and $name
     outputs: string
@@ -679,7 +659,7 @@ function create-parametersName([object]$resource, [string]$name = 'name') {
 }
 
 function create-redeployTemplate($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     creates new redeploy template from current template
     outputs: null
@@ -715,7 +695,7 @@ function create-redeployTemplate($currentConfig) {
 }
 
 function display-settings([object[]]$resources) {
-<#
+    <#
 .SYNOPSIS
     displays current resource settings
     outputs: null
@@ -730,7 +710,7 @@ function display-settings([object[]]$resources) {
 }
 
 function export-template($configuredResources, $jsonFile) {
-<#
+    <#
 .SYNOPSIS
     exports raw teamplate from azure using export-azresourcegroup cmdlet
     outputs: null
@@ -765,7 +745,7 @@ function export-template($configuredResources, $jsonFile) {
 }
 
 function enum-allResources() {
-<#
+    <#
 .SYNOPSIS
     enumerate all resources in resource group
     outputs: object[]
@@ -859,7 +839,7 @@ function enum-allResources() {
 }
 
 function enum-clusterResource() {
-<#
+    <#
 .SYNOPSIS
     enumerate cluster resource using get-azresource.
     will prompt if multiple cluster resources found.
@@ -905,7 +885,7 @@ function enum-clusterResource() {
 }
 
 function enum-ipResourceIds([object[]]$lbResources) {
-<#
+    <#
 .SYNOPSIS
     enumerate ip resource id's from lb resources
     outputs: string[]
@@ -933,7 +913,7 @@ function enum-ipResourceIds([object[]]$lbResources) {
 }
 
 function enum-kvResourceIds([object[]]$vmssResources) {
-<#
+    <#
 .SYNOPSIS
     enumerate keyvault resource id's from vmss resources
     outputs: string[]
@@ -957,7 +937,7 @@ function enum-kvResourceIds([object[]]$vmssResources) {
 }
 
 function enum-lbResourceIds([object[]]$vmssResources) {
-<#
+    <#
 .SYNOPSIS
     enumerate loadbalancer resource id's from vmss resources
     outputs: string[]
@@ -985,7 +965,7 @@ function enum-lbResourceIds([object[]]$vmssResources) {
 }
 
 function enum-nsgResourceIds([object[]]$vmssResources) {
-<#
+    <#
 .SYNOPSIS
     enumerate network security group resource id's from vmss resources
     outputs: string[]
@@ -1014,7 +994,7 @@ function enum-nsgResourceIds([object[]]$vmssResources) {
 }
 
 function enum-storageResources([object]$clusterResource) {
-<#
+    <#
 .SYNOPSIS
     enumerate storage resources from cluster resource
     outputs: object[]
@@ -1050,7 +1030,7 @@ function enum-storageResources([object]$clusterResource) {
 }
 
 function enum-vmssResources([object]$clusterResource) {
-<#
+    <#
 .SYNOPSIS
     enumerate virtual machine scaleset resources from cluster resource
     outputs: object[]
@@ -1092,7 +1072,7 @@ function enum-vmssResources([object]$clusterResource) {
 }
 
 function enum-vnetResourceIds([object[]]$vmssResources) {
-<#
+    <#
 .SYNOPSIS
     enumerate virtual network resource Ids from vmss resources
     outputs: string[]
@@ -1120,7 +1100,7 @@ function enum-vnetResourceIds([object[]]$vmssResources) {
 }
 
 function get-clusterResource($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     enumerate cluster resources[0] from $currentConfig
     outputs: object
@@ -1140,7 +1120,7 @@ function get-clusterResource($currentConfig) {
 }
 
 function get-lbResources($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     enumerate loadbalancer resources from $currentConfig
     outputs: object[]
@@ -1160,7 +1140,7 @@ function get-lbResources($currentConfig) {
 }
 
 function get-fromParametersSection($currentConfig, [string]$parameterName) {
-<#
+    <#
 .SYNOPSIS
     enumerate defaultValue[] from parameters section by $parameterName
     outputs: object[]
@@ -1188,7 +1168,7 @@ function get-fromParametersSection($currentConfig, [string]$parameterName) {
 }
 
 function get-parameterizedNameFromValue([object]$resourceObject) {
-<#
+    <#
 .SYNOPSIS
     enumerate parameter name from parameter value that is parameterized
     [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]")
@@ -1207,7 +1187,7 @@ function get-parameterizedNameFromValue([object]$resourceObject) {
 }
 
 function get-resourceParameterValue([object]$resource, [string]$name) {
-<#
+    <#
 .SYNOPSIS
     gets resource parameter value
     outputs: string
@@ -1248,7 +1228,7 @@ function get-resourceParameterValue([object]$resource, [string]$name) {
 }
 
 function get-resourceParameterValueObject($resource, $name) {
-<#
+    <#
 .SYNOPSIS
     get resource parameter value object
     outputs: object
@@ -1286,7 +1266,7 @@ function get-resourceParameterValueObject($resource, $name) {
 }
 
 function get-update($updateUrl) {
-<#
+    <#
 .SYNOPSIS
     checks for script update
     outputs: bool
@@ -1329,7 +1309,7 @@ function get-update($updateUrl) {
 }
 
 function get-vmssExtensions([object]$vmssResource, [string]$extensionType = $null) {
-<#
+    <#
 .SYNOPSIS
     returns vmss extension resources from $vmssResource
     outputs: object[]
@@ -1360,7 +1340,7 @@ function get-vmssExtensions([object]$vmssResource, [string]$extensionType = $nul
 }
 
 function get-vmssResources($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     returns vmss resources from $currentConfig
     outputs: object[]
@@ -1378,7 +1358,7 @@ function get-vmssResources($currentConfig) {
 }
 
 function get-vmssResourcesByNodeType($currentConfig, [object]$nodetypeResource) {
-<#
+    <#
 .SYNOPSIS
     returns vmss resources from $currentConfig by $nodetypeResource
     outputs: object[]
@@ -1411,7 +1391,7 @@ function get-vmssResourcesByNodeType($currentConfig, [object]$nodetypeResource) 
 }
 
 function modify-clusterResourceAddNodeType($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies cluster resource for addNodeType template
     outputs: null
@@ -1433,7 +1413,7 @@ function modify-clusterResourceAddNodeType($currentConfig) {
 
 
 function modify-clusterResourceRedeploy($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies cluster resource for redeploy template
     outputs: null
@@ -1458,7 +1438,7 @@ function modify-clusterResourceRedeploy($currentConfig) {
 }
 
 function modify-ipAddressesRedeploy($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies ip resources for redeploy template
     outputs: null
@@ -1474,7 +1454,7 @@ function modify-ipAddressesRedeploy($currentConfig) {
 }
 
 function modify-lbResources($currenConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies loadbalancer resources for current
     outputs: null
@@ -1511,7 +1491,7 @@ function modify-lbResources($currenConfig) {
 }
 
 function modify-lbResourcesRedeploy($currenConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies loadbalancer resources for redeploy template
     outputs: null
@@ -1531,7 +1511,7 @@ function modify-lbResourcesRedeploy($currenConfig) {
 }
 
 function modify-storageResourcesDeploy($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies storage resources for deploy template
     outputs: null
@@ -1563,7 +1543,7 @@ function modify-storageResourcesDeploy($currentConfig) {
 }
 
 function modify-vmssResources($currenConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies vmss resources for current template
     outputs: null
@@ -1600,7 +1580,7 @@ function modify-vmssResources($currenConfig) {
 }
 
 function modify-vmssResourcesDeploy($currenConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies storage vmss for deploy template
     outputs: null
@@ -1625,7 +1605,7 @@ function modify-vmssResourcesDeploy($currenConfig) {
 }
 
 function modify-vmssResourcesRedeploy($currenConfig) {
-<#
+    <#
 .SYNOPSIS
     modifies vmss resources for redeploy template
     outputs: null
@@ -1699,7 +1679,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
 }
 
 function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$parameterName, [string]$parameterValue = $null, [string]$type = 'string') {
-<#
+    <#
 .SYNOPSIS
     parameterizes nodetype for addnodetype template
     outputs: null
@@ -1760,7 +1740,7 @@ function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$param
 }
 
 function parameterize-nodeTypes($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     parameterizes nodetypes for addnodetype template
     outputs: null
@@ -1813,7 +1793,7 @@ function parameterize-nodeTypes($currentConfig) {
 }
 
 function remove-duplicateResources($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     removes duplicate resources for current template
     outputs: null
@@ -1841,7 +1821,7 @@ function remove-duplicateResources($currentConfig) {
 }
 
 function remove-unusedParameters($currentConfig) {
-<#
+    <#
 .SYNOPSIS
     removes unused parameters from parameters section
     outputs: null
@@ -1877,7 +1857,7 @@ function remove-unusedParameters($currentConfig) {
 }
 
 function set-resourceParameterValue([object]$resource, [string]$name, [string]$newValue) {
-<#
+    <#
 .SYNOPSIS
     sets resource parameter value in resources section
     outputs: bool
@@ -1915,7 +1895,7 @@ function set-resourceParameterValue([object]$resource, [string]$name, [string]$n
 }
 
 function verify-config($currentConfig, [string]$templateParameterFile) {
-<#
+    <#
 .SYNOPSIS
     verifies current configuration $currentConfig using test-resourcegroupdeployment
     outputs: null
@@ -1944,7 +1924,7 @@ function verify-config($currentConfig, [string]$templateParameterFile) {
 }
 
 function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError, [switch]$isWarning, [switch]$verbose) {
-<#
+    <#
 .SYNOPSIS
     writes output to console and logfile
     outputs: null
