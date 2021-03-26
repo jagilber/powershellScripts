@@ -603,6 +603,8 @@ function create-parametersName($resource, $name = 'name') {
         $resourceName = $resource.name
     }
     
+    $resourceName = $resourceName.replace("-","_")
+
     # prevent dupes
     $parametersNamePrefix = "$($resourceSubType)_$($resourceName)_"
     $parametersName = [regex]::replace($name, '^' + [regex]::Escape($parametersNamePrefix), '', [text.regularExpressions.regexoptions]::IgnoreCase)
