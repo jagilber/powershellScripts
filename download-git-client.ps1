@@ -2,6 +2,7 @@
 downloads git client for use 
 
 to run with no arguments:
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:

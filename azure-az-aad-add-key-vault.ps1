@@ -68,7 +68,7 @@ catch [management.automation.commandNotFoundException]
     }
 }
 
-if (!(Get-azResourceGroup))
+if (!(@(Get-AzResourceGroup).Count))
 {
     connect-azaccount
 

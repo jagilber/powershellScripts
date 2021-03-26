@@ -10,6 +10,7 @@ creates $nuget ps object with functions an properties to manage nuget packages
 # -allversions is broken in nuget.exe
 
 .EXAMPLE
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/scripts/nuget-functions.ps1" -outFile "$pwd/nuget-functions.ps1";
 .\nuget-functions.ps1;
 $nuget
@@ -25,6 +26,7 @@ class NugetObj {
     [string]$packageName = $null
     [string]$packageSource = $null
     [string]$globalPackages = "$($env:USERPROFILE)\.nuget\packages"
+    [string]$nugetFallbackFolder = "$($env:userprofile)\.dotnet\NuGetFallbackFolder"
     [bool]$allVersions = $false
     [string]$verbose = "normal" #"normal" # detailed, quiet
     [string]$nuget = "nuget.exe"
@@ -90,6 +92,10 @@ class NugetObj {
             [string[]]$sourceProperties = $source -split ": "
             $this.locals.Add($sourceProperties[0], $sourceProperties[1])
         }
+
+        if ((test-path $this.nugetFallbackFolder)) {
+            $this.locals.Add("nugetFallbackFolder", $this.nugetFallbackFolder)
+        }
         write-host "$($this.locals | out-string)"
         return $this.locals
     }
@@ -98,7 +104,12 @@ class NugetObj {
         [hashtable]$results = @{}
         foreach ($localSource in $this.locals.GetEnumerator()) {
             foreach($result in $this.EnumPackages($packageName, $localSource.Key, $null).GetEnumerator()){
-                $results.Add($result.Key, $result.Value)
+                if(!$results.ContainsKey($result.Key)){
+                    $results.Add($result.Key, $result.Value)
+                }
+                else{
+                    write-warning "$($result.key) already added"
+                }
             }
         }
         return $results

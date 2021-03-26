@@ -3,6 +3,7 @@
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
 
 .LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1";
     .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
@@ -49,7 +50,7 @@ param (
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = './template.json', 
+    [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
@@ -83,8 +84,7 @@ function main () {
         return
     }
     
-    Enable-AzureRmAlias
-    if (!(Get-AzContext)) {
+    if (!(@(Get-AzResourceGroup).Count)) {
         write-host "connecting to azure"
         Connect-AzAccount
     }

@@ -14,6 +14,7 @@
     or
     .\azure-az-create-aad-application-spn.ps1 
 .LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-create-aad-application-spn.ps1" -out "$pwd\azure-az-create-aad-application-spn.ps1";
 #>
 
@@ -63,7 +64,7 @@ function main() {
         }
     }
     
-    if (!(Get-azResourceGroup)) {
+    if (!(@(Get-AzResourceGroup).Count)) {
         connect-azaccount
     
         if (!(Get-azResourceGroup)) {
