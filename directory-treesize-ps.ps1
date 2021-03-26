@@ -4,8 +4,7 @@
 
 .DESCRIPTION
     To download and execute with arguments:
-    [net.servicePointManager]::Expect100Continue = $true;
-    [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/directory-treesize.ps1" -outFile "$pwd\directory-treesize.ps1";
     .\directory-treesize.ps1 c:\windows\system32 -showPercent -detail -minSizeGB 0 -logFile $pwd\dts.log
 
