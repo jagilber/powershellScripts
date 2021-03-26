@@ -143,7 +143,8 @@ function main () {
     $currentConfig = create-exportTemplate
     create-currentTemplate $currentConfig
     create-redeployTemplate $currentConfig
-    create-addNodeTypeTemplate $currentConfig
+    create-addPrimaryNodeTypeTemplate $currentConfig
+    create-addSecondaryNodeTypeTemplate $currentConfig
     create-newTemplate $currentConfig
 
     if ($compress) {
@@ -392,18 +393,66 @@ function check-module() {
     return $true
 }
 
-function create-addNodeTypeTemplate($currentConfig) {
+function create-addPrimaryNodeTypeTemplate($currentConfig) {
     <#
 .SYNOPSIS
-    creates new addnodetype template with modifications based on redeploy template
+    creates new addprimarynodetype template with modifications based on redeploy template
+    based off of first nodetype found where isPrimary = true
+    isPrimary will be set to true
     outputs: null
 .OUTPUTS
     [null]
 #>
-    write-log "enter:create-addNodeTypeTemplate"
+    write-log "enter:create-addPrimaryNodeTypeTemplate"
     # create add node type templates for primary os / hardware sku change
     # create secondary for additional secondary nodetypes
-    $templateFile = $templateJsonFile.Replace(".json", ".addnodetype.json")
+    $templateFile = $templateJsonFile.Replace(".json", ".addprimarynodetype.json")
+    $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
+
+    # addprimarynodetype from primarynodetype
+    # addsecondarynodetype from secondarynodetype
+    parameterize-nodeTypes $currentConfig -isPrimary
+
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
+
+    # save base / current json
+    $currentConfig | create-json | out-file $templateFile
+
+    # save current readme
+    $readme = "addnodetype modifications:
+            - additional parameters have been added
+            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+            - adminPassword required parameter added (needs to be set)
+            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            - dnsSettings for public Ip Address needs to be unique
+            - storageAccountNames required parameters (needs to be unique or will be generated)
+            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
+            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
+            - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
+            - primarydurability is a parameter
+            - isPrimary is a parameter
+            - additional nodetype resource has been added to cluster resource
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".addprimarynodetype.readme.txt")
+    write-log "exit:create-addNodePrimaryTypeTemplate"
+}
+
+function create-addSecondaryNodeTypeTemplate($currentConfig) {
+    <#
+.SYNOPSIS
+    creates new addsecondarynodetype template with modifications based on redeploy template
+    based off of first nodetype found where isPrimary = false
+    isPrimary will be set to false
+    outputs: null
+.OUTPUTS
+    [null]
+#>
+    write-log "enter:create-addSecondaryNodeTypeTemplate"
+    # create add node type templates for primary os / hardware sku change
+    # create secondary for additional secondary nodetypes
+    $templateFile = $templateJsonFile.Replace(".json", ".addsecondarynodetype.json")
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
     # addprimarynodetype from primarynodetype
@@ -432,8 +481,8 @@ function create-addNodeTypeTemplate($currentConfig) {
             - isPrimary is a parameter
             - additional nodetype resource has been added to cluster resource
             "
-    $readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
-    write-log "exit:create-addNodeTypeTemplate"
+    $readme | out-file $templateJsonFile.Replace(".json", ".addsecondarynodetype.readme.txt")
+    write-log "exit:create-addSecondaryNodeTypeTemplate"
 }
 
 function create-currentTemplate($currentConfig) {
@@ -1739,7 +1788,7 @@ function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$param
     write-log "exit:parameterize-nodetype"
 }
 
-function parameterize-nodeTypes($currentConfig) {
+function parameterize-nodeTypes($currentConfig,[switch]$isPrimary) {
     <#
 .SYNOPSIS
     parameterizes nodetypes for addnodetype template
@@ -1759,17 +1808,21 @@ function parameterize-nodeTypes($currentConfig) {
     }
 
     write-log "parameterize-nodetypes:current nodetypes $($nodetypes.name)" -ForegroundColor Green
-    $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
+    $filterednodetypes = @($nodetypes | Where-Object isPrimary -eq $isPrimary)
 
-    if ($primarynodetypes.count -eq 0) {
-        write-log "parameterize-nodetypes:unable to find primary nodetype" -isError
+    if ($filterednodetypes.count -eq 0 -and $isPrimary) {
+        write-log "parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary" -isError
     }
-    elseif ($primarynodetypes.count -gt 1) {
+    elseif ($filterednodetypes.count -eq 0) {
+        write-log "parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary"
+        return
+    }
+    elseif ($filterednodetypes.count -gt 1 -and $isPrimary) {
         write-log "parameterize-nodetypes:more than one primary node type detected!" -isError
     }
     
     write-log "parameterize-nodetypes:adding new nodetype" -foregroundcolor Cyan
-    $newPrimaryNodeType = $primarynodetypes[0].psobject.copy()
+    $newPrimaryNodeType = $filterednodetypes[0].psobject.copy()
     $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $newPrimaryNodeType)
 
     if ($existingVmssNodeTypeRef.count -lt 1) {
@@ -1778,11 +1831,9 @@ function parameterize-nodeTypes($currentConfig) {
     }
 
     write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
-    ####    $instanceCount = get-resourceParameterValue
-    ####    add-parameter -currentConfig $currentConfig -resource $newPrimaryNodeType -name 'capacity' -aliasname 'vmInstanceCount' -resourceObject $existingVmssNodeTypeRef[0].sku -type 'int'
 
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
-    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool'
+    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool' -parameterValue $isPrimary
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'vmInstanceCount' -type 'int'
     # todo: currently name has to be parameterized last so parameter names above can be found
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name'
