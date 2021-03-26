@@ -91,6 +91,7 @@ $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
 $debugLevel = 'none'
+$global:ignoreCase = [text.regularExpressions.regexOptions]::IgnoreCase
 
 function main () {
     if (!(test-path $templatePath)) {
@@ -195,14 +196,14 @@ function main () {
     write-log "deployment:`r`n$($deployment | format-list * | out-string)"
     Write-Progress -Completed -Activity "complete"
 
-    if($global:warnings){
+    if ($global:warnings) {
         write-log "global warnings:" -foregroundcolor Yellow
-        write-log ($global:warnings|create-json) -isWarning
+        write-log ($global:warnings | create-json) -isWarning
     }
 
-    if($global:errors){
+    if ($global:errors) {
         write-log "global errors:" -foregroundcolor Red
-        write-log ($global:errors|create-json) -isError
+        write-log ($global:errors | create-json) -isError
     }
 
     write-log "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
@@ -585,12 +586,24 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
     write-log "exit:create-parameterFile"
 }
 
-function create-parameterizedName($parameterName, $resource, [switch]$withbrackets) {
-    if ($withbrackets) {
-        return "[parameters('$(create-parametersName -resource $resource -name $parameterName)')]"
+function create-parameterizedName($parameterName, $resource = $null, [switch]$withbrackets) {
+    write-log "enter:reate-parameterizedName $parameterName, $resource = $null, [switch]$withbrackets"
+    $retval = ""
+
+    if ($resource) {
+        $retval = create-parametersName -resource $resource -name $parameterName
+        $retval = "parameters('$retval')"
+    }
+    else {
+        $retval = "parameters('$parameterName')"
     }
 
-    return "parameters('$(create-parametersName -resource $resource -name $parameterName)')"
+    if ($withbrackets) {
+        $retval = "[$retval]"
+    }
+
+    write-log "exit:create-parameterizedName:$retval"
+    return $retval
 }
 
 function create-parametersName($resource, $name = 'name') {
@@ -605,7 +618,7 @@ function create-parametersName($resource, $name = 'name') {
     
     # prevent dupes
     $parametersNamePrefix = "$($resourceSubType)_$($resourceName)_"
-    $parametersName = [regex]::replace($name, '^' + [regex]::Escape($parametersNamePrefix), '', [text.regularExpressions.regexoptions]::IgnoreCase)
+    $parametersName = [regex]::replace($name, '^' + [regex]::Escape($parametersNamePrefix), '', $global:ignoreCase)
     #$parametersName = "$parametersNamePrefix$($name.trimstart($parametersNamePrefix))"
     $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
        
@@ -1172,8 +1185,8 @@ function get-fromParametersSection($currentConfig, $parameterName) {
 function get-parameterizedNameFromValue($resourceObject) {
     write-log "enter:get-parameterizedNameFromValue($resourceObject)"
     $retval = $null
-    if ([regex]::IsMatch($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase)) {
-        $retval = [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]", [text.regularExpressions.regexOptions]::ignorecase).groups[1].Value
+    if ([regex]::IsMatch($resourceobject, "\[parameters\('(.+?)'\)\]", $global:ignoreCase)) {
+        $retval = [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]", $global:ignoreCase).groups[1].Value
     }
 
     write-log "exit:get-parameterizedNameFromValue:returning $retval"
@@ -1652,12 +1665,14 @@ function parameterize-nodeTypes($currentConfig) {
     }
 
     write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
-    ####    $instanceCount = get-resourceParameterValue
-    ####    add-parameter -currentConfig $currentConfig -resource $newPrimaryNodeType -name 'capacity' -aliasname 'vmInstanceCount' -resourceObject $existingVmssNodeTypeRef[0].sku -type 'int'
+
+    # setting capacity value should be parametized value to vmInstanceCount value
+    $capacity = get-resourceParameterValue -resource $existingVmssNodeTypeRef[0].sku -name 'capacity'
+    set-resourceParameterValue -resource $newPrimaryNodeType -name 'vmInstanceCount' -newValue $capacity
 
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool'
-    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'vmInstanceCount' -type 'int'
+    #parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'vmInstanceCount' -parameterValue $capacity -type 'int'
     # todo: currently name has to be parameterized last so parameter names above can be found
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name'
     
@@ -1714,9 +1729,9 @@ function remove-unusedParameters($currentConfig) {
     $currentConfigResourcejson = $currentConfigJson | create-json
 
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties) {
-        $parameterizedName = "parameters\('$($psObjectProperty.name)'\)"
+        $parameterizedName = create-parameterizedName $psObjectProperty.name
         write-log "remove-unusedParameters:checking to see if $parameterizedName is being used"
-        if ([regex]::IsMatch($currentConfigResourcejson, $parameterizedName, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+        if ([regex]::IsMatch($currentConfigResourcejson, [regex]::Escape($parameterizedName), $global:ignoreCase)) {
             write-log "remove-unusedParameters:$parameterizedName is being used" -verbose
             continue
         }
@@ -1731,6 +1746,67 @@ function remove-unusedParameters($currentConfig) {
     write-log "exit:remove-unusedParameters"
 }
 
+function rename-Parameter($currentConfig, $oldParameterName, $newParameterName) {
+    write-log "enter:rename-Parameter: $oldParameterName, $newParameterName"
+
+    if (!$oldParameterName -or !$newParameterName) {
+        write-log "exit:rename-Parameter:error:empty parameters:oldParameterName:$oldParameterName newParameterName:$newParameterName" -isError
+        return $false
+    }
+
+    $oldParameterizedName = create-parameterizedName -parameterName $oldParameterName
+    $newParameterizedName = create-parameterizedName -parameterName $newParameterName
+    $currentConfigResourcejson = $null
+
+    if (!$currentConfig.parameters) {
+        write-log "exit:rename-Parameter:error:empty parameters section" -isError
+        return $false
+    }
+
+    #serialize
+    $currentConfigParametersjson = $currentConfig.parameters | create-json
+    $currentConfigResourcejson = $currentConfig | create-json
+
+
+    if ([regex]::IsMatch($currentConfigResourcejson, [regex]::Escape($newParameterizedName), $global:ignoreCase)) {
+        write-log "exit:rename-Parameter:new parameter already exists in resources section:$newParameterizedName" -isError
+        return $false
+    }
+
+    if ([regex]::IsMatch($currentConfigParametersjson, [regex]::Escape($newParameterName), $global:ignoreCase)) {
+        write-log "exit:rename-Parameter:new parameter already exists in parameters section:$newParameterizedName" -isError
+        return $false
+    }
+
+    if ([regex]::IsMatch($currentConfigParametersjson, [regex]::Escape($oldParameterName), $global:ignoreCase)) {
+        write-log "rename-Parameter:found parameter Name:$oldParameterName" -verbose
+        $currentConfigParametersjson = [regex]::Replace($currentConfigParametersjson, [regex]::Escape($oldParameterName), $newParameterName, $global:ignoreCase)
+        write-log "rename-Parameter:replaced $oldParameterName json:$currentConfigParametersJson" -verbose
+        $currentConfig.parameters = $currentConfigParametersjson | convertfrom-json
+
+        # reserialize with modified parameters section
+        $currentConfigResourcejson = $currentConfig | create-json
+    }
+    else {
+        write-log "rename-Parameter:parameter not found:$oldParameterName" -isWarning
+    }
+
+    if ($currentConfigResourcesjson) {
+        if ([regex]::IsMatch($currentConfigResourcejson, [regex]::Escape($oldParameterizedName), $global:ignoreCase)) {
+            write-log "rename-Parameter:found parameterizedName:$oldParameterizedName" -verbose
+            $currentConfigResourceJson = [regex]::Replace($currentConfigResourcejson, [regex]::Escape($oldParameterizedName), $newParameterizedName, $global:ignoreCase)
+            write-log "rename-Parameter:replaced $oldParameterizedName json:$currentConfigResourceJson" -verbose
+            $currentConfig = $currentConfigResourcejson | convertfrom-json
+        }
+        else {
+            write-log "rename-Parameter:parameter not found:$oldParameterizedName" -isWarning
+        }
+    }
+
+    write-log "rename-Parameter:result:$($currentConfig | create-json)" -verbose
+    write-log "exit:rename-Parameter"
+    return $true
+}
 function set-resourceParameterValue($resource, $name, $newValue) {
     write-log "enter:set-resourceParameterValue:resource:$($resource|create-json) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
     $retval = $false
@@ -1853,10 +1929,10 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
         }
     }
     else {
-        if($data.startswith('enter:')){
+        if ($data.startswith('enter:')) {
             $global:functionDepth++
         }
-        elseif($data.startswith('exit:')){
+        elseif ($data.startswith('exit:')) {
             $global:functionDepth--
         }
 
