@@ -1254,65 +1254,93 @@ function get-parameterizedNameFromValue([object]$resourceObject) {
     return $retval
 }
 
-function get-resourceParameterValue([object]$resource, [string]$name, [switch]$final) {
+function get-resourceParameterValue([object]$resource, [string]$name) {
     <#
 .SYNOPSIS
-    gets resource parameter value
+    gets resource parameter value from $resource object by $name
+    outputs: object
+.OUTPUTS
+    [object]
+#>
+    write-log "enter:get-resourceParameterValue:resource:$($resource|create-json) name:$name"
+    $retval = $null
+    $values = [collections.arraylist]::new()
+    [void]$values.AddRange(@(get-resourceParameterValues -resource $resource -name $name))
+    
+    if ($values.Count -eq 1) {
+        write-log "get-resourceParameterValue:parameter name found in resource. returning first value" -foregroundcolor Magenta
+        $retval = @($values)[0]
+    }
+    elseif ($values.Count -gt 1) {
+        write-log "get-resourceParameterValue:multiple parameter names found in resource. returning first value" -isError
+        $retval = @($values)[0]
+    }
+    elseif ($values.Count -lt 1) {
+        write-log "get-resourceParameterValue:no parameter name found in resource. returning $null" -isError
+    }
+    write-log "exit:get-resourceParameterValue:returning:$retval" -foregroundcolor Magenta
+    return $retval
+}
+
+function get-resourceParameterValues([object]$resource, [string]$name) {
+    <#
+.SYNOPSIS
+    gets resource parameter values from $resource object by $name
     outputs: object[]
 .OUTPUTS
     [object[]]
 #>
-    write-log "enter:get-resourceParameterValue:resource:$($resource|create-json) name:$name"
+    write-log "enter:get-resourceParameterValues:resource:$($resource|create-json) name:$name"
     $retval = [collections.arraylist]::new()
 
     if ($resource.psobject.members.name -imatch 'ToArray') {
         foreach ($resourceObject in $resource.ToArray()) {
-            $retval.AddRange(@(get-resourceParameterValue -resource $resourceObject -name $name))
+            [void]$retval.AddRange(@(get-resourceParameterValues -resource $resourceObject -name $name))
         }
     }
     elseif ($resource.psobject.members.name -imatch 'GetEnumerator') {
         foreach ($resourceObject in $resource.GetEnumerator()) {
-            $retval.AddRange(@(get-resourceParameterValue -resource $resourceObject -name $name))
+            [void]$retval.AddRange(@(get-resourceParameterValues -resource $resourceObject -name $name))
         }
     }
 
     foreach ($psObjectProperty in $resource.psobject.Properties.GetEnumerator()) {
         
-        write-log "get-resourceParameterValue:checking parameter name:$($psobjectProperty.name)`r`n`tparameter type:$($psObjectProperty.TypeNameOfValue)`r`n`tfilter:$name" -verbose
+        write-log "get-resourceParameterValues:checking parameter name:$($psobjectProperty.name)`r`n`tparameter type:$($psObjectProperty.TypeNameOfValue)`r`n`tfilter:$name" -verbose
 
         if (($psObjectProperty.Name -imatch "^$name$")) {
             $parameterValues = @($psObjectProperty | Where-Object Name -imatch "^$name$")
             if ($parameterValues.Count -eq 1) {
                 $parameterValue = $psObjectProperty.Value
                 if (!($parameterValue)) {
-                    write-log "get-resourceParameterValue:returning:string::empty" -foregroundcolor green
+                    write-log "get-resourceParameterValues:returning:string::empty" -foregroundcolor green
                     [void]$retval.Add([string]::Empty)
                 }
                 else {
-                    write-log "get-resourceParameterValue:returning:$parameterValue" -foregroundcolor green
+                    write-log "get-resourceParameterValues:returning:$parameterValue" -foregroundcolor green
                     [void]$retval.Add($parameterValue)
                 }
             }
             else {
-                write-log "get-resourceParameterValue:multiple parameter names found in resource. returning" -isWarning
+                write-log "get-resourceParameterValues:multiple parameter names found in resource"
                 [void]$retval.AddRange($parameterValues)
             }
         }
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-            $retval.AddRange(@(get-resourceParameterValue -resource $psObjectProperty.Value -name $name))
+            [void]$retval.AddRange(@(get-resourceParameterValues -resource $psObjectProperty.Value -name $name))
         }
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.Hashtable') {
-            $retval.AddRange(@(get-resourceParameterValue -resource $psObjectProperty.Value -name $name))
+            [void]$retval.AddRange(@(get-resourceParameterValues -resource $psObjectProperty.Value -name $name))
         }
         elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.ArrayList') {
-            $retval.AddRange(@(get-resourceParameterValue -resource $psObjectProperty.Value -name $name))
+            [void]$retval.AddRange(@(get-resourceParameterValues -resource $psObjectProperty.Value -name $name))
         }
         else {
-            write-log "get-resourceParameterValue:skipping property name:$($psObjectProperty.Name) type:$($psObjectProperty.TypeNameOfValue) filter:$name"
+            write-log "get-resourceParameterValues:skipping property name:$($psObjectProperty.Name) type:$($psObjectProperty.TypeNameOfValue) filter:$name"
             #write-log "get-resourceParameterValue:skipping property name:$($psObjectProperty|create-json) type:$($psObjectProperty.TypeNameOfValue) filter:$name" -verbose
         }
     }
-    write-log "exit:get-resourceParameterValue:returning:$retval" -foregroundcolor Magenta
+    write-log "exit:get-resourceParameterValues:returning:$retval" -foregroundcolor Magenta
     return $retval.ToArray()
 }
 
