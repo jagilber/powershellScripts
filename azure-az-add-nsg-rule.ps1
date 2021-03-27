@@ -10,7 +10,7 @@ param(
     [string[]]$ports = @('3389', '19000', '19080', '19081', '22'),
     [string[]]$existingNsgNames = @(),
     [string]$access = "Allow",
-    [string]$sourceAddressPrefix = (invoke-webRequest -uri "http://ifconfig.me/ip").Content, # *
+    [string]$sourceAddressPrefix = (Invoke-RestMethod https://ipinfo.io/json).ip, # *
     [switch]$force,
     [switch]$remove,
     [switch]$wait
