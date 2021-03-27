@@ -529,6 +529,7 @@ function create-exportTemplate() {
     <#
 .SYNOPSIS
     creates new export template from resource group and sets $global:currentConfig
+    must be called before any modification functions
     outputs: null
 .OUTPUTS
     [null]
@@ -1253,45 +1254,66 @@ function get-parameterizedNameFromValue([object]$resourceObject) {
     return $retval
 }
 
-function get-resourceParameterValue([object]$resource, [string]$name) {
+function get-resourceParameterValue([object]$resource, [string]$name, [switch]$final) {
     <#
 .SYNOPSIS
     gets resource parameter value
-    outputs: string
+    outputs: object[]
 .OUTPUTS
-    [string]
+    [object[]]
 #>
     write-log "enter:get-resourceParameterValue:resource:$($resource|create-json) name:$name"
-    $retval = $null
-    foreach ($psObjectProperty in $resource.psobject.Properties) {
-        write-log "get-resourceParameterValue:checking parameter name:$psobjectProperty" -verbose
+    $retval = [collections.arraylist]::new()
 
-        if (($psObjectProperty.Name -ieq $name)) {
-            $parameterValues = @($psObjectProperty.Name)
-            if ($parameterValues.Count -eq 1) {
-                $parameterValue = $psObjectProperty.Value
-                if (!($parameterValue)) {
-                    write-log "exit:get-resourceParameterValue:returning:string::empty"
-                    return [string]::Empty
-                }
-                write-log "exit:get-resourceParameterValue:returning:$parameterValue"
-                return $parameterValue
-            }
-            else {
-                write-log "exit:get-resourceParameterValue:multiple parameter names found in resource. returning" -isError
-                return $null
-            }
+    if ($resource.psobject.members.name -imatch 'ToArray') {
+        foreach ($resourceObject in $resource.ToArray()) {
+            $retval.AddRange(@(get-resourceParameterValue -resource $resourceObject -name $name))
         }
-        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-            $retval = get-resourceParameterValue -resource $psObjectProperty.Value -name $name
-        }
-        else {
-            write-log "get-resourceParameterValue: skipping. property name:$($psObjectProperty.Name) name:$name type:$($psObjectProperty.TypeNameOfValue)" -verbose
+    }
+    elseif ($resource.psobject.members.name -imatch 'GetEnumerator') {
+        foreach ($resourceObject in $resource.GetEnumerator()) {
+            $retval.AddRange(@(get-resourceParameterValue -resource $resourceObject -name $name))
         }
     }
 
-    write-log "exit:get-resourceParameterValue:returning:$retval"
-    return $retval
+    foreach ($psObjectProperty in $resource.psobject.Properties.GetEnumerator()) {
+        
+        write-log "get-resourceParameterValue:checking parameter name:$($psobjectProperty.name)`r`n`tparameter type:$($psObjectProperty.TypeNameOfValue)`r`n`tfilter:$name" -verbose
+
+        if (($psObjectProperty.Name -imatch "^$name$")) {
+            $parameterValues = @($psObjectProperty | Where-Object Name -imatch "^$name$")
+            if ($parameterValues.Count -eq 1) {
+                $parameterValue = $psObjectProperty.Value
+                if (!($parameterValue)) {
+                    write-log "get-resourceParameterValue:returning:string::empty" -foregroundcolor green
+                    [void]$retval.Add([string]::Empty)
+                }
+                else {
+                    write-log "get-resourceParameterValue:returning:$parameterValue" -foregroundcolor green
+                    [void]$retval.Add($parameterValue)
+                }
+            }
+            else {
+                write-log "get-resourceParameterValue:multiple parameter names found in resource. returning" -isWarning
+                [void]$retval.AddRange($parameterValues)
+            }
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
+            $retval.AddRange(@(get-resourceParameterValue -resource $psObjectProperty.Value -name $name))
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.Hashtable') {
+            $retval.AddRange(@(get-resourceParameterValue -resource $psObjectProperty.Value -name $name))
+        }
+        elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.ArrayList') {
+            $retval.AddRange(@(get-resourceParameterValue -resource $psObjectProperty.Value -name $name))
+        }
+        else {
+            write-log "get-resourceParameterValue:skipping property name:$($psObjectProperty.Name) type:$($psObjectProperty.TypeNameOfValue) filter:$name"
+            #write-log "get-resourceParameterValue:skipping property name:$($psObjectProperty|create-json) type:$($psObjectProperty.TypeNameOfValue) filter:$name" -verbose
+        }
+    }
+    write-log "exit:get-resourceParameterValue:returning:$retval" -foregroundcolor Magenta
+    return $retval.ToArray()
 }
 
 function get-resourceParameterValueObject($resource, $name) {
@@ -2081,14 +2103,14 @@ function verify-config( [string]$templateParameterFile) {
     " -ForegroundColor Green
 
     $error.Clear()
-    Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -Mode Incremental `
         -TemplateFile $json `
         -TemplateParameterFile $templateParameterFile `
         -Verbose
 
-    if ($error) {
-        write-log "exit:verify-config:error$($error | out-string)" -isError
+    if ($error -or $result) {
+        write-log "exit:verify-config:error:$($result | create-json) `r`n$($error | out-string)" -isError
     }
     else {
         write-log "exit:verify-config:success" -foregroundcolor Green
