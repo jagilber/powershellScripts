@@ -1923,7 +1923,14 @@ function remove-unusedParameters($currentConfig) {
     write-log "exit:remove-unusedParameters"
 }
 
-function rename-Parameter($currentConfig, $oldParameterName, $newParameterName) {
+function rename-parameter($currentConfig, [string]$oldParameterName, [string]$newParameterName) {
+<#
+.SYNOPSIS
+    renames parameter from $oldParameterName to $newParameterName by $oldParameterName in all template sections
+    outputs: bool
+.OUTPUTS
+    [bool]
+#>
     write-log "enter:rename-Parameter: $oldParameterName, $newParameterName"
 
     if (!$oldParameterName -or !$newParameterName) {
@@ -1985,6 +1992,16 @@ function rename-Parameter($currentConfig, $oldParameterName, $newParameterName) 
     return $true
 }
 
+function rename-parametersByResource($currentConfig, [object]$resource, [string]$oldParameterName, [string]$newParameterName) {
+    <#
+    .SYNOPSIS
+        renames parameter from $oldParameterName to $newParameterName by $resource in all template sections
+        outputs: bool
+    .OUTPUTS
+        [bool]
+    #>
+}    
+
 function set-resourceParameterValue([object]$resource, [string]$name, [string]$newValue) {
 <#
 .SYNOPSIS
@@ -2042,14 +2059,22 @@ function verify-config($currentConfig, [string]$templateParameterFile) {
         -Verbose
     " -ForegroundColor Green
 
+    $error.Clear()
     Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -Mode Incremental `
         -TemplateFile $json `
         -TemplateParameterFile $templateParameterFile `
         -Verbose
 
+    if($error){
+        write-log "exit:verify-config:error$($error | out-string)" -isError
+    }
+    else{
+        write-log "exit:verify-config:success" -foregroundcolor Green
+    }
+    
     remove-item $json
-    write-log "exit:verify-config:templateparameterFile:$templateParameterFile"
+    $error.Clear()
 }
 
 function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError, [switch]$isWarning, [switch]$verbose) {
