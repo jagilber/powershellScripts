@@ -3,6 +3,10 @@
 # see https://github.com/Huachao/vscode-restclient
 # use ### to separate requests
 
+# ip info
+https://ipinfo.io/json
+###
+
 # sf package download versions
 https://go.microsoft.com/fwlink/?LinkID=824848&clcid=0x409
 ###

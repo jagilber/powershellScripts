@@ -39,7 +39,6 @@
 .EXAMPLE 
     .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
     export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file .\template.export.json
-
 #>
 
 [cmdletbinding()]
@@ -49,26 +48,15 @@ param (
     [string]$templatePath = "$psscriptroot/templates-$resourceGroupName", # for cloudshell
     [string]$useExportedJsonFile = '',
     [string]$adminPassword = '', #'GEN_PASSWORD',
+    [string[]]$resourceNames = '',
+    [string[]]$excludeResourceNames = '',
     [switch]$detail,
     [string]$logFile = "$templatePath/azure-az-sf-export-arm-template.log",
     [switch]$compress,
     [switch]$updateScript
 )
 
-# todo unused params need cleanup
-[string[]]$resourceNames = ''
-[string[]]$excludeResourceNames = ''
-[bool]$patch = $false # [switch]
-[string]$templateParameterFile = ''
-[string]$apiVersion = '' 
-[int]$sleepSeconds = 1 
-#[ValidateSet('Incremental', 'Complete')]
-[string]$mode = 'Incremental'
-[bool]$useLatestApiVersion = $false # [swtich]
-# end todo unused params need cleanup
-
 set-strictMode -Version 3.0
-$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json'
 $parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
 $updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
 
@@ -90,7 +78,6 @@ $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
-$debugLevel = 'none'
 $global:ignoreCase = [text.regularExpressions.regexOptions]::IgnoreCase
 
 function main () {
@@ -154,33 +141,27 @@ function main () {
 
     $deploymentName = "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
-    if ($patch) {
-        #remove-jobs
-        #if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
-        #wait-jobs
+    $currentConfig = create-exportTemplate
+    create-currentTemplate $currentConfig
+    create-redeployTemplate $currentConfig
+    create-addPrimaryNodeTypeTemplate $currentConfig
+    create-addSecondaryNodeTypeTemplate $currentConfig
+    create-newTemplate $currentConfig
+
+    if ($compress) {
+        $zipFile = "$templatePath.zip"
+        compress-archive $templatePath $zipFile -Force
+        write-log "zip file located here:$zipFile" -ForegroundColor Cyan
     }
-    else {
-        $currentConfig = create-exportTemplate
-        create-currentTemplate $currentConfig
-        create-redeployTemplate $currentConfig
-        create-addNodeTypeTemplate $currentConfig
-        create-newTemplate $currentConfig
 
-        if ($compress) {
-            $zipFile = "$templatePath.zip"
-            compress-archive $templatePath $zipFile -Force
-            write-log "zip file located here:$zipFile" -ForegroundColor Cyan
-        }
+    $global:resourceTemplateObj = $currentConfig
+    $error.clear()
 
-        $global:resourceTemplateObj = $currentConfig
-        $error.clear()
-
-        write-host "finished. files stored in $templatePath" -ForegroundColor Green
-        code $templatePath # for cloudshell and local
+    write-host "finished. files stored in $templatePath" -ForegroundColor Green
+    code $templatePath # for cloudshell and local
         
-        if ($error) {
-            . $templateJsonFile.Replace(".json", ".current.json")
-        }
+    if ($error) {
+        . $templateJsonFile.Replace(".json", ".current.json")
     }
 
     if ($global:resourceErrors -or $global:resourceWarnings) {
@@ -213,7 +194,14 @@ function main () {
     }
 }
 
-function add-outputs($currentConfig, $name, $value, $type = 'string') {
+function add-outputs($currentConfig, [string]$name, [string]$value, [string]$type = 'string') {
+<#
+.SYNOPSIS
+    add element to outputs section of template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:add-outputs($currentConfig, $name, $value, $type = 'string'"
     $outputs = $currentConfig.psobject.Properties | where-object name -ieq 'outputs'
     $outputItem = @{
@@ -230,12 +218,19 @@ function add-outputs($currentConfig, $name, $value, $type = 'string') {
         }
     }
     else {
-        $currentConfig.outputs.add($name, $outputItem)
+        [void]$currentConfig.outputs.add($name, $outputItem)
     }
     write-log "exit:add-outputs:added"
 }
 
-function add-parameterNameByResourceType($currentConfig, $type, $name, $metadataDescription = '') {
+function add-parameterNameByResourceType($currentConfig, [string]$type, [string]$name, [string]$metadataDescription = '') {
+<#
+.SYNOPSIS
+    add parameter name by resource type
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:add-parameterNameByResourceType($currentConfig, $type, $name, $metadataDescription = '')"
     $resources = @($currentConfig.resources | where-object 'type' -eq $type)
     $parameterNames = @{}
@@ -264,7 +259,14 @@ function add-parameterNameByResourceType($currentConfig, $type, $name, $metadata
     write-log "exit:add-parameterNameByResourceType"
 }
 
-function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '') {
+function add-parameter($currentConfig, [object]$resource, [string]$name, [string]$aliasName = $name, [object]$resourceObject = $resource, [object]$value = $null, [string]$type = 'string', [string]$metadataDescription = '') {
+<#
+.SYNOPSIS
+    add a new parameter based on $resource $name/$aliasName $resourceObject
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     $parameterName = create-parametersName -resource $resource -name $aliasName
     $parameterizedName = create-parameterizedName -parameterName $aliasName -resource $resource -withbrackets
     $parameterNameValue = $value
@@ -273,7 +275,7 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
         $parameterNameValue = get-resourceParameterValue -resource $resourceObject -name $name
     }
     write-log "enter:add-parameter($currentConfig, $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '')"
-    set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
+    $null = set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
     if ($parameterNameValue -ne $null) {
         write-log "add-parameter:parameter name $parameterName"
@@ -288,7 +290,14 @@ function add-parameter($currentConfig, $resource, $name, $aliasName = $name, $re
     write-log "exit:add-parameter"
 }
 
-function add-toParametersSection ($currentConfig, $parameterName, $parameterValue, $type = 'string', $metadataDescription = '') {
+function add-toParametersSection ($currentConfig, [string]$parameterName, [string]$parameterValue, [string]$type = 'string', [string]$metadataDescription = '') {
+<#
+.SYNOPSIS
+    add a new parameter based on $parameterName and $parameterValue to parameters Setion
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:add-toParametersSection:parameterName:$parameterName, parameterValue:$parameterValue, $type = 'string', $metadataDescription"
     $parameterObject = @{
         type         = $type
@@ -308,7 +317,14 @@ function add-toParametersSection ($currentConfig, $parameterName, $parameterValu
     write-log "exit:add-toParametersSection:new parameter name:$parameterName added"
 }
 
-function add-vmssProtectedSettings($vmssResource) {
+function add-vmssProtectedSettings([object]$vmssResource) {
+<#
+.SYNOPSIS
+    add wellknown protectedSettings section to vmss resource for storageAccounts
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:add-vmssProtectedSettings$($vmssResource.name)"
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs
 
@@ -338,6 +354,13 @@ function add-vmssProtectedSettings($vmssResource) {
 }
 
 function check-module() {
+<#
+.SYNOPSIS
+    checks for proper azure az modules
+    outputs: bool
+.OUTPUTS
+    [bool]
+#>
     $error.clear()
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
     
@@ -371,11 +394,66 @@ function check-module() {
     return $true
 }
 
-function create-addNodeTypeTemplate($currentConfig) {
-    write-log "enter:create-addNodeTypeTemplate"
+function create-addPrimaryNodeTypeTemplate($currentConfig) {
+<#
+.SYNOPSIS
+    creates new addprimarynodetype template with modifications based on redeploy template
+    based off of first nodetype found where isPrimary = true
+    isPrimary will be set to true
+    outputs: null
+.OUTPUTS
+    [null]
+#>
+    write-log "enter:create-addPrimaryNodeTypeTemplate"
     # create add node type templates for primary os / hardware sku change
     # create secondary for additional secondary nodetypes
-    $templateFile = $templateJsonFile.Replace(".json", ".addnodetype.json")
+    $templateFile = $templateJsonFile.Replace(".json", ".addprimarynodetype.json")
+    $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
+
+    # addprimarynodetype from primarynodetype
+    # addsecondarynodetype from secondarynodetype
+    parameterize-nodeTypes $currentConfig -isPrimary
+
+    create-parameterFile $currentConfig  $templateParameterFile
+    verify-config $currentConfig $templateParameterFile
+
+    # save base / current json
+    $currentConfig | create-json | out-file $templateFile
+
+    # save current readme
+    $readme = "addnodetype modifications:
+            - additional parameters have been added
+            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+            - adminPassword required parameter added (needs to be set)
+            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
+            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+            - dnsSettings for public Ip Address needs to be unique
+            - storageAccountNames required parameters (needs to be unique or will be generated)
+            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
+            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
+            - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
+            - primarydurability is a parameter
+            - isPrimary is a parameter
+            - additional nodetype resource has been added to cluster resource
+            "
+    $readme | out-file $templateJsonFile.Replace(".json", ".addprimarynodetype.readme.txt")
+    write-log "exit:create-addNodePrimaryTypeTemplate"
+}
+
+function create-addSecondaryNodeTypeTemplate($currentConfig) {
+<#
+.SYNOPSIS
+    creates new addsecondarynodetype template with modifications based on redeploy template
+    based off of first nodetype found where isPrimary = false
+    isPrimary will be set to false
+    outputs: null
+.OUTPUTS
+    [null]
+#>
+    write-log "enter:create-addSecondaryNodeTypeTemplate"
+    # create add node type templates for primary os / hardware sku change
+    # create secondary for additional secondary nodetypes
+    $templateFile = $templateJsonFile.Replace(".json", ".addsecondarynodetype.json")
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
     # addprimarynodetype from primarynodetype
@@ -404,11 +482,18 @@ function create-addNodeTypeTemplate($currentConfig) {
             - isPrimary is a parameter
             - additional nodetype resource has been added to cluster resource
             "
-    $readme | out-file $templateJsonFile.Replace(".json", ".addnodetype.readme.txt")
-    write-log "exit:create-addNodeTypeTemplate"
+    $readme | out-file $templateJsonFile.Replace(".json", ".addsecondarynodetype.readme.txt")
+    write-log "exit:create-addSecondaryNodeTypeTemplate"
 }
 
 function create-currentTemplate($currentConfig) {
+<#
+.SYNOPSIS
+    creates new current template with modifications based on raw export template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:create-currentTemplate"
     # create base /current template
     $templateFile = $templateJsonFile.Replace(".json", ".current.json")
@@ -437,6 +522,13 @@ function create-currentTemplate($currentConfig) {
 }
 
 function create-exportTemplate() {
+<#
+.SYNOPSIS
+    creates new export template from resource group
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:create-exportTemplate"
     # create base /current template
     $templateFile = $templateJsonFile.Replace(".json", ".export.json")
@@ -472,7 +564,16 @@ function create-json(
     [object]$inputObject,
     [int]$depth = 99
 ) {
-    
+<#
+.SYNOPSIS
+    creates json string compatible with ps 5.6 - 7.x '\u0027' issue
+    inputs: object
+    outputs: string
+.INPUTS
+    [object]
+.OUTPUTS
+    [string]
+#>   
     $currentWarningPreference = $WarningPreference
     $WarningPreference = 'SilentlyContinue'
     
@@ -483,44 +584,18 @@ function create-json(
     return $result
 }
 
-function create-jsonTemplate([collections.arraylist]$resources, 
-    [string]$jsonFile, 
-    [hashtable]$parameters = @{},
-    [hashtable]$variables = @{},
-    [hashtable]$outputs = @{}) {
-    try {
-        $resourceTemplate = @{ 
-            resources      = $resources
-            '$schema'      = $schema
-            contentVersion = "1.0.0.0"
-            outputs        = $outputs
-            parameters     = $parameters
-            variables      = $variables
-        } | create-json
-
-        $resourceTemplate | out-file $jsonFile
-        write-log $resourceTemplate -ForegroundColor Cyan
-        $global:resourceTemplateObj = $resourceTemplate | convertfrom-json
-        return $true
-    }
-    catch { 
-        write-log "$($_)`r`n$($error | out-string)" -isError
-        return $false
-    }
-}
-
 function create-newTemplate($currentConfig) {
+<#
+.SYNOPSIS
+    creates new new template from based on addnodetype template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:create-newTemplate"
     # create deploy / new / add template
     $templateFile = $templateJsonFile.Replace(".json", ".new.json")
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
-    # nodetype info, isPrimary
-    # modify-clusterResourcesDeploy $currentConfig
-    # os, sku, capacity, durability?
-    # modify-vmssResourcesDeploy $currentConfig
-    # GEN_UNIQUE dns, fqdn
-    # modify-ipResourcesDeploy $currentConfig
-    # GEN_UNIQUE name
     $parameterExclusions = modify-storageResourcesDeploy $currentConfig
     modify-vmssResourcesDeploy $currentConfig
 
@@ -546,19 +621,23 @@ function create-newTemplate($currentConfig) {
     write-log "exit:create-newTemplate"
 }
 
-function create-parameterFile($currentConfig, $parameterFileName, $ignoreParameters = @()) {
+function create-parameterFile($currentConfig, [string]$parameterFileName, [string[]]$ignoreParameters = @()) {
     write-log "enter:create-parameterFile"
     $parameterTemplate = [ordered]@{ 
         '$schema'      = $parametersSchema
         contentVersion = "1.0.0.0"
     } 
-
+<#
+.SYNOPSIS
+    creates new template parameters files based on $currentConfig
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     # create pscustomobject
     $parameterTemplate | Add-Member -TypeName System.Management.Automation.PSCustomObject -NotePropertyMembers @{ parameters = @{} }
     
     foreach ($psObjectProperty in $currentConfig.parameters.psobject.Properties.GetEnumerator()) {
-        $metadata = $null
-
         if ($ignoreParameters.Contains($psObjectProperty.name)) {
             write-log "create-parameterFile:skipping parameter $($psobjectProperty.name)"
             continue
@@ -574,7 +653,7 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
                 $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
             }
         }
-        $parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
+        [void]$parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
     }
 
     if (!($parameterFileName.tolower().contains('parameters'))) {
@@ -587,6 +666,13 @@ function create-parameterFile($currentConfig, $parameterFileName, $ignoreParamet
 }
 
 function create-parameterizedName($parameterName, $resource = $null, [switch]$withbrackets) {
+<#
+.SYNOPSIS
+    creates parameterized name for variables, resources, and outputs section based on $paramterName and $resource
+    outputs: string
+.OUTPUTS
+    [string]
+#>
     write-log "enter:reate-parameterizedName $parameterName, $resource = $null, [switch]$withbrackets"
     $retval = ""
 
@@ -606,7 +692,14 @@ function create-parameterizedName($parameterName, $resource = $null, [switch]$wi
     return $retval
 }
 
-function create-parametersName($resource, $name = 'name') {
+function create-parametersName([object]$resource, [string]$name = 'name') {
+<#
+.SYNOPSIS
+    creates parameter name for parameters, variables, resources, and outputs section based on $resource and $name
+    outputs: string
+.OUTPUTS
+    [string]
+#>
     write-log "enter:create-parametersName($resource, $name = 'name')"
     $resourceSubType = [regex]::replace($resource.type, '^.+?/', '')
     if ($resource.name.contains('[')) {
@@ -616,17 +709,25 @@ function create-parametersName($resource, $name = 'name') {
         $resourceName = $resource.name
     }
     
+    $resourceName = $resourceName.replace("-", "_")
+
     # prevent dupes
     $parametersNamePrefix = "$($resourceSubType)_$($resourceName)_"
     $parametersName = [regex]::replace($name, '^' + [regex]::Escape($parametersNamePrefix), '', $global:ignoreCase)
-    #$parametersName = "$parametersNamePrefix$($name.trimstart($parametersNamePrefix))"
     $parametersName = "$($resourceSubType)_$($resourceName)_$($name)"
-       
+
     write-log "exit:create-parametersName returning:$parametersName"
     return $parametersName
 }
 
 function create-redeployTemplate($currentConfig) {
+<#
+.SYNOPSIS
+    creates new redeploy template from current template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:create-redeployTemplate"
     # create redeploy template
     $templateFile = $templateJsonFile.Replace(".json", ".redeploy.json")
@@ -655,103 +756,14 @@ function create-redeployTemplate($currentConfig) {
     write-log "exit:create-redeployTemplate"
 }
 
-function deploy-template($configuredResources) {
-    write-log "enter:deploy-Template"
-    $templateParameters = @{}
-    $parameters = @{}
-    $variables = @{}
-    $outputs = @{}
-    
-    $json = get-content -raw $templateJsonFile | convertfrom-json
-    
-    if (!$json -or !$json.resources) {
-        write-log "invalid template file $templateJsonFile" -isError
-        return
-    }
-
-    if ((test-path $templateParameterFile)) {
-        $jsonParameters = get-content -raw $templateParameterFile | convertfrom-json
-        # convert pscustom object to hashtable
-        foreach ($jsonParameter in $jsonParameters.parameters.psobject.properties) {
-            $templateParameters.Add($jsonParameter.name, $jsonParameter.value.value)
-        }
-    }
-
-    $templateJsonFile = Resolve-Path $templateJsonFile
-    $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where-object Id -imatch ($configuredResources.ResourceId -join '|'))
-
-    foreach ($jsonParameter in $json.parameters.psobject.properties) {
-        $parameters.Add($jsonParameter.name, $jsonParameter.value)
-    }
-    
-    foreach ($jsonParameter in $json.variables.psobject.properties) {
-        $variables.Add($jsonParameter.name, $jsonParameter.value)
-    }
-
-    foreach ($jsonParameter in $json.outputs.psobject.properties) {
-        $outputs.Add($jsonParameter.name, $jsonParameter.value)
-    }
-
-    create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
-
-    $error.Clear()
-    write-log "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
-        -TemplateFile $tempJsonFile `
-        -Verbose:$detail `
-        -TemplateParameterObject $templateParameters `
-        -Debug:$detail `
-        -Mode $mode" -ForegroundColor Cyan
-
-    $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
-        -TemplateFile $tempJsonFile `
-        -Verbose:$detail `
-        -TemplateParameterObject $templateParameters `
-        -Debug:$detail `
-        -Mode $mode
-
-    if (!$error -and !$result) {
-        write-log "patching resource with $tempJsonFile" -ForegroundColor Yellow
-        start-job -ScriptBlock {
-            param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters)
-            if ($detail) {
-                $VerbosePreference = 'continue'
-            }
-
-            write-log "using file: $tempJsonFile"
-            write-log "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
-                -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel $debuglevel `
-                -TemplateFile $tempJsonFile `
-                -TemplateParameterObject $templateParameters `
-                -Verbose:$detail `
-                -Mode $mode" -ForegroundColor Cyan
-
-            New-AzResourceGroupDeployment -Name $deploymentName `
-                -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel $debugLevel `
-                -TemplateFile $tempJsonFile `
-                -TemplateParameterObject $templateParameters `
-                -Verbose:$detail `
-                -Mode $mode
-        } -ArgumentList $resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters
-    }
-    else {
-        write-log "template validation failed: $($error |out-string) $($result | out-string)"
-        write-log "template validation failed`r`n$($error | create-json)`r`n$($result | create-json)" -isError
-        return $false
-    }
-
-    write-log "exit:deploy-Template"
-    if ($error) {
-        return $false
-    }
-    else {
-        return $true
-    }
-}
-
-function display-settings($resources) {
+function display-settings([object[]]$resources) {
+<#
+.SYNOPSIS
+    displays current resource settings
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     $settings = @()
     foreach ($resource in $resources) {
         $settings += $resource | create-json
@@ -760,6 +772,13 @@ function display-settings($resources) {
 }
 
 function export-template($configuredResources, $jsonFile) {
+<#
+.SYNOPSIS
+    exports raw teamplate from azure using export-azresourcegroup cmdlet
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:export-template:exporting template to $jsonFile" -ForegroundColor Yellow
     $resources = [collections.arraylist]@()
     $azResourceGroupLocation = @($configuredResources)[0].Location
@@ -785,58 +804,16 @@ function export-template($configuredResources, $jsonFile) {
         -Resource $resourceIds
     
     write-log "exit:export-template:template exported to $jsonFile" -ForegroundColor Yellow
-    return
-
-    # todo cleanup if not implementing latest api
-    write-log "export-template:getting latest api versions" -ForegroundColor yellow
-    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
-
-    write-log "export-template:getting configured api versions" -ForegroundColor green
-
-    $currentConfig = Get-Content -raw $jsonFile | convertfrom-json
-    $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
-    write-log ($currentApiVersions | format-list * | out-string)
-    remove-item $jsonFile -Force
-    
-    foreach ($azResource in $configuredResources) {
-        write-log "export-template:azresource by id: $($azResource | format-list * | out-string)" -verbose
-        $resourceApiVersion = $null
-
-        if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
-            $rpType = $currentApiVersions | where-object type -ieq $azResource.ResourceType | select-object apiversion
-            $resourceApiVersion = $rpType.ApiVersion
-            write-log "export-template:using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
-        }
-
-        if ($useLatestApiVersion -or !$resourceApiVersion) {
-            $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
-            $rpType = $resourceProvider.ResourceTypes | where-object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
-            $resourceApiVersion = $rpType.ApiVersions[0]
-            write-log "export-template:using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
-        }
-
-        $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
-        write-log "export-template:azresource by id and version: $($azResource | format-list * | out-string)" -verbose
-
-        [void]$resources.Add(@{
-                apiVersion = $resourceApiVersion
-                #dependsOn  = @()
-                type       = $azResource.ResourceType
-                location   = $azResource.Location
-                id         = $azResource.ResourceId
-                name       = $azResource.Name 
-                tags       = $azResource.Tags
-                properties = $azResource.properties
-            })
-    }
-
-    if (!(create-jsonTemplate -resources $resources -jsonFile $jsonFile)) { return }
-    write-log "exit:export-template"
-    return
-    # end todo cleanup
 }
 
 function enum-allResources() {
+<#
+.SYNOPSIS
+    enumerate all resources in resource group
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:enum-allResources"
     $resources = [collections.arraylist]::new()
 
@@ -892,7 +869,6 @@ function enum-allResources() {
     $ipResources = @(enum-ipResourceIds $lbResources)
     if ($ipResources.count -lt 1) {
         write-log "enum-allResources:unable to enumerate ips." -isWarning
-        #return $null
     }
     else {
         [void]$resources.AddRange($ipResources)
@@ -902,7 +878,6 @@ function enum-allResources() {
     $kvResources = @(enum-kvResourceIds $vmssResources)
     if ($kvResources.count -lt 1) {
         write-log "enum-allResources:unable to enumerate key vaults." -isWarning
-        #return $null
     }
     else {
         [void]$resources.AddRange($kvResources)
@@ -912,7 +887,6 @@ function enum-allResources() {
     $nsgResources = @(enum-nsgResourceIds $vmssResources)
     if ($nsgResources.count -lt 1) {
         write-log "enum-allResources:unable to enumerate nsgs." -isWarning
-        #return $null
     }
     else {
         [void]$resources.AddRange($nsgResources)
@@ -925,7 +899,16 @@ function enum-allResources() {
     write-log "exit:enum-allResources"
     return $resources | sort-object -Unique
 }
+
 function enum-clusterResource() {
+<#
+.SYNOPSIS
+    enumerate cluster resource using get-azresource.
+    will prompt if multiple cluster resources found.
+    outputs: object
+.OUTPUTS
+    [object]
+#>
     write-log "enter:enum-clusterResource"
     $clusters = @(get-azresource -ResourceGroupName $resourceGroupName `
             -ResourceType 'Microsoft.ServiceFabric/clusters' `
@@ -963,7 +946,14 @@ function enum-clusterResource() {
     return $clusterResource
 }
 
-function enum-ipResourceIds($lbResources) {
+function enum-ipResourceIds([object[]]$lbResources) {
+<#
+.SYNOPSIS
+    enumerate ip resource id's from lb resources
+    outputs: string[]
+.OUTPUTS
+    [string[]]
+#>
     write-log "enter:enum-ipResourceIds"
     $resources = [collections.arraylist]::new()
 
@@ -984,13 +974,14 @@ function enum-ipResourceIds($lbResources) {
     return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-kvResourceIds($vmssResources) {
-    <#
-    .DESCRIPTION enumerate keyvault resource ids from vmss resource
-    .PARAMETER vmssResources 
-    .INPUTS vmss resource array
-    .OUTPUTS keyvault id array
-    #>
+function enum-kvResourceIds([object[]]$vmssResources) {
+<#
+.SYNOPSIS
+    enumerate keyvault resource id's from vmss resources
+    outputs: string[]
+.OUTPUTS
+    [string[]]
+#>
     write-log "enter:enum-kvResourceIds"
     $resources = [collections.arraylist]::new()
 
@@ -1007,7 +998,14 @@ function enum-kvResourceIds($vmssResources) {
     return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-lbResourceIds($vmssResources) {
+function enum-lbResourceIds([object[]]$vmssResources) {
+<#
+.SYNOPSIS
+    enumerate loadbalancer resource id's from vmss resources
+    outputs: string[]
+.OUTPUTS
+    [string[]]
+#>
     write-log "enter:enum-lbResourceIds"
     $resources = [collections.arraylist]::new()
 
@@ -1028,7 +1026,14 @@ function enum-lbResourceIds($vmssResources) {
     return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-nsgResourceIds($vmssResources) {
+function enum-nsgResourceIds([object[]]$vmssResources) {
+<#
+.SYNOPSIS
+    enumerate network security group resource id's from vmss resources
+    outputs: string[]
+.OUTPUTS
+    [string[]]
+#>
     write-log "enter:enum-nsgResourceIds"
     $resources = [collections.arraylist]::new()
 
@@ -1050,7 +1055,14 @@ function enum-nsgResourceIds($vmssResources) {
     return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-storageResources($clusterResource) {
+function enum-storageResources([object]$clusterResource) {
+<#
+.SYNOPSIS
+    enumerate storage resources from cluster resource
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:enum-storageResources"
     $resources = [collections.arraylist]::new()
     
@@ -1079,7 +1091,14 @@ function enum-storageResources($clusterResource) {
     return $resources.ToArray() | sort-object name -Unique
 }
 
-function enum-vmssResources($clusterResource) {
+function enum-vmssResources([object]$clusterResource) {
+<#
+.SYNOPSIS
+    enumerate virtual machine scaleset resources from cluster resource
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:enum-vmssResources"
     $nodeTypes = $clusterResource.Properties.nodeTypes
     write-log "enum-vmssResources:cluster nodetypes $($nodeTypes| create-json)"
@@ -1114,7 +1133,14 @@ function enum-vmssResources($clusterResource) {
     return $vmssResources.ToArray() | sort-object name -Unique
 }
 
-function enum-vnetResourceIds($vmssResources) {
+function enum-vnetResourceIds([object[]]$vmssResources) {
+<#
+.SYNOPSIS
+    enumerate virtual network resource Ids from vmss resources
+    outputs: string[]
+.OUTPUTS
+    [string[]]
+#>
     write-log "enter:enum-vnetResourceIds"
     $resources = [collections.arraylist]::new()
 
@@ -1136,6 +1162,13 @@ function enum-vnetResourceIds($vmssResources) {
 }
 
 function get-clusterResource($currentConfig) {
+<#
+.SYNOPSIS
+    enumerate cluster resources[0] from $currentConfig
+    outputs: object
+.OUTPUTS
+    [object]
+#>
     write-log "enter:get-clusterResource"
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.ServiceFabric/clusters')
     
@@ -1149,6 +1182,13 @@ function get-clusterResource($currentConfig) {
 }
 
 function get-lbResources($currentConfig) {
+<#
+.SYNOPSIS
+    enumerate loadbalancer resources from $currentConfig
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:get-lbResources"
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers')
     
@@ -1161,7 +1201,14 @@ function get-lbResources($currentConfig) {
     return $resources
 }
 
-function get-fromParametersSection($currentConfig, $parameterName) {
+function get-fromParametersSection($currentConfig, [string]$parameterName) {
+<#
+.SYNOPSIS
+    enumerate defaultValue[] from parameters section by $parameterName
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:get-fromParametersSection parameterName=$parameterName"
     $results = $null
     $parameters = @($currentConfig.parameters)
@@ -1182,7 +1229,15 @@ function get-fromParametersSection($currentConfig, $parameterName) {
     return $results
 }
 
-function get-parameterizedNameFromValue($resourceObject) {
+function get-parameterizedNameFromValue([object]$resourceObject) {
+<#
+.SYNOPSIS
+    enumerate parameter name from parameter value that is parameterized
+    [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]")
+    outputs: string
+.OUTPUTS
+    [string]
+#>
     write-log "enter:get-parameterizedNameFromValue($resourceObject)"
     $retval = $null
     if ([regex]::IsMatch($resourceobject, "\[parameters\('(.+?)'\)\]", $global:ignoreCase)) {
@@ -1193,7 +1248,14 @@ function get-parameterizedNameFromValue($resourceObject) {
     return $retval
 }
 
-function get-resourceParameterValue($resource, $name) {
+function get-resourceParameterValue([object]$resource, [string]$name) {
+<#
+.SYNOPSIS
+    gets resource parameter value
+    outputs: string
+.OUTPUTS
+    [string]
+#>
     write-log "enter:get-resourceParameterValue:resource:$($resource|create-json) name:$name"
     $retval = $null
     foreach ($psObjectProperty in $resource.psobject.Properties) {
@@ -1226,7 +1288,15 @@ function get-resourceParameterValue($resource, $name) {
     write-log "exit:get-resourceParameterValue:returning:$retval"
     return $retval
 }
+
 function get-resourceParameterValueObject($resource, $name) {
+<#
+.SYNOPSIS
+    get resource parameter value object
+    outputs: object
+.OUTPUTS
+    [object]
+#>
     write-log "enter:get-resourceParameterValueObjet:name $name"
     $retval = $null
     foreach ($psObjectProperty in $resource.psobject.Properties) {
@@ -1258,6 +1328,13 @@ function get-resourceParameterValueObject($resource, $name) {
 }
 
 function get-update($updateUrl) {
+<#
+.SYNOPSIS
+    checks for script update
+    outputs: bool
+.OUTPUTS
+    [bool]
+#>
     write-log "get-update:checking for updated script: $($updateUrl)"
     $gitScript = $null
     $scriptFile = $MyInvocation.ScriptName
@@ -1293,7 +1370,14 @@ function get-update($updateUrl) {
     }
 }
 
-function get-vmssExtensions($vmssResource, $extensionType = $null) {
+function get-vmssExtensions([object]$vmssResource, [string]$extensionType = $null) {
+<#
+.SYNOPSIS
+    returns vmss extension resources from $vmssResource
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:get-vmssExtensions:vmssname: $($vmssResource.name)"
     $extensions = @($vmssResource.properties.virtualMachineProfile.extensionProfile.extensions)
     $results = [collections.arraylist]::new()
@@ -1318,6 +1402,13 @@ function get-vmssExtensions($vmssResource, $extensionType = $null) {
 }
 
 function get-vmssResources($currentConfig) {
+<#
+.SYNOPSIS
+    returns vmss resources from $currentConfig
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:get-vmssResources"
     $resources = @($currentConfig.resources | Where-Object type -ieq 'Microsoft.Compute/virtualMachineScaleSets')
     if ($resources.count -eq 0) {
@@ -1328,7 +1419,14 @@ function get-vmssResources($currentConfig) {
     return $resources
 }
 
-function get-vmssResourcesByNodeType($currentConfig, $nodetypeResource) {
+function get-vmssResourcesByNodeType($currentConfig, [object]$nodetypeResource) {
+<#
+.SYNOPSIS
+    returns vmss resources from $currentConfig by $nodetypeResource
+    outputs: object[]
+.OUTPUTS
+    [object[]]
+#>
     write-log "enter:get-vmssResourcesByNodeType"
     $vmssResources = get-vmssResources -currentConfig $currentConfig
     $vmssByNodeType = [collections.arraylist]::new()
@@ -1355,6 +1453,13 @@ function get-vmssResourcesByNodeType($currentConfig, $nodetypeResource) {
 }
 
 function modify-clusterResourceAddNodeType($currentConfig) {
+<#
+.SYNOPSIS
+    modifies cluster resource for addNodeType template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-clusterResourceAddNodeType"
     $clusterResource = get-clusterResource $currentConfig
     
@@ -1370,6 +1475,13 @@ function modify-clusterResourceAddNodeType($currentConfig) {
 
 
 function modify-clusterResourceRedeploy($currentConfig) {
+<#
+.SYNOPSIS
+    modifies cluster resource for redeploy template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-clusterResourceDeploy"
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
     $clusterResource = get-clusterResource $currentConfig
@@ -1388,6 +1500,13 @@ function modify-clusterResourceRedeploy($currentConfig) {
 }
 
 function modify-ipAddressesRedeploy($currentConfig) {
+<#
+.SYNOPSIS
+    modifies ip resources for redeploy template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-ipAddressesRedeploy"
     # add ip address dns parameter
     $metadataDescription = 'this name must be unique in deployment region.'
@@ -1397,6 +1516,13 @@ function modify-ipAddressesRedeploy($currentConfig) {
 }
 
 function modify-lbResources($currenConfig) {
+<#
+.SYNOPSIS
+    modifies loadbalancer resources for current
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-lbResources"
     $lbResources = get-lbResources $currentConfig
     foreach ($lbResource in $lbResources) {
@@ -1427,6 +1553,13 @@ function modify-lbResources($currenConfig) {
 }
 
 function modify-lbResourcesRedeploy($currenConfig) {
+<#
+.SYNOPSIS
+    modifies loadbalancer resources for redeploy template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-lbResourcesRedeploy"
     $lbResources = get-lbResources $currentConfig
     foreach ($lbResource in $lbResources) {
@@ -1440,6 +1573,13 @@ function modify-lbResourcesRedeploy($currenConfig) {
 }
 
 function modify-storageResourcesDeploy($currentConfig) {
+<#
+.SYNOPSIS
+    modifies storage resources for deploy template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-storageResourcesDeploy"
     $metadataDescription = 'this name must be unique in deployment region.'
     $parameterExclusions = [collections.arraylist]::new()
@@ -1465,6 +1605,13 @@ function modify-storageResourcesDeploy($currentConfig) {
 }
 
 function modify-vmssResources($currenConfig) {
+<#
+.SYNOPSIS
+    modifies vmss resources for current template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-vmssResources"
     $vmssResources = get-vmssResources $currentConfig
    
@@ -1495,6 +1642,13 @@ function modify-vmssResources($currenConfig) {
 }
 
 function modify-vmssResourcesDeploy($currenConfig) {
+<#
+.SYNOPSIS
+    modifies storage vmss for deploy template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-vmssResourcesDeploy"
     $vmssResources = get-vmssResources $currentConfig
     foreach ($vmssResource in $vmssResources) {
@@ -1513,6 +1667,13 @@ function modify-vmssResourcesDeploy($currenConfig) {
 }
 
 function modify-vmssResourcesRedeploy($currenConfig) {
+<#
+.SYNOPSIS
+    modifies vmss resources for redeploy template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:modify-vmssResourcesReDeploy"
     $vmssResources = get-vmssResources $currentConfig
    
@@ -1579,7 +1740,14 @@ function modify-vmssResourcesRedeploy($currenConfig) {
     write-log "exit:modify-vmssResourcesReDeploy"
 }
 
-function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $parameterValue = $null, $type = 'string') {
+function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$parameterName, [string]$parameterValue = $null, [string]$type = 'string') {
+<#
+.SYNOPSIS
+    parameterizes nodetype for addnodetype template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:parameterize-nodetype:nodetype:$($nodetype |create-json) parameterName:$parameterName parameterValue:$parameterValue type:$type"
     $vmssResources = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $nodetype)
     $parameterizedName = $null
@@ -1633,7 +1801,14 @@ function parameterize-nodetype($currentConfig, $nodetype, $parameterName, $param
     write-log "exit:parameterize-nodetype"
 }
 
-function parameterize-nodeTypes($currentConfig) {
+function parameterize-nodeTypes($currentConfig,[switch]$isPrimary) {
+<#
+.SYNOPSIS
+    parameterizes nodetypes for addnodetype template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:parameterize-nodetypes"
     # todo. should validation be here? how many nodetypes
     $clusterResource = get-clusterResource $currentConfig
@@ -1646,17 +1821,21 @@ function parameterize-nodeTypes($currentConfig) {
     }
 
     write-log "parameterize-nodetypes:current nodetypes $($nodetypes.name)" -ForegroundColor Green
-    $primarynodetypes = @($nodetypes | Where-Object isPrimary -eq $true)
+    $filterednodetypes = @($nodetypes | Where-Object isPrimary -eq $isPrimary)
 
-    if ($primarynodetypes.count -eq 0) {
-        write-log "parameterize-nodetypes:unable to find primary nodetype" -isError
+    if ($filterednodetypes.count -eq 0 -and $isPrimary) {
+        write-log "parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary" -isError
     }
-    elseif ($primarynodetypes.count -gt 1) {
+    elseif ($filterednodetypes.count -eq 0) {
+        write-log "parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary"
+        return
+    }
+    elseif ($filterednodetypes.count -gt 1 -and $isPrimary) {
         write-log "parameterize-nodetypes:more than one primary node type detected!" -isError
     }
     
     write-log "parameterize-nodetypes:adding new nodetype" -foregroundcolor Cyan
-    $newPrimaryNodeType = $primarynodetypes[0].psobject.copy()
+    $newPrimaryNodeType = $filterednodetypes[0].psobject.copy()
     $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -currentConfig $currentConfig -nodetypeResource $newPrimaryNodeType)
 
     if ($existingVmssNodeTypeRef.count -lt 1) {
@@ -1671,7 +1850,7 @@ function parameterize-nodeTypes($currentConfig) {
     set-resourceParameterValue -resource $newPrimaryNodeType -name 'vmInstanceCount' -newValue $capacity
 
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
-    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool'
+    parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool' -parameterValue $isPrimary
     # todo: currently name has to be parameterized last so parameter names above can be found
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name'
     
@@ -1681,6 +1860,13 @@ function parameterize-nodeTypes($currentConfig) {
 }
 
 function remove-duplicateResources($currentConfig) {
+<#
+.SYNOPSIS
+    removes duplicate resources for current template
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:remove-duplicateResources"
     # fix up deploy errors by removing duplicated sub resources on root like lb rules by
     # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
@@ -1701,22 +1887,14 @@ function remove-duplicateResources($currentConfig) {
     write-log "exit:remove-duplicateResources"
 }
 
-function remove-jobs() {
-    try {
-        foreach ($job in get-job) {
-            write-log "removing job $($job.Name)" -report $global:scriptName
-            write-log $job -report $global:scriptName
-            $job.StopJob()
-            Remove-Job $job -Force
-        }
-    }
-    catch {
-        write-log "error:$($Error | out-string)"
-        $error.Clear()
-    }
-}
-
 function remove-unusedParameters($currentConfig) {
+<#
+.SYNOPSIS
+    removes unused parameters from parameters section
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:remove-unusedParameters"
     $parametersRemoveList = [collections.arraylist]::new()
     #serialize and copy
@@ -1806,7 +1984,15 @@ function rename-Parameter($currentConfig, $oldParameterName, $newParameterName) 
     write-log "exit:rename-Parameter"
     return $true
 }
-function set-resourceParameterValue($resource, $name, $newValue) {
+
+function set-resourceParameterValue([object]$resource, [string]$name, [string]$newValue) {
+<#
+.SYNOPSIS
+    sets resource parameter value in resources section
+    outputs: bool
+.OUTPUTS
+    [bool]
+#>
     write-log "enter:set-resourceParameterValue:resource:$($resource|create-json) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
     $retval = $false
     foreach ($psObjectProperty in $resource.psobject.Properties) {
@@ -1837,7 +2023,14 @@ function set-resourceParameterValue($resource, $name, $newValue) {
     return $retval
 }
 
-function verify-config($currentConfig, $templateParameterFile) {
+function verify-config($currentConfig, [string]$templateParameterFile) {
+<#
+.SYNOPSIS
+    verifies current configuration $currentConfig using test-resourcegroupdeployment
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     write-log "enter:verify-config:templateparameterFile:$templateParameterFile"
     $json = '.\verify-config.json'
     $currentConfig | create-json | out-file -FilePath $json -Force
@@ -1859,38 +2052,14 @@ function verify-config($currentConfig, $templateParameterFile) {
     write-log "exit:verify-config:templateparameterFile:$templateParameterFile"
 }
 
-function wait-jobs() {
-    write-log "monitoring jobs"
-    while (get-job) {
-        foreach ($job in get-job) {
-            $jobInfo = (receive-job -Id $job.id)
-            if ($jobInfo) {
-                write-log -data $jobInfo
-            }
-            else {
-                write-log -data $job
-            }
-
-            if ($job.state -ine "running") {
-                write-log -data $job
-
-                if ($job.state -imatch "fail" -or $job.statusmessage -imatch "fail") {
-                    write-log -data $job
-                }
-
-                write-log -data $job
-                remove-job -Id $job.Id -Force  
-            }
-
-            write-progressInfo
-            start-sleep -Seconds $sleepSeconds
-        }
-    }
-
-    write-log "finished jobs"
-}
-
 function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray, [switch]$isError, [switch]$isWarning, [switch]$verbose) {
+<#
+.SYNOPSIS
+    writes output to console and logfile
+    outputs: null
+.OUTPUTS
+    [null]
+#>
     if (!$data) { return }
     $stringData = [text.stringbuilder]::new()
     $verboseTag = ''
@@ -1955,43 +2124,6 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
 
     if ($logFile) {
         out-file -Append -inputobject $stringData.ToString() -filepath $logFile
-    }
-}
-
-function write-progressInfo() {
-    $ErrorActionPreference = $VerbosePreference = 'silentlycontinue'
-    $errorCount = $error.Count
-    write-log "Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue" -verbose
-    $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
-    $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
-    write-log $status -verbose
-
-    $count = 0
-    Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName" -Status $status -id ($count++)
-
-    if ($deploymentOperations) {
-        write-log ("deployment operations: `r`n`t$($deploymentOperations | out-string)") -verbose
-        
-        foreach ($operation in $deploymentOperations) {
-            write-log ($operation | create-json) -verbose
-            $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
-            $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
-            
-            if ($operation.Properties.statusMessage) {
-                $status = "$status $($operation.Properties.statusMessage)"
-            }
-            
-            $activity = "$($operation.Properties.provisioningOperation):$($currentOperation)"
-            Write-Progress -Activity $activity -id ($count++) -Status $status
-        }
-    }
-
-    if ($errorCount -ne $error.Count) {
-        $error.RemoveRange($errorCount - 1, $error.Count - $errorCount)
-    }
-
-    if ($detail) {
-        $ErrorActionPreference = $VerbosePreference = 'continue'
     }
 }
 
