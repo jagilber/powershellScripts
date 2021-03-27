@@ -410,9 +410,10 @@ function create-addPrimaryNodeTypeTemplate($currentConfig) {
     $templateFile = $templateJsonFile.Replace(".json", ".addprimarynodetype.json")
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-    # addprimarynodetype from primarynodetype
-    # addsecondarynodetype from secondarynodetype
-    parameterize-nodeTypes $currentConfig -isPrimary $true
+    if(!(parameterize-nodeTypes $currentConfig -isPrimary $true)){
+        write-log "exit:create-addPrimaryNodeTypeTemplate:no nodetype found" -isError
+        return
+    }
 
     create-parameterFile $currentConfig  $templateParameterFile
     verify-config $currentConfig $templateParameterFile
@@ -456,9 +457,10 @@ function create-addSecondaryNodeTypeTemplate($currentConfig) {
     $templateFile = $templateJsonFile.Replace(".json", ".addsecondarynodetype.json")
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-    # addprimarynodetype from primarynodetype
-    # addsecondarynodetype from secondarynodetype
-    parameterize-nodeTypes $currentConfig
+    if(!(parameterize-nodeTypes $currentConfig)){
+        write-log "exit:create-addSecondaryNodeTypeTemplate:no nodetype found"
+        return
+    }
 
     create-parameterFile $currentConfig  $templateParameterFile
     verify-config $currentConfig $templateParameterFile
@@ -673,7 +675,7 @@ function create-parameterizedName($parameterName, $resource = $null, [switch]$wi
 .OUTPUTS
     [string]
 #>
-    write-log "enter:reate-parameterizedName $parameterName, $resource = $null, [switch]$withbrackets"
+    write-log "enter:create-parameterizedName $parameterName, $resource = $null, [switch]$withbrackets"
     $retval = ""
 
     if ($resource) {
@@ -1805,9 +1807,9 @@ function parameterize-nodeTypes($currentConfig,[bool]$isPrimary = $false) {
 <#
 .SYNOPSIS
     parameterizes nodetypes for addnodetype template
-    outputs: null
+    outputs: bool
 .OUTPUTS
-    [null]
+    [bool]
 #>
     write-log "enter:parameterize-nodetypes"
     # todo. should validation be here? how many nodetypes
@@ -1817,18 +1819,15 @@ function parameterize-nodeTypes($currentConfig,[bool]$isPrimary = $false) {
 
     if ($nodetypes.Count -lt 1) {
         write-log "exit:parameterize-nodetypes:no nodetypes detected!" -isError
-        return
+        return $false
     }
 
     write-log "parameterize-nodetypes:current nodetypes $($nodetypes.name)" -ForegroundColor Green
-    $filterednodetypes = @($nodetypes | Where-Object isPrimary -eq $isPrimary)
+    $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimary)
 
-    if ($filterednodetypes.count -eq 0 -and $isPrimary) {
-        write-log "parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary" -isError
-    }
-    elseif ($filterednodetypes.count -eq 0) {
-        write-log "parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary"
-        return
+    if ($filterednodetypes.count -eq 0) {
+        write-log "exit:parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary" -isError:$isPrimary
+        return $false
     }
     elseif ($filterednodetypes.count -gt 1 -and $isPrimary) {
         write-log "parameterize-nodetypes:more than one primary node type detected!" -isError
@@ -1840,7 +1839,7 @@ function parameterize-nodeTypes($currentConfig,[bool]$isPrimary = $false) {
 
     if ($existingVmssNodeTypeRef.count -lt 1) {
         write-log "exit:parameterize-nodetypes:unable to find existing nodetypes by nodetyperef" -isError
-        return
+        return $false
     }
 
     write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
@@ -1854,15 +1853,16 @@ function parameterize-nodeTypes($currentConfig,[bool]$isPrimary = $false) {
     # todo: currently name has to be parameterized last so parameter names above can be found
     parameterize-nodetype -currentConfig $currentConfig -nodetype $newPrimaryNodeType -parameterName 'name'
     
-    $nodetypes.Add($newPrimaryNodeType)
+    [void]$nodetypes.Add($newPrimaryNodeType)
     $clusterResource.properties.nodetypes = $nodetypes
     write-log "exit:parameterize-nodetypes:result:`r`n$($nodetypes | create-json)"
+    return $true
 }
 
 function remove-duplicateResources($currentConfig) {
 <#
 .SYNOPSIS
-    removes duplicate resources for current template
+    removes duplicate resources for current template from export
     outputs: null
 .OUTPUTS
     [null]
