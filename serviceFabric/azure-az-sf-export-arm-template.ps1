@@ -290,7 +290,7 @@ function add-parameter($currentConfig, [object]$resource, [string]$name, [string
     write-log "exit:add-parameter"
 }
 
-function add-toParametersSection ($currentConfig, [string]$parameterName, [string]$parameterValue, [string]$type = 'string', [string]$metadataDescription = '') {
+function add-toParametersSection ($currentConfig, [string]$parameterName, [object]$parameterValue, [string]$type = 'string', [string]$metadataDescription = '') {
 <#
 .SYNOPSIS
     add a new parameter based on $parameterName and $parameterValue to parameters Setion
@@ -412,7 +412,7 @@ function create-addPrimaryNodeTypeTemplate($currentConfig) {
 
     # addprimarynodetype from primarynodetype
     # addsecondarynodetype from secondarynodetype
-    parameterize-nodeTypes $currentConfig -isPrimary
+    parameterize-nodeTypes $currentConfig -isPrimary $true
 
     create-parameterFile $currentConfig  $templateParameterFile
     verify-config $currentConfig $templateParameterFile
@@ -1740,7 +1740,7 @@ function modify-vmssResourcesRedeploy($currenConfig) {
     write-log "exit:modify-vmssResourcesReDeploy"
 }
 
-function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$parameterName, [string]$parameterValue = $null, [string]$type = 'string') {
+function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$parameterName, [object]$parameterValue = $null, [string]$type = 'string') {
 <#
 .SYNOPSIS
     parameterizes nodetype for addnodetype template
@@ -1801,7 +1801,7 @@ function parameterize-nodetype($currentConfig, [object]$nodetype, [string]$param
     write-log "exit:parameterize-nodetype"
 }
 
-function parameterize-nodeTypes($currentConfig,[switch]$isPrimary) {
+function parameterize-nodeTypes($currentConfig,[bool]$isPrimary = $false) {
 <#
 .SYNOPSIS
     parameterizes nodetypes for addnodetype template
