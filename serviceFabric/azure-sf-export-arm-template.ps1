@@ -159,7 +159,7 @@ class SFTemplate {
             }
         }
         else {
-            $resourceIds = EnumAllResources
+            $resourceIds = $this.EnumAllResources
             foreach ($resourceId in $resourceIds) {
                 $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
                 if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
@@ -172,7 +172,7 @@ class SFTemplate {
             }
         }
 
-        DisplaySettings -resources $this.configuredRGResources
+        $this.DisplaySettings($this.configuredRGResources)
 
         if ($this.configuredRGResources.count -lt 1) {
             $this.WriteWarning("error enumerating resource $($error | format-list * | out-string)")
@@ -182,14 +182,14 @@ class SFTemplate {
         $deploymentName = "$($this.resourceGroupName)-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
         # create $this.currentConfig
-        CreateExportTemplate
+        $this.CreateExportTemplate
 
         # use $this.currentConfig
-        CreateCurrentTemplate
-        CreateRedeployTemplate
-        CreateAddPrimaryNodeTypeTemplate
-        CreateAddSecondaryNodeTypeTemplate
-        CreateNewTemplate
+        $this.CreateCurrentTemplate
+        $this.CreateRedeployTemplate
+        $this.CreateAddPrimaryNodeTypeTemplate
+        $this.CreateAddSecondaryNodeTypeTemplate
+        $this.CreateNewTemplate
 
         if ($this.compress) {
             $zipFile = "$($this.templatePath).zip"
@@ -279,10 +279,10 @@ class SFTemplate {
         $parameterNames = @{}
 
         foreach ($resource in $resources) {
-            $parameterName = CreateParametersName -resource $resource -name $name
-            $parameterizedName = CreateParameterizedName -parameterName $name -resource $resource -withbrackets
-            $parameterNameValue = GetResourceParameterValue -resource $resource -name $name
-            SetResourceParameterValue -resource $resource -name $name -newValue $parameterizedName
+            $parameterName = $this.CreateParametersName($resource, $name)
+            $parameterizedName = $this.CreateParameterizedName($name, $resource, $true)
+            $parameterNameValue = $this.GetResourceParameterValue($resource, $name)
+            $null = $this.SetResourceParameterValue($resource, $name, $parameterizedName)
 
             if ($parameterNameValue -ne $null) {
                 [void]$parameterNames.Add($parameterName, $parameterNameValue)
@@ -292,11 +292,8 @@ class SFTemplate {
 
         $this.WriteLog("AddParameterNameByResourceType:parameter names $parameterNames")
         foreach ($parameterName in $parameterNames.GetEnumerator()) {
-            if (!(GetFromParametersSection -parameterName $parameterName.key)) {
-                AddToParametersSection `
-                    -parameterName $parameterName.key `
-                    -parameterValue $parameterName.value `
-                    -metadataDescription $metadataDescription
+            if (!($this.GetFromParametersSection($parameterName.key))) {
+                $this.AddToParametersSection($parameterName.key, $parameterName.value, $metadataDescription)
             }
         }
         $this.WriteLog("exit:AddParameterNameByResourceType")
@@ -310,28 +307,46 @@ class SFTemplate {
         .OUTPUTS
             [null]
         #>
-        $parameterName = CreateParametersName -resource $resource -name $aliasName
-        $parameterizedName = CreateParameterizedName -parameterName $aliasName -resource $resource -withbrackets
+        $parameterName = $this.CreateParametersName($resource, $aliasName)
+        $parameterizedName = $this.CreateParameterizedName($aliasName, $resource, $true)
         $parameterNameValue = $value
 
         if (!$parameterNameValue) {
-            $parameterNameValue = GetResourceParameterValue -resource $resourceObject -name $name
+            $parameterNameValue = $this.GetResourceParameterValue($resourceObject, $name)
         }
         $this.WriteLog("enter:AddParameter( $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '')")
-        $null = SetResourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
+        $null = $this.SetResourceParameterValue($resourceObject, $name, $parameterizedName)
 
         if ($parameterNameValue -ne $null) {
             $this.WriteLog("AddParameter:adding parameter name:$parameterName parameter value:$parameterNameValue")
-            if ((GetFromParametersSection -parameterName $parameterName) -eq $null) {
+            if (($this.GetFromParametersSection($parameterName)) -eq $null) {
                 $this.WriteLog("AddParameter:$parameterName not found in parameters sections. adding.")
-                AddToParametersSection `
-                    -parameterName $parameterName `
-                    -parameterValue $parameterNameValue `
-                    -type $type `
-                    -metadataDescription $metadataDescription
+                $this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
             }
         }
         $this.WriteLog("exit:AddParameter")
+    }
+
+    [void] AddToParametersSection( [string]$parameterName, [object]$parameterValue, [string]$type = 'string') {
+        <#
+        .SYNOPSIS
+            add a new parameter based on $parameterName and $parameterValue to parameters Setion
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        AddToParametersSection( $parameterName, $parameterValue, $type, '')
+    }
+
+    [void] AddToParametersSection( [string]$parameterName, [object]$parameterValue, [string]$metadataDescription = '') {
+        <#
+        .SYNOPSIS
+            add a new parameter based on $parameterName and $parameterValue to parameters Setion
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        AddToParametersSection( $parameterName, $parameterValue, 'string', $metadataDescription)
     }
 
     [void] AddToParametersSection( [string]$parameterName, [object]$parameterValue, [string]$type = 'string', [string]$metadataDescription = '') {
@@ -370,7 +385,7 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:AddVmssProtectedSettings$($vmssResource.name)")
-        $sflogsParameter = CreateParameterizedName -parameterName 'name' -resource $this.sflogs
+        $sflogsParameter = $this.CreateParameterizedName('name', $this.sflogs)
 
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
@@ -383,7 +398,7 @@ class SFTemplate {
 
             if ($extension.properties.type -ieq 'IaaSDiagnostics') {
                 $saname = $extension.properties.settings.storageAccount
-                $sfdiagsParameter = CreateParameterizedName -parameterName 'name' -resource ($this.sfdiags | where-object name -imatch $saname)
+                $sfdiagsParameter = $this.CreateParameterizedName('name', ($this.sfdiags | where-object name -imatch $saname))
                 $extension.properties.settings.storageAccount = "[$sfdiagsParameter]"
 
                 $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
@@ -718,7 +733,29 @@ class SFTemplate {
         $this.WriteLog("exit:CreateParameterFile")
     }
 
-    [string] CreateParameterizedName($parameterName, $resource = $null, [switch]$withbrackets) {
+    [string] CreateParameterizedName($parameterName) {
+        <#
+        .SYNOPSIS
+            creates parameterized name for variables, resources, and outputs section based on $paramterName and $resource
+            outputs: string
+        .OUTPUTS
+            [string]
+        #>
+        return CreateParameterizedName($parameterName, $null, $false) 
+    }
+
+    [string] CreateParameterizedName($parameterName, $resource) {
+        <#
+        .SYNOPSIS
+            creates parameterized name for variables, resources, and outputs section based on $paramterName and $resource
+            outputs: string
+        .OUTPUTS
+            [string]
+        #>
+        return CreateParameterizedName($parameterName, $resource, $false) 
+    }
+
+    [string] CreateParameterizedName($parameterName, $resource, [switch]$withbrackets) {
         <#
         .SYNOPSIS
             creates parameterized name for variables, resources, and outputs section based on $paramterName and $resource
@@ -730,7 +767,7 @@ class SFTemplate {
         $retval = ""
 
         if ($resource) {
-            $retval = CreateParametersName -resource $resource -name $parameterName
+            $retval = $this.CreateParametersName($resource, $parameterName)
             $retval = "parameters('$retval')"
         }
         else {
@@ -743,6 +780,18 @@ class SFTemplate {
 
         $this.WriteLog("exit:CreateParameterizedName:$retval")
         return $retval
+    }
+
+    [string] CreateParametersName([object]$resource) {
+        <#
+        .SYNOPSIS
+            creates parameter name for parameters, variables, resources, and outputs section based on $resource and $name
+            outputs: string
+        .OUTPUTS
+            [string]
+        #>
+
+        return CreateParametersName($resource, 'name')
     }
 
     [string] CreateParametersName([object]$resource, [string]$name = 'name') {
@@ -1540,7 +1589,7 @@ class SFTemplate {
             $parameterizedName = GetParameterizedNameFromValue $extension.properties.settings.nodetyperef
 
             if ($parameterizedName) {
-                $nodetypeName = GetFromParametersSection -parameterName $parameterizedName
+                $nodetypeName = $this.GetFromParametersSection($parameterizedName)
             }
             else {
                 $nodetypeName = $extension.properties.settings.nodetyperef
@@ -1586,7 +1635,7 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyClusterResourceRedeploy")
-        $sflogsParameter = CreateParameterizedName -parameterName 'name' -resource $this.sflogs -withbrackets
+        $sflogsParameter = $this.CreateParameterizedName('name', $this.sflogs, $true)
         $clusterResource = GetClusterResource
     
         $this.WriteLog("ModifyClusterResourceRedeploy:setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter")
@@ -1597,7 +1646,7 @@ class SFTemplate {
             [void]$clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
         }
     
-        $reference = "[reference($(CreateParameterizedName -parameterName 'name' -resource $clusterResource))]"
+        $reference = "[reference($($this.CreateParameterizedName('name',$clusterResource)))]"
         AddOutputs -name 'clusterProperties' -value $reference -type 'object'
         $this.WriteLog("exit:ModifyClusterResourceDeploy")
     }
@@ -1686,21 +1735,14 @@ class SFTemplate {
         $this.WriteLog("enter:ModifyStorageResourcesDeploy")
         $metadataDescription = 'this name must be unique in deployment region.'
         $parameterExclusions = [collections.arraylist]::new()
-        $sflogsParameter = CreateParametersName -resource $this.sflogs
+        $sflogsParameter = $this.CreateParametersName($this.sflogs)
         [void]$parameterExclusions.Add($sflogsParameter)
-
-        AddToParametersSection `
-            -parameterName $sflogsParameter `
-            -parameterValue $this.defaultSflogsValue `
-            -metadataDescription $metadataDescription
+        $this.AddToParametersSection($sflogsParameter, $this.defaultSflogsValue, $metadataDescription)
 
         foreach ($sfdiag in $this.sfdiags) {
-            $sfdiagParameter = CreateParametersName -resource $sfdiag
+            $sfdiagParameter = $this.CreateParametersName($sfdiag)
             [void]$parameterExclusions.Add($sfdiagParameter)
-            AddToParametersSection `
-                -parameterName $sfdiagParameter `
-                -parameterValue $this.defaultSfdiagsValue `
-                -metadataDescription $metadataDescription
+            $this.AddToParametersSection($sfdiagParameter, $this.defaultSfldiagsValue, $metadataDescription)
         }
 
         $this.WriteLog("exit:ModifyStorageResourcesDeploy")
@@ -1758,11 +1800,11 @@ class SFTemplate {
             $extension = GetVmssExtensions -vmssResource $vmssResource -extensionType 'ServiceFabricNode'
             $clusterResource = GetClusterResource
 
-            $parameterizedName = CreateParameterizedName -parameterName 'name' -resource $clusterResource
+            $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
             $newName = "[reference($parameterizedName).clusterEndpoint]"
 
             $this.WriteLog("setting cluster endpoint to $newName")
-            SetResourceParameterValue -resource $extension.properties.settings -name 'clusterEndpoint' -newValue $newName
+            $null = $this.SetResourceParameterValue($extension.properties.settings, 'clusterEndpoint', $newName)
             # remove clusterendpoint parameter
             RemoveUnusedParameters
         }
@@ -1856,17 +1898,17 @@ class SFTemplate {
         $parameterizedName = $null
 
         if ($parameterValue -eq $null) {
-            $parameterValue = GetResourceParameterValue -resource $nodetype -name $parameterName
+            $parameterValue = $this.GetResourceParameterValue($nodetype, $parameterName)
         }
         foreach ($vmssResource in $vmssResources) {
-            $parametersName = CreateParametersName -resource $vmssResource -name $parameterName
+            $parametersName = $this.CreateParametersName($vmssResource, $parameterName)
 
-            $parameterizedName = GetParameterizedNameFromValue -resourceObject (GetResourceParameterValue -resource $nodetype -name $parameterName)
+            $parameterizedName = GetParameterizedNameFromValue -resourceObject ($this.GetResourceParameterValue($nodetype, $parameterName))
             if (!$parameterizedName) {
-                $parameterizedName = CreateParameterizedName -resource $vmssResource -parameterName $parameterName
+                $parameterizedName = $this.CreateParameterizedName($parameterName, $vmssResource)
             }
 
-            $null = AddToParametersSection -parameterName $parametersName -parameterValue $parameterValue -type $type
+            $null = $this.AddToParametersSection($parameterName, $parameterValue, $type)
             $this.WriteLog("ParameterizeNodetype:setting $parametersName to $parameterValue for $($nodetype.name)", [consolecolor]::Magenta)
 
             $this.WriteLog("ParameterizeNodetype:AddParameter `
@@ -1958,8 +2000,8 @@ class SFTemplate {
             $this.WriteLog("ParameterizeNodetypes:parameterizing new nodetype ", [consolecolor]::Cyan)
 
             # setting capacity value should be parametized value to vmInstanceCount value
-            $capacity = GetResourceParameterValue -resource $existingVmssNodeTypeRef[0].sku -name 'capacity'
-            $null = SetResourceParameterValue -resource $newNodeType -name 'vmInstanceCount' -newValue $capacity
+            $capacity = $this.GetResourceParameterValue($existingVmssNodeTypeRef[0].sku, 'capacity')
+            $null = $this.SetResourceParameterValue($newNodeType, 'vmInstanceCount', $capacity)
 
             ParameterizeNodetype -nodetype $newNodeType -parameterName 'durabilityLevel'
         
@@ -2116,7 +2158,7 @@ class SFTemplate {
         $this.currentConfigResourcejson = CreateJson($this.currentConfigJson)
 
         foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
-            $parameterizedName = CreateParameterizedName $psObjectProperty.name
+            $parameterizedName = CreateParameterizedName -parameterName $psObjectProperty.name
             $this.WriteLog("RemoveUnusedParameters:checking to see if $parameterizedName is being used")
             if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($parameterizedName), $this.ignoreCase)) {
                 $this.WriteVerbose("RemoveUnusedParameters:$parameterizedName is being used")
@@ -2218,7 +2260,7 @@ class SFTemplate {
             $currentParameterizedName = CreateParameterizedName -resource $resource
         }
         else {
-            $currentResourceName = GetFromParametersSection -parameterName $currentParameterizedName
+            $currentResourceName = $this.GetFromParametersSection($currentParameterizedName)
         }
     
         $currentResourceType = $resource.type
@@ -2257,7 +2299,7 @@ class SFTemplate {
                 }
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-                $retval = SetResourceParameterValue -resource $psObjectProperty.Value -name $name -newValue $newValue
+                $retval = $this.SetResourceParameterValue($psObjectProperty.Value, $name, $newValue)
             }
             else {
                 $this.WriteVerbose("SetResourceParameterValue:skipping type:$($psObjectProperty.TypeNameOfValue)")
