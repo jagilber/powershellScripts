@@ -115,7 +115,7 @@ function main () {
     if ($resourceNames) {
         foreach ($resourceName in $resourceNames) {
             write-log "getting resource $resourceName"
-            $global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
+            [void]$global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
         }
     }
     else {
@@ -280,8 +280,9 @@ function add-parameter( [object]$resource, [string]$name, [string]$aliasName = $
     $null = set-resourceParameterValue -resource $resourceObject -name $name -newValue $parameterizedName
 
     if ($parameterNameValue -ne $null) {
-        write-log "add-parameter:parameter name $parameterName"
-        if (!(get-fromParametersSection -parameterName $parameterName)) {
+        write-log "add-parameter:adding parameter name:$parameterName parameter value:$parameterNameValue"
+        if ((get-fromParametersSection -parameterName $parameterName) -eq $null) {
+            write-log "add-parameter:$parameterName not found in parameters sections. adding."
             add-toParametersSection `
                 -parameterName $parameterName `
                 -parameterValue $parameterNameValue `
@@ -310,13 +311,13 @@ function add-toParametersSection ( [string]$parameterName, [object]$parameterVal
     foreach ($psObjectProperty in $global:currentConfig.parameters.psobject.Properties) {
         if (($psObjectProperty.Name -ieq $parameterName)) {
             $psObjectProperty.Value = $parameterObject
-            write-log "exit:add-toParametersSection:parameterObject value added to existing parameter:$parameterObject"
+            write-log "exit:add-toParametersSection:parameterObject value added to existing parameter:$($parameterValue|create-json)"
             return
         }
     }
 
     $global:currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
-    write-log "exit:add-toParametersSection:new parameter name:$parameterName added"
+    write-log "exit:add-toParametersSection:new parameter name:$parameterName added $($parameterObject |create-json)"
 }
 
 function add-vmssProtectedSettings([object]$vmssResource) {
@@ -412,7 +413,7 @@ function create-addPrimaryNodeTypeTemplate() {
     $templateFile = $templateJsonFile.Replace(".json", ".addprimarynodetype.json")
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-    if (!(parameterize-nodeTypes -isPrimary $true)) {
+    if (!(parameterize-nodeTypes -isPrimaryFilter $true)) {
         write-log "exit:create-addPrimaryNodeTypeTemplate:no nodetype found" -isError
         return
     }
@@ -460,9 +461,14 @@ function create-addSecondaryNodeTypeTemplate() {
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
     if (!(parameterize-nodeTypes)) {
-        write-log "exit:create-addSecondaryNodeTypeTemplate:no nodetype found"
-        return
+        write-log "create-addSecondaryNodeTypeTemplate:no secondary nodetype found" -foregroundcolor Yellow
+
+        if (!(parameterize-nodeTypes -isPrimaryFilter $true -isPrimaryValue $false)) {
+            write-log "exit:create-addSecondaryNodeTypeTemplate:no primary nodetype found" -isError
+            return
+        }
     }
+
 
     create-parameterFile  $templateParameterFile
     verify-config $templateParameterFile
@@ -602,6 +608,7 @@ function create-newTemplate() {
     $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
     $parameterExclusions = modify-storageResourcesDeploy
     modify-vmssResourcesDeploy
+    modify-clusterResourceDeploy
 
     create-parameterFile -parameterFileName $templateParameterFile -ignoreParameters $parameterExclusions
     verify-config $templateParameterFile
@@ -1224,11 +1231,11 @@ function get-fromParametersSection( [string]$parameterName) {
     $results = @($parameters.$parameterName.defaultValue)
     $ErrorActionPreference = $currentErrorPreference
     
-    if (!$results) {
+    if ($results.Count -lt 1) {
         write-log "get-fromParametersSection:no matching values found in parameters section for $parameterName"
     }
-    if (@($results).count -gt 1) {
-        write-log "get-fromParametersSection:multiple matching values found in parameters section for $parameterName `r`n $($results |create-json)"
+    if ($results.count -gt 1) {
+        write-log "get-fromParametersSection:multiple matching values found in parameters section for $parameterName" -isWarning
     }
 
     write-log "exit:get-fromParametersSection: returning: $($results | create-json)" -ForegroundColor Magenta
@@ -1285,7 +1292,7 @@ function get-resourceParameterValue([object]$resource, [string]$name) {
 function get-resourceParameterValues([object]$resource, [string]$name) {
     <#
 .SYNOPSIS
-    gets resource parameter values from $resource object by $name
+    gets resource parameter values from $resource object by regex ^$name$
     outputs: object[]
 .OUTPUTS
     [object[]]
@@ -1528,25 +1535,38 @@ function modify-clusterResourceAddNodeType() {
     write-log "exit:modify-clusterResourceAddNodeType"
 }
 
-
-function modify-clusterResourceRedeploy() {
+function modify-clusterResourceDeploy() {
     <#
 .SYNOPSIS
-    modifies cluster resource for redeploy template
+    modifies cluster resource for deploy template from addnodetype
     outputs: null
 .OUTPUTS
     [null]
 #>
     write-log "enter:modify-clusterResourceDeploy"
+    $null = remove-parameterizedNodeTypes
+    write-log "exit:modify-clusterResourceDeploy"
+}
+
+
+function modify-clusterResourceRedeploy() {
+    <#
+.SYNOPSIS
+    modifies cluster resource for redeploy template from current
+    outputs: null
+.OUTPUTS
+    [null]
+#>
+    write-log "enter:modify-clusterResourceReDeploy"
     $sflogsParameter = create-parameterizedName -parameterName 'name' -resource $global:sflogs -withbrackets
     $clusterResource = get-clusterResource
     
-    write-log "modify-clusterResourceDeploy:setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
+    write-log "modify-clusterResourceReDeploy:setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
     $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
     
     if ($clusterResource.properties.upgradeMode -ieq 'Automatic') {
-        write-log "modify-clusterResourceDeploy:removing value cluster code version $($clusterResource.properties.clusterCodeVersion)" -ForegroundColor Yellow
-        $clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
+        write-log "modify-clusterResourceReDeploy:removing value cluster code version $($clusterResource.properties.clusterCodeVersion)" -ForegroundColor Yellow
+        [void]$clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
     }
     
     $reference = "[reference($(create-parameterizedName -parameterName 'name' -resource $clusterResource))]"
@@ -1807,7 +1827,7 @@ function parameterize-nodetype( [object]$nodetype, [string]$parameterName, [obje
     $vmssResources = @(get-vmssResourcesByNodeType -nodetypeResource $nodetype)
     $parameterizedName = $null
 
-    if (!$parameterValue) {
+    if ($parameterValue -eq $null) {
         $parameterValue = get-resourceParameterValue -resource $nodetype -name $parameterName
     }
     foreach ($vmssResource in $vmssResources) {
@@ -1818,7 +1838,7 @@ function parameterize-nodetype( [object]$nodetype, [string]$parameterName, [obje
             $parameterizedName = create-parameterizedName -resource $vmssResource -parameterName $parameterName
         }
 
-        add-toParametersSection -parameterName $parametersName -parameterValue $parameterValue -type $type
+        $null = add-toParametersSection -parameterName $parametersName -parameterValue $parameterValue -type $type
         write-log "parameterize-nodetype:setting $parametersName to $parameterValue for $($nodetype.name)" -foregroundcolor Magenta
 
         write-log "parameterize-nodetype:add-parameter `
@@ -1856,19 +1876,23 @@ function parameterize-nodetype( [object]$nodetype, [string]$parameterName, [obje
     write-log "exit:parameterize-nodetype"
 }
 
-function parameterize-nodeTypes([bool]$isPrimary = $false) {
+function parameterize-nodeTypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter) {
     <#
 .SYNOPSIS
-    parameterizes nodetypes for addnodetype template
+    parameterizes nodetypes for addnodetype template filtered by $isPrimaryFilter and isPrimary value set to $isPrimaryValue
+    there will always be at least one primary nodetype unparameterized
+    there will only be one parameterized nodetype
     outputs: bool
 .OUTPUTS
     [bool]
 #>
-    write-log "enter:parameterize-nodetypes"
+    write-log "enter:parameterize-nodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue)"
     # todo. should validation be here? how many nodetypes
+    $null = remove-parameterizedNodeTypes
+
     $clusterResource = get-clusterResource
     $nodetypes = [collections.arraylist]::new()
-    $nodetypes.AddRange(@($clusterResource.properties.nodetypes))
+    [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
 
     if ($nodetypes.Count -lt 1) {
         write-log "exit:parameterize-nodetypes:no nodetypes detected!" -isError
@@ -1876,13 +1900,13 @@ function parameterize-nodeTypes([bool]$isPrimary = $false) {
     }
 
     write-log "parameterize-nodetypes:current nodetypes $($nodetypes.name)" -ForegroundColor Green
-    $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimary)
+    $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)
 
     if ($filterednodetypes.count -eq 0) {
-        write-log "exit:parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimary" -isError:$isPrimary
+        write-log "exit:parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter" -isError:$isPrimaryValue
         return $false
     }
-    elseif ($filterednodetypes.count -gt 1 -and $isPrimary) {
+    elseif ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
         write-log "parameterize-nodetypes:more than one primary node type detected!" -isError
     }
     
@@ -1899,10 +1923,10 @@ function parameterize-nodeTypes([bool]$isPrimary = $false) {
 
     # setting capacity value should be parametized value to vmInstanceCount value
     $capacity = get-resourceParameterValue -resource $existingVmssNodeTypeRef[0].sku -name 'capacity'
-    set-resourceParameterValue -resource $newPrimaryNodeType -name 'vmInstanceCount' -newValue $capacity
+    $null = set-resourceParameterValue -resource $newPrimaryNodeType -name 'vmInstanceCount' -newValue $capacity
 
     parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
-    parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool' -parameterValue $isPrimary
+    parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool' -parameterValue $isPrimaryValue
     # todo: currently name has to be parameterized last so parameter names above can be found
     parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'name'
     
@@ -1940,6 +1964,50 @@ function remove-duplicateResources() {
     write-log "exit:remove-duplicateResources"
 }
 
+function remove-parameterizedNodeTypes() {
+    <#
+.SYNOPSIS
+    removes parameterized nodetypes for from cluster resource section in $global:currentConfig
+    there will always be at least one primary nodetype unparameterized
+    outputs: bool
+.OUTPUTS
+    [bool]
+#>
+    write-log "enter:remove-parameterizedNodeTypes"
+    $clusterResource = get-clusterResource
+    $cleanNodetypes = [collections.arraylist]::new()
+    $nodetypes = [collections.arraylist]::new()
+    $retval = $false
+    [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
+
+    if ($nodetypes.Count -lt 1) {
+        write-log "exit:remove-parameterizedNodeTypes:no nodetypes detected!" -isError
+        return $false
+    }
+
+    foreach ($nodetype in $nodetypes) {
+        if (!(get-parameterizedNameFromValue -resourceObject $nodetype.name)) {
+            write-log "remove-parameterizedNodeTypes:skipping:$($nodetype.name)"
+            [void]$cleanNodetypes.Add($nodetype)
+        }
+        else {
+            write-log "remove-parameterizedNodeTypes:removing:$($nodetype.name)"
+        }
+    }
+
+    if ($cleanNodetypes.Count -gt 0) {
+        $retval = $true
+        $clusterResource.properties.nodetypes = $cleanNodetypes
+        $null = remove-unusedParameters
+    }
+    else {
+        write-log "exit:remove-parameterizedNodeTypes:no clean nodetypes" -isError
+    }
+
+    write-log "exit:remove-parameterizedNodeTypes:$retval"
+    return $retval
+}
+
 function remove-unusedParameters() {
     <#
 .SYNOPSIS
@@ -1955,7 +2023,7 @@ function remove-unusedParameters() {
     $global:currentConfigJson = $global:currentConfigResourcejson | convertfrom-json
 
     # remove parameters section but keep everything else like variables, resources, outputs
-    $global:currentConfigJson.psobject.properties.remove('Parameters')
+    [void]$global:currentConfigJson.psobject.properties.remove('Parameters')
     $global:currentConfigResourcejson = $global:currentConfigJson | create-json
 
     foreach ($psObjectProperty in $global:currentConfig.parameters.psobject.Properties) {
@@ -1971,7 +2039,7 @@ function remove-unusedParameters() {
 
     foreach ($parameter in $parametersRemoveList) {
         write-log "remove-unusedParameters:removing $($parameter.name)" -isWarning
-        $global:currentConfig.parameters.psobject.Properties.Remove($parameter.name)
+        [void]$global:currentConfig.parameters.psobject.Properties.Remove($parameter.name)
     }
     write-log "exit:remove-unusedParameters"
 }
@@ -2164,27 +2232,27 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
     if ($data.GetType().Name -eq "PSRemotingJob") {
         foreach ($job in $data.childjobs) {
             if ($job.Information) {
-                $stringData.appendline(@($job.Information.ReadAll()) -join "`r`n")
+                [void]$stringData.appendline(@($job.Information.ReadAll()) -join "`r`n")
             }
             if ($job.Verbose) {
-                $stringData.appendline(@($job.Verbose.ReadAll()) -join "`r`n")
+                [void]$stringData.appendline(@($job.Verbose.ReadAll()) -join "`r`n")
             }
             if ($job.Debug) {
-                $stringData.appendline(@($job.Debug.ReadAll()) -join "`r`n")
+                [void]$stringData.appendline(@($job.Debug.ReadAll()) -join "`r`n")
             }
             if ($job.Output) {
-                $stringData.appendline(@($job.Output.ReadAll()) -join "`r`n")
+                [void]$stringData.appendline(@($job.Output.ReadAll()) -join "`r`n")
             }
             if ($job.Warning) {
                 write-log (@($job.Warning.ReadAll()) -join "`r`n") -isWarning
-                $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | format-list * | out-string))
+                [void]$stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
+                [void]$stringData.appendline(($job | format-list * | out-string))
                 $global:resourceWarnings++
             }
             if ($job.Error) {
                 write-log (@($job.Error.ReadAll()) -join "`r`n") -isError
-                $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | format-list * | out-string))
+                [void]$stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
+                [void]$stringData.appendline(($job | format-list * | out-string))
                 $global:resourceErrors++
             }
             if ($stringData.tostring().Trim().Length -lt 1) {
@@ -2205,11 +2273,11 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
 
     if ($isError) {
         write-error $stringData
-        $global:errors.add($stringData)
+        [void]$global:errors.add($stringData)
     }
     elseif ($isWarning) {
         Write-Warning $stringData
-        $global:warnings.add($stringData)
+        [void]$global:warnings.add($stringData)
     }
     elseif ($verbose) {
         write-verbose $stringData
