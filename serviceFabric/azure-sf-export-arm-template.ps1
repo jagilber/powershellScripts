@@ -187,12 +187,12 @@ class SFTemplate {
 
         if ($global:warnings) {
             WriteLog "global warnings:" -foregroundcolor Yellow
-            WriteLog ($global:warnings | CreateJson) -isWarning
+            WriteLog (CreateJson($global:warnings)) -isWarning
         }
 
         if ($global:errors) {
             WriteLog "global errors:" -foregroundcolor Red
-            WriteLog ($global:errors | CreateJson) -isError
+            WriteLog (CreateJson($global:errors)) -isError
         }
 
         WriteLog "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
@@ -318,13 +318,13 @@ class SFTemplate {
         foreach ($psObjectProperty in $global:currentConfig.parameters.psobject.Properties) {
             if (($psObjectProperty.Name -ieq $parameterName)) {
                 $psObjectProperty.Value = $parameterObject
-                WriteLog "exit:AddToParametersSection:parameterObject value added to existing parameter:$($parameterValue|CreateJson)"
+                WriteLog "exit:AddToParametersSection:parameterObject value added to existing parameter:$(CreateJson($parameterValue))"
                 return
             }
         }
 
         $global:currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
-        WriteLog "exit:AddToParametersSection:new parameter name:$parameterName added $($parameterObject |CreateJson)"
+        WriteLog "exit:AddToParametersSection:new parameter name:$parameterName added $(CreateJson($parameterObject))"
     }
 
     [void] AddVmssProtectedSettings([object]$vmssResource) {
@@ -344,7 +344,7 @@ class SFTemplate {
                     StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key1]"
                     StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key2]"
                 }
-                WriteLog "AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | CreateJson)" -ForegroundColor Magenta
+                WriteLog "AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $(CreateJson($extension.properties.protectedSettings))" -ForegroundColor Magenta
             }
 
             if ($extension.properties.type -ieq 'IaaSDiagnostics') {
@@ -357,7 +357,7 @@ class SFTemplate {
                     storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$storageKeyApi').key1]"
                     storageAccountEndPoint = "https://core.windows.net/"                  
                 }
-                WriteLog "AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($extension.properties.protectedSettings | CreateJson)" -ForegroundColor Magenta
+                WriteLog "AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $(CreateJson($extension.properties.protectedSettings))" -ForegroundColor Magenta
             }
         }
         WriteLog "exit:AddVmssProtectedSettings"
@@ -429,7 +429,7 @@ class SFTemplate {
         VerifyConfig $templateParameterFile
 
         # save base / current json
-        $global:currentConfig | CreateJson | out-file $templateFile
+        CreateJson($global:currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "addnodetype modifications:
@@ -481,7 +481,7 @@ class SFTemplate {
         VerifyConfig $templateParameterFile
 
         # save base / current json
-        $global:currentConfig | CreateJson | out-file $templateFile
+        CreateJson($global:currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "addnodetype modifications:
@@ -525,7 +525,7 @@ class SFTemplate {
         VerifyConfig $templateParameterFile
 
         # save base / current json
-        $global:currentConfig | CreateJson | out-file $templateFile
+        CreateJson($global:currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "current modifications:
@@ -563,7 +563,7 @@ class SFTemplate {
 
         # save base / current json
         $global:currentConfig = Get-Content -raw $templateFile | convertfrom-json
-        $global:currentConfig | CreateJson | out-file $templateFile
+        CreateJson($global:currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "export:
@@ -577,7 +577,7 @@ class SFTemplate {
     }
 
     [string] CreateJson(
-        [Parameter(Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        #[Parameter(Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
         [object]$inputObject,
         [int]$depth = 99) {
         <#
@@ -620,7 +620,7 @@ class SFTemplate {
         VerifyConfig $templateParameterFile
 
         # # save add json
-        $global:currentConfig | CreateJson | out-file $templateFile
+        CreateJson($global:currentConfig) | out-file $templateFile
 
         # save add readme
         $readme = "new / add modifications:
@@ -680,7 +680,7 @@ class SFTemplate {
         }
 
         WriteLog "CreateParameterFile:creating parameterfile $parameterFileName" -ForegroundColor Green
-        $parameterTemplate | CreateJson | out-file -FilePath $parameterFileName
+        CreateJson($parameterTemplate) | out-file -FilePath $parameterFileName
         WriteLog "exit:CreateParameterFile"
     }
 
@@ -761,7 +761,7 @@ class SFTemplate {
         VerifyConfig $templateParameterFile
 
         # # save redeploy json
-        $global:currentConfig | CreateJson | out-file $templateFile
+        CreateJson($global:currentConfig) | out-file $templateFile
 
         # save redeploy readme
         $readme = "redeploy modifications:
@@ -785,7 +785,7 @@ class SFTemplate {
         #>
         $settings = @()
         foreach ($resource in $resources) {
-            $settings += $resource | CreateJson
+            $settings += CreateJson($resource)
         }
         WriteLog "current settings: `r`n $settings" -ForegroundColor Green
     }
@@ -1121,7 +1121,7 @@ class SFTemplate {
         #>
         WriteLog "enter:EnumVmssResources"
         $nodeTypes = $clusterResource.Properties.nodeTypes
-        WriteLog "EnumVmssResources:cluster nodetypes $($nodeTypes| CreateJson)"
+        WriteLog "EnumVmssResources:cluster nodetypes $(CreateJson($nodeTypes))"
         $vmssResources = [collections.arraylist]::new()
 
         $clusterEndpoint = $clusterResource.Properties.clusterEndpoint
@@ -1141,7 +1141,7 @@ class SFTemplate {
         foreach ($resource in $resources) {
             $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
             if ($vmsscep -ieq $clusterEndpoint) {
-                WriteLog "EnumVmssResources:adding vmss resource $($resource | CreateJson)" -ForegroundColor Cyan
+                WriteLog "EnumVmssResources:adding vmss resource $(CreateJson($resource))" -ForegroundColor Cyan
                 [void]$vmssResources.Add($resource)
             }
             else {
@@ -1246,7 +1246,7 @@ class SFTemplate {
             WriteLog "GetFromParametersSection:multiple matching values found in parameters section for $parameterName" -isWarning
         }
 
-        WriteLog "exit:GetFromParametersSection: returning: $($results | CreateJson)" -ForegroundColor Magenta
+        WriteLog "exit:GetFromParametersSection: returning: $(CreateJson($results))" -ForegroundColor Magenta
         return $results
     }
 
@@ -1277,7 +1277,7 @@ class SFTemplate {
         .OUTPUTS
             [object]
         #>
-        WriteLog "enter:GetResourceParameterValue:resource:$($resource|CreateJson) name:$name"
+        WriteLog "enter:GetResourceParameterValue:resource:$(CreateJson($resource)) name:$name"
         $retval = $null
         $values = [collections.arraylist]::new()
         [void]$values.AddRange(@(GetResourceParameterValues -resource $resource -name $name))
@@ -1305,7 +1305,7 @@ class SFTemplate {
         .OUTPUTS
             [object[]]
         #>
-        WriteLog "enter:GetResourceParameterValues:resource:$($resource|CreateJson) name:$name"
+        WriteLog "enter:GetResourceParameterValues:resource:$(CreateJson($resource)) name:$name"
         $retval = [collections.arraylist]::new()
 
         if ($resource.psobject.members.name -imatch 'ToArray') {
@@ -1352,7 +1352,6 @@ class SFTemplate {
             }
             else {
                 WriteLog "GetResourceParameterValues:skipping property name:$($psObjectProperty.Name) type:$($psObjectProperty.TypeNameOfValue) filter:$name"
-                #WriteLog "GetResourceParameterValue:skipping property name:$($psObjectProperty|CreateJson) type:$($psObjectProperty.TypeNameOfValue) filter:$name" -verbose
             }
         }
         WriteLog "exit:GetResourceParameterValues:returning:$retval" -foregroundcolor Magenta
@@ -1596,7 +1595,7 @@ class SFTemplate {
         $lbResources = GetLbResources
         foreach ($lbResource in $lbResources) {
             # fix backend pool
-            WriteLog "ModifyLbResources:fixing exported lb resource $($lbresource | CreateJson)"
+            WriteLog "ModifyLbResources:fixing exported lb resource $(CreateJson($lbresource))"
             $parameterName = GetParameterizedNameFromValue $lbresource.name
             if ($parameterName) {
                 $name = $global:currentConfig.parameters.$parametername.defaultValue
@@ -1616,7 +1615,7 @@ class SFTemplate {
                 }
             }
             $lbResource.dependsOn = $dependsOn.ToArray()
-            WriteLog "ModifyLbResources:lbResource modified dependson: $($lbResource.dependson | CreateJson)" -ForegroundColor Yellow
+            WriteLog "ModifyLbResources:lbResource modified dependson: $(CreateJson($lbResource.dependson))" -ForegroundColor Yellow
         }
         WriteLog "exit:ModifyLbResources"
     }
@@ -1634,7 +1633,7 @@ class SFTemplate {
         foreach ($lbResource in $lbResources) {
             # fix dupe pools and rules
             if ($lbResource.properties.inboundNatPools) {
-                WriteLog "ModifyLbResourcesRedeploy:removing natrules: $($lbResource.properties.inboundNatRules | CreateJson)" -ForegroundColor Yellow
+                WriteLog "ModifyLbResourcesRedeploy:removing natrules: $(CreateJson($lbResource.properties.inboundNatRules))" -ForegroundColor Yellow
                 [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
             }
         }
@@ -1705,7 +1704,7 @@ class SFTemplate {
                 }
             }
             $vmssResource.dependsOn = $dependsOn.ToArray()
-            WriteLog "vmssResource modified dependson: $($vmssResource.dependson | CreateJson)" -ForegroundColor Yellow
+            WriteLog "vmssResource modified dependson: $(CreateJson($vmssResource.dependson))" -ForegroundColor Yellow
         }
         WriteLog "exit:ModifyVmssResources"
     }
@@ -1784,7 +1783,7 @@ class SFTemplate {
             }
 
             $vmssResource.dependsOn = $dependsOn.ToArray()
-            WriteLog "ModifyVmssResourcesReDeploy:vmssResource modified dependson: $($vmssResource.dependson | CreateJson)" -ForegroundColor Yellow
+            WriteLog "ModifyVmssResourcesReDeploy:vmssResource modified dependson: $(CreateJson($vmssResource.dependson))" -ForegroundColor Yellow
             
             WriteLog "ModifyVmssResourcesReDeploy:parameterizing hardware sku"
             AddParameter -resource $vmssResource -name 'name' -aliasName 'hardwareSku' -resourceObject $vmssResource.sku
@@ -1817,7 +1816,7 @@ class SFTemplate {
         .OUTPUTS
             [null]
         #>
-        WriteLog "enter:ParameterizeNodetype:nodetype:$($nodetype |CreateJson) parameterName:$parameterName parameterValue:$parameterValue type:$type"
+        WriteLog "enter:ParameterizeNodetype:nodetype:$(CreateJson($nodetype)) parameterName:$parameterName parameterValue:$parameterValue type:$type"
         $vmssResources = @(GetVmssResourcesByNodeType -nodetypeResource $nodetype)
         $parameterizedName = $null
 
@@ -1943,7 +1942,7 @@ class SFTemplate {
         }    
 
         $clusterResource.properties.nodetypes = $nodetypes
-        WriteLog "exit:ParameterizeNodetypes:result:`r`n$($nodetypes | CreateJson)"
+        WriteLog "exit:ParameterizeNodetypes:result:`r`n$(CreateJson($nodetypes))"
         return $true
     }
 
@@ -1958,16 +1957,16 @@ class SFTemplate {
         WriteLog "enter:RemoveDuplicateResources"
         # fix up deploy errors by removing duplicated sub resources on root like lb rules by
         # removing any 'type' added by export-azresourcegroup that was not in the $global:configuredRGResources
-        $currentResources = [collections.arraylist]::new() #$global:currentConfig.resources | CreateJson | convertfrom-json
+        $currentResources = [collections.arraylist]::new() 
 
         $resourceTypes = $global:configuredRGResources.resourceType
         foreach ($resource in $global:currentConfig.resources.GetEnumerator()) {
             WriteLog "RemoveDuplicateResources:checking exported resource $($resource.name)" -ForegroundColor Magenta
-            WriteLog "RemoveDuplicateResources:checking exported resource $($resource | CreateJson)" -verbose
+            WriteLog "RemoveDuplicateResources:checking exported resource $(CreateJson($resource))" -verbose
         
             if ($resourceTypes.Contains($resource.type)) {
                 WriteLog "RemoveDuplicateResources:adding exported resource $($resource.name)" -ForegroundColor Cyan
-                WriteLog "RemoveDuplicateResources:adding exported resource $($resource | CreateJson)" -verbose
+                WriteLog "RemoveDuplicateResources:adding exported resource $(CreateJson($resource))" -verbose
                 [void]$currentResources.Add($resource)
             }
         }
@@ -2074,12 +2073,12 @@ class SFTemplate {
         WriteLog "enter:RemoveUnusedParameters"
         $parametersRemoveList = [collections.arraylist]::new()
         #serialize and copy
-        $global:currentConfigResourcejson = $global:currentConfig | CreateJson
+        $global:currentConfigResourcejson = CreateJson($global:currentConfig)
         $global:currentConfigJson = $global:currentConfigResourcejson | convertfrom-json
 
         # remove parameters section but keep everything else like variables, resources, outputs
         [void]$global:currentConfigJson.psobject.properties.remove('Parameters')
-        $global:currentConfigResourcejson = $global:currentConfigJson | CreateJson
+        $global:currentConfigResourcejson = CreateJson($global:currentConfigJson)
 
         foreach ($psObjectProperty in $global:currentConfig.parameters.psobject.Properties) {
             $parameterizedName = CreateParameterizedName $psObjectProperty.name
@@ -2124,8 +2123,8 @@ class SFTemplate {
         }
 
         #serialize
-        $global:currentConfigParametersjson = $global:currentConfig.parameters | CreateJson
-        $global:currentConfigResourcejson = $global:currentConfig | CreateJson
+        $global:currentConfigParametersjson = CreateJson($global:currentConfig.parameters)
+        $global:currentConfigResourcejson = CreateJson($global:currentConfig)
 
 
         if ([regex]::IsMatch($global:currentConfigResourcejson, [regex]::Escape($newParameterizedName), $global:ignoreCase)) {
@@ -2145,7 +2144,7 @@ class SFTemplate {
             $global:currentConfig.parameters = $global:currentConfigParametersjson | convertfrom-json
 
             # reserialize with modified parameters section
-            $global:currentConfigResourcejson = $global:currentConfig | CreateJson
+            $global:currentConfigResourcejson = CreateJson($global:currentConfig)
         }
         else {
             WriteLog "RenameParameter:parameter not found:$oldParameterName" -isWarning
@@ -2163,7 +2162,7 @@ class SFTemplate {
             }
         }
 
-        WriteLog "RenameParameter:result:$($global:currentConfig | CreateJson)" -verbose
+        WriteLog "RenameParameter:result:$(CreateJson($global:currentConfig))" -verbose
         WriteLog "exit:RenameParameter"
         return $true
     }
@@ -2190,7 +2189,7 @@ class SFTemplate {
         $currentResourceType = $resource.type
 
         if (!$currentResourceName -or !$currentResourceType) {
-            WriteLog "exit:RenameParametersByResource:invalid resource. no name/type:$($resource|CreateJson)" -isError
+            WriteLog "exit:RenameParametersByResource:invalid resource. no name/type:$(CreateJson($resource))" -isError
             return $false
         }
     
@@ -2204,7 +2203,7 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-        WriteLog "enter:SetResourceParameterValue:resource:$($resource|CreateJson) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
+        WriteLog "enter:SetResourceParameterValue:resource:$(CreateJson($resource)) name:$name,newValue:$newValue" -foregroundcolor DarkCyan
         $retval = $false
         foreach ($psObjectProperty in $resource.psobject.Properties) {
             WriteLog "SetResourceParameterValuechecking parameter name $psobjectProperty" -verbose
@@ -2244,7 +2243,7 @@ class SFTemplate {
         #>
         WriteLog "enter:VerifyConfig:templateparameterFile:$templateParameterFile"
         $json = '.\VerifyConfig.json'
-        $global:currentConfig | CreateJson | out-file -FilePath $json -Force
+        CreateJson($global:currentConfig) | out-file -FilePath $json -Force
 
         WriteLog "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
         -Mode Incremental `
@@ -2261,7 +2260,7 @@ class SFTemplate {
             -Verbose
 
         if ($error -or $result) {
-            WriteLog "exit:VerifyConfig:error:$($result | CreateJson) `r`n$($error | out-string)" -isError
+            WriteLog "exit:VerifyConfig:error:$(CreateJson($result)) `r`n$($error | out-string)" -isError
         }
         else {
             WriteLog "exit:VerifyConfig:success" -foregroundcolor Green
