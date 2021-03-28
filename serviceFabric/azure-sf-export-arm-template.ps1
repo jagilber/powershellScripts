@@ -247,7 +247,7 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:AddOutputs( $name, $value, $type = 'string'")
         $outputs = $this.currentConfig.psobject.Properties | where-object name -ieq 'outputs'
-        $outputItem = @{
+        $outputItem = [pscustomobject]@{
             value = $value
             type  = $type
         }
@@ -255,7 +255,7 @@ class SFTemplate {
         if (!$outputs) {
             # create pscustomobject
             $this.currentConfig | Add-Member -TypeName System.Management.Automation.PSCustomObject -NotePropertyMembers @{
-                outputs = @{
+                outputs = [pscustomobject]@{
                     $name = $outputItem
                 }
             }
@@ -413,10 +413,10 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:AddToParametersSection:parameterName:$parameterName, parameterValue:$parameterValue, $type = 'string', $metadataDescription")
-        $parameterObject = @{
+        $parameterObject = [pscustomobject]@{
             type         = $type
             defaultValue = $parameterValue 
-            metadata     = @{description = $metadataDescription }
+            metadata     = [pscustomobject]@{description = $metadataDescription }
         }
 
         foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
@@ -444,10 +444,10 @@ class SFTemplate {
 
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
+                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value ([pscustomobject]@{
                     StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key1]"
                     StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key2]"
-                }
+                })
                 $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
 
@@ -456,11 +456,11 @@ class SFTemplate {
                 $sfdiagsParameter = $this.CreateParameterizedName('name', ($this.sfdiags | where-object name -imatch $saname))
                 $extension.properties.settings.storageAccount = "[$sfdiagsParameter]"
 
-                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
+                $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value ([pscustomobject]@{
                     storageAccountName     = "$sfdiagsParameter"
                     storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$($this.storageKeyApi)').key1]"
                     storageAccountEndPoint = "https://core.windows.net/"                  
-                }
+                })
                 $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
         }
@@ -789,13 +789,13 @@ class SFTemplate {
             }
 
             $this.WriteVerbose("CreateParameterFile:value properties:$($psObjectProperty.Value.psobject.Properties.Name)")
-            $parameterItem = @{
+            $parameterItem = [pscustomobject]@{
                 value = $psObjectProperty.Value.defaultValue
             }
 
             if ($psObjectProperty.Value.GetType().name -ieq 'hashtable' -and $psObjectProperty.Value['metadata']) {
                 if ($psObjectProperty.value.metadata.description) {
-                    $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
+                    $parameterItem.metadata = [pscustomobject]@{description = $psObjectProperty.value.metadata.description }
                 }
             }
             [void]$parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
@@ -1820,11 +1820,11 @@ class SFTemplate {
         foreach ($sfdiag in $this.sfdiags) {
             $sfdiagParameter = $this.CreateParametersName($sfdiag)
             [void]$parameterExclusions.Add($sfdiagParameter)
-            $this.AddToParametersSection($sfdiagParameter, $this.defaultSfldiagsValue, 'string', $metadataDescription)
+            $this.AddToParametersSection($sfdiagParameter, $this.defaultSfdiagsValue, 'string', $metadataDescription)
         }
 
         $this.WriteLog("exit:ModifyStorageResourcesDeploy")
-        return $this.parameterExclusions.ToArray()
+        return $parameterExclusions.ToArray()
     }
 
     [void] ModifyVmssResources() {
@@ -2047,7 +2047,7 @@ class SFTemplate {
                 $parameterizedName = $this.CreateParameterizedName($parameterName, $vmssResource)
             }
 
-            $null = $this.AddToParametersSection($parameterName, $parameterValue, $type)
+            $null = $this.AddToParametersSection($parametersName, $parameterValue, $type)
             $this.WriteLog("ParameterizeNodetype:setting $parametersName to $parameterValue for $($nodetype.name)", [consolecolor]::Magenta)
 
             $this.WriteLog("ParameterizeNodetype:AddParameter `
@@ -2160,15 +2160,20 @@ class SFTemplate {
             $nodetypes.Clear()
         }
         else {
-            $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)[0]
+            $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)
         }
 
         if ($filterednodetypes.count -eq 0) {
             $this.WriteError("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
             return $false
         }
-        elseif ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
+        
+        if ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
             $this.WriteError("ParameterizeNodetypes:more than one primary node type detected!")
+        }
+
+        if(!$all){
+            $filterednodetypes = $filterednodetypes[0]
         }
  
         foreach ($filterednodetype in $filterednodetypes) {
