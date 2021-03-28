@@ -1232,10 +1232,10 @@ function get-fromParametersSection( [string]$parameterName) {
     $results = @($parameters.$parameterName.defaultValue)
     $ErrorActionPreference = $currentErrorPreference
     
-    if ($results.Count -lt 1) {
+    if (@($results).Count -lt 1) {
         write-log "get-fromParametersSection:no matching values found in parameters section for $parameterName"
     }
-    if ($results.count -gt 1) {
+    if (@($results).count -gt 1) {
         write-log "get-fromParametersSection:multiple matching values found in parameters section for $parameterName" -isWarning
     }
 
@@ -1515,27 +1515,6 @@ function get-vmssResourcesByNodeType( [object]$nodetypeResource) {
     return $vmssByNodeType.ToArray()
 }
 
-function modify-clusterResourceAddNodeType() {
-    <#
-.SYNOPSIS
-    modifies cluster resource for addNodeType template
-    outputs: null
-.OUTPUTS
-    [null]
-#>
-    write-log "enter:modify-clusterResourceAddNodeType"
-    $clusterResource = get-clusterResource
-    
-    write-log "modify-clusterResourceAddNodeType:setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter"
-    $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
-    
-    write-log "modify-clusterResourceAddNodeType:setting `$clusterResource.properties.upgradeMode = Manual"
-    $clusterResource.properties.upgradeMode = "Manual"
-    $reference = "[reference($(create-parameterizedName -parameterName 'name' -resource $clusterResource))]"
-    add-outputs -name 'clusterProperties' -value $reference -type 'object'
-    write-log "exit:modify-clusterResourceAddNodeType"
-}
-
 function modify-clusterResourceDeploy() {
     <#
 .SYNOPSIS
@@ -1545,7 +1524,14 @@ function modify-clusterResourceDeploy() {
     [null]
 #>
     write-log "enter:modify-clusterResourceDeploy"
-    $null = remove-parameterizedNodeTypes
+    # clean previous entries
+    #$null = remove-parameterizedNodeTypes
+    
+    # reparameterize all
+    parameterize-NodeTypes -all
+    
+    # remove unparameterized nodetypes
+    #$null = remove-unparameterizedNodeTypes
     write-log "exit:modify-clusterResourceDeploy"
 }
 
@@ -1877,11 +1863,11 @@ function parameterize-nodetype( [object]$nodetype, [string]$parameterName, [obje
     write-log "exit:parameterize-nodetype"
 }
 
-function parameterize-nodeTypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter) {
+function parameterize-nodeTypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter, [switch]$all) {
     <#
 .SYNOPSIS
     parameterizes nodetypes for addnodetype template filtered by $isPrimaryFilter and isPrimary value set to $isPrimaryValue
-    there will always be at least one primary nodetype unparameterized
+    there will always be at least one primary nodetype unparameterized except for 'new' template
     there will only be one parameterized nodetype
     outputs: bool
 .OUTPUTS
@@ -1894,6 +1880,7 @@ function parameterize-nodeTypes([bool]$isPrimaryFilter = $false, [bool]$isPrimar
     $clusterResource = get-clusterResource
     $nodetypes = [collections.arraylist]::new()
     [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
+    $filterednodetypes = $nodetypes.psobject.copy()
 
     if ($nodetypes.Count -lt 1) {
         write-log "exit:parameterize-nodetypes:no nodetypes detected!" -isError
@@ -1901,7 +1888,13 @@ function parameterize-nodeTypes([bool]$isPrimaryFilter = $false, [bool]$isPrimar
     }
 
     write-log "parameterize-nodetypes:current nodetypes $($nodetypes.name)" -ForegroundColor Green
-    $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)
+    
+    if ($all) {
+        $nodetypes.Clear()
+    }
+    else {
+        $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)[0]
+    }
 
     if ($filterednodetypes.count -eq 0) {
         write-log "exit:parameterize-nodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter" -isError:$isPrimaryValue
@@ -1910,28 +1903,38 @@ function parameterize-nodeTypes([bool]$isPrimaryFilter = $false, [bool]$isPrimar
     elseif ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
         write-log "parameterize-nodetypes:more than one primary node type detected!" -isError
     }
-    
-    write-log "parameterize-nodetypes:adding new nodetype" -foregroundcolor Cyan
-    $newPrimaryNodeType = $filterednodetypes[0].psobject.copy()
-    $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -nodetypeResource $newPrimaryNodeType)
+ 
+    foreach ($filterednodetype in $filterednodetypes) {
+        write-log "parameterize-nodetypes:adding new nodetype" -foregroundcolor Cyan
+        $newNodeType = $filterednodetype.psobject.copy()
+        $existingVmssNodeTypeRef = @(get-vmssResourcesByNodeType -nodetypeResource $newNodeType)
 
-    if ($existingVmssNodeTypeRef.count -lt 1) {
-        write-log "exit:parameterize-nodetypes:unable to find existing nodetypes by nodetyperef" -isError
-        return $false
-    }
+        if ($existingVmssNodeTypeRef.count -lt 1) {
+            write-log "exit:parameterize-nodetypes:unable to find existing nodetypes by nodetyperef" -isError
+            return $false
+        }
 
-    write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
+        write-log "parameterize-nodetypes:parameterizing new nodetype " -foregroundcolor Cyan
 
-    # setting capacity value should be parametized value to vmInstanceCount value
-    $capacity = get-resourceParameterValue -resource $existingVmssNodeTypeRef[0].sku -name 'capacity'
-    $null = set-resourceParameterValue -resource $newPrimaryNodeType -name 'vmInstanceCount' -newValue $capacity
+        # setting capacity value should be parametized value to vmInstanceCount value
+        $capacity = get-resourceParameterValue -resource $existingVmssNodeTypeRef[0].sku -name 'capacity'
+        $null = set-resourceParameterValue -resource $newNodeType -name 'vmInstanceCount' -newValue $capacity
 
-    parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'durabilityLevel'
-    parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'isPrimary' -type 'bool' -parameterValue $isPrimaryValue
-    # todo: currently name has to be parameterized last so parameter names above can be found
-    parameterize-nodetype -nodetype $newPrimaryNodeType -parameterName 'name'
-    
-    [void]$nodetypes.Add($newPrimaryNodeType)
+        parameterize-nodetype -nodetype $newNodeType -parameterName 'durabilityLevel'
+        
+        if ($all) {
+            parameterize-nodetype -nodetype $newNodeType -parameterName 'isPrimary' -type 'bool'
+        }
+        else {
+            parameterize-nodetype -nodetype $newNodeType -parameterName 'isPrimary' -type 'bool' -parameterValue $isPrimaryValue
+        }
+        
+        # todo: currently name has to be parameterized last so parameter names above can be found
+        parameterize-nodetype -nodetype $newNodeType -parameterName 'name'
+        
+        [void]$nodetypes.Add($newNodeType)
+    }    
+
     $clusterResource.properties.nodetypes = $nodetypes
     write-log "exit:parameterize-nodetypes:result:`r`n$($nodetypes | create-json)"
     return $true
@@ -1969,7 +1972,7 @@ function remove-parameterizedNodeTypes() {
     <#
 .SYNOPSIS
     removes parameterized nodetypes for from cluster resource section in $global:currentConfig
-    there will always be at least one primary nodetype unparameterized
+    there will always be at least one primary nodetype unparameterized unless 'new' template
     outputs: bool
 .OUTPUTS
     [bool]
@@ -2008,6 +2011,50 @@ function remove-parameterizedNodeTypes() {
     write-log "exit:remove-parameterizedNodeTypes:$retval"
     return $retval
 }
+
+function remove-unparameterizedNodeTypes() {
+    <#
+.SYNOPSIS
+    removes unparameterized nodetypes for from cluster resource section in $global:currentConfig
+    outputs: bool
+.OUTPUTS
+    [bool]
+#>
+    write-log "enter:remove-unparameterizedNodeTypes"
+    $clusterResource = get-clusterResource
+    $cleanNodetypes = [collections.arraylist]::new()
+    $nodetypes = [collections.arraylist]::new()
+    $retval = $false
+    [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
+
+    if ($nodetypes.Count -lt 1) {
+        write-log "exit:remove-unparameterizedNodeTypes:no nodetypes detected!" -isError
+        return $false
+    }
+
+    foreach ($nodetype in $nodetypes) {
+        if ((get-parameterizedNameFromValue -resourceObject $nodetype.name)) {
+            write-log "remove-unparameterizedNodeTypes:removing:$($nodetype.name)"
+            [void]$cleanNodetypes.Add($nodetype)
+        }
+        else {
+            write-log "remove-unparameterizedNodeTypes:skipping:$($nodetype.name)"
+        }
+    }
+
+    if ($cleanNodetypes.Count -gt 0) {
+        $retval = $true
+        $clusterResource.properties.nodetypes = $cleanNodetypes
+        #$null = remove-unusedParameters
+    }
+    else {
+        write-log "exit:remove-unparameterizedNodeTypes:no parameterized nodetypes" -isError
+    }
+
+    write-log "exit:remove-unparameterizedNodeTypes:$retval"
+    return $retval
+}
+
 
 function remove-unusedParameters() {
     <#
