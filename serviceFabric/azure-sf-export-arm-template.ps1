@@ -85,7 +85,7 @@ class Vmss {
     }
 }
 
-class SFTemplate {
+class SFTemplate {  
     [string]$resourceGroupName = $resourceGroupName
     [string]$templatePath = $templatePath
     [string]$useExportedJsonFile = $useExportedJsonFile
@@ -292,7 +292,7 @@ class SFTemplate {
 
         $this.WriteLog("AddParameterNameByResourceType:parameter names $parameterNames")
         foreach ($parameterName in $parameterNames.GetEnumerator()) {
-            if (!($this.GetFromParametersSection($parameterName.key))) {
+            if ($this.GetFromParametersSection($parameterName.key).Count -lt 1) {
                 $this.AddToParametersSection($parameterName.key, $parameterName.value, 'string', $metadataDescription)
             }
         }
@@ -374,7 +374,7 @@ class SFTemplate {
 
         if ($parameterNameValue -ne $null) {
             $this.WriteLog("AddParameter:adding parameter name:$parameterName parameter value:$parameterNameValue")
-            if (($this.GetFromParametersSection($parameterName)) -eq $null) {
+            if ($this.GetFromParametersSection($parameterName).Count -lt 1) {
                 $this.WriteLog("AddParameter:$parameterName not found in parameters sections. adding.")
                 $this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
             }
@@ -691,7 +691,7 @@ class SFTemplate {
         .OUTPUTS
             [string]
         #>   
-        return $this.CreateJson($inputObject,99)
+        return $this.CreateJson($inputObject, 99)
     }
 
     [string] CreateJson([object]$inputObject, [int]$depth = 99) {
@@ -1391,13 +1391,12 @@ class SFTemplate {
             [object[]]
         #>
         $this.WriteLog("enter:GetFromParametersSection parameterName=$parameterName")
-        $results = $null
-        $parameters = @($this.currentConfig.parameters)
-        $currentErrorPreference = $global:ErrorActionPreference
-        $ErrorActionPreference = 'silentlycontinue'
+        $results = @()
 
-        $results = @($parameters.$parameterName.defaultValue)
-        $ErrorActionPreference = $currentErrorPreference
+        if(($this.currentConfig.parameters.psobject.Properties.Match($parameterName).count -gt 0) -and 
+            ($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.psobject.Properties.Match('defaultValue'))){
+                $results = @($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.defaultValue)
+            }
     
         if (@($results).Count -lt 1) {
             $this.WriteLog("GetFromParametersSection:no matching values found in parameters section for $parameterName")
@@ -1470,12 +1469,12 @@ class SFTemplate {
 
         if ($resource.psobject.members.name -imatch 'ToArray') {
             foreach ($resourceObject in $resource.ToArray()) {
-                [void]$retval.AddRange(@($this.GetResourceParameterValues($resourceObject,$name)))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($resourceObject, $name)))
             }
         }
         elseif ($resource.psobject.members.name -imatch 'GetEnumerator') {
             foreach ($resourceObject in $resource.GetEnumerator()) {
-                [void]$retval.AddRange(@($this.GetResourceParameterValues($resourceObject,$name)))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($resourceObject, $name)))
             }
         }
 
@@ -1502,13 +1501,13 @@ class SFTemplate {
                 }
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value,$name)))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value, $name)))
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.Hashtable') {
-                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value,$name)))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value, $name)))
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.ArrayList') {
-                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value,$name)))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value, $name)))
             }
             else {
                 $this.WriteLog("GetResourceParameterValues:skipping property name:$($psObjectProperty.Name) type:$($psObjectProperty.TypeNameOfValue) filter:$name")
@@ -1666,7 +1665,7 @@ class SFTemplate {
             $parameterizedName = $this.GetParameterizedNameFromValue($extension.properties.settings.nodetyperef)
 
             if ($parameterizedName) {
-                $nodetypeName = $this.GetFromParametersSection($parameterizedName)
+                $nodetypeName = $this.GetFromParametersSection($parameterizedName)[0]
             }
             else {
                 $nodetypeName = $extension.properties.settings.nodetyperef
@@ -1946,7 +1945,7 @@ class SFTemplate {
                 $vmssResource, # resource
                 'name', # name
                 'hardwareSku', # aliasName
-                $vmssResource.sku   # resourceObject
+                $vmssResource.sku # resourceObject
             )
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
@@ -1954,14 +1953,14 @@ class SFTemplate {
                 $vmssResource, # resource
                 'capacity', # name
                 $vmssResource.sku, # resourceObject
-                'int'               # type
+                'int' # type
             )
 
             $this.AddParameter(
                 $vmssResource, # resource
                 'capacity', # name 
                 $vmssResource.sku, # resourceObject
-                'int'               # type
+                'int' # type
             )
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing os sku")
@@ -1985,7 +1984,7 @@ class SFTemplate {
                     $vmssResource.properties.virtualMachineProfile.osProfile, # resourceObject
                     $null, # value
                     'string', # type
-                    'password must be set before deploying template.'           # metadataDescription
+                    'password must be set before deploying template.' # metadataDescription
                 )
             }
         }
@@ -2069,7 +2068,7 @@ class SFTemplate {
                 ''                  # description
             )
 
-            $extension = GetVmssExtensions($vmssResource, 'ServiceFabricNode')
+            $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
             
             $this.WriteLog("ParameterizeNodetype:AddParameter `
                 -resource $vmssResource `
@@ -2143,9 +2142,9 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:ParameterizeNodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue)")
         # todo. should validation be here? how many nodetypes
-        $null = $this.RemoveParameterizedNodeTypes
+        $null = $this.RemoveParameterizedNodeTypes()
 
-        $clusterResource = $this.GetClusterResource
+        $clusterResource = $this.GetClusterResource()
         $nodetypes = [collections.arraylist]::new()
         [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
         $filterednodetypes = $nodetypes.psobject.copy()
@@ -2460,7 +2459,7 @@ class SFTemplate {
             $currentParameterizedName = $this.CreateParameterizedName($resource)
         }
         else {
-            $currentResourceName = $this.GetFromParametersSection($currentParameterizedName)
+            $currentResourceName = $this.GetFromParametersSection($currentParameterizedName)[0]
         }
     
         $currentResourceType = $resource.type
@@ -2482,8 +2481,8 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:SetResourceParameterValue:resource:$($this.CreateJson($resource)) name:$name,newValue:$newValue", [consolecolor]::DarkCyan)
         $retval = $false
-        foreach ($psObjectProperty in $resource.psobject.Properties) {
-            $this.WriteVerbose("SetResourceParameterValuechecking parameter name $psobjectProperty")
+        foreach ($psObjectProperty in $resource.psobject.Properties.GetEnumerator()) {
+            $this.WriteVerbose("SetResourceParameterValue:checking parameter name $psobjectProperty")
 
             if (($psObjectProperty.Name -ieq $name)) {
                 $parameterValues = @($psObjectProperty.Name)
