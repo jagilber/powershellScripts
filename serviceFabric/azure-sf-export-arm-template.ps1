@@ -705,7 +705,7 @@ class SFTemplate {
         .OUTPUTS
             [string]
         #>   
-        $currentWarningPreference = $this.WarningPreference
+        $currentWarningPreference = $global:WarningPreference
         $WarningPreference = 'SilentlyContinue'
     
         # to fix \u0027 single quote issue
@@ -761,7 +761,7 @@ class SFTemplate {
         .OUTPUTS
             [null]
         #>
-        CreateParameterFile($parameterFileName, @())
+        $this.CreateParameterFile($parameterFileName, @())
     }
 
     [void] CreateParameterFile( [string]$parameterFileName, [string[]]$ignoreParameters = @()) {
@@ -1063,7 +1063,7 @@ class SFTemplate {
         }
 
         $this.WriteLog("EnumAllResources:getting nsgs $($this.resourceGroupName)")
-        $nsgResources = @($this.EnumNsgResourceIds($vmssResources))
+        $nsgResources = @($this.EnumNsgResourceIds($vnetResources))
         if ($nsgResources.count -lt 1) {
             $this.WriteWarning("EnumAllResources:unable to enumerate nsgs.")
         }
@@ -1206,10 +1206,10 @@ class SFTemplate {
         return $resources.ToArray() | sort-object -Unique
     }
 
-    [string[]] EnumNsgResourceIds([object[]]$vmssResources) {
+    [string[]] EnumNsgResourceIds([object[]]$vnetResources) {
         <#
         .SYNOPSIS
-            enumerate network security group resource id's from vmss resources
+            enumerate network security group resource id's from vnet resources
             outputs: string[]
         .OUTPUTS
             [string[]]
@@ -1217,7 +1217,7 @@ class SFTemplate {
         $this.WriteLog("enter:EnumNsgResourceIds")
         $resources = [collections.arraylist]::new()
 
-        foreach ($vnetId in $this.vnetResources) {
+        foreach ($vnetId in $vnetResources) {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
             foreach ($subnet in $vnetResource.Properties.subnets) {
@@ -1393,7 +1393,7 @@ class SFTemplate {
         $this.WriteLog("enter:GetFromParametersSection parameterName=$parameterName")
         $results = $null
         $parameters = @($this.currentConfig.parameters)
-        $currentErrorPreference = $this.ErrorActionPreference
+        $currentErrorPreference = $global:ErrorActionPreference
         $ErrorActionPreference = 'silentlycontinue'
 
         $results = @($parameters.$parameterName.defaultValue)
@@ -1470,12 +1470,12 @@ class SFTemplate {
 
         if ($resource.psobject.members.name -imatch 'ToArray') {
             foreach ($resourceObject in $resource.ToArray()) {
-                [void]$retval.AddRange(@(GetResourceParameterValues -resource $resourceObject -name $name))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($resourceObject,$name)))
             }
         }
         elseif ($resource.psobject.members.name -imatch 'GetEnumerator') {
             foreach ($resourceObject in $resource.GetEnumerator()) {
-                [void]$retval.AddRange(@(GetResourceParameterValues -resource $resourceObject -name $name))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($resourceObject,$name)))
             }
         }
 
@@ -1502,13 +1502,13 @@ class SFTemplate {
                 }
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-                [void]$retval.AddRange(@(GetResourceParameterValues -resource $psObjectProperty.Value -name $name))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value,$name)))
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.Hashtable') {
-                [void]$retval.AddRange(@(GetResourceParameterValues -resource $psObjectProperty.Value -name $name))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value,$name)))
             }
             elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Collections.ArrayList') {
-                [void]$retval.AddRange(@(GetResourceParameterValues -resource $psObjectProperty.Value -name $name))
+                [void]$retval.AddRange(@($this.GetResourceParameterValues($psObjectProperty.Value,$name)))
             }
             else {
                 $this.WriteLog("GetResourceParameterValues:skipping property name:$($psObjectProperty.Name) type:$($psObjectProperty.TypeNameOfValue) filter:$name")
@@ -1744,7 +1744,7 @@ class SFTemplate {
         $this.WriteLog("exit:ModifyIpAddressesRedeploy")
     }
 
-    [void] ModifyLbResources($currenConfig) {
+    [void] ModifyLbResources() {
         <#
         .SYNOPSIS
             modifies loadbalancer resources for current
@@ -1753,7 +1753,7 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyLbResources")
-        $lbResources = $this.GetLbResources
+        $lbResources = $this.GetLbResources()
         foreach ($lbResource in $lbResources) {
             # fix backend pool
             $this.WriteLog("ModifyLbResources:fixing exported lb resource $($this.CreateJson($lbresource))")
@@ -1768,7 +1768,7 @@ class SFTemplate {
                 $name = $lbResource.name
             }
 
-            $lb = get-azresource -ResourceGroupName $this.resourceGroupName -Name $this.name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
+            $lb = get-azresource -ResourceGroupName $this.resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
             $dependsOn = [collections.arraylist]::new()
 
             $this.WriteLog("ModifyLbResources:removing backendpool from lb dependson")
@@ -1783,7 +1783,7 @@ class SFTemplate {
         $this.WriteLog("exit:ModifyLbResources")
     }
 
-    [void] ModifyLbResourcesRedeploy($currenConfig) {
+    [void] ModifyLbResourcesRedeploy() {
         <#
         .SYNOPSIS
             modifies loadbalancer resources for redeploy template
@@ -1828,7 +1828,7 @@ class SFTemplate {
         return $this.parameterExclusions.ToArray()
     }
 
-    [void] ModifyVmssResources($currenConfig) {
+    [void] ModifyVmssResources() {
         <#
         .SYNOPSIS
             modifies vmss resources for current template
@@ -1865,7 +1865,7 @@ class SFTemplate {
         $this.WriteLog("exit:ModifyVmssResources")
     }
 
-    [void] ModifyVmssResourcesDeploy($currenConfig) {
+    [void] ModifyVmssResourcesDeploy() {
         <#
         .SYNOPSIS
             modifies storage vmss for deploy template
@@ -1890,7 +1890,7 @@ class SFTemplate {
         $this.WriteLog("exit:ModifyVmssResourcesDeploy")
     }
 
-    [void] ModifyVmssResourcesRedeploy($currenConfig) {
+    [void] ModifyVmssResourcesRedeploy() {
         <#
         .SYNOPSIS
             modifies vmss resources for redeploy template
@@ -2350,17 +2350,17 @@ class SFTemplate {
         $this.WriteLog("enter:RemoveUnusedParameters")
         $parametersRemoveList = [collections.arraylist]::new()
         #serialize and copy
-        $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
-        $this.currentConfigJson = $this.currentConfigResourcejson | convertfrom-json
+        $currentConfigResourcejson = $this.CreateJson($this.currentConfig)
+        $currentConfigJson = $currentConfigResourcejson | convertfrom-json
 
         # remove parameters section but keep everything else like variables, resources, outputs
-        [void]$this.currentConfigJson.psobject.properties.remove('Parameters')
-        $this.currentConfigResourcejson = $this.CreateJson($this.currentConfigJson)
+        [void]$currentConfigJson.psobject.properties.remove('Parameters')
+        $currentConfigResourcejson = $this.CreateJson($currentConfigJson)
 
         foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
             $parameterizedName = $this.CreateParameterizedName($psObjectProperty.name)
             $this.WriteLog("RemoveUnusedParameters:checking to see if $parameterizedName is being used")
-            if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($parameterizedName), $this.ignoreCase)) {
+            if ([regex]::IsMatch($currentConfigResourcejson, [regex]::Escape($parameterizedName), $this.ignoreCase)) {
                 $this.WriteVerbose("RemoveUnusedParameters:$parameterizedName is being used")
                 continue
             }
