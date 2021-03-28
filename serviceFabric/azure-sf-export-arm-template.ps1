@@ -87,26 +87,26 @@ class SFTemplate {
     static SFTemplate() {}
 
     [void] Export() {
-        if (!(test-path $templatePath)) {
+        if (!(test-path $this.templatePath)) {
             # test local and for cloudshell
-            mkdir $templatePath
-            WriteLog "making directory $templatePath"
+            mkdir $this.templatePath
+            WriteLog "making directory $($this.templatePath)"
         }
 
         WriteLog "starting"
-        if ($updateScript -and (GetUpdate -updateUrl $updateUrl)) {
+        if ($this.updateScript -and (GetUpdate -updateUrl $this.updateUrl)) {
             return
         }
 
-        if (!$resourceGroupName) {
+        if (!$this.resourceGroupName) {
             WriteLog "resource group name is required." -isError
             return
         }
 
-        if ($detail) {
+        if ($this.detail) {
             $ErrorActionPreference = 'continue'
             $VerbosePreference = 'continue'
-            $debugLevel = 'all'
+            $this.debugLevel = 'all'
         }
 
         if (!(CheckModule)) {
@@ -118,17 +118,17 @@ class SFTemplate {
             Connect-AzAccount
         }
 
-        if ($resourceNames) {
-            foreach ($resourceName in $resourceNames) {
+        if ($this.resourceNames) {
+            foreach ($resourceName in $this.resourceNames) {
                 WriteLog "getting resource $resourceName"
-                [void]$global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
+                [void]$global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $this.resourceGroupName -resourceName $resourceName)))
             }
         }
         else {
             $resourceIds = EnumAllResources
             foreach ($resourceId in $resourceIds) {
                 $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
-                if ($resource.ResourceGroupName -ieq $resourceGroupName) {
+                if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
                     WriteLog "adding resource id to configured resources: $($resource.resourceId)" -ForegroundColor Cyan
                     [void]$global:configuredRGResources.Add($resource)
                 }
@@ -145,7 +145,7 @@ class SFTemplate {
             return
         }
 
-        $deploymentName = "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))"
+        $deploymentName = "$($this.resourceGroupName)-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
         # create $global:currentConfig
         CreateExportTemplate
@@ -157,30 +157,30 @@ class SFTemplate {
         CreateAddSecondaryNodeTypeTemplate
         CreateNewTemplate
 
-        if ($compress) {
-            $zipFile = "$templatePath.zip"
-            compress-archive $templatePath $zipFile -Force
+        if ($this.compress) {
+            $zipFile = "$($this.templatePath).zip"
+            compress-archive $this.templatePath $zipFile -Force
             WriteLog "zip file located here:$zipFile" -ForegroundColor Cyan
         }
 
         $error.clear()
 
-        write-host "finished. files stored in $templatePath" -ForegroundColor Green
-        code $templatePath # for cloudshell and local
+        write-host "finished. files stored in $($this.templatePath)" -ForegroundColor Green
+        code $this.templatePath # for cloudshell and local
         
         if ($error) {
-            . $templateJsonFile.Replace(".json", ".current.json")
+            . $this.templateJsonFile.Replace(".json", ".current.json")
         }
 
         if ($global:resourceErrors -or $global:resourceWarnings) {
             WriteLog "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings" -isWarning
 
-            if ($DebugPreference -ieq 'continue') {
+            if ($this.DebugPreference -ieq 'continue') {
                 WriteLog "errors: $($error | sort-object -Descending | out-string)"
             }
         }
 
-        $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
+        $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $this.resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
 
         WriteLog "deployment:`r`n$($deployment | format-list * | out-string)"
         Write-Progress -Completed -Activity "complete"
@@ -198,8 +198,8 @@ class SFTemplate {
         WriteLog "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
         WriteLog 'finished. template stored in $global:currentConfig' -ForegroundColor Cyan
 
-        if ($logFile) {
-            WriteLog "log file saved to $logFile"
+        if ($this.logFile) {
+            WriteLog "log file saved to $this.logFile"
         }
     }
 
@@ -341,8 +341,8 @@ class SFTemplate {
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
                 $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
-                    StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key1]"
-                    StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$storageKeyApi').key2]"
+                    StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key1]"
+                    StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key2]"
                 }
                 WriteLog "AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $(CreateJson($extension.properties.protectedSettings))" -ForegroundColor Magenta
             }
@@ -354,7 +354,7 @@ class SFTemplate {
 
                 $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value @{
                     storageAccountName     = "$sfdiagsParameter"
-                    storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$storageKeyApi').key1]"
+                    storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$($this.storageKeyApi)').key1]"
                     storageAccountEndPoint = "https://core.windows.net/"                  
                 }
                 WriteLog "AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $(CreateJson($extension.properties.protectedSettings))" -ForegroundColor Magenta
@@ -417,7 +417,7 @@ class SFTemplate {
         WriteLog "enter:CreateAddPrimaryNodeTypeTemplate"
         # create add node type templates for primary os / hardware sku change
         # create secondary for additional secondary nodetypes
-        $templateFile = $templateJsonFile.Replace(".json", ".addprimarynodetype.json")
+        $templateFile = $this.templateJsonFile.Replace(".json", ".addprimarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
         if (!(ParameterizeNodetypes -isPrimaryFilter $true)) {
@@ -447,7 +447,7 @@ class SFTemplate {
             - isPrimary is a parameter
             - additional nodetype resource has been added to cluster resource
             "
-        $readme | out-file $templateJsonFile.Replace(".json", ".addprimarynodetype.readme.txt")
+        $readme | out-file $this.templateJsonFile.Replace(".json", ".addprimarynodetype.readme.txt")
         WriteLog "exit:create-addNodePrimaryTypeTemplate"
     }
 
@@ -464,7 +464,7 @@ class SFTemplate {
         WriteLog "enter:CreateAddSecondaryNodeTypeTemplate"
         # create add node type templates for primary os / hardware sku change
         # create secondary for additional secondary nodetypes
-        $templateFile = $templateJsonFile.Replace(".json", ".addsecondarynodetype.json")
+        $templateFile = $this.templateJsonFile.Replace(".json", ".addsecondarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
         if (!(ParameterizeNodetypes)) {
@@ -499,7 +499,7 @@ class SFTemplate {
             - isPrimary is a parameter
             - additional nodetype resource has been added to cluster resource
             "
-        $readme | out-file $templateJsonFile.Replace(".json", ".addsecondarynodetype.readme.txt")
+        $readme | out-file $this.templateJsonFile.Replace(".json", ".addsecondarynodetype.readme.txt")
         WriteLog "exit:CreateAddSecondaryNodeTypeTemplate"
     }
 
@@ -513,7 +513,7 @@ class SFTemplate {
         #>
         WriteLog "enter:CreateCurrentTemplate"
         # create base /current template
-        $templateFile = $templateJsonFile.Replace(".json", ".current.json")
+        $templateFile = $this.templateJsonFile.Replace(".json", ".current.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
         RemoveDuplicateResources
@@ -534,7 +534,7 @@ class SFTemplate {
             - dependsOn modified to remove conflicting / unneeded resources
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             "
-        $readme | out-file $templateJsonFile.Replace(".json", ".current.readme.txt")
+        $readme | out-file $this.templateJsonFile.Replace(".json", ".current.readme.txt")
         WriteLog "exit:CreateCurrentTemplate"
     }
 
@@ -549,11 +549,11 @@ class SFTemplate {
         #>
         WriteLog "enter:CreateExportTemplate"
         # create base /current template
-        $templateFile = $templateJsonFile.Replace(".json", ".export.json")
+        $templateFile = $this.templateJsonFile.Replace(".json", ".export.json")
 
-        if ($useExportedJsonFile -and (test-path $useExportedJsonFile)) {
-            WriteLog "using existing export file $useExportedJsonFile" -ForegroundColor Green
-            $templateFile = $useExportedJsonFile
+        if ($this.useExportedJsonFile -and (test-path $this.useExportedJsonFile)) {
+            WriteLog "using existing export file $this.useExportedJsonFile" -ForegroundColor Green
+            $templateFile = $this.useExportedJsonFile
         }
         else {
             $exportResult = ExportTemplate -configuredResources $global:configuredRGResources -jsonFile $templateFile
@@ -572,7 +572,7 @@ class SFTemplate {
             - use 'current' to modify existing cluster
             - use 'redeploy' or 'new' to recreate / create cluster
             "
-        $readme | out-file $templateJsonFile.Replace(".json", ".export.readme.txt")
+        $readme | out-file $this.templateJsonFile.Replace(".json", ".export.readme.txt")
         WriteLog "exit:CreateExportTemplate"
     }
 
@@ -590,7 +590,7 @@ class SFTemplate {
         .OUTPUTS
             [string]
         #>   
-        $currentWarningPreference = $WarningPreference
+        $currentWarningPreference = $this.WarningPreference
         $WarningPreference = 'SilentlyContinue'
     
         # to fix \u0027 single quote issue
@@ -610,7 +610,7 @@ class SFTemplate {
         #>
         WriteLog "enter:CreateNewTemplate"
         # create deploy / new / add template
-        $templateFile = $templateJsonFile.Replace(".json", ".new.json")
+        $templateFile = $this.templateJsonFile.Replace(".json", ".new.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
         $parameterExclusions = ModifyStorageResourcesDeploy
         ModifyVmssResourcesDeploy
@@ -634,7 +634,7 @@ class SFTemplate {
             - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
             - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
             "
-        $readme | out-file $templateJsonFile.Replace(".json", ".new.readme.txt")
+        $readme | out-file $this.templateJsonFile.Replace(".json", ".new.readme.txt")
         WriteLog "exit:CreateNewTemplate"
     }
 
@@ -649,7 +649,7 @@ class SFTemplate {
         WriteLog "enter:CreateParameterFile( [string]$parameterFileName, [string[]]$ignoreParameters = @())"
  
         $parameterTemplate = [ordered]@{ 
-            '$schema'      = $parametersSchema
+            '$schema'      = $this.parametersSchema
             contentVersion = "1.0.0.0"
         } 
 
@@ -749,7 +749,7 @@ class SFTemplate {
         #>
         WriteLog "enter:CreateRedeployTemplate"
         # create redeploy template
-        $templateFile = $templateJsonFile.Replace(".json", ".redeploy.json")
+        $templateFile = $this.templateJsonFile.Replace(".json", ".redeploy.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
         ModifyClusterResourceRedeploy
@@ -771,7 +771,7 @@ class SFTemplate {
             - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
             - clusterendpoint is parameterized
             "
-        $readme | out-file $templateJsonFile.Replace(".json", ".redeploy.readme.txt")
+        $readme | out-file $this.templateJsonFile.Replace(".json", ".redeploy.readme.txt")
         WriteLog "exit:CreateRedeployTemplate"
     }
 
@@ -808,14 +808,14 @@ class SFTemplate {
         WriteLog "ExportTemplate:file exists:$((test-path $jsonFile))"
         WriteLog "ExportTemplate:resource ids: $resourceIds" -ForegroundColor green
 
-        WriteLog "Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
+        WriteLog "Export-AzResourceGroup -ResourceGroupName $($this.resourceGroupName) `
             -Path $jsonFile `
             -Force `
             -IncludeComments `
             -IncludeParameterDefaultValue `
             -Resource $resourceIds
     " -foregroundcolor Blue
-        Export-AzResourceGroup -ResourceGroupName $resourceGroupName `
+        Export-AzResourceGroup -ResourceGroupName $this.resourceGroupName `
             -Path $jsonFile `
             -Force `
             -IncludeComments `
@@ -836,7 +836,7 @@ class SFTemplate {
         WriteLog "enter:EnumAllResources"
         $resources = [collections.arraylist]::new()
 
-        WriteLog "EnumAllResources:getting resource group cluster $resourceGroupName"
+        WriteLog "EnumAllResources:getting resource group cluster $($this.resourceGroupName)"
         $clusterResource = EnumClusterResource
         if (!$clusterResource) {
             WriteLog "EnumAllResources:unable to enumerate cluster. exiting" -isError
@@ -844,7 +844,7 @@ class SFTemplate {
         }
         [void]$resources.Add($clusterResource.Id)
 
-        WriteLog "EnumAllResources:getting scalesets $resourceGroupName"
+        WriteLog "EnumAllResources:getting scalesets $($this.resourceGroupName)"
         $vmssResources = @(EnumVmssResources $clusterResource)
         if ($vmssResources.Count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate vmss. exiting" -isError
@@ -854,7 +854,7 @@ class SFTemplate {
             [void]$resources.AddRange(@($vmssResources.Id))
         }
 
-        WriteLog "EnumAllResources:getting storage $resourceGroupName"
+        WriteLog "EnumAllResources:getting storage $($this.resourceGroupName)"
         $storageResources = @(EnumStorageResources $clusterResource)
         if ($storageResources.count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate storage. exiting" -isError
@@ -864,7 +864,7 @@ class SFTemplate {
             [void]$resources.AddRange(@($storageResources.Id))
         }
     
-        WriteLog "EnumAllResources:getting virtualnetworks $resourceGroupName"
+        WriteLog "EnumAllResources:getting virtualnetworks $($this.resourceGroupName)"
         $vnetResources = @(EnumVnetResourceIds $vmssResources)
         if ($vnetResources.count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate vnets. exiting" -isError
@@ -874,7 +874,7 @@ class SFTemplate {
             [void]$resources.AddRange($vnetResources)
         }
 
-        WriteLog "EnumAllResources:getting loadbalancers $resourceGroupName"
+        WriteLog "EnumAllResources:getting loadbalancers $($this.resourceGroupName)"
         $lbResources = @(EnumLbResourceIds $vmssResources)
         if ($lbResources.count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate loadbalancers. exiting" -isError
@@ -884,7 +884,7 @@ class SFTemplate {
             [void]$resources.AddRange($lbResources)
         }
 
-        WriteLog "EnumAllResources:getting ip addresses $resourceGroupName"
+        WriteLog "EnumAllResources:getting ip addresses $($this.resourceGroupName)"
         $ipResources = @(EnumIpResourceIds $lbResources)
         if ($ipResources.count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate ips." -isWarning
@@ -893,7 +893,7 @@ class SFTemplate {
             [void]$resources.AddRange($ipResources)
         }
 
-        WriteLog "EnumAllResources:getting key vaults $resourceGroupName"
+        WriteLog "EnumAllResources:getting key vaults $($this.resourceGroupName)"
         $kvResources = @(EnumKvResourceIds $vmssResources)
         if ($kvResources.count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate key vaults." -isWarning
@@ -902,7 +902,7 @@ class SFTemplate {
             [void]$resources.AddRange($kvResources)
         }
 
-        WriteLog "EnumAllResources:getting nsgs $resourceGroupName"
+        WriteLog "EnumAllResources:getting nsgs $($this.resourceGroupName)"
         $nsgResources = @(EnumNsgResourceIds $vmssResources)
         if ($nsgResources.count -lt 1) {
             WriteLog "EnumAllResources:unable to enumerate nsgs." -isWarning
@@ -911,8 +911,8 @@ class SFTemplate {
             [void]$resources.AddRange($nsgResources)
         }
 
-        if ($excludeResourceNames) {
-            $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
+        if ($this.excludeResourceNames) {
+            $resources = $resources | where-object Name -NotMatch "$($this.excludeResourceNames -join "|")"
         }
 
         WriteLog "exit:EnumAllResources"
@@ -929,7 +929,7 @@ class SFTemplate {
             [object]
         #>
         WriteLog "enter:EnumClusterResource"
-        $clusters = @(get-azresource -ResourceGroupName $resourceGroupName `
+        $clusters = @(get-azresource -ResourceGroupName $this.resourceGroupName `
                 -ResourceType 'Microsoft.ServiceFabric/clusters' `
                 -ExpandProperties)
         $clusterResource = $null
@@ -1057,7 +1057,7 @@ class SFTemplate {
         WriteLog "enter:EnumNsgResourceIds"
         $resources = [collections.arraylist]::new()
 
-        foreach ($vnetId in $vnetResources) {
+        foreach ($vnetId in $this.vnetResources) {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             WriteLog "EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)"
             foreach ($subnet in $vnetResource.Properties.subnets) {
@@ -1086,19 +1086,19 @@ class SFTemplate {
         WriteLog "enter:EnumStorageResources"
         $resources = [collections.arraylist]::new()
     
-        $sflogs = $clusterResource.Properties.diagnosticsStorageAccountConfig.storageAccountName
-        WriteLog "EnumStorageResources:cluster sflogs storage account $sflogs"
+        $this.sflogs = $clusterResource.Properties.diagnosticsStorageAccountConfig.storageAccountName
+        WriteLog "EnumStorageResources:cluster sflogs storage account $($this.sflogs)"
 
         $scalesets = EnumVmssResources($clusterResource)
-        $sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
-        WriteLog "EnumStorageResources:cluster sfdiags storage account $sfdiags"
+        $this.sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
+        WriteLog "EnumStorageResources:cluster sfdiags storage account $($this.sfdiags)"
   
-        $storageResources = @(get-azresource -ResourceGroupName $resourceGroupName `
+        $storageResources = @(get-azresource -ResourceGroupName $this.resourceGroupName `
                 -ResourceType 'Microsoft.Storage/storageAccounts' `
                 -ExpandProperties)
 
-        $global:sflogs = $storageResources | where-object name -ieq $sflogs
-        $global:sfdiags = @($storageResources | where-object name -ieq $sfdiags)
+        $global:sflogs = $storageResources | where-object name -ieq $this.sflogs
+        $global:sfdiags = @($storageResources | where-object name -ieq $this.sfdiags)
     
         [void]$resources.add($global:sflogs)
         foreach ($sfdiag in $global:sfdiags) {
@@ -1132,7 +1132,7 @@ class SFTemplate {
             return $null
         }
 
-        $resources = @(get-azresource -ResourceGroupName $resourceGroupName `
+        $resources = @(get-azresource -ResourceGroupName $this.resourceGroupName `
                 -ResourceType 'Microsoft.Compute/virtualMachineScaleSets' `
                 -ExpandProperties)
 
@@ -1233,7 +1233,7 @@ class SFTemplate {
         WriteLog "enter:GetFromParametersSection parameterName=$parameterName"
         $results = $null
         $parameters = @($global:currentConfig.parameters)
-        $currentErrorPreference = $ErrorActionPreference
+        $currentErrorPreference = $this.ErrorActionPreference
         $ErrorActionPreference = 'silentlycontinue'
 
         $results = @($parameters.$parameterName.defaultValue)
@@ -1437,6 +1437,7 @@ class SFTemplate {
             $error.Clear()
             return $false
         }
+        return $true
     }
 
     [object[]] GetVmssExtensions([object]$vmssResource, [string]$extensionType = $null) {
@@ -1601,11 +1602,11 @@ class SFTemplate {
                 $name = $global:currentConfig.parameters.$parametername.defaultValue
             }
 
-            if (!$name) {
+            if (!$this.name) {
                 $name = $lbResource.name
             }
 
-            $lb = get-azresource -ResourceGroupName $resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
+            $lb = get-azresource -ResourceGroupName $this.resourceGroupName -Name $this.name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
             $dependsOn = [collections.arraylist]::new()
 
             WriteLog "ModifyLbResources:removing backendpool from lb dependson"
@@ -1640,13 +1641,13 @@ class SFTemplate {
         WriteLog "exit:ModifyLbResourcesRedeploy"
     }
 
-    [void] ModifyStorageResourcesDeploy() {
+    [string[]] ModifyStorageResourcesDeploy() {
         <#
         .SYNOPSIS
             modifies storage resources for deploy template
-            outputs: null
+            outputs: string[]
         .OUTPUTS
-            [null]
+            [string[]]
         #>
         WriteLog "enter:ModifyStorageResourcesDeploy"
         $metadataDescription = 'this name must be unique in deployment region.'
@@ -1669,7 +1670,7 @@ class SFTemplate {
         }
 
         WriteLog "exit:ModifyStorageResourcesDeploy"
-        return $parameterExclusions.ToArray()
+        return $this.parameterExclusions.ToArray()
     }
 
     [void] ModifyVmssResources($currenConfig) {
@@ -1796,7 +1797,7 @@ class SFTemplate {
 
             if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq 'adminPassword')) {
                 WriteLog "ModifyVmssResourcesReDeploy:adding admin password"
-                $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value $adminPassword
+                $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name 'adminPassword' -Value $this.adminPassword
             
                 AddParameter `
                     -resource $vmssResource `
@@ -2192,7 +2193,7 @@ class SFTemplate {
             WriteLog "exit:RenameParametersByResource:invalid resource. no name/type:$(CreateJson($resource))" -isError
             return $false
         }
-    
+        return $true
     }
 
     [bool] SetResourceParameterValue([object]$resource, [string]$name, [string]$newValue) {
@@ -2245,7 +2246,7 @@ class SFTemplate {
         $json = '.\VerifyConfig.json'
         CreateJson($global:currentConfig) | out-file -FilePath $json -Force
 
-        WriteLog "Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+        WriteLog "Test-AzResourceGroupDeployment -ResourceGroupName $($this.resourceGroupName) `
         -Mode Incremental `
         -Templatefile $json `
         -TemplateParameterFile $templateParameterFile `
@@ -2253,7 +2254,7 @@ class SFTemplate {
     " -ForegroundColor Green
 
         $error.Clear()
-        $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+        $result = Test-AzResourceGroupDeployment -ResourceGroupName $this.resourceGroupName `
             -Mode Incremental `
             -TemplateFile $json `
             -TemplateParameterFile $templateParameterFile `
@@ -2340,8 +2341,8 @@ class SFTemplate {
             write-host $stringData -ForegroundColor $foregroundcolor
         }
 
-        if ($logFile) {
-            out-file -Append -inputobject $stringData.ToString() -filepath $logFile
+        if ($this.logFile) {
+            out-file -Append -inputobject $stringData.ToString() -filepath $this.logFile
         }
     }
 
