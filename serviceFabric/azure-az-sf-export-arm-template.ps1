@@ -144,6 +144,7 @@ function main () {
     # create $global:currentConfig
     create-exportTemplate
 
+    # use $global:currentConfig
     create-currentTemplate
     create-redeployTemplate
     create-addPrimaryNodeTypeTemplate
