@@ -44,7 +44,7 @@
 [cmdletbinding()]
 param (
     #[Parameter(Mandatory = $true)]
-    [string]$resourceGroupName = '',
+    [string]$resourceGroupName = 'sfjagilber1nt3',
     [string]$templatePath = "$psscriptroot/templates-$resourceGroupName", # for cloudshell
     [string]$useExportedJsonFile = '',
     [string]$adminPassword = '', #'GEN_PASSWORD',
@@ -128,7 +128,7 @@ class SFTemplate {
         }
 
         $this.WriteLog("starting")
-        if ($this.updateScript -and (GetUpdate -updateUrl $this.updateUrl)) {
+        if ($this.updateScript -and ($this.GetUpdate($this.updateUrl))) {
             return
         }
 
@@ -159,7 +159,7 @@ class SFTemplate {
             }
         }
         else {
-            $resourceIds = $this.EnumAllResources
+            $resourceIds = $this.EnumAllResources()
             foreach ($resourceId in $resourceIds) {
                 $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
                 if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
@@ -182,14 +182,14 @@ class SFTemplate {
         $deploymentName = "$($this.resourceGroupName)-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
         # create $this.currentConfig
-        $this.CreateExportTemplate
+        $this.CreateExportTemplate()
 
         # use $this.currentConfig
-        $this.CreateCurrentTemplate
-        $this.CreateRedeployTemplate
-        $this.CreateAddPrimaryNodeTypeTemplate
-        $this.CreateAddSecondaryNodeTypeTemplate
-        $this.CreateNewTemplate
+        $this.CreateCurrentTemplate()
+        $this.CreateRedeployTemplate()
+        $this.CreateAddPrimaryNodeTypeTemplate()
+        $this.CreateAddSecondaryNodeTypeTemplate()
+        $this.CreateNewTemplate()
 
         if ($this.compress) {
             $zipFile = "$($this.templatePath).zip"
@@ -221,12 +221,12 @@ class SFTemplate {
 
         if ($this.warnings) {
             $this.WriteLog("global warnings:", [consolecolor]::Yellow)
-            $this.WriteWarning((CreateJson($this.warnings)))
+            $this.WriteWarning(($this.CreateJson($this.warnings)))
         }
 
         if ($this.errors) {
             $this.WriteLog("global errors:", [consolecolor]::Red)
-            $this.WriteError((CreateJson($this.errors)))
+            $this.WriteError(($this.CreateJson($this.errors)))
         }
 
         $this.WriteLog("time elapsed:  $(((get-date) - $this.startTime).TotalMinutes.ToString("0.0")) minutes`r`n")
@@ -422,13 +422,13 @@ class SFTemplate {
         foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
             if (($psObjectProperty.Name -ieq $parameterName)) {
                 $psObjectProperty.Value = $parameterObject
-                $this.WriteLog("exit:AddToParametersSection:parameterObject value added to existing parameter:$(CreateJson($parameterValue))")
+                $this.WriteLog("exit:AddToParametersSection:parameterObject value added to existing parameter:$($this.CreateJson($parameterValue))")
                 return
             }
         }
 
         $this.currentConfig.parameters | Add-Member -MemberType NoteProperty -Name $parameterName -Value $parameterObject
-        $this.WriteLog("exit:AddToParametersSection:new parameter name:$parameterName added $(CreateJson($parameterObject))")
+        $this.WriteLog("exit:AddToParametersSection:new parameter name:$parameterName added $($this.CreateJson($parameterObject))")
     }
 
     [void] AddVmssProtectedSettings([object]$vmssResource) {
@@ -448,7 +448,7 @@ class SFTemplate {
                     StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key1]"
                     StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key2]"
                 }
-                $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $(CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
+                $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
 
             if ($extension.properties.type -ieq 'IaaSDiagnostics') {
@@ -461,7 +461,7 @@ class SFTemplate {
                     storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$($this.storageKeyApi)').key1]"
                     storageAccountEndPoint = "https://core.windows.net/"                  
                 }
-                $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $(CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
+                $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
         }
         $this.WriteLog("exit:AddVmssProtectedSettings")
@@ -533,7 +533,7 @@ class SFTemplate {
         $this.VerifyConfig($templateParameterFile)
 
         # save base / current json
-        CreateJson($this.currentConfig) | out-file $templateFile
+        $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "addnodetype modifications:
@@ -585,7 +585,7 @@ class SFTemplate {
         $this.VerifyConfig($templateParameterFile)
 
         # save base / current json
-        CreateJson($this.currentConfig) | out-file $templateFile
+        $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "addnodetype modifications:
@@ -620,16 +620,16 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".current.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-        $this.RemoveDuplicateResources
-        $this.RemoveUnusedParameters
-        $this.ModifyLbResources
-        $this.ModifyVmssResources
+        $this.RemoveDuplicateResources()
+        $this.RemoveUnusedParameters()
+        $this.ModifyLbResources()
+        $this.ModifyVmssResources()
     
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
 
         # save base / current json
-        CreateJson($this.currentConfig) | out-file $templateFile
+        $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "current modifications:
@@ -667,7 +667,7 @@ class SFTemplate {
 
         # save base / current json
         $this.currentConfig = Get-Content -raw $templateFile | convertfrom-json
-        CreateJson($this.currentConfig) | out-file $templateFile
+        $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save current readme
         $readme = "export:
@@ -680,10 +680,21 @@ class SFTemplate {
         $this.WriteLog("exit:CreateExportTemplate")
     }
 
-    [string] Json(
-        #[Parameter(Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [object]$inputObject,
-        [int]$depth = 99) {
+    [string] CreateJson([object]$inputObject) {
+        <#
+        .SYNOPSIS
+            creates json string compatible with ps 5.6 - 7.x '\u0027' issue
+            inputs: object
+            outputs: string
+        .INPUTS
+            [object]
+        .OUTPUTS
+            [string]
+        #>   
+        return $this.CreateJson($inputObject,99)
+    }
+
+    [string] CreateJson([object]$inputObject, [int]$depth = 99) {
         <#
         .SYNOPSIS
             creates json string compatible with ps 5.6 - 7.x '\u0027' issue
@@ -716,15 +727,15 @@ class SFTemplate {
         # create deploy / new / add template
         $templateFile = $this.templateJsonFile.Replace(".json", ".new.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
-        $parameterExclusions = $this.ModifyStorageResourcesDeploy
-        $this.ModifyVmssResourcesDeploy
-        $this.ModifyClusterResourceDeploy
+        $parameterExclusions = $this.ModifyStorageResourcesDeploy()
+        $this.ModifyVmssResourcesDeploy()
+        $this.ModifyClusterResourceDeploy()
 
         $this.CreateParameterFile($templateParameterFile, $parameterExclusions)
         $this.VerifyConfig($templateParameterFile)
 
         # # save add json
-        CreateJson($this.currentConfig) | out-file $templateFile
+        $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save add readme
         $readme = "new / add modifications:
@@ -795,7 +806,7 @@ class SFTemplate {
         }
 
         $this.WriteLog("CreateParameterFile:creating parameterfile $parameterFileName", [consolecolor]::Green)
-        CreateJson($parameterTemplate) | out-file -FilePath $parameterFileName
+        $this.CreateJson($parameterTemplate) | out-file -FilePath $parameterFileName
         $this.WriteLog("exit:CreateParameterFile")
     }
 
@@ -901,16 +912,16 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".redeploy.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-        $this.ModifyClusterResourceRedeploy
-        $this.ModifyLbResourcesRedeploy
-        $this.ModifyVmssResourcesRedeploy
-        $this.ModifyIpAddressesRedeploy
+        $this.ModifyClusterResourceRedeploy()
+        $this.ModifyLbResourcesRedeploy()
+        $this.ModifyVmssResourcesRedeploy()
+        $this.ModifyIpAddressesRedeploy()
 
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
 
         # # save redeploy json
-        CreateJson($this.currentConfig) | out-file $templateFile
+        $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save redeploy readme
         $readme = "redeploy modifications:
@@ -934,7 +945,7 @@ class SFTemplate {
         #>
         $settings = @()
         foreach ($resource in $resources) {
-            $settings += CreateJson($resource)
+            $settings += $this.CreateJson($resource)
         }
         $this.WriteLog("current settings: `r`n $settings", [consolecolor]::Green)
     }
@@ -986,7 +997,7 @@ class SFTemplate {
         $resources = [collections.arraylist]::new()
 
         $this.WriteLog("EnumAllResources:getting resource group cluster $($this.resourceGroupName)")
-        $clusterResource = $this.EnumClusterResource
+        $clusterResource = $this.EnumClusterResource()
         if (!$clusterResource) {
             $this.WriteError("EnumAllResources:unable to enumerate cluster. exiting")
             return $null
@@ -1270,7 +1281,7 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:EnumVmssResources")
         $nodeTypes = $clusterResource.Properties.nodeTypes
-        $this.WriteLog("EnumVmssResources:cluster nodetypes $(CreateJson($nodeTypes))")
+        $this.WriteLog("EnumVmssResources:cluster nodetypes $($this.CreateJson($nodeTypes))")
         $vmssResources = [collections.arraylist]::new()
 
         $clusterEndpoint = $clusterResource.Properties.clusterEndpoint
@@ -1290,7 +1301,7 @@ class SFTemplate {
         foreach ($resource in $resources) {
             $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
             if ($vmsscep -ieq $clusterEndpoint) {
-                $this.WriteLog("EnumVmssResources:adding vmss resource $(CreateJson($resource))", [consolecolor]::Cyan)
+                $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
                 [void]$vmssResources.Add($resource)
             }
             else {
@@ -1395,7 +1406,7 @@ class SFTemplate {
             $this.WriteWarning("GetFromParametersSection:multiple matching values found in parameters section for $parameterName")
         }
 
-        $this.WriteLog("exit:GetFromParametersSection: returning: $(CreateJson($results))", [consolecolor]::Magenta)
+        $this.WriteLog("exit:GetFromParametersSection: returning: $($this.CreateJson($results))", [consolecolor]::Magenta)
         return $results
     }
 
@@ -1426,7 +1437,7 @@ class SFTemplate {
         .OUTPUTS
             [object]
         #>
-        $this.WriteLog("enter:GetResourceParameterValue:resource:$(CreateJson($resource)) name:$name")
+        $this.WriteLog("enter:GetResourceParameterValue:resource:$($this.CreateJson($resource)) name:$name")
         $retval = $null
         $values = [collections.arraylist]::new()
         [void]$values.AddRange(@($this.GetResourceParameterValues($resource, $name)))
@@ -1454,7 +1465,7 @@ class SFTemplate {
         .OUTPUTS
             [object[]]
         #>
-        $this.WriteLog("enter:GetResourceParameterValues:resource:$(CreateJson($resource)) name:$name")
+        $this.WriteLog("enter:GetResourceParameterValues:resource:$($this.CreateJson($resource)) name:$name")
         $retval = [collections.arraylist]::new()
 
         if ($resource.psobject.members.name -imatch 'ToArray') {
@@ -1647,7 +1658,7 @@ class SFTemplate {
             [object[]]
         #>
         $this.WriteLog("enter:GetVmssResourcesByNodeType")
-        $vmssResources = $this.GetVmssResources
+        $vmssResources = $this.GetVmssResources()
         $vmssByNodeType = [collections.arraylist]::new()
 
         foreach ($vmssResource in $vmssResources) {
@@ -1702,7 +1713,7 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:ModifyClusterResourceRedeploy")
         $sflogsParameter = $this.CreateParameterizedName('name', $this.sflogs, $true)
-        $clusterResource = $this.GetClusterResource
+        $clusterResource = $this.GetClusterResource()
     
         $this.WriteLog("ModifyClusterResourceRedeploy:setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter")
         $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
@@ -1745,7 +1756,7 @@ class SFTemplate {
         $lbResources = $this.GetLbResources
         foreach ($lbResource in $lbResources) {
             # fix backend pool
-            $this.WriteLog("ModifyLbResources:fixing exported lb resource $(CreateJson($lbresource))")
+            $this.WriteLog("ModifyLbResources:fixing exported lb resource $($this.CreateJson($lbresource))")
             $parameterName = $this.GetParameterizedNameFromValue($lbresource.name)
             $name = $null
 
@@ -1767,7 +1778,7 @@ class SFTemplate {
                 }
             }
             $lbResource.dependsOn = $dependsOn.ToArray()
-            $this.WriteLog("ModifyLbResources:lbResource modified dependson: $(CreateJson($lbResource.dependson))", [consolecolor]::Yellow)
+            $this.WriteLog("ModifyLbResources:lbResource modified dependson: $($this.CreateJson($lbResource.dependson))", [consolecolor]::Yellow)
         }
         $this.WriteLog("exit:ModifyLbResources")
     }
@@ -1781,11 +1792,11 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyLbResourcesRedeploy")
-        $lbResources = $this.GetLbResources
+        $lbResources = $this.GetLbResources()
         foreach ($lbResource in $lbResources) {
             # fix dupe pools and rules
             if ($lbResource.properties.inboundNatPools) {
-                $this.WriteLog("ModifyLbResourcesRedeploy:removing natrules: $(CreateJson($lbResource.properties.inboundNatRules))", [consolecolor]::Yellow)
+                $this.WriteLog("ModifyLbResourcesRedeploy:removing natrules: $($this.CreateJson($lbResource.properties.inboundNatRules))", [consolecolor]::Yellow)
                 [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
             }
         }
@@ -1826,7 +1837,7 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyVmssResources")
-        $vmssResources = $this.GetVmssResources
+        $vmssResources = $this.GetVmssResources()
    
         foreach ($vmssResource in $vmssResources) {
 
@@ -1849,7 +1860,7 @@ class SFTemplate {
                 }
             }
             $vmssResource.dependsOn = $dependsOn.ToArray()
-            $this.WriteLog("vmssResource modified dependson: $(CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
+            $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
         }
         $this.WriteLog("exit:ModifyVmssResources")
     }
@@ -1863,10 +1874,10 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyVmssResourcesDeploy")
-        $vmssResources = $this.GetVmssResources
+        $vmssResources = $this.GetVmssResources()
         foreach ($vmssResource in $vmssResources) {
             $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
-            $clusterResource = $this.GetClusterResource
+            $clusterResource = $this.GetClusterResource()
 
             $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
             $newName = "[reference($parameterizedName).clusterEndpoint]"
@@ -1874,7 +1885,7 @@ class SFTemplate {
             $this.WriteLog("setting cluster endpoint to $newName")
             $null = $this.SetResourceParameterValue($extension.properties.settings, 'clusterEndpoint', $newName)
             # remove clusterendpoint parameter
-            $this.RemoveUnusedParameters
+            $this.RemoveUnusedParameters()
         }
         $this.WriteLog("exit:ModifyVmssResourcesDeploy")
     }
@@ -1888,7 +1899,7 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyVmssResourcesReDeploy")
-        $vmssResources = $this.GetVmssResources
+        $vmssResources = $this.GetVmssResources()
    
         foreach ($vmssResource in $vmssResources) {
             # add protected settings
@@ -1928,7 +1939,7 @@ class SFTemplate {
             }
 
             $vmssResource.dependsOn = $dependsOn.ToArray()
-            $this.WriteLog("ModifyVmssResourcesReDeploy:vmssResource modified dependson: $(CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
+            $this.WriteLog("ModifyVmssResourcesReDeploy:vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
             
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware sku")
             $this.AddParameter(
@@ -2022,7 +2033,7 @@ class SFTemplate {
         .OUTPUTS
             [null]
         #>
-        $this.WriteLog("enter:ParameterizeNodetype:nodetype:$(CreateJson($nodetype)) parameterName:$parameterName parameterValue:$parameterValue type:$type")
+        $this.WriteLog("enter:ParameterizeNodetype:nodetype:$($this.CreateJson($nodetype)) parameterName:$parameterName parameterValue:$parameterValue type:$type")
         $vmssResources = @($this.GetVmssResourcesByNodeType($nodetype))
         $parameterizedName = $null
 
@@ -2178,29 +2189,29 @@ class SFTemplate {
             $null = $this.SetResourceParameterValue($newNodeType, 'vmInstanceCount', $capacity)
 
             $this.ParameterizeNodetype(
-                $newNodeType,       # nodetype
+                $newNodeType, # nodetype
                 'durabilityLevel'   # parameterName
             )
         
             if ($all) {
                 $this.ParameterizeNodetype(
-                    $newNodeType,   # nodetype
-                    'isPrimary',    # parameterName
+                    $newNodeType, # nodetype
+                    'isPrimary', # parameterName
                     'bool'          # type
                 )
             }
             else {
                 $this.ParameterizeNodetype(
-                    $newNodeType,       # nodetype
-                    'isPrimary',        # parameterName
-                    $isPrimaryValue,    # parameterValue
+                    $newNodeType, # nodetype
+                    'isPrimary', # parameterName
+                    $isPrimaryValue, # parameterValue
                     'bool'              # type
                 )
             }
         
             # todo: currently name has to be parameterized last so parameter names above can be found
             $this.ParameterizeNodetype(
-                $newNodeType,   # nodetype
+                $newNodeType, # nodetype
                 'name'          # parameterName
             )
         
@@ -2208,7 +2219,7 @@ class SFTemplate {
         }    
 
         $clusterResource.properties.nodetypes = $nodetypes
-        $this.WriteLog("exit:ParameterizeNodetypes:result:`r`n$(CreateJson($nodetypes))")
+        $this.WriteLog("exit:ParameterizeNodetypes:result:`r`n$($this.CreateJson($nodetypes))")
         return $true
     }
 
@@ -2228,11 +2239,11 @@ class SFTemplate {
         $resourceTypes = $this.configuredRGResources.resourceType
         foreach ($resource in $this.currentConfig.resources.GetEnumerator()) {
             $this.WriteLog("RemoveDuplicateResources:checking exported resource $($resource.name)", [consolecolor]::Magenta)
-            $this.WriteVerbose("RemoveDuplicateResources:checking exported resource $(CreateJson($resource))")
+            $this.WriteVerbose("RemoveDuplicateResources:checking exported resource $($this.CreateJson($resource))")
         
             if ($resourceTypes.Contains($resource.type)) {
                 $this.WriteLog("RemoveDuplicateResources:adding exported resource $($resource.name)", [consolecolor]::Cyan)
-                $this.WriteVerbose("RemoveDuplicateResources:adding exported resource $(CreateJson($resource))")
+                $this.WriteVerbose("RemoveDuplicateResources:adding exported resource $($this.CreateJson($resource))")
                 [void]$currentResources.Add($resource)
             }
         }
@@ -2250,7 +2261,7 @@ class SFTemplate {
             [bool]
         #>
         $this.WriteLog("enter:RemoveParameterizedNodeTypes")
-        $clusterResource = $this.GetClusterResource
+        $clusterResource = $this.GetClusterResource()
         $cleanNodetypes = [collections.arraylist]::new()
         $nodetypes = [collections.arraylist]::new()
         $retval = $false
@@ -2274,7 +2285,7 @@ class SFTemplate {
         if ($cleanNodetypes.Count -gt 0) {
             $retval = $true
             $clusterResource.properties.nodetypes = $cleanNodetypes
-            $null = $this.RemoveUnusedParameters
+            $null = $this.RemoveUnusedParameters()
         }
         else {
             $this.WriteError("exit:RemoveParameterizedNodeTypes:no clean nodetypes")
@@ -2293,7 +2304,7 @@ class SFTemplate {
             [bool]
         #>
         $this.WriteLog("enter:RemoveUnparameterizedNodeTypes")
-        $clusterResource = $this.GetClusterResource
+        $clusterResource = $this.GetClusterResource()
         $cleanNodetypes = [collections.arraylist]::new()
         $nodetypes = [collections.arraylist]::new()
         $retval = $false
@@ -2389,8 +2400,8 @@ class SFTemplate {
         }
 
         #serialize
-        $this.currentConfigParametersjson = CreateJson($this.currentConfig.parameters)
-        $this.currentConfigResourcejson = CreateJson($this.currentConfig)
+        $this.currentConfigParametersjson = $this.CreateJson($this.currentConfig.parameters)
+        $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
 
 
         if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($newParameterizedName), $this.ignoreCase)) {
@@ -2410,7 +2421,7 @@ class SFTemplate {
             $this.currentConfig.parameters = $this.currentConfigParametersjson | convertfrom-json
 
             # reserialize with modified parameters section
-            $this.currentConfigResourcejson = CreateJson($this.currentConfig)
+            $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
         }
         else {
             $this.WriteWarning("RenameParameter:parameter not found:$oldParameterName")
@@ -2428,7 +2439,7 @@ class SFTemplate {
             }
         }
 
-        $this.WriteVerbose("RenameParameter:result:$(CreateJson($this.currentConfig))")
+        $this.WriteVerbose("RenameParameter:result:$($this.CreateJson($this.currentConfig))")
         $this.WriteLog("exit:RenameParameter")
         return $true
     }
