@@ -789,13 +789,13 @@ class SFTemplate {
             }
 
             $this.WriteVerbose("CreateParameterFile:value properties:$($psObjectProperty.Value.psobject.Properties.Name)")
-            $parameterItem = [pscustomobject]@{
+            $parameterItem = @{
                 value = $psObjectProperty.Value.defaultValue
             }
 
-            if ($psObjectProperty.Value.GetType().name -ieq 'hashtable' -and $psObjectProperty.Value['metadata']) {
+            if ($psObjectProperty.Value.psobject.Properties.Match('metadata').Count -gt 0) {
                 if ($psObjectProperty.value.metadata.description) {
-                    $parameterItem.metadata = [pscustomobject]@{description = $psObjectProperty.value.metadata.description }
+                    $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
                 }
             }
             [void]$parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
