@@ -63,26 +63,48 @@ $currentVerbosePreference = $VerbosePreference
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 
 class ClusterTree {
-    [Cluster]$cluster = [Cluster]::new()
-    [Vmss[]]$vmss = @()
+    [object]$cluster = $null
+    [collections.generic.list[vmss]]$vmss = [collections.generic.list[vmss]]::new()
+    [ClusterDependsOn]$relationships = [ClusterDependsOn]::new()
 }
 
-class Cluster {
-    $resource = [object]::new()
-    $relationships = @{
-        vmss            = @()
-        storageAccounts = @()
+class DependsOn {
+    DependsOn(){
+
     }
+    DependsOn([string]$id){
+
+    }
+    DependsOn([string]$type,[string]$name,[string]$id){
+
+    }
+    [string]$type = $null
+    [string]$name = $null
+    [string]$id = $null
+}
+
+class ClusterDependsOn{
+    [collections.generic.list[DependsOn]]$storageAccountIds     = [collections.generic.list[DependsOn]]::new()
 }
 
 class Vmss {
-    $resource = [object]::new()
-    $relationships = @{
-        loadbalancers = @()
-        ipAddresses   = @()
-        vnets         = @()
-        keyvaults     = @()
+    Vmss(){
+
     }
+    Vmss($resource){
+        $this.resource = $resource
+    }
+
+    [object]$resource = $null
+    [VmssDependsOn]$relationships = [VmssDependsOn]::new()
+}
+
+class VmssDependsOn{
+    [collections.generic.list[DependsOn]]$loadbalancerIds = [collections.generic.list[DependsOn]]::new()
+    [collections.generic.list[DependsOn]]$ipAddressIds   = [collections.generic.list[DependsOn]]::new()
+    [collections.generic.list[DependsOn]]$nsgIds     = [collections.generic.list[DependsOn]]::new()
+    [collections.generic.list[DependsOn]]$keyVaultIds     = [collections.generic.list[DependsOn]]::new()
+    [collections.generic.list[DependsOn]]$vnetIds         = [collections.generic.list[DependsOn]]::new()
 }
 
 class SFTemplate {  
@@ -1122,7 +1144,7 @@ class SFTemplate {
 
         $this.WriteLog("using cluster resource $clusterResource", [consolecolor]::Green)
         $this.WriteLog("exit:EnumClusterResource")
-        $this.clusterTree.cluster.resource = $clusterResource
+        $this.clusterTree.cluster = $clusterResource
         return $clusterResource
     }
 
@@ -1145,6 +1167,9 @@ class SFTemplate {
                     $id = $fec.properties.publicIpAddress.id
                     $this.WriteLog("adding public ip: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
+
+                    $vmssResource = $this.clusterTree.vmss.Where({$_.relationships.loadbalancerids.contains($id)})
+                    [void]$this.clusterTree.vmss.$vmssResource.relationships.ipaddressids.Add([DependsOn]::new($id))
                 }
             }
         }
@@ -1170,6 +1195,7 @@ class SFTemplate {
             foreach ($id in $vmssResource.Properties.virtualMachineProfile.osProfile.secrets.sourceVault.id) {
                 $this.WriteLog("EnumKvResourceIds:adding kv id: $id", [consolecolor]::green)
                 [void]$resources.Add($id)
+                [void]$this.clusterTree.vmss.$vmssResource.relationships.keyvaultids.Add([DependsOn]::new($id))
             }
         }
 
@@ -1197,6 +1223,7 @@ class SFTemplate {
                     $id = [regex]::replace($ipconfig.properties.loadBalancerBackendAddressPools.id, '/backendAddressPools/.+$', '')
                     $this.WriteLog("EnumLbResourceIds:adding lb id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
+                    [void]$this.clusterTree.vmss.$vmssResource.relationships.loadbalancerids.Add([DependsOn]::new($id))
                 }
             }
         }
@@ -1225,6 +1252,8 @@ class SFTemplate {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
+                    $vmssResource = $this.clusterTree.vmss.Where({$_.relationships.vnetids.contains($vnetid)})
+                    [void]$this.clusterTree.vmss.$vmssResource.relationships.nsgids.Add([DependsOn]::new($id))
                 }
             }
 
@@ -1261,9 +1290,12 @@ class SFTemplate {
         $this.sfdiags = @($storageResources | where-object name -ieq $this.sfdiags)
     
         [void]$resources.add($this.sflogs)
+        [void]$this.clusterTree.relationships.storageAccountIds.Add([DependsOn]::new($this.sflogs.id))
+
         foreach ($sfdiag in $this.sfdiags) {
             $this.WriteLog("EnumStorageResources: adding $sfdiag")
             [void]$resources.add($sfdiag)
+            [void]$this.clusterTree.relationships.storageAccountIds.Add([DependsOn]::new($sfdiag.id))
         }
     
         $this.WriteVerbose("storage resources $resources")
@@ -1303,6 +1335,7 @@ class SFTemplate {
             if ($vmsscep -ieq $clusterEndpoint) {
                 $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
                 [void]$vmssResources.Add($resource)
+                [void]$this.clusterTree.vmss.Add([vmss]::new($resource))
             }
             else {
                 $this.WriteWarning("EnumVmssResources:vmss assigned to different cluster $vmsscep")
@@ -1310,7 +1343,6 @@ class SFTemplate {
         }
 
         $this.WriteLog("exit:EnumVmssResources")
-        $this.clusterTree.cluster.resource = $clusterResource
         return $vmssResources.ToArray() | sort-object name -Unique
     }
 
@@ -1333,6 +1365,7 @@ class SFTemplate {
                     $id = [regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
                     $this.WriteLog("EnumVnetResourceIds:adding vnet id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
+                    [void]$this.clusterTree.vmss.$vmssResource.relationships.vnetids.Add([DependsOn]::new($id))
                 }
             }
         }
