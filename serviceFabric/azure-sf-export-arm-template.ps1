@@ -524,7 +524,7 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".addprimarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-        if (!($this.ParameterizeNodetypes($true, $false))) {
+        if (!($this.ParameterizeNodetypes($true, $true))) {
             $this.WriteError("exit:CreateAddPrimaryNodeTypeTemplate:no nodetype found")
             return
         }
@@ -2065,7 +2065,7 @@ class SFTemplate {
                 $nodetype, # resourceObject
                 $parameterizedName, # value
                 $type, # type
-                ''                  # description
+                '' # description
             )
 
             $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
@@ -2085,7 +2085,7 @@ class SFTemplate {
                 $extension.properties.settings, # resourceObject
                 $parameterizedName, # value
                 $type, # type
-                ''                              # description
+                '' # description
             )
         }
         $this.WriteLog("exit:ParameterizeNodetype")
@@ -2194,14 +2194,14 @@ class SFTemplate {
 
             $this.ParameterizeNodetype(
                 $newNodeType, # nodetype
-                'durabilityLevel'   # parameterName
+                'durabilityLevel' # parameterName
             )
         
             if ($all) {
                 $this.ParameterizeNodetype(
                     $newNodeType, # nodetype
                     'isPrimary', # parameterName
-                    'bool'          # type
+                    'bool' # type
                 )
             }
             else {
@@ -2209,14 +2209,14 @@ class SFTemplate {
                     $newNodeType, # nodetype
                     'isPrimary', # parameterName
                     $isPrimaryValue, # parameterValue
-                    'bool'              # type
+                    'bool' # type
                 )
             }
         
             # todo: currently name has to be parameterized last so parameter names above can be found
             $this.ParameterizeNodetype(
                 $newNodeType, # nodetype
-                'name'          # parameterName
+                'name' # parameterName
             )
         
             [void]$nodetypes.Add($newNodeType)
