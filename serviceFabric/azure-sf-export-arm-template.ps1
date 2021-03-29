@@ -65,47 +65,50 @@ $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 class ClusterTree {
     [object]$cluster = $null
     [collections.generic.list[vmss]]$vmss = [collections.generic.list[vmss]]::new()
-    [ClusterDependsOn]$relationships = [ClusterDependsOn]::new()
-}
-
-class DependsOn {
-    DependsOn(){
-
+    [collections.generic.list[string]]$storageAccountIds = [collections.generic.list[string]]::new()
+    
+    [Vmss] FindVmssByExpression([string]$expression) {
+        [Vmss]$vmssObject = $null
+        
+        $vmssObject = $this.vmss.Where( { $expression })[0]
+        
+        if (!$vmssObject) {
+            write-error "unable to find vmss in clusterTree"
+        }
+        
+        return $vmssObject
     }
-    DependsOn([string]$id){
-
+    
+    [Vmss] FindVmssByResource([object]$vmssResource) {
+        [Vmss]$vmssObject = $null
+        
+        $vmssObject = $this.vmss.Where( { $_.resource -eq $vmssResource })[0]
+        
+        if (!$vmssObject) {
+            write-error "unable to find vmss in clusterTree"
+        }
+        
+        return $vmssObject
     }
-    DependsOn([string]$type,[string]$name,[string]$id){
-
-    }
-    [string]$type = $null
-    [string]$name = $null
-    [string]$id = $null
-}
-
-class ClusterDependsOn{
-    [collections.generic.list[DependsOn]]$storageAccountIds     = [collections.generic.list[DependsOn]]::new()
 }
 
 class Vmss {
-    Vmss(){
+    Vmss() {
 
     }
-    Vmss($resource){
+    Vmss($resource) {
         $this.resource = $resource
     }
 
     [object]$resource = $null
-    [VmssDependsOn]$relationships = [VmssDependsOn]::new()
+    [collections.generic.list[string]]$loadbalancerIds = [collections.generic.list[string]]::new()
+    [collections.generic.list[string]]$ipAddressIds = [collections.generic.list[string]]::new()
+    [collections.generic.list[string]]$nsgIds = [collections.generic.list[string]]::new()
+    [collections.generic.list[string]]$keyVaultIds = [collections.generic.list[string]]::new()
+    [collections.generic.list[string]]$vnetIds = [collections.generic.list[string]]::new()
+    
 }
 
-class VmssDependsOn{
-    [collections.generic.list[DependsOn]]$loadbalancerIds = [collections.generic.list[DependsOn]]::new()
-    [collections.generic.list[DependsOn]]$ipAddressIds   = [collections.generic.list[DependsOn]]::new()
-    [collections.generic.list[DependsOn]]$nsgIds     = [collections.generic.list[DependsOn]]::new()
-    [collections.generic.list[DependsOn]]$keyVaultIds     = [collections.generic.list[DependsOn]]::new()
-    [collections.generic.list[DependsOn]]$vnetIds         = [collections.generic.list[DependsOn]]::new()
-}
 
 class SFTemplate {  
     [string]$resourceGroupName = $resourceGroupName
@@ -162,10 +165,9 @@ class SFTemplate {
         if ($this.detail) {
             $ErrorActionPreference = 'continue'
             $VerbosePreference = 'continue'
-            $this.debugLevel = 'all'
         }
 
-        if (!($this.CheckModule)) {
+        if (!($this.CheckModule())) {
             return
         }
 
@@ -467,9 +469,9 @@ class SFTemplate {
         foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionPRofile.extensions) {
             if ($extension.properties.type -ieq 'ServiceFabricNode') {
                 $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value ([pscustomobject]@{
-                    StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key1]"
-                    StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key2]"
-                })
+                        StorageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key1]"
+                        StorageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sflogsParameter),'$($this.storageKeyApi)').key2]"
+                    })
                 $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
 
@@ -479,10 +481,10 @@ class SFTemplate {
                 $extension.properties.settings.storageAccount = "[$sfdiagsParameter]"
 
                 $extension.properties | Add-Member -MemberType NoteProperty -Name protectedSettings -Value ([pscustomobject]@{
-                    storageAccountName     = "$sfdiagsParameter"
-                    storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$($this.storageKeyApi)').key1]"
-                    storageAccountEndPoint = "https://core.windows.net/"                  
-                })
+                        storageAccountName     = "$sfdiagsParameter"
+                        storageAccountKey      = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $sfdiagsParameter),'$($this.storageKeyApi)').key1]"
+                        storageAccountEndPoint = "https://core.windows.net/"                  
+                    })
                 $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
         }
@@ -1168,8 +1170,13 @@ class SFTemplate {
                     $this.WriteLog("adding public ip: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
 
-                    $vmssResource = $this.clusterTree.vmss.Where({$_.relationships.loadbalancerids.contains($id)})
-                    [void]$this.clusterTree.vmss.$vmssResource.relationships.ipaddressids.Add([DependsOn]::new($id))
+                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByExpression('$_.loadbalancerIds.contains($lbresource)')
+                    if (!$vmssTreeResource) {
+                        $this.WriteError("unable to find vmss in clusterTree")
+                    }
+                    else {
+                        [void]$vmssTreeResource.ipAddressIds.Add($id)
+                    }
                 }
             }
         }
@@ -1195,7 +1202,14 @@ class SFTemplate {
             foreach ($id in $vmssResource.Properties.virtualMachineProfile.osProfile.secrets.sourceVault.id) {
                 $this.WriteLog("EnumKvResourceIds:adding kv id: $id", [consolecolor]::green)
                 [void]$resources.Add($id)
-                [void]$this.clusterTree.vmss.$vmssResource.relationships.keyvaultids.Add([DependsOn]::new($id))
+                
+                [object]$vmssTreeResource = $this.clusterTree.FindVmssByResource($vmssResource) # .vmss.$vmssResource.keyvaultIds.Add($id)
+                if (!$vmssTreeResource) {
+                    $this.WriteError("unable to find vmss in clusterTree")
+                }
+                else {
+                    [void]$vmssTreeResource.keyvaultIds.Add($id)
+                }
             }
         }
 
@@ -1223,7 +1237,14 @@ class SFTemplate {
                     $id = [regex]::replace($ipconfig.properties.loadBalancerBackendAddressPools.id, '/backendAddressPools/.+$', '')
                     $this.WriteLog("EnumLbResourceIds:adding lb id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
-                    [void]$this.clusterTree.vmss.$vmssResource.relationships.loadbalancerids.Add([DependsOn]::new($id))
+                    
+                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByResource($vmssResource)
+                    if (!$vmssTreeResource) {
+                        $this.WriteError("unable to find vmss in clusterTree")
+                    }
+                    else {
+                        [void]$vmssTreeResource.loadbalancerIds.Add($id)
+                    }
                 }
             }
         }
@@ -1252,8 +1273,15 @@ class SFTemplate {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
-                    $vmssResource = $this.clusterTree.vmss.Where({$_.relationships.vnetids.contains($vnetid)})
-                    [void]$this.clusterTree.vmss.$vmssResource.relationships.nsgids.Add([DependsOn]::new($id))
+                    
+                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
+                    if (!$vmssTreeResource) {
+                        $this.WriteError("unable to find vmss in clusterTree")
+                    }
+                    else {
+                        [void]$vmssTreeResource.nsgIds.Add($id)
+                    }
+                    
                 }
             }
 
@@ -1290,12 +1318,12 @@ class SFTemplate {
         $this.sfdiags = @($storageResources | where-object name -ieq $this.sfdiags)
     
         [void]$resources.add($this.sflogs)
-        [void]$this.clusterTree.relationships.storageAccountIds.Add([DependsOn]::new($this.sflogs.id))
+        [void]$this.clusterTree.storageAccountIds.Add($this.sflogs.id)
 
         foreach ($sfdiag in $this.sfdiags) {
             $this.WriteLog("EnumStorageResources: adding $sfdiag")
             [void]$resources.add($sfdiag)
-            [void]$this.clusterTree.relationships.storageAccountIds.Add([DependsOn]::new($sfdiag.id))
+            [void]$this.clusterTree.storageAccountIds.Add($sfdiag.id)
         }
     
         $this.WriteVerbose("storage resources $resources")
@@ -1335,7 +1363,10 @@ class SFTemplate {
             if ($vmsscep -ieq $clusterEndpoint) {
                 $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
                 [void]$vmssResources.Add($resource)
-                [void]$this.clusterTree.vmss.Add([vmss]::new($resource))
+                $vmssTreeResource = [vmss]::new($resource)
+                if ($this.clusterTree.vmss.count -lt 1 -or !$this.clusterTree.vmss.resource.name -ieq $resource.Name) {
+                    [void]$this.clusterTree.vmss.Add($vmssTreeResource)
+                }
             }
             else {
                 $this.WriteWarning("EnumVmssResources:vmss assigned to different cluster $vmsscep")
@@ -1365,7 +1396,13 @@ class SFTemplate {
                     $id = [regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
                     $this.WriteLog("EnumVnetResourceIds:adding vnet id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
-                    [void]$this.clusterTree.vmss.$vmssResource.relationships.vnetids.Add([DependsOn]::new($id))
+                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByResource($vmssResource)
+                    if (!$vmssTreeResource) {
+                        $this.WriteError("unable to find vmss in clusterTree")
+                    }
+                    else {
+                        [void]$vmssTreeResource.vnetIds.Add($id)
+                    }
                 }
             }
         }
@@ -1426,10 +1463,10 @@ class SFTemplate {
         $this.WriteLog("enter:GetFromParametersSection parameterName=$parameterName")
         $results = @()
 
-        if(($this.currentConfig.parameters.psobject.Properties.Match($parameterName).count -gt 0) -and 
-            ($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.psobject.Properties.Match('defaultValue'))){
-                $results = @($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.defaultValue)
-            }
+        if (($this.currentConfig.parameters.psobject.Properties.Match($parameterName).count -gt 0) -and 
+            ($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.psobject.Properties.Match('defaultValue'))) {
+            $results = @($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.defaultValue)
+        }
     
         if (@($results).Count -lt 1) {
             $this.WriteLog("GetFromParametersSection:no matching values found in parameters section for $parameterName")
@@ -2205,7 +2242,7 @@ class SFTemplate {
             $this.WriteError("ParameterizeNodetypes:more than one primary node type detected!")
         }
 
-        if(!$all){
+        if (!$all) {
             $filterednodetypes = $filterednodetypes[0]
         }
  
@@ -2684,8 +2721,8 @@ class SFTemplate {
     }
 }
 
-[SFTemplate]$sftemplate = [SFTemplate]::new()
-$sftemplate.Export();
+[SFTemplate]$global:sftemplate = [SFTemplate]::new()
+$global:sftemplate.Export();
 
 $ErrorActionPreference = $currentErrorActionPreference
 $VerbosePreference = $currentVerbosePreference
