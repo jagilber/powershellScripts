@@ -26,8 +26,8 @@
 .NOTES  
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 210322.1
-    todo       : merge capacity and instance count
+    Version    : 210329
+    todo       : 
                  rename and hide unused parameters for addnodetype
                  update readmes
     History    : 
@@ -898,7 +898,7 @@ function enum-allResources() {
     }
 
     write-log "enum-allResources:getting nsgs $resourceGroupName"
-    $nsgResources = @(enum-nsgResourceIds $vmssResources)
+    $nsgResources = @(enum-nsgResourceIds $vnetResources)
     if ($nsgResources.count -lt 1) {
         write-log "enum-allResources:unable to enumerate nsgs." -isWarning
     }
@@ -1040,15 +1040,14 @@ function enum-lbResourceIds([object[]]$vmssResources) {
     return $resources.ToArray() | sort-object -Unique
 }
 
-function enum-nsgResourceIds([object[]]$vmssResources) {
+function enum-nsgResourceIds([object[]]$vnetResources) {
     <#
-.SYNOPSIS
-    enumerate network security group resource id's from vmss resources
-    outputs: string[]
-.OUTPUTS
-    [string[]]
-#>
-    write-log "enter:enum-nsgResourceIds"
+    .SYNOPSIS
+        enumerate network security group resource id's from vnet resources
+        outputs: string[]
+    .OUTPUTS
+        [string[]]
+    #>    write-log "enter:enum-nsgResourceIds"
     $resources = [collections.arraylist]::new()
 
     foreach ($vnetId in $vnetResources) {
