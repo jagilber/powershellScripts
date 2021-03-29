@@ -44,7 +44,7 @@
 [cmdletbinding()]
 param (
     #[Parameter(Mandatory = $true)]
-    [string]$resourceGroupName = 'sfjagilber1nt3',
+    [string]$resourceGroupName = '',
     [string]$templatePath = "$psscriptroot/templates-$resourceGroupName", # for cloudshell
     [string]$useExportedJsonFile = '',
     [string]$adminPassword = '', #'GEN_PASSWORD',
