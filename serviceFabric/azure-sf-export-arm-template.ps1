@@ -62,18 +62,26 @@ $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 
-class ClusterTree {
+class ClusterModel {
+    [SFTemplate]$sfTemplate = $null
     [object]$cluster = $null
     [collections.generic.list[vmss]]$vmss = [collections.generic.list[vmss]]::new()
     [collections.generic.list[string]]$storageAccountIds = [collections.generic.list[string]]::new()
+    
+    ClusterModel () {}
+    ClusterModel($sfTemplate) {
+        $this.sfTemplate = $sfTemplate
+    }
+    
     
     [Vmss] FindVmssByExpression([string]$expression) {
         [Vmss]$vmssObject = $null
         
         $vmssObject = $this.vmss.Where( { $expression })[0]
         
-        if (!$vmssObject) {
-            write-error "unable to find vmss in clusterTree"
+        if (!$vmssObject)
+        {
+            $this.WriteError("unable to find vmss in ClusterModel:expression:$expression")
         }
         
         return $vmssObject
@@ -84,11 +92,23 @@ class ClusterTree {
         
         $vmssObject = $this.vmss.Where( { $_.resource -eq $vmssResource })[0]
         
-        if (!$vmssObject) {
-            write-error "unable to find vmss in clusterTree"
+        if (!$vmssObject)
+        {
+            $this.WriteError("unable to find vmss in ClusterModel:resource:$vmssResource")
         }
         
         return $vmssObject
+    }
+
+    [void] WriteError($data){
+        if ($this.sfTemplate)
+        {
+            #& $this.sfTemplate($data)
+            $this.sfTemplate.WriteError($data)
+        }
+        else{
+            write-error $data
+        }
     }
 }
 
@@ -109,7 +129,6 @@ class Vmss {
     
 }
 
-
 class SFTemplate {  
     [string]$resourceGroupName = $resourceGroupName
     [string]$templatePath = $templatePath
@@ -124,14 +143,14 @@ class SFTemplate {
 
     [string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
     [string]$updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
-
+    
+    [ClusterModel]$clusterModel = [ClusterModel]::new($this)
     [collections.arraylist]$errors = [collections.arraylist]::new()
     [collections.arraylist]$warnings = [collections.arraylist]::new()
     [int]$functionDepth = 0
     [string]$templateJsonFile = "$templatePath/template.json"
     [int]$resourceErrors = 0
     [int]$resourceWarnings = 0
-    [ClusterTree]$clusterTree = [ClusterTree]::new()
     [collections.arraylist]$configuredRGResources = [collections.arraylist]::new()
     [object]$currentConfig = $null
     [object]$sflogs = $null
@@ -143,9 +162,11 @@ class SFTemplate {
     [text.regularExpressions.regexOptions]$ignoreCase = [text.regularExpressions.regexOptions]::IgnoreCase
 
     SFTemplate() {}
-    static SFTemplate() {}
-
+    static SFTemplate() { }
+    
     [void] Export() {
+        $this.clusterModel = [ClusterModel]::new($this)
+
         if (!(test-path $this.templatePath)) {
             # test local and for cloudshell
             mkdir $this.templatePath
@@ -253,6 +274,7 @@ class SFTemplate {
             $this.WriteError(($this.CreateJson($this.errors)))
         }
 
+        $this.clusterModel.sfTemplate = $null
         $this.WriteLog("time elapsed:  $(((get-date) - $this.startTime).TotalMinutes.ToString("0.0")) minutes`r`n")
         $this.WriteLog('finished. template stored in $this.currentConfig', [consolecolor]::Cyan)
 
@@ -1146,7 +1168,7 @@ class SFTemplate {
 
         $this.WriteLog("using cluster resource $clusterResource", [consolecolor]::Green)
         $this.WriteLog("exit:EnumClusterResource")
-        $this.clusterTree.cluster = $clusterResource
+        $this.clusterModel.cluster = $clusterResource
         return $clusterResource
     }
 
@@ -1170,13 +1192,8 @@ class SFTemplate {
                     $this.WriteLog("adding public ip: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
 
-                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByExpression('$_.loadbalancerIds.contains($lbresource)')
-                    if (!$vmssTreeResource) {
-                        $this.WriteError("unable to find vmss in clusterTree")
-                    }
-                    else {
-                        [void]$vmssTreeResource.ipAddressIds.Add($id)
-                    }
+                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.loadbalancerIds.contains($lbresource)')
+                    [void]$vmssTreeResource.ipAddressIds.Add($id)
                 }
             }
         }
@@ -1203,13 +1220,8 @@ class SFTemplate {
                 $this.WriteLog("EnumKvResourceIds:adding kv id: $id", [consolecolor]::green)
                 [void]$resources.Add($id)
                 
-                [object]$vmssTreeResource = $this.clusterTree.FindVmssByResource($vmssResource) # .vmss.$vmssResource.keyvaultIds.Add($id)
-                if (!$vmssTreeResource) {
-                    $this.WriteError("unable to find vmss in clusterTree")
-                }
-                else {
-                    [void]$vmssTreeResource.keyvaultIds.Add($id)
-                }
+                [object]$vmssTreeResource = $this.clusterModel.FindVmssByResource($vmssResource) # .vmss.$vmssResource.keyvaultIds.Add($id)
+                [void]$vmssTreeResource.keyvaultIds.Add($id)
             }
         }
 
@@ -1238,13 +1250,8 @@ class SFTemplate {
                     $this.WriteLog("EnumLbResourceIds:adding lb id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
                     
-                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByResource($vmssResource)
-                    if (!$vmssTreeResource) {
-                        $this.WriteError("unable to find vmss in clusterTree")
-                    }
-                    else {
-                        [void]$vmssTreeResource.loadbalancerIds.Add($id)
-                    }
+                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByResource($vmssResource)
+                    [void]$vmssTreeResource.loadbalancerIds.Add($id)
                 }
             }
         }
@@ -1274,14 +1281,8 @@ class SFTemplate {
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
                     
-                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
-                    if (!$vmssTreeResource) {
-                        $this.WriteError("unable to find vmss in clusterTree")
-                    }
-                    else {
-                        [void]$vmssTreeResource.nsgIds.Add($id)
-                    }
-                    
+                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
+                    [void]$vmssTreeResource.nsgIds.Add($id)
                 }
             }
 
@@ -1318,12 +1319,12 @@ class SFTemplate {
         $this.sfdiags = @($storageResources | where-object name -ieq $this.sfdiags)
     
         [void]$resources.add($this.sflogs)
-        [void]$this.clusterTree.storageAccountIds.Add($this.sflogs.id)
+        [void]$this.clusterModel.storageAccountIds.Add($this.sflogs.id)
 
         foreach ($sfdiag in $this.sfdiags) {
             $this.WriteLog("EnumStorageResources: adding $sfdiag")
             [void]$resources.add($sfdiag)
-            [void]$this.clusterTree.storageAccountIds.Add($sfdiag.id)
+            [void]$this.clusterModel.storageAccountIds.Add($sfdiag.id)
         }
     
         $this.WriteVerbose("storage resources $resources")
@@ -1364,8 +1365,8 @@ class SFTemplate {
                 $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
                 [void]$vmssResources.Add($resource)
                 $vmssTreeResource = [vmss]::new($resource)
-                if ($this.clusterTree.vmss.count -lt 1 -or !$this.clusterTree.vmss.resource.name -ieq $resource.Name) {
-                    [void]$this.clusterTree.vmss.Add($vmssTreeResource)
+                if ($this.clusterModel.vmss.count -lt 1 -or !$this.clusterModel.vmss.resource.name -ieq $resource.Name) {
+                    [void]$this.clusterModel.vmss.Add($vmssTreeResource)
                 }
             }
             else {
@@ -1396,13 +1397,9 @@ class SFTemplate {
                     $id = [regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
                     $this.WriteLog("EnumVnetResourceIds:adding vnet id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
-                    [object]$vmssTreeResource = $this.clusterTree.FindVmssByResource($vmssResource)
-                    if (!$vmssTreeResource) {
-                        $this.WriteError("unable to find vmss in clusterTree")
-                    }
-                    else {
-                        [void]$vmssTreeResource.vnetIds.Add($id)
-                    }
+                    
+                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByResource($vmssResource)
+                    [void]$vmssTreeResource.vnetIds.Add($id)
                 }
             }
         }
@@ -1761,7 +1758,6 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:ModifyClusterResourceDeploy")
         # clean previous entries
-        #$null = RemoveParameterizedNodeTypes
     
         # reparameterize all
         $null = $this.ParameterizeNodetypes($false, $false, $true)
@@ -2620,23 +2616,30 @@ class SFTemplate {
         remove-item $json
         $error.Clear()
     }
+    
+    static [void]WriteErrorStatic([object]$data) {
+        if ([SFTemplate]::instance)
+        {
+            [SFTemplate]::instance.WriteError($data)
+        }
+    }
 
     [void] WriteError([object]$data) {
         $this.WriteLog($data, $true, $false, $false, [consolecolor]::Gray) 
     }
-
+    
     [void] WriteWarning([object]$data) {
         $this.WriteLog($data, $false, $true, $false, [consolecolor]::Gray) 
     }
-
+    
     [void] WriteVerbose([object]$data) {
         $this.WriteLog($data, $false, $false, $true, [consolecolor]::Gray) 
     }
-
+    
     [void] WriteLog([object]$data) {
         $this.WriteLog($data, $null, $null, $null, [consolecolor]::Gray) 
     }
-
+    
     [void] WriteLog([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray) {
         $this.WriteLog($data, $null, $false, $false, $foregroundcolor) 
     }
