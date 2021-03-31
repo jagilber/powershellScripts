@@ -1,7 +1,30 @@
 
+##
 # vscode rest client extension http file
 # see https://github.com/Huachao/vscode-restclient
 # use ### to separate requests
+##
+
+##
+#
+# cert setup. place in vscode 'setttings.json'
+#"rest-client.certificates": {
+#     "%fqdn%: {
+#         "pfx": "%path to pfx file%",
+#         "passphrase": ""
+#     }
+# },
+##
+
+##
+# azure aadv1 setup
+#
+# "rest-client.environmentVariables": {
+#     "$shared": {
+#         "subscriptionId": "",
+#         "tenantId": ""
+#     }
+##
 
 # ip info
 https://ipinfo.io/json
@@ -11,13 +34,9 @@ https://ipinfo.io/json
 https://go.microsoft.com/fwlink/?LinkID=824848&clcid=0x409
 ###
 
-# collectsfdata releases
-https://github.com/microsoft/collectservicefabricdata/releases/latest
 ###
+GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/latest
 
-# collectsfdata releases
-https://github.com/microsoft/collectservicefabricdata/releases
-###
 
 # github api urls
 https://api.github.com
@@ -37,13 +56,7 @@ https://www.w3.org/services/html2txt?url=https://store.rg-adguard.net/api/GetFil
 ###
 
 ###
-POST https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
-
-
-###
-https://www.w3.org/services/html2txt?url=https://jagilber.github.io
-
-###
+# convert google news to text
 https://www.w3.org/services/html2txt?url=https://news.google.com 
 ###
 
@@ -59,15 +72,12 @@ GET {{id}}?q={{QUERY}}&skip={{SKIP}}&take={{TAKE}}&prerelease={{PRERELEASE}}
 #&semVerLevel={SEMVERLEVEL}&packageType={PACKAGETYPE}
 
 ###
-GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/latest
-
-###
 GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powershell/arm-dsc-extension-settings/
 ###
 
 
 ###
-@cluster = sfjagilber1nt3
+@cluster = sfcluster
 @location = eastus
 @apiversion = 6.4
 @managementPort = 19080
