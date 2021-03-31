@@ -6,15 +6,15 @@ param(
     $file = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-export-arm-template.ps1"
 )
 
-#$localFile = "$pwd/$([io.path]::GetFileName($file))"
+$localFile = "$pwd/$([io.path]::GetFileName($file))"
 if (!$psEditor) {
     write-error "start ps debugger in vscode"
     return
 }
 
-#if(!(test-path $localFile)){
-#    iwr $file -OutFile $localFile
-#}
+if(!(test-path $localFile)){
+    iwr $file -OutFile $localFile
+}
 
 $psEditor.Workspace.OpenFile($file)
 
@@ -24,7 +24,7 @@ $psEditor.GetEditorContext().CurrentFile.ast.FindAll(
         param($x) 
         $x = [System.Management.Automation.Language.ast]$x
         #write-host ($x) -ForegroundColor DarkGreen
-        write-host ("$($x.gettype())") -ForegroundColor Green
+        #write-host ("$($x.gettype())") -ForegroundColor Green
 
         if ([System.Management.Automation.Language.FunctionDefinitionAst] -eq $x.gettype()) {
             write-host $x.gettype()
@@ -36,7 +36,11 @@ $psEditor.GetEditorContext().CurrentFile.ast.FindAll(
         }
     }, $true)
 
-$global:astList.name
+#$global:astList.name
+foreach($func in $global:astList){
+    $func = [System.Management.Automation.Language.ast]$func
+    write-host "$($func.name) startline:$($func.extent.StartLineNumber) endline:$($func.extent.EndLineNumber)`r`n$($func.Parameters)" -ForegroundColor Green
+}
 
 <#
 az:
