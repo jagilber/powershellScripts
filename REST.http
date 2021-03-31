@@ -84,3 +84,42 @@ GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explo
 @tableSasToken = ?sv=2020-02-10&ss=bfqt&srt=sco&sp=rwdlacupx&se=2021-03-25T10:16:34Z&st=2021-03-25T02:16:34Z&spr=https&sig=DEIyaWBlIKe0Nru1ubEbb6u5t787LwoqQ5UVWgxMoJQ%3D
 @storageObjectToQuery = fabriclog8de7b13a4137454a9ad5a356fa0c3159Api
 https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
+###
+
+###
+# arm query
+@query =
+@apiversion = 2021-01-01
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/{{query}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+###
+
+###
+# sfrp query api list
+# https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-api-operations_list
+@query = providers/Microsoft.ServiceFabric/operations
+@apiversion = 2018-02-01
+
+GET https://management.azure.com/{{query}}?api-version={{apiversion}}
+#GET https://management.azure.com/subscriptions/{{subscriptionId}}/{{query}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+###
+
+###
+# sfrp get cluster
+# https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-api-clusters_get
+
+@query = providers/Microsoft.ServiceFabric/clusters/{{clusterName}}
+@apiversion = 2018-02-01
+@resourceGroupName = sfcluster
+@clusterName = {{resourceGroupName}}
+
+#GET https://management.azure.com/{{query}}?api-version={{apiversion}}
+
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/{{query}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+
+###
