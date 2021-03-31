@@ -2,12 +2,12 @@
 .SYNOPSIS
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
     works with cloudshell https://shell.azure.com/
-    >help .\azure-az-sf-export-arm-template.ps1 -full
+    >help .\azure-sf-export-arm-template.ps1 -full
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd/azure-az-sf-export-arm-template.ps1";
-    ./azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-export-arm-template.ps1" -outFile "$pwd/azure-sf-export-arm-template.ps1";
+    ./azure-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
 
 .DESCRIPTION  
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
@@ -24,7 +24,7 @@
         cluster depends on storage account sflogs
 
 .NOTES  
-    File Name  : azure-az-sf-export-arm-template.ps1
+    File Name  : azure-sf-export-arm-template.ps1
     Author     : jagilber
     Version    : 210322.1
     todo       : merge capacity and instance count
@@ -33,11 +33,11 @@
     History    : 
 
 .EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
+    .\azure-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
     export sf resources in resource group 'clusteresourcegroup' and generate template.json
 
 .EXAMPLE 
-    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
+    .\azure-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
     export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file .\template.export.json
 #>
 
@@ -142,7 +142,7 @@ class SFTemplate {
     [switch]$updateScript = $updateScript
 
     [string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
-    [string]$updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
+    [string]$updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-export-arm-template.ps1'
     
     [ClusterModel]$clusterModel = [ClusterModel]::new($this)
     [collections.arraylist]$errors = [collections.arraylist]::new()
