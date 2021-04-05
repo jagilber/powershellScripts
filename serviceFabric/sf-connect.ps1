@@ -31,23 +31,30 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
-class Callback {
-    [bool] ValidationCallback([object]$result, [System.Security.Cryptography.X509Certificates.X509Certificate]$cert, [System.Security.Cryptography.X509Certificates.X509Chain]$chain, [System.Net.Security.SslPolicyErrors]$errors) {
+class SecurityCallback {
+    [bool] ValidationCallback(
+            [object]$result, 
+            [System.Security.Cryptography.X509Certificates.X509Certificate]$cert, 
+            [System.Security.Cryptography.X509Certificates.X509Chain]$chain, 
+            [System.Net.Security.SslPolicyErrors]$policyErrors
+        ) {
         write-host "validation callback:result:$($result | out-string)" -ForegroundColor Cyan
-        write-host "validation callback:cert:$($cert | Format-List * |out-string)" -ForegroundColor Cyan
-        write-host "validation callback:chain:$($chain | Format-List * |out-string)" -ForegroundColor Cyan
-        write-host "validation callback:errors:$($errors | out-string)" -ForegroundColor Cyan
-        
         write-verbose "validation callback:result:$($result | convertto-json)"
+        
+        write-host "validation callback:cert:$($cert | Format-List * |out-string)" -ForegroundColor Cyan
         write-verbose  "validation callback:cert:$($cert | convertto-json)"
+        
+        write-host "validation callback:chain:$($chain | Format-List * |out-string)" -ForegroundColor Cyan
         write-verbose  "validation callback:chain:$($chain | convertto-json)"
-        write-verbose  "validation callback:errors:$($errors | convertto-json)"
+        
+        write-host "validation callback:errors:$($policyErrors | out-string)" -ForegroundColor Cyan
+        write-verbose  "validation callback:errors:$($policyErrors | convertto-json)"
         return $true
     }
 }
 
-[Callback]$callback = [Callback]::new()
-[net.servicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($callback.ValidationCallback)
+[SecurityCallback]$securityCallback = [SecurityCallback]::new()
+[net.servicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($securityCallback.ValidationCallback)
 
 function main() {
     $error.Clear()
@@ -101,7 +108,7 @@ function main() {
 
     if ($result.tcpTestSucceeded) {
         write-host "able to connect to $($clusterFqdn):$($clusterExplorerPort)" -ForegroundColor Green
-        get-cert -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
+        get-certValidation -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
     }
     else {
         write-error "unable to connect to $($clusterFqdn):$($clusterExplorerPort)"
@@ -140,53 +147,20 @@ function main() {
     $DebugPreference = $currentDebug
 }
 
-function get-cert([string] $url, [string] $certFile) {
+function get-certValidation([string] $url) {
     write-host "get-cert:$($url) $($certFile)" -ForegroundColor Green
     $error.Clear()
     $webRequest = [Net.WebRequest]::Create($url)
+    $webRequest.ServerCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
     $webRequest.Timeout = 1000 #ms
 
     try { 
-        $webRequest.GetResponse() 
+        [void]$webRequest.GetResponse() 
         # return $null
     }
     catch [System.Exception] {
         Write-Verbose "get-cert:first catch getresponse: $($url) $($certFile) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
         $error.Clear()
-    }
-
-    try {
-        $webRequest = [Net.WebRequest]::Create($url)
-        $crt = $webRequest.ServicePoint.Certificate
-        write-host "checking cert: $($crt | Format-List * | Out-String)"
-
-        $bytes = $crt.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-
-        if ($bytes.Length -gt 0) {
-            if (!$certFile) {
-                $certFile = "$($url -replace '\W','').cer"
-            }
-
-            $certFile = [IO.Path]::GetFullPath($certFile)
-
-            if ([IO.File]::Exists($certFile)) {
-                [IO.File]::Delete($certFile)
-            }
-
-            set-content -value $bytes -encoding byte -path $certFile
-            $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new()
-            $cert.Import($certFile)
-
-            return $cert
-        }
-        else {
-            return $null
-        }
-    }
-    catch {
-        write-host "get-cert:error: $($error)"
-        $error.Clear()
-        return $null
     }
 }
 
