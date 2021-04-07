@@ -133,3 +133,17 @@ Authorization: {{$aadToken}}
 Accept: application/json
 
 ###
+
+PUT  http://localhost:8080/api/Votes/dfff
+###
+
+GET  http://localhost:8080
+###
+
+GET  http://localhost:8080/api/Votes?c={{$timestamp}}
+###
+
+PUT http://localhost:19081/Voting/VotingData/api/VoteData/ddddd?PartitionKey=3&PartitionKind=Int64Range
+###
+
+PUT http://localhost:19964/Voting/VotingData/api/VoteData/ddddd?PartitionKey=3&PartitionKind=Int64Range
