@@ -1,0 +1,57 @@
+
+
+
+{
+    "StopCommands": [
+        {
+            "enabled": true,
+            "searchSubDir": false,
+            "wait": true,
+            "sourceFiles": "admin$\\temp\\processList*.txt",
+            "command": "powershell.exe",
+            "useWmi": true,
+            "name": "process-list",
+            "arguments": "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass \u0026\"{get-process | fl * \u003e c:\\windows\\temp\\processListStop.txt}\"",
+            "workingDir": "c:\\windows\\temp",
+            "destfiles": ""
+        },
+        {
+            "enabled": true,
+            "searchSubDir": true,
+            "wait": true,
+            "sourceFiles":  "admin$\\temp\\sac",
+            "command": "cmd.exe",
+            "useWmi": true,
+            "name": "standalonecollector",
+            "arguments": "/c standalonelogcollector.mgr.bat stop",
+            "workingDir": "c:\\windows\\temp\\Microsoft.Azure.ServiceFabric.WindowsServer.SupportPackage",
+            "destfiles": ""
+        }
+    ],
+    "StartCommands": [
+        {
+            "enabled": true,
+            "searchSubDir": false,
+            "wait": true,
+            "sourceFiles": "admin$\\temp\\processListStart.txt",
+            "command": "powershell.exe",
+            "useWmi": true,
+            "name": "process-list",
+            "arguments": "-WindowStyle Hidden -NonInteractive -Executionpolicy bypass \u0026\"{get-process | fl * \u003e c:\\windows\\temp\\processListStart.txt}\"",
+            "workingDir": "c:\\windows\\temp",
+            "destfiles": ""
+        },
+        {
+            "enabled": true,
+            "searchSubDir": false,
+            "wait": true,
+            "sourceFiles":  ".\\Microsoft.Azure.ServiceFabric.WindowsServer.SupportPackage",
+            "command": "cmd.exe",
+            "useWmi": true,
+            "name": "standalonecollector",
+            "arguments": "/c standalonelogcollector.mgr.bat start 02/26/2018 22:00:00 02/27/2018 00:00:00",
+            "workingDir": "c:\\windows\\temp\\Microsoft.Azure.ServiceFabric.WindowsServer.SupportPackage",
+            "destfiles":  "admin$\\temp\\Microsoft.Azure.ServiceFabric.WindowsServer.SupportPackage"
+        }
+    ]
+}

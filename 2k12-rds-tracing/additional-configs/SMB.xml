@@ -1,0 +1,6374 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DataCollectorSet>
+  <Status>1</Status>
+  <Duration>0</Duration>
+  <Description />
+  <DescriptionUnresolved />
+  <DisplayName />
+  <DisplayNameUnresolved />
+  <SchedulesEnabled>-1</SchedulesEnabled>
+  <LatestOutputLocation />
+  <Name></Name>
+  <OutputLocation></OutputLocation>
+  <RootPath></RootPath>
+  <Segment>0</Segment>
+  <SegmentMaxDuration>0</SegmentMaxDuration>
+  <SegmentMaxSize>4096</SegmentMaxSize>
+  <SerialNumber>1</SerialNumber>
+  <Server />
+  <Subdirectory />
+  <SubdirectoryFormat>0</SubdirectoryFormat>
+  <SubdirectoryFormatPattern />
+  <Task />
+  <TaskArguments />
+  <TaskUserTextArguments />
+  <UserAccount />
+  <Security>O:BAG:BAD:(A;;0x800;;;WD)(A;;0x120fff;;;SY)(A;;0x120fff;;;LS)(A;;0x120fff;;;NS)(A;;0x120fff;;;BA)(A;;0xee5;;;LU)(A;;LC;;;MU)(A;;0x800;;;AC)</Security>
+  <TraceDataCollector>
+    <DataCollectorType>1</DataCollectorType>
+    <Name></Name>
+    <FileName></FileName>
+    <FileNameFormat>0</FileNameFormat>
+    <FileNameFormatPattern />
+    <LogAppend>0</LogAppend>
+    <LogCircular>-1</LogCircular>
+    <LogOverwrite>0</LogOverwrite>
+    <LatestOutputLocation></LatestOutputLocation>
+    <Guid>{B04629D5-AD75-4853-B7F8-472594D123FD}</Guid>
+    <BufferSize>1024</BufferSize>
+    <BuffersLost>0</BuffersLost>
+    <BuffersWritten>1</BuffersWritten>
+    <ClockType>1</ClockType>
+    <EventsLost>0</EventsLost>
+    <ExtendedModes>4194304</ExtendedModes>
+    <FlushTimer>0</FlushTimer>
+    <FreeBuffers>18</FreeBuffers>
+    <MaximumBuffers>24</MaximumBuffers>
+    <MinimumBuffers>24</MinimumBuffers>
+    <NumberOfBuffers>24</NumberOfBuffers>
+    <PreallocateFile>0</PreallocateFile>
+    <ProcessMode>0</ProcessMode>
+    <RealTimeBuffersLost>0</RealTimeBuffersLost>
+    <SessionName>base_fs</SessionName>
+    <SessionThreadId>20644</SessionThreadId>
+    <StreamMode>1</StreamMode>
+    <TraceDataProvider>
+      <DisplayName>{48BE2803-12C0-4932-AA80-93372D5A9114}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{48BE2803-12C0-4932-AA80-93372D5A9114}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{5D386AD0-415E-4A31-958A-328A5F3D8422}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{5D386AD0-415E-4A31-958A-328A5F3D8422}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{62BC0382-07D2-4C2E-B2C8-3DE3ED67DF13}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{62BC0382-07D2-4C2E-B2C8-3DE3ED67DF13}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{52134415-75C1-4DF9-9118-8B2BD00CC6E2}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{52134415-75C1-4DF9-9118-8B2BD00CC6E2}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{988C59C5-0A1C-45B6-A555-0C62276E327D}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{988C59C5-0A1C-45B6-A555-0C62276E327D}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{D48CE617-33A2-4BC3-A5C7-11AA4F29619E}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{D48CE617-33A2-4BC3-A5C7-11AA4F29619E}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{163624CA-6DE7-4614-A43F-DCFFA869FB7B}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{163624CA-6DE7-4614-A43F-DCFFA869FB7B}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{76334FD1-D9FD-4DB5-B554-D356BD7C58BE}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{76334FD1-D9FD-4DB5-B554-D356BD7C58BE}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{771E7665-3E83-4475-8AE6-8F5384C41408}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{771E7665-3E83-4475-8AE6-8F5384C41408}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{20C46239-D059-4214-A11E-7D6769CBE020}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0</Value>
+      </Properties>
+      <Guid>{20C46239-D059-4214-A11E-7D6769CBE020}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{50B9E206-9D55-4092-92E8-F157A8235799}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{50B9E206-9D55-4092-92E8-F157A8235799}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{DB66EA65-B7BB-4CA9-8748-334CB5C32400}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{DB66EA65-B7BB-4CA9-8748-334CB5C32400}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{D3BCE2D2-92C9-44C7-BEFE-A27A96D413E9}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{D3BCE2D2-92C9-44C7-BEFE-A27A96D413E9}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{32254F6C-AA33-46F0-A5E3-1CBCC74BF683}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>64</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>64</Value>
+        </ValueMapItem>
+      </Properties>
+      <Guid>{32254F6C-AA33-46F0-A5E3-1CBCC74BF683}</Guid>
+    </TraceDataProvider>
+    <TraceDataProvider>
+      <DisplayName>{BCA7BD7F-B0BF-4051-99F4-03CFE79664C1}</DisplayName>
+      <FilterEnabled>0</FilterEnabled>
+      <FilterType>0</FilterType>
+      <Level>
+        <Description>Events up to this level are enabled</Description>
+        <ValueMapType>1</ValueMapType>
+        <Value>255</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>255</Value>
+        </ValueMapItem>
+      </Level>
+      <KeywordsAny>
+        <Description>Events with any of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0xffffffffffffffff</Value>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x10000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x20000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x40000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x80000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x100000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x200000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x400000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x800000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x1000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x2000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x4000000000000000</Value>
+        </ValueMapItem>
+        <ValueMapItem>
+          <Key />
+          <Description />
+          <Enabled>-1</Enabled>
+          <Value>0x8000000000000000</Value>
+        </ValueMapItem>
+      </KeywordsAny>
+      <KeywordsAll>
+        <Description>Events with all of these keywords are enabled</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0x0</Value>
+      </KeywordsAll>
+      <Properties>
+        <Description>These additional data fields will be collected with each event</Description>
+        <ValueMapType>2</ValueMapType>
+        <Value>0</Value>
+      </Properties>
+      <Guid>{BCA7BD7F-B0BF-4051-99F4-03CFE79664C1}</Guid>
+    </TraceDataProvider>
+  </TraceDataCollector>
+</DataCollectorSet>
