@@ -33,13 +33,13 @@ $ErrorActionPreference = 'continue'
 
 class SecurityCallback {
     [bool] ValidationCallback(
-            [object]$result, 
+            [object]$senderObject, 
             [System.Security.Cryptography.X509Certificates.X509Certificate]$cert, 
             [System.Security.Cryptography.X509Certificates.X509Chain]$chain, 
             [System.Net.Security.SslPolicyErrors]$policyErrors
         ) {
-        write-host "validation callback:result:$($result | out-string)" -ForegroundColor Cyan
-        write-verbose "validation callback:result:$($result | convertto-json)"
+        write-host "validation callback:sender:$($senderObject | out-string)" -ForegroundColor Cyan
+        write-verbose "validation callback:sender:$($senderObject | convertto-json)"
         
         write-host "validation callback:cert:$($cert | Format-List * |out-string)" -ForegroundColor Cyan
         write-verbose  "validation callback:cert:$($cert | convertto-json)"
