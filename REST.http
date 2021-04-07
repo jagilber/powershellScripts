@@ -24,6 +24,7 @@
 #         "subscriptionId": "",
 #         "tenantId": ""
 #     }
+# }
 ##
 
 # ip info
@@ -90,9 +91,9 @@ GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explo
 ###
 
 ###
-@storageAccountName = sflogsbmnjfzoagi7jc2
-@tableSasToken = ?sv=2020-02-10&ss=bfqt&srt=sco&sp=rwdlacupx&se=2021-03-25T10:16:34Z&st=2021-03-25T02:16:34Z&spr=https&sig=DEIyaWBlIKe0Nru1ubEbb6u5t787LwoqQ5UVWgxMoJQ%3D
-@storageObjectToQuery = fabriclog8de7b13a4137454a9ad5a356fa0c3159Api
+@storageAccountName = 
+@tableSasToken = 
+@storageObjectToQuery = 
 https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
 ###
 
