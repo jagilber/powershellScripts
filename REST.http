@@ -1,7 +1,31 @@
 
+##
 # vscode rest client extension http file
 # see https://github.com/Huachao/vscode-restclient
 # use ### to separate requests
+##
+
+##
+#
+# cert setup. place in vscode 'setttings.json'
+#"rest-client.certificates": {
+#     "%fqdn%: {
+#         "pfx": "%path to pfx file%",
+#         "passphrase": ""
+#     }
+# },
+##
+
+##
+# azure aadv1 setup
+#
+# "rest-client.environmentVariables": {
+#     "$shared": {
+#         "subscriptionId": "",
+#         "tenantId": ""
+#     }
+# }
+##
 
 # ip info
 https://ipinfo.io/json
@@ -11,13 +35,9 @@ https://ipinfo.io/json
 https://go.microsoft.com/fwlink/?LinkID=824848&clcid=0x409
 ###
 
-# collectsfdata releases
-https://github.com/microsoft/collectservicefabricdata/releases/latest
 ###
+GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/latest
 
-# collectsfdata releases
-https://github.com/microsoft/collectservicefabricdata/releases
-###
 
 # github api urls
 https://api.github.com
@@ -37,13 +57,7 @@ https://www.w3.org/services/html2txt?url=https://store.rg-adguard.net/api/GetFil
 ###
 
 ###
-POST https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
-
-
-###
-https://www.w3.org/services/html2txt?url=https://jagilber.github.io
-
-###
+# convert google news to text
 https://www.w3.org/services/html2txt?url=https://news.google.com 
 ###
 
@@ -59,15 +73,12 @@ GET {{id}}?q={{QUERY}}&skip={{SKIP}}&take={{TAKE}}&prerelease={{PRERELEASE}}
 #&semVerLevel={SEMVERLEVEL}&packageType={PACKAGETYPE}
 
 ###
-GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/latest
-
-###
 GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powershell/arm-dsc-extension-settings/
 ###
 
 
 ###
-@cluster = sfjagilber1nt3
+@cluster = sfcluster
 @location = eastus
 @apiversion = 6.4
 @managementPort = 19080
@@ -145,3 +156,60 @@ content-type: application/json
 ###
 GET http://localhost:46564/api/configurationProperties HTTP/1.1
 content-type: application/json
+@storageAccountName = 
+@tableSasToken = 
+@storageObjectToQuery = 
+https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
+###
+
+###
+# arm query
+@query =
+@apiversion = 2021-01-01
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/{{query}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+###
+
+###
+# sfrp query api list
+# https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-api-operations_list
+@query = providers/Microsoft.ServiceFabric/operations
+@apiversion = 2018-02-01
+
+GET https://management.azure.com/{{query}}?api-version={{apiversion}}
+#GET https://management.azure.com/subscriptions/{{subscriptionId}}/{{query}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+###
+
+###
+# sfrp get cluster
+# https://docs.microsoft.com/en-us/rest/api/servicefabric/sfrp-api-clusters_get
+
+@query = providers/Microsoft.ServiceFabric/clusters/{{clusterName}}
+@apiversion = 2018-02-01
+@resourceGroupName = sfcluster
+@clusterName = {{resourceGroupName}}
+
+#GET https://management.azure.com/{{query}}?api-version={{apiversion}}
+
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/{{query}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+
+###
+
+PUT  http://localhost:8080/api/Votes/dfff
+###
+
+GET  http://localhost:8080
+###
+
+GET  http://localhost:8080/api/Votes?c={{$timestamp}}
+###
+
+PUT http://localhost:19081/Voting/VotingData/api/VoteData/ddddd?PartitionKey=3&PartitionKind=Int64Range
+###
+
+PUT http://localhost:19964/Voting/VotingData/api/VoteData/ddddd?PartitionKey=3&PartitionKind=Int64Range
