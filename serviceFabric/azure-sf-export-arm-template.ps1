@@ -276,7 +276,7 @@ class SFTemplate {
 
         $this.clusterModel.sfTemplate = $null
         $this.WriteLog("time elapsed:  $(((get-date) - $this.startTime).TotalMinutes.ToString("0.0")) minutes`r`n")
-        $this.WriteLog('finished. template stored in $this.currentConfig', [consolecolor]::Cyan)
+        $this.WriteLog('finished. template stored in $global:sftemplate', [consolecolor]::Cyan)
 
         if ($this.logFile) {
             $this.WriteLog("log file saved to $this.logFile")
