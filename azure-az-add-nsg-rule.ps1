@@ -1,5 +1,6 @@
 <#
     script to add NSG 100 rule for remote access to azure resources for test deployments
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-add-nsg-rule.ps1" -out "$pwd\azure-az-add-nsg-rule.ps1";.\azure-az-add-nsg-rule.ps1
 #>
 
 param(
@@ -7,7 +8,7 @@ param(
     [string]$resourceGroup = '',
     [string]$nsgRuleName = "remote-rule",
     [int]$priority = 100,
-    [string[]]$ports = @('3389', '19000', '19080', '19081', '22'),
+    [string[]]$ports = @('*'), #@('3389', '19000', '19080', '19081', '22'),
     [string[]]$existingNsgNames = @(),
     [string]$access = "Allow",
     [string]$sourceAddressPrefix = (Invoke-RestMethod https://ipinfo.io/json).ip, # *
