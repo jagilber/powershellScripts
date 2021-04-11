@@ -96,9 +96,21 @@ GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explo
 @storageObjectToQuery = fabriclog8de7b13a4137454a9ad5a356fa0c3159Api
 https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
 
+###
+GET https://localhost:44394/api/configurationJson HTTP/1.1
+content-type: application/json
 
 ###
-POST http://localhost:46564/api/configuration/update HTTP/1.1
+GET https://localhost:44394/api/configurationOptions HTTP/1.1
+content-type: application/json
+
+###
+GET https://localhost:44394/api/configuration HTTP/1.1
+content-type: application/json
+
+
+###
+POST https://localhost:44394/api/configuration/update HTTP/1.1
 content-type: application/json
 
 {
@@ -146,16 +158,6 @@ content-type: application/json
 }
 
 ###
-GET http://localhost:46564/api/configurationJson HTTP/1.1
-content-type: application/json
-
-###
-GET http://localhost:46564/api/configurationOptions HTTP/1.1
-content-type: application/json
-
-###
-GET http://localhost:46564/api/configurationProperties HTTP/1.1
-content-type: application/json
 @storageAccountName = 
 @tableSasToken = 
 @storageObjectToQuery = 
