@@ -91,6 +91,71 @@ GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explo
 ###
 
 ###
+@storageAccountName = sflogsxxxxxxxxxxxxxxxxxx
+@tableSasToken = ?sv=2020-02-10&ss=bfqt&srt=sco&sp=rwdlacupx&se=2021-03-25T10:16:34Z&st=2021-03-25T02:16:34Z&spr=https&sig=DEIyaWBlIKe0Nru1ubEbb6u5t787LwoqQ5UVWgxMoJQ%3D
+@storageObjectToQuery = fabriclog8de7b13a4137454a9ad5a356fa0c3159Api
+https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
+
+
+###
+POST http://localhost:46564/api/configuration/update HTTP/1.1
+content-type: application/json
+
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/configurationFiles/collectsfdata.schema.json",
+  "AzureClientId": null,
+  "AzureClientSecret": null,
+  "AzureResourceGroup": null,
+  "AzureResourceGroupLocation": null,
+  "AzureSubscriptionId": null,
+  "AzureTenantId": null,
+  "CacheLocation": null,
+  "ContainerFilter": null,
+  "DeleteCache": false,
+  "EndTimeStamp": "04/09/2021 21:46 -04:00",
+  "GatherType": "trace",
+  "KustoCluster": "https://ingest-sfus.kusto.windows.net/dblogs",
+  "KustoCompressed": true,
+  "KustoPurge": null,
+  "KustoRecreateTable": false,
+  "KustoTable": "jagilber_test",
+  "KustoUseBlobAsSource": true,
+  "KustoUseIngestMessage": false,
+  "List": false,
+  "LogAnalyticsCreate": false,
+  "LogAnalyticsId": null,
+  "LogAnalyticsKey": null,
+  "LogAnalyticsName": null,
+  "LogAnalyticsPurge": null,
+  "LogAnalyticsRecreate": false,
+  "LogAnalyticsWorkspaceName": null,
+  "LogAnalyticsWorkspaceSku": "PerGB2018",
+  "LogDebug": 4,
+  "LogFile": null,
+  "NodeFilter": null,
+  "NoProgressTimeoutMin": 10,
+  "ResourceUri": null,
+  "SasKey": "https://sflogsxxxxxxxxxxxxx.blob.core.windows.net/?sv=2019-07-07&sig=iifcH%2B6%2FZwrea9w%2BWwp52nYFvyvxl7NVjRxWCyLKKSw%3D&spr=https&st=2021-04-11T01%3A47%3A51Z&se=2021-04-11T09%3A48%3A51Z&srt=sco&ss=bfqt&sp=racupwdl",
+  "StartTimeStamp": "04/09/2021 19:46 -04:00",
+  "Threads": 12,
+  "Unique": true,
+  "UriFilter": null,
+  "UseMemoryStream": true,
+  "UseTx": false,
+  "Version": "${Process.GetCurrentProcess().MainModule?.FileVersionInfo.FileVersion}"
+}
+
+###
+GET http://localhost:46564/api/configurationJson HTTP/1.1
+content-type: application/json
+
+###
+GET http://localhost:46564/api/configurationOptions HTTP/1.1
+content-type: application/json
+
+###
+GET http://localhost:46564/api/configurationProperties HTTP/1.1
+content-type: application/json
 @storageAccountName = 
 @tableSasToken = 
 @storageObjectToQuery = 
