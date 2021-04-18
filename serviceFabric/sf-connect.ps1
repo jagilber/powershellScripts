@@ -5,8 +5,9 @@
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-connect.ps1" -outFile "$pwd/sf-connect.ps1";
-    ./sf-connect.ps1 -clusterEndpoing <cluster endpoint fqdn> -thumbprint <thumbprint>
+    ./sf-connect.ps1 -clusterEndpoint <cluster endpoint fqdn> -thumbprint <thumbprint>
 #>
+using namespace System.Net.Security
 [cmdletbinding()]
 param(
     $clusterendpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
@@ -26,7 +27,7 @@ param(
 #$proxy = [System.Net.CredentialCache]::DefaultCredentials
 #[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
 #Add-azAccount
-
+$PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = 'continue'
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -65,6 +66,9 @@ function main() {
             return
         }
     }
+
+    $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
+    write-host "current public ip:$publicIp" -ForegroundColor Green
 
     $managementEndpoint = $clusterEndpoint
     $currentVerbose = $VerbosePreference
