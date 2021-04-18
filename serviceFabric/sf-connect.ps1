@@ -7,7 +7,7 @@
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-connect.ps1" -outFile "$pwd/sf-connect.ps1";
     ./sf-connect.ps1 -clusterEndpoint <cluster endpoint fqdn> -thumbprint <thumbprint>
 #>
-using namespace System.Net.Security
+
 [cmdletbinding()]
 param(
     $clusterendpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
@@ -32,32 +32,8 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
-class SecurityCallback {
-    [bool] ValidationCallback(
-            [object]$senderObject, 
-            [System.Security.Cryptography.X509Certificates.X509Certificate]$cert, 
-            [System.Security.Cryptography.X509Certificates.X509Chain]$chain, 
-            [System.Net.Security.SslPolicyErrors]$policyErrors
-        ) {
-        write-host "validation callback:sender:$($senderObject | out-string)" -ForegroundColor Cyan
-        write-verbose "validation callback:sender:$($senderObject | convertto-json)"
-        
-        write-host "validation callback:cert:$($cert | Format-List * |out-string)" -ForegroundColor Cyan
-        write-verbose  "validation callback:cert:$($cert | convertto-json)"
-        
-        write-host "validation callback:chain:$($chain | Format-List * |out-string)" -ForegroundColor Cyan
-        write-verbose  "validation callback:chain:$($chain | convertto-json)"
-        
-        write-host "validation callback:errors:$($policyErrors | out-string)" -ForegroundColor Cyan
-        write-verbose  "validation callback:errors:$($policyErrors | convertto-json)"
-        return $true
-    }
-}
-
-[SecurityCallback]$securityCallback = [SecurityCallback]::new()
-[net.servicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($securityCallback.ValidationCallback)
-
 function main() {
+    set-callback
     $error.Clear()
     if (!(get-command Connect-ServiceFabricCluster)) {
         import-module servicefabric
@@ -165,6 +141,54 @@ function get-certValidation([string] $url) {
     catch [System.Exception] {
         Write-Verbose "get-cert:first catch getresponse: $($url) $($certFile) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
         $error.Clear()
+    }
+}
+
+function set-callback() {
+    if ($PSVersionTable.PSEdition -ieq 'core') {
+        class SecurityCallback {
+            [bool] ValidationCallback(
+                [object]$senderObject, 
+                [System.Security.Cryptography.X509Certificates.X509Certificate]$cert, 
+                [System.Security.Cryptography.X509Certificates.X509Chain]$chain, 
+                [System.Net.Security.SslPolicyErrors]$policyErrors
+            ) {
+                write-host "validation callback:sender:$($senderObject | out-string)" -ForegroundColor Cyan
+                write-verbose "validation callback:sender:$($senderObject | convertto-json)"
+        
+                write-host "validation callback:cert:$($cert | Format-List * |out-string)" -ForegroundColor Cyan
+                write-verbose  "validation callback:cert:$($cert | convertto-json)"
+        
+                write-host "validation callback:chain:$($chain | Format-List * |out-string)" -ForegroundColor Cyan
+                write-verbose  "validation callback:chain:$($chain | convertto-json)"
+        
+                write-host "validation callback:errors:$($policyErrors | out-string)" -ForegroundColor Cyan
+                write-verbose  "validation callback:errors:$($policyErrors | convertto-json)"
+                return $true
+            }
+        }
+
+        [SecurityCallback]$securityCallback = [SecurityCallback]::new()
+        [net.servicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($securityCallback.ValidationCallback)
+    }
+    else {
+        add-type @"
+        using System;
+        using System.Net;
+        using System.Security.Cryptography.X509Certificates;
+
+        public class IDontCarePolicy : ICertificatePolicy {
+                public IDontCarePolicy() {}
+                public bool CheckValidationResult(ServicePoint sPoint, X509Certificate cert, WebRequest wRequest, int certProb) {
+                Console.WriteLine(cert);
+                Console.WriteLine(cert.Issuer);
+                Console.WriteLine(cert.Subject);
+                Console.WriteLine(cert.GetCertHashString());
+                return true;
+            }
+        }
+"@
+        [System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
     }
 }
 
