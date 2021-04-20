@@ -103,11 +103,11 @@ class NugetObj {
     [hashtable] EnumLocalPackages ([string]$packageName) {
         [hashtable]$results = @{}
         foreach ($localSource in $this.locals.GetEnumerator()) {
-            foreach($result in $this.EnumPackages($packageName, $localSource.Key, $null).GetEnumerator()){
-                if(!$results.ContainsKey($result.Key)){
+            foreach ($result in $this.EnumPackages($packageName, $localSource.Key, $null).GetEnumerator()) {
+                if (!$results.ContainsKey($result.Key)) {
                     $results.Add($result.Key, $result.Value)
                 }
-                else{
+                else {
                     write-warning "$($result.key) already added"
                 }
             }
@@ -124,16 +124,24 @@ class NugetObj {
     }
 
     [hashtable] EnumPackages ([string]$packageName) {
-        return $this.EnumPackages($packageName, $null, "packageid:")
+        return $this.EnumPackages($packageName, $null, "")
     }
 
     [hashtable] EnumPackages ([string]$packageName, [string]$packageSource) {
-        return $this.EnumPackages($packageName, $packageSource, "packageid:")
+        return $this.EnumPackages($packageName, $packageSource, "")
     }
 
     [hashtable] EnumPackages ([string]$packageName, [string]$packageSource, [string]$searchFilter) {
         $this.packagesource = $packageSource
-        #if(!$searchFilter) { $searchFilter = "packageid:" }
+        $this.packages = @{}
+        $sourcePackages = $null
+        [string]$all = ""
+        [string]$sourcePackage = ""
+        [string]$packageId = "packageid:"
+
+        if ($searchFilter) {
+            $packageId = ""
+        }
 
         if ($this.locals.Contains($packageSource)) {
             write-host "converting local package source $packageSource to $($this.locals[$packageSource])" -ForegroundColor cyan
@@ -144,48 +152,89 @@ class NugetObj {
             $this.packageSource = $this.sources[$packageSource].sourcePath.trimend('\')
         }
 
-        $this.packages = @{}
-        $sourcePackages = $null
-        [string]$all = ""
-
         if ($this.allVersions) {
             $all = " -allVersions"
         }
 
-        if ($this.packageSource) { 
-            write-host "nuget list $searchFilter$packageName -verbosity $($this.verbose)$all -prerelease -Source $($this.packageSource)"
-            $sourcePackages = nuget list "$searchFilter$packageName" -verbosity $($this.verbose)$($all) -prerelease -Source $($this.packageSource)
+        if ($this.packageSource) {
+            $sourcePackage = " -Source $($this.packageSource)"
         }
-        else {
-            write-host "nuget list $searchFilter$packageName -verbosity $($this.verbose)$all -prerelease"
-            $sourcePackages = nuget list "$searchFilter$packageName" -verbosity $($this.verbose)$($all) -prerelease 
+
+        write-host "nuget list $($packageId)$packageName$($searchFilter) -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+        $sourcePackages = nuget list "$($packageId)$($packageName)$($searchFilter)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+
+        if ($sourcePackages.Length -lt 1 -or ($sourcePackages.Contains('No Packages found.') -and $searchFilter)) {
+            write-warning "no packages found, trying with searchfilter first $searchFilter"
+            write-host "nuget list $($searchFilter)$packageName -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($searchFilter)$($packageName)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or ($sourcePackages.Contains('No Packages found.') -and $searchFilter)) {
+            write-warning "no packages found, trying without searchfilter $searchFilter"
+            write-host "nuget list $packageName -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($packageName)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or $sourcePackages.Contains('No Packages found.')) {
+            $searchFilter = '*'
+            write-warning "no packages found, trying with filter $searchFilter"
+            write-host "nuget list $packageName$searchFilter -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($packageName)$($searchFilter)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or $sourcePackages.Contains('No Packages found.')) {
+            $searchFilter = '*'
+            write-warning "no packages found, trying with filter $searchFilter"
+            write-host "nuget list $searchFilter$packageName -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($searchFilter)$($packageName)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or $sourcePackages.Contains('No Packages found.')) {
+            $searchFilter = '*'
+            write-warning "no packages found, trying with filter $searchFilter"
+            write-host "nuget list $searchFilter$packageName$searchFilter -verbosity $($this.verbose)$all -prerelease$sourcePackage"
+            $sourcePackages = nuget list "$($searchFilter)$($packageName)$($searchFilter)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
         }
 
         foreach ($package in $sourcePackages) {
             write-host "checking package: $package"
-            if ($package -ilike 'No Packages found.' -and $searchFilter) {
-                write-warning "$package, trying without searchfilter $searchFilter"
-                return $this.EnumPackages($packageName, $packageSource, $null)
-            } 
-            elseif ($package -ilike 'No Packages found.') {
+            if ($package -ilike 'No Packages found.') {
                 write-error $package
                 return $this.packages
             }
 
             [string[]]$packageProperties = $package -split " "
+            [string]$resultName = $null
+            [string]$resultVersion = $null
+
             try {
-                $this.packages.Add($packageProperties[0], $packageProperties[1])
-                write-host "$($packageProperties[0]) $($packageProperties[1])"
+                $resultName = $packageProperties[0]
+                $resultVersion = $packageProperties[1]
+
+                if ($resultName -inotmatch $packageName) {
+                    write-host "$resultName does not match packagename:$packageName, skipping."
+                    continue
+                }
+
+                if ($searchFilter -and $searchFilter -ne '*') {
+                    if ($resultName -inotmatch $searchFilter) {
+                        write-host "$resultName does not match searchfilter:$searchFilter, skipping."
+                        continue
+                    }
+                }
+
+                $this.packages.Add($resultName, $resultVersion)
+                write-host "$resultName $resultVersion"
 
                 if ($this.allVersions) {
-                    $matches = [regex]::Matches((iwr "https://www.nuget.org/packages/$($packageProperties[0])/").Content, "/packages/$($packageProperties[0])/([\d\.-]*?)`"")
+                    $matches = [regex]::Matches((Invoke-WebRequest "https://www.nuget.org/packages/$resultName/").Content, "/packages/$resultName/([\d\.-]*?)`"")
                     foreach ($match in $matches) {
                         write-host "`t$($match.Groups[1].Value)"
                     }
                 }
             }
             catch {
-                write-host "$($packageProperties[0]) $($packageProperties[1]) already added"
+                write-host "$resultName $resultVersion already added"
             }
         }
         return $this.packages
@@ -224,7 +273,7 @@ class NugetObj {
         }
 
         #write-host "$($this.sources | out-string)"
-        write-host ($this.sources.values | select sourceNumber, sourceName, sourcePath, sourceEnabled | sort sourceNumber | out-string)
+        write-host ($this.sources.values | Select-Object sourceNumber, sourceName, sourcePath, sourceEnabled | Sort-Object sourceNumber | out-string)
         return $this.sources
     }
 
