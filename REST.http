@@ -78,16 +78,21 @@ GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powe
 
 
 ###
-@cluster = sfcluster
+# SFRP
+@cluster = sfjagilber1lx3
 @location = eastus
-@apiversion = 6.4
+@api = 6.0
 @managementPort = 19080
-#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/$/BackupRestore/BackupPolicies?api-version={{apiversion}}
+@timeout = 1200
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/$/BackupRestore/BackupPolicies?api-version={{api}}
 
-#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/Applications/?api-version={{apiversion}}
-#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/$/GetClusterManifest?api-version={{apiversion}}
-#https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/$/GetClusterHealth?api-version={{apiversion}}
-GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explorer
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/Applications/?api-version={{api}}
+https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/$/GetClusterManifest?api-version={{api}}&timeout={{timeout}} HTTP/1.1
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/$/GetClusterHealth?api-version={{api}}
+#https://{{cluster}}.{{location}}.cloudapp.azure.com:19080/Nodes/?api-version={{api}} HTTP/1.1
+Accept: application/xml,application/json
+
+#GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explorer
 ###
 
 ###
@@ -97,20 +102,20 @@ GET https://{{cluster}}.{{location}}.cloudapp.azure.com:{{managementPort}}/Explo
 https://{{storageAccountName}}.table.core.windows.net/{{storageObjectToQuery}}{{tableSasToken}}
 
 ###
-GET https://localhost:44394/api/configurationJson HTTP/1.1
+GET https://localhost:5001/api/configurationJson HTTP/1.1
 content-type: application/json
 
 ###
-GET https://localhost:44394/api/configurationOptions HTTP/1.1
+GET https://localhost:5001/api/configurationOptions HTTP/1.1
 content-type: application/json
 
 ###
-GET https://localhost:44394/api/configuration HTTP/1.1
+GET https://localhost:5001/api/configuration HTTP/1.1
 content-type: application/json
 
 
 ###
-POST https://localhost:44394/api/configuration/update HTTP/1.1
+POST https://localhost:5001/api/configuration/update HTTP/1.1
 content-type: application/json
 
 {
@@ -215,3 +220,12 @@ PUT http://localhost:19081/Voting/VotingData/api/VoteData/ddddd?PartitionKey=3&P
 ###
 
 PUT http://localhost:19964/Voting/VotingData/api/VoteData/ddddd?PartitionKey=3&PartitionKind=Int64Range
+
+
+### 
+https://supportaction-prod.northeurope.cloudapp.azure.com/swagger/index.html HTTP/1.1
+
+### 
+https://supportaction-prod.northeurope.cloudapp.azure.com/swagger/index.html
+
+###
