@@ -1,5 +1,6 @@
 <#
     script to add NSG 100 rule for remote access to azure resources for test deployments
+    https://docs.microsoft.com/en-us/azure/virtual-network/service-tags-overview
     iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-add-nsg-rule.ps1" -out "$pwd\azure-az-add-nsg-rule.ps1";.\azure-az-add-nsg-rule.ps1
 #>
 
@@ -11,7 +12,7 @@ param(
     [string[]]$ports = @('*'), #@('3389', '19000', '19080', '19081', '22'),
     [string[]]$existingNsgNames = @(),
     [string]$access = "Allow",
-    [string]$sourceAddressPrefix = (Invoke-RestMethod https://ipinfo.io/json).ip, # *
+    [string[]]$sourceAddressPrefix = @(((Invoke-RestMethod https://ipinfo.io/json).ip)), #,'AzureDevOps','AzureTrafficManager','ServiceFabric'), # *
     [switch]$force,
     [switch]$remove,
     [switch]$wait

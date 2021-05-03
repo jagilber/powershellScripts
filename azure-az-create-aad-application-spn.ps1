@@ -14,20 +14,20 @@
     or
     .\azure-az-create-aad-application-spn.ps1 
 .LINK
-    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-create-aad-application-spn.ps1" -out "$pwd\azure-az-create-aad-application-spn.ps1";
 #>
 
 param(
     [pscredential]$credentials,
+    [string]$password,
     [string]$aadDisplayName = "azure-az-rest-logon--$($env:Computername)",
     [string]$certStore = "cert:\CurrentUser\My",
     [string]$uri,
-    [string[]]$replyUrls = @('https://localhost'), # core uses localhost 'https://login.microsoftonline.com/common/oauth2/nativeclient', 
+    [string[]]$replyUrls = @(), #@('https://localhost'), # core uses localhost 'https://login.microsoftonline.com/common/oauth2/nativeclient', 
     [switch]$list,
     [string]$pfxPath,
-    [ValidateSet('credentials', 'key', 'cert', 'certthumb')]
-    [string]$logonType = 'certthumb'
+    [ValidateSet('key', 'cert', 'certthumb')]
+    [string]$logonType = 'cert'
 )
 
 function main() {
@@ -64,7 +64,7 @@ function main() {
         }
     }
     
-    if (!(@(Get-AzResourceGroup).Count)) {
+    if (!(Get-azResourceGroup)) {
         connect-azaccount
     
         if (!(Get-azResourceGroup)) {
@@ -96,7 +96,7 @@ function main() {
                 Remove-azADServicePrincipal -ObjectId $id.Id
             }
         }
-        else{
+        else {
             return
         }
     }
@@ -112,7 +112,7 @@ function main() {
         }
 
         if (($result = read-host "enter line number of existing cert to use or 0 to create new. normally an existing cert from list should be used.") -gt 0) {
-            $cert = $certs[$result -1]
+            $cert = $certs[$result - 1]
         }
 
     }
@@ -127,23 +127,27 @@ function main() {
                     -Subject "CN=$($aadDisplayName)" `
                     -KeyExportPolicy Exportable `
                     -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" `
-                    -KeySpec KeyExchange
+                    -KeySpec KeyExchange `
+                    -KeyLength 2048 `
+                    -KeyAlgorithm RSA
             }
             
-            #if (!$credentials) {
-            #    $credentials = (get-credential)
-            #}
+            if (!$credentials -and !$password) {
+                $credentials = (get-credential)
+                $password = $credentials.Password
+            }
 
-            #$securePassword = ConvertTo-SecureString -String $credentials.Password -Force -AsPlainText
+            $securePassword = ConvertTo-SecureString -String $password -Force -AsPlainText
 
-            #if ([io.file]::Exists($pfxPath)) {
-            #    [io.file]::Delete($pfxPath)
-            #}
+            if ((test-path $pfxPath)) {
+                [io.file]::Delete($pfxPath)
+            }
 
-            #Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $securePassword
+            Export-PfxCertificate -cert "cert:\currentuser\my\$($cert.thumbprint)" -FilePath $pfxPath -Password $securePassword
             #$cert509 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate($pfxPath, $securePassword)
             #$thumbprint = $cert509.thumbprint
             #$keyValue = [convert]::ToBase64String($cert509.GetCertHash())
+            $keyValue = [convert]::ToBase64String([io.file]::ReadAllBytes($pfxPath))
             $certValue = [convert]::ToBase64String($cert.GetRawCertData())
 
             if ($oldAdApp = Get-azADApplication -DisplayName $aadDisplayName) {
@@ -160,15 +164,26 @@ function main() {
                 -replyUrls $replyUrls `
                 -verbose"
 
-            $app = New-azADApplication -DisplayName $aadDisplayName `
-                -HomePage $uri `
-                -IdentifierUris $uri `
-                -CertValue $certValue `
-                -EndDate ($cert.NotAfter) `
-                -StartDate ($cert.NotBefore) `
-                -replyUrls $replyUrls `
-                -verbose #-Debug 
-
+            if ($replyUrls) {
+                $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -HomePage $uri `
+                    -IdentifierUris $uri `
+                    -CertValue $certValue `
+                    -EndDate ($cert.NotAfter) `
+                    -StartDate ($cert.NotBefore) `
+                    -replyUrls $replyUrls `
+                    -verbose #-Debug 
+            }
+            else {
+                $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -HomePage $uri `
+                    -IdentifierUris $uri `
+                    -CertValue $certValue `
+                    -EndDate ($cert.NotAfter) `
+                    -StartDate ($cert.NotBefore) `
+                    -verbose #-Debug 
+            }
+            
             $appCredential = New-AzADAppCredential -ObjectId $app.ObjectId `
                 -CertValue $certValue `
                 -EndDate ($cert.NotAfter) `
@@ -178,8 +193,7 @@ function main() {
             $appCredential | convertto-json
 
             $thumbprint = $cert.thumbprint
-            $clientSecret = [convert]::ToBase64String($cert.GetCertHash())
-            $keyvalue = $clientSecret
+            #$clientSecret = $certValue # [convert]::ToBase64String($cert.GetCertHash())
             $app | convertto-json
         }
         elseif ($logontype -ieq 'certthumb') {
@@ -191,7 +205,6 @@ function main() {
                     -KeySpec KeyExchange
             }
 
-            $keyValue = [System.Convert]::ToBase64String($cert.GetCertHash())
             $thumbprint = $cert.Thumbprint
             $clientSecret = [System.Convert]::ToBase64String($cert.GetCertHash())
             $securePassword = ConvertTo-SecureString -String $clientSecret -Force -AsPlainText
@@ -203,12 +216,21 @@ function main() {
                 -EndDate $($cert.NotAfter)"
 
             if (!$app) {
-                $app = New-azADApplication -DisplayName $aadDisplayName `
-                    -HomePage $uri `
-                    -IdentifierUris $uri `
-                    -Password $securePassword `
-                    -replyUrls $replyUrls `
-                    -EndDate ($cert.NotAfter)
+                if ($replyUrls) {
+                    $app = New-azADApplication -DisplayName $aadDisplayName `
+                        -HomePage $uri `
+                        -IdentifierUris $uri `
+                        -Password $securePassword `
+                        -replyUrls $replyUrls `
+                        -EndDate ($cert.NotAfter)
+                }
+                else {
+                    $app = New-azADApplication -DisplayName $aadDisplayName `
+                        -HomePage $uri `
+                        -IdentifierUris $uri `
+                        -Password $securePassword `
+                        -EndDate ($cert.NotAfter)
+                }
             }
         }
         elseif ($logontype -ieq 'key') {
@@ -315,16 +337,20 @@ function main() {
     write-host "application id: $($app.ApplicationId)" -ForegroundColor Cyan
     write-host "tenant id: $($tenantId)" -ForegroundColor Cyan
     write-host "application identifier Uri: $($uri)" -ForegroundColor Cyan
-    write-host "keyValue: $($keyValue)" -ForegroundColor Cyan
     write-host "clientsecret: $($clientSecret)" -ForegroundColor Cyan
-    write-host "clientsecret BASE64:$([convert]::ToBase64String([text.encoding]::Unicode.GetBytes($clientSecret)))"
+    write-host
+    write-host "cert base64: $($certValue)" -ForegroundColor Cyan
+    write-host
+    write-host "cert and key base64: $($keyValue)" -ForegroundColor Cyan
+    write-host
     write-host "thumbprint: $($thumbprint)" -ForegroundColor Cyan
     write-host "pfx path: $($pfxPath)" -ForegroundColor Cyan
     $global:thumbprint = $thumbprint
     $global:applicationId = $app.Applicationid
     $global:tenantId = $tenantId
     $global:clientSecret = $clientSecret
-    $global:keyValue = $keyValue
+    $global:certValue = $certValue
+    $global:keyValue = $keyvalue
     write-host "clientid / applicationid saved in `$global:applicationId" -ForegroundColor Yellow
     write-host "clientsecret / base64 thumb saved in `$global:clientSecret" -ForegroundColor Yellow
 
