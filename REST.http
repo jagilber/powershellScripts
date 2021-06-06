@@ -206,6 +206,30 @@ Authorization: {{$aadToken}}
 Accept: application/json
 
 ###
+# sfrp get available cluster versions
+# https://docs.microsoft.com/en-us/rest/api/servicefabric/clusterversions/list
+
+@apiversion = 2018-02-01
+@location = eastus
+
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/providers/Microsoft.ServiceFabric/locations/{{location}}/clusterVersions?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+
+
+###
+# sfrp get available cluster version
+# https://docs.microsoft.com/en-us/rest/api/servicefabric/clusterversions/get
+
+@apiversion = 2018-02-01
+@location = eastus
+
+@clusterVersion = 7.2.432.9590
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/providers/Microsoft.ServiceFabric/locations/{{location}}/clusterVersions/{{clusterVersion}}?api-version={{apiversion}}
+Authorization: {{$aadToken}}
+Accept: application/json
+
+###
 
 PUT  http://localhost:8080/api/Votes/dfff
 ###
