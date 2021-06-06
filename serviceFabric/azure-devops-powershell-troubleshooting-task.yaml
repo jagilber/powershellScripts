@@ -3,7 +3,7 @@
     $psversiontable
     $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
     write-host "current public ip:$publicIp" -ForegroundColor Green
-    [environment]::getenvironmentvariables();
+    [environment]::getenvironmentvariables().getenumerator()|sort Name
     (dir ([environment]::getenvironmentvariable('PIPELINE_WORKSPACE')) -re).fullName;
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-connect.ps1" -outFile "$pwd/sf-connect.ps1";
