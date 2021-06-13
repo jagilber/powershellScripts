@@ -5,12 +5,11 @@ downloads a release from git
 .LINK
 to run with no arguments:
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -UseBasicParsing|iex
-
-or use the following to save and pass arguments:
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -outFile "$pwd/download-git-releases.ps1";
+iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-releases.ps1" -outFile "$pwd/download-git-releases.ps1";
 .\download-git-releases.ps1 -owner {{ git owner }} -repository {{ git repository }} [-latest]
+.\download-git-releases.ps1 -owner microsoft -repository winget-cli -latest
 #>
+
 [cmdletbinding()]
 param(
     [Parameter(Mandatory = $true)]
