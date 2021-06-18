@@ -31,7 +31,6 @@ param(
 #$proxy = [System.Net.CredentialCache]::DefaultCredentials
 #[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
 
-
 #Add-azAccount
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = 'continue'
