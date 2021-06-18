@@ -15,12 +15,12 @@ param(
   [Parameter(Mandatory = $true)]
   $resourceGroupName,
   $clusterName,
-  $templateFileName = ".\template.json",
-  $patchScript = "$pwd\..\azure-az-patch-resource.ps1"
+  $templateFileName = "$pwd\template.json",
+  $patchScript = "$pwd\..\azure-az-patch-resource.ps1",
+  [switch]$whatIf
 )
 
 $ErrorActionPreference = 'continue'
-$templateFileName = resolve-path $templateFileName
 
 $upgradeDescription = @{
   "forceRestart"                  = $true #// <--- set to 'false' after upgrade
@@ -73,6 +73,7 @@ if (!$clusterName) {
   }
 }
 
+write-host ". $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName" -ForegroundColor Cyan
 . $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName
 
 $global:resourceTemplateObj
@@ -106,13 +107,16 @@ $global:resourceTemplateObj | convertto-json -depth 99 | out-file $templateFileN
 write-host ($global:resourceTemplateObj | convertto-json -depth 99)
 
 write-host "executing deployment setting restart to true" -ForegroundColor Cyan
-. $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch
+write-host ". $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch" -ForegroundColor Magenta
+if(!$whatIf){
+  . $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch
+}
 
 write-host "setting forcerestart back to false" -ForegroundColor Cyan
 $global:resourceTemplateObj.resources.properties.upgradeDescription.forceRestart = $false
 write-host $global:resourceTemplateObj | convertto-json -depth 99
 
-write-host "decrementing nt 0 ephemeral start port to trigger update" -ForegroundColor Cyan
+write-host "incrementing nt 0 ephemeral start port to trigger update" -ForegroundColor Cyan
 $global:currentNTEStartPort = $global:resourceTemplateObj.resources.properties.nodeTypes[0].ephemeralPorts.startPort
 $global:resourceTemplateObj.resources.properties.nodeTypes[0].ephemeralPorts.startPort = $global:currentNTEStartPort + 1
 write-host "current ephem start port:$($global:currentNTEStartPort)" -ForegroundColor Yellow
@@ -123,10 +127,16 @@ $global:resourceTemplateObj | convertto-json -depth 99 | out-file $templateFileN
 write-host ($global:resourceTemplateObj | convertto-json -depth 99)
 
 write-host "executing deployment setting restart to false" -ForegroundColor Cyan
-. $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch
+write-host ". $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch" -ForegroundColor Magenta
+if(!$whatIf){
+  . $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName -patch
+}
 
 write-host "verifying forcerestart set to false" -ForegroundColor Cyan
-. $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName
+write-host ". $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName" -ForegroundColor Magenta
+if(!$whatIf) {
+  . $patchScript -resourceGroupName $resourceGroupName -resourceName $clusterName -templateJsonFile $templateFileName
+}
 
 if ($global:resourceTemplateObj.resources.properties.upgradeDescription.forceRestart -ne $false) {
   write-error "template configuration incorrect. review template."
