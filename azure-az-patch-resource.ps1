@@ -146,9 +146,13 @@ function main () {
         }
     }
 
+    write-host "Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue"
     $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
 
-    write-host "deployment:`r`n$($deployment | format-list * | out-string)"
+    if ($deployment) {
+        write-host "deployment:`r`n$($deployment | format-list * | out-string)"
+    }
+
     Write-Progress -Completed -Activity "complete"
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
@@ -358,11 +362,11 @@ function export-template($configuredResources) {
         }
 
         # add other arm objects. vmss sku is an example
-        foreach($item in $azResource.psobject.properties){
+        foreach ($item in $azResource.psobject.properties) {
             write-verbose "searching psobject for resourcemanager objects: item: $item"
-            if($item.TypeNameOfValue -imatch 'Microsoft.Azure.Management.ResourceManager'){
+            if ($item.TypeNameOfValue -imatch 'Microsoft.Azure.Management.ResourceManager') {
                 write-verbose "adding psobject for resourcemanager objects: item: $item"
-                [void]$resource.Add($item.Name,$azresource."$($item.Name)")
+                [void]$resource.Add($item.Name, $azresource."$($item.Name)")
             }
         }
 
@@ -468,6 +472,7 @@ function write-progressInfo() {
     $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
     $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
     write-verbose $status
+    $pattern = "/subscriptions/(?<subscriptionId>.+?)/resourceGroups/(?<resourceGroup>.+?)/providers/(?<provider>.+?)/(?<providerType>.+?)/(?<resource>.+)"
 
     $count = 0
     Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName" -Status $status -id ($count++)
@@ -477,15 +482,17 @@ function write-progressInfo() {
         
         foreach ($operation in $deploymentOperations) {
             write-verbose ($operation | convertto-json)
-            $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
-            $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
+            $result = [regex]::Match($operation.targetResource, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase);
+            $providerType = $result.Groups['providerType'].Value
+            $resource = $result.Groups['resource'].Value
+            $currentOperation = "$($providerType):$($resource)"
+            $status = "$($operation.provisioningState):$($operation.statusCode)"
             
-            if ($operation.Properties.statusMessage) {
-                $status = "$status $($operation.Properties.statusMessage)"
+            if ($operation.statusMessage) {
+                $status = "$status $($operation.statusMessage)"
             }
             
-            $activity = "$($operation.Properties.provisioningOperation):$($currentOperation)"
-            Write-Progress -Activity $activity -id ($count++) -Status $status
+            Write-Progress -Activity $currentOperation -id ($count++) -Status $status
         }
     }
 
