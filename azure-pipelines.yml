@@ -3,8 +3,8 @@
 
 resources:
   webhooks:
-    - webhook: MyWebhookTrigger ### Webhook alias
-      connection: powershellScriptsWebHookServiceConnection ### Incoming webhook service connection
+    - webhook: esrp-oss-proxy-web-hook-trigger ### Webhook alias
+      connection: esrp-oss-proxy-web-hook-connection ### Incoming webhook service connection
       # filters:
       #   - path: repositoryName ### JSON path in the payload
       #     value: maven-releases ### Expected value in the path provided
