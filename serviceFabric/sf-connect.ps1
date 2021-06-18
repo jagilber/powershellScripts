@@ -7,6 +7,10 @@
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-connect.ps1" -outFile "$pwd/sf-connect.ps1";
     ./sf-connect.ps1 -clusterEndpoint <cluster endpoint fqdn> -thumbprint <thumbprint>
 #>
+using namespace System.Net;
+using namespace System.Net.Sockets;
+using namespace System.Net.Security;
+using namespace System.Security.Cryptography.X509Certificates;
 
 [cmdletbinding()]
 param(
@@ -75,6 +79,7 @@ function main() {
 
     if ($result.tcpTestSucceeded) {
         write-host "able to connect to $($clusterFqdn):$($clusterEndpointPort)" -ForegroundColor Green
+        get-certValidationTcp -url $clusterFqdn -port $clusterEndpointPort
     }
     else {
         write-error "unable to connect to $($clusterFqdn):$($clusterEndpointPort)"
@@ -88,7 +93,7 @@ function main() {
 
     if ($result.tcpTestSucceeded) {
         write-host "able to connect to $($clusterFqdn):$($clusterExplorerPort)" -ForegroundColor Green
-        get-certValidation -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
+        get-certValidationHttp -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
     }
     else {
         write-error "unable to connect to $($clusterFqdn):$($clusterExplorerPort)"
@@ -127,8 +132,8 @@ function main() {
     $DebugPreference = $currentDebug
 }
 
-function get-certValidation([string] $url) {
-    write-host "get-cert:$($url) $($certFile)" -ForegroundColor Green
+function get-certValidationHttp([string] $url) {
+    write-host "get-certValidationHttp:$($url) $($certFile)" -ForegroundColor Green
     $error.Clear()
     $webRequest = [Net.WebRequest]::Create($url)
     $webRequest.ServerCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
@@ -139,7 +144,42 @@ function get-certValidation([string] $url) {
         # return $null
     }
     catch [System.Exception] {
-        Write-Verbose "get-cert:first catch getresponse: $($url) $($certFile) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
+        Write-Verbose "get-certValidationHttp:first catch getresponse: $($url) $($certFile) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
+        $error.Clear()
+    }
+}
+
+function get-certValidationTcp([string] $url, [int]  $port) {
+    write-host "get-certValidationTcp:$($url) $($certFile)" -ForegroundColor Green
+    $error.Clear()
+    $tcpClient = [Net.Sockets.TcpClient]::new($url, $port)
+    # $sslStream = [sslstream]::new($tcpClient.GetStream(),`
+    #     $true,`
+    #     [net.servicePointManager]::ServerCertificateValidationCallback,`
+    #     $null)
+$sslStream = [sslstream]::new($tcpClient.GetStream(),$false)
+    # $webRequest.ServerCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
+    # $webRequest.Timeout = 1000 #ms
+
+    try { 
+        $sslAuthenticationOptions = [SslClientAuthenticationOptions]::new()
+            
+        $sslAuthenticationOptions.AllowRenegotiation = $true
+        $sslAuthenticationOptions.CertificateRevocationCheckMode = 0
+        $sslAuthenticationOptions.EncryptionPolicy = 1
+        $sslAuthenticationOptions.RemoteCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
+        $sslAuthenticationOptions.TargetHost = $url
+        # $sslAuthenticationOptions.
+        ## todo: not working
+        # https://docs.microsoft.com/en-us/dotnet/api/system.net.security.sslstream.authenticateasclient?view=net-5.0
+        $sslStream.AuthenticateAsClient($sslAuthenticationOptions)
+        
+        #$sslStream.AuthenticateAsClient('sfjagilber') #($url)
+        # [void]$webRequest.GetResponse() 
+        # return $null
+    }
+    catch [System.Exception] {
+        Write-Host "get-certValidationTcp:first catch getresponse: $($url) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
         $error.Clear()
     }
 }
@@ -168,8 +208,8 @@ function set-callback() {
             }
         }
 
-        [SecurityCallback]$securityCallback = [SecurityCallback]::new()
-        [net.servicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($securityCallback.ValidationCallback)
+        [SecurityCallback]$global:securityCallback = [SecurityCallback]::new()
+        [net.servicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($global:securityCallback.ValidationCallback)
     }
     else {
         add-type @"
