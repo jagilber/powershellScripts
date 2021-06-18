@@ -30,6 +30,7 @@ param(
 #[Net.WebRequest]::DefaultWebProxy = new-object System.Net.WebProxy ($proxyUri, $true)
 #$proxy = [System.Net.CredentialCache]::DefaultCredentials
 #[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
+
 #Add-azAccount
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = 'continue'
@@ -173,7 +174,7 @@ $sslStream = [sslstream]::new($tcpClient.GetStream(),$false)
         ## todo: not working
         # https://docs.microsoft.com/en-us/dotnet/api/system.net.security.sslstream.authenticateasclient?view=net-5.0
         $sslStream.AuthenticateAsClient($sslAuthenticationOptions)
-        
+
         #$sslStream.AuthenticateAsClient('sfjagilber') #($url)
         # [void]$webRequest.GetResponse() 
         # return $null
