@@ -1,4 +1,5 @@
 <#
+  [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
   iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/action.ps1" -outFile "$pwd\action.ps1"
 #>
 # ------------------------------------------------------------
@@ -8,8 +9,6 @@
 
 param(
     $applicationName = 'fabric:/NCAS-STG', #'fabric:/Voting', 
-    $applicationTypeName = 'NCAS.FabricAppType', #'VotingType',
-    $applicationTypeVersion = '1.0.0', # needs verification
     $placementConstraints = 'NodeName==NotUsed',
     $fmPartitionId = '00000000-0000-0000-0000-000000000001',
     [switch]$whatif
@@ -84,8 +83,5 @@ foreach ($service in $services) {
     write-host "Remove-ServiceFabricService -ForceRemove -ServiceName $serviceName -Force" -foregroundColor green
     if (!$whatif) { Remove-ServiceFabricService -ForceRemove -ServiceName $serviceName -Force }
 }
-
-write-host "Unregister-ServiceFabricApplicationType -ApplicationTypeName $applicationTypeName -ApplicationTypeVersion $applicationTypeVersion -Force"
-if(!$whatIf) { Unregister-ServiceFabricApplicationType -ApplicationTypeName $applicationTypeName -ApplicationTypeVersion $applicationTypeVersion -Force}
 
 write-host "finished" -foregroundColor green
