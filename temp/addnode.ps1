@@ -311,6 +311,7 @@ Powershell -Command {
         if($X509Credential)
         {
             Connect-ServiceFabricCluster -ConnectionEndpoint $ExistingClientConnectionEndpoint -X509Credential -ServerCertThumbprint $ServerCertThumbprint -StoreLocation $StoreLocation -StoreName $StoreName -FindValue $FindValueThumbprint -FindType FindByThumbprint
+            #Connect-ServiceFabricCluster -ConnectionEndpoint $ExistingClientConnectionEndpoint -X509Credential -ServerCertThumbprint $ServerCertThumbprint -StoreLocation $StoreLocation -StoreName $StoreName -FindValue $FindValueThumbprint -FindType FindBySubjectName
         }
         else
         {
