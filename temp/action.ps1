@@ -7,7 +7,7 @@
 # ------------------------------------------------------------
 
 param(
-    $applicationName = 'fabric:/Voting', # 'fabric:/NCAS-STG'  
+    $applicationName = 'fabric:/NCAS-STG', #'fabric:/Voting', 
     $placementConstraints = 'NodeName==NotUsed',
     $fmPartitionId = '00000000-0000-0000-0000-000000000001',
     [switch]$whatif
@@ -32,11 +32,6 @@ foreach($service in $services){
         if($service.ServiceKind -ieq 'Stateful'){
             write-warning "skipping stateful service $($service | convertto-json)"
             continue
-            #write-host "Update-ServiceFabricService -Stateful -InstanceCount 1 -ServiceName $serviceName -Force"
-            #if(!$whatif) { Update-ServiceFabricService -Stateful -InstanceCount 1 -ServiceName $serviceName -Force}
-
-            #write-host "Update-ServiceFabricService -Stateful -PlacementConstraints $placementConstraints -ServiceName $serviceName -Force"
-            #if(!$whatif) { Update-ServiceFabricService -Stateful -PlacementConstraints $placementConstraints -ServiceName $serviceName  -Force}
         }
         else {
             write-host "Update-ServiceFabricService -Stateless -InstanceCount 1 -ServiceName $serviceName -Force" -foregroundColor green
