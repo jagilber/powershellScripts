@@ -59,7 +59,7 @@ foreach ($service in $services) {
 }
 
 write-warning "if above is successful, disable and reimage all nodes in same nodetype (worker), one node at a time waiting for successful reimage completion between each node."
-write-warning "it is critical for cluster to stabalize (be green) between each node reimage."
+write-warning "it is critical for cluster to stabilize (be green) between each node reimage. Only press 'enter' when ready to continue. use ctrl-c to exit."
 pause
 
 # remove fm replicas
