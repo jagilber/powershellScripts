@@ -1,5 +1,6 @@
 <#
-  iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/action.ps1" -outFile "$pwd\action.ps1"
+ [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+ iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/action.ps1" -outFile "$pwd\action.ps1"
 #>
 # ------------------------------------------------------------
 # Copyright (c) Microsoft Corporation.  All rights reserved.
@@ -13,7 +14,7 @@ param(
     [switch]$whatif
 )
 
-$erroractionpreference = 'stop' #'continue'
+$erroractionpreference = 'continue'
 
 if(!(get-servicefabricclusterconnection)) {
     Connect-ServiceFabricCluster
