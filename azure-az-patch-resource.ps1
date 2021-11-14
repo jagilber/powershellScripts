@@ -3,6 +3,7 @@
     powershell script to update (patch) existing azure arm template resource settings similar to resources.azure.com
 
 .LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-patch-resource.ps1" -outFile "$pwd\azure-az-patch-resource.ps1";
     .\azure-az-patch-resource.ps1 -resourceGroupName {{ resource group name }} -resourceName {{ resource name }} [-patch]
 
@@ -49,7 +50,7 @@ param (
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
     [switch]$patch,
-    [string]$templateJsonFile = './template.json', 
+    [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
     [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
@@ -65,7 +66,7 @@ $global:resourceTemplateObj = @{ }
 $global:resourceErrors = 0
 $global:resourceWarnings = 0
 $global:configuredRGResources = [collections.arraylist]::new()
-
+$env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
@@ -73,7 +74,7 @@ $debugLevel = 'none'
 
 function main () {
     write-host "starting"
-    if($detail){
+    if ($detail) {
         $ErrorActionPreference = 'continue'
         $VerbosePreference = 'continue'
         $debugLevel = 'all'
@@ -81,6 +82,11 @@ function main () {
 
     if (!(check-module)) {
         return
+    }
+    
+    if (!(@(Get-AzResourceGroup).Count)) {
+        write-host "connecting to azure"
+        Connect-AzAccount
     }
 
     if (!(Get-AzContext)) {
@@ -105,7 +111,7 @@ function main () {
         write-host "getting resource group resource ids $resourceGroupName"
         $resources = @((get-azresource -ResourceGroupName $resourceGroupName))
         if ($excludeResourceNames) {
-            $resources = $resources | where Name -NotMatch "$($excludeResourceNames -join "|")"
+            $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
         }
 
         $global:configuredRGResources.AddRange($resources)
@@ -114,7 +120,7 @@ function main () {
     display-settings -resources $global:configuredRGResources
 
     if ($global:configuredRGResources.count -lt 1) {
-        Write-Warning "error enumerating resource $($error | fl * | out-string)"
+        Write-Warning "error enumerating resource $($error | format-list * | out-string)"
         return
     }
 
@@ -141,13 +147,17 @@ function main () {
         write-warning "deployment may not have been successful: errors: $global:resourceErrors warnings: $global:resourceWarnings"
 
         if ($DebugPreference -ieq 'continue') {
-            write-host "errors: $($error | sort -Descending | out-string)"
+            write-host "errors: $($error | sort-object -Descending | out-string)"
         }
     }
 
+    write-host "Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue"
     $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
 
-    write-host "deployment:`r`n$($deployment | format-list * | out-string)"
+    if ($deployment) {
+        write-host "deployment:`r`n$($deployment | format-list * | out-string)"
+    }
+
     Write-Progress -Completed -Activity "complete"
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-host 'finished. template stored in $global:resourceTemplateObj' -ForegroundColor Cyan
@@ -186,7 +196,7 @@ function create-jsonTemplate([collections.arraylist]$resources,
     [hashtable]$parameters = @{},
     [hashtable]$variables = @{},
     [hashtable]$outputs = @{}
-    ) {
+) {
     try {
         $resourceTemplate = @{ 
             resources      = $resources
@@ -210,6 +220,10 @@ function create-jsonTemplate([collections.arraylist]$resources,
 
 function deploy-template($configuredResources) {
     $templateParameters = @{}
+    $parameters = @{}
+    $variables = @{}
+    $outputs = @{}
+    
     $json = get-content -raw $templateJsonFile | convertfrom-json
     
     if (!$json -or !$json.resources) {
@@ -217,22 +231,29 @@ function deploy-template($configuredResources) {
         return
     }
 
-    if((test-path $templateParameterFile)) {
+    if ((test-path $templateParameterFile)) {
         $jsonParameters = get-content -raw $templateParameterFile | convertfrom-json
         # convert pscustom object to hashtable
-        $jsonParameters = ($jsonParameters.parameters | convertto-json | convertfrom-json -AsHashtable).getenumerator()
-        foreach($jsonParameter in $jsonParameters) {
-            $templateParameters.Add($jsonParameter.key, $jsonParameter.value.value)
+        foreach ($jsonParameter in $jsonParameters.parameters.psobject.properties) {
+            $templateParameters.Add($jsonParameter.name, $jsonParameter.value.value)
         }
-     
     }
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where Id -imatch ($configuredResources.ResourceId -join '|'))
-    $parameters = $json.parameters | convertto-json | convertfrom-json -AsHashtable
-    $variables = $json.variables | convertto-json | convertfrom-json -AsHashtable
-    $outputs = $json.outputs | convertto-json | convertfrom-json -AsHashtable
+    $resources = @($json.resources | where-object Id -imatch ($configuredResources.ResourceId -join '|'))
+
+    foreach ($jsonParameter in $json.parameters.psobject.properties) {
+        $parameters.Add($jsonParameter.name, $jsonParameter.value)
+    }
+    
+    foreach ($jsonParameter in $json.variables.psobject.properties) {
+        $variables.Add($jsonParameter.name, $jsonParameter.value)
+    }
+
+    foreach ($jsonParameter in $json.outputs.psobject.properties) {
+        $outputs.Add($jsonParameter.name, $jsonParameter.value)
+    }
 
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
@@ -255,7 +276,7 @@ function deploy-template($configuredResources) {
         write-host "patching resource with $tempJsonFile" -ForegroundColor Yellow
         start-job -ScriptBlock {
             param ($resourceGroupName, $tempJsonFile, $deploymentName, $mode, $debugLevel, $detail, $templateParameters)
-            if($detail){
+            if ($detail) {
                 $VerbosePreference = 'continue'
             }
 
@@ -310,54 +331,51 @@ function export-template($configuredResources) {
     write-host "getting configured api versions" -ForegroundColor green
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
     $currentConfig = Get-Content -raw $templateJsonFile | convertfrom-json
-    $currentApiVersions = $currentConfig.resources | select type, apiversion | sort -Unique type
-    write-host ($currentApiVersions | fl * | out-string)
+    $currentApiVersions = $currentConfig.resources | select-object type, apiversion | sort-object -Unique type
+    write-host ($currentApiVersions | format-list * | out-string)
     remove-item $templateJsonFile -Force
     
     
     foreach ($azResource in $configuredResources) {
-        # convert az resource to arm template
-        # bug where depending on arguments sent to get-azresource. using rg name and type will return correct name for extensions vm/extension
-        # ex: 2019-dc/AzureNetworkWatcherExtension
-        # querying by resource id returns incorrect name
-        # ex: AzureNetworkWatcherExtension
-        # so query again for just name using type and rg
-
-        # get validation of rg name and type
-        #$azResource = get-azresource -Id $resourceId
-        write-debug "azresource by id: $($azResource | fl * | out-string)"
-        # requery for correct name
-        $azResourceName = (get-azresource -ResourceGroupName $azResource.ResourceGroupName -ResourceType $azResource.ResourceType | where ResourceId -eq $azResource.ResourceId | select Name).Name
-        write-debug ("azresourcename fix: $azResourceName")
-        
+        write-verbose "azresource by id: $($azResource | format-list * | out-string)"
         $resourceApiVersion = $null
 
         if (!$useLatestApiVersion -and $currentApiVersions.type.contains($azResource.ResourceType)) {
-            $rpType = $currentApiVersions | where type -ieq $azResource.ResourceType | select apiversion
+            $rpType = $currentApiVersions | where-object type -ieq $azResource.ResourceType | select-object apiversion
             $resourceApiVersion = $rpType.ApiVersion
             write-host "using configured resource schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor green
         }
 
         if ($useLatestApiVersion -or !$resourceApiVersion) {
-            $resourceProvider = $resourceProviders | where ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
-            $rpType = $resourceProvider.ResourceTypes | where ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
+            $resourceProvider = $resourceProviders | where-object ProviderNamespace -ieq $azResource.ResourceType.split('/')[0]
+            $rpType = $resourceProvider.ResourceTypes | where-object ResourceTypeName -ieq $azResource.ResourceType.split('/')[1]
             $resourceApiVersion = $rpType.ApiVersions[0]
             write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
         }
 
         $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
-        write-debug "azresource by id and version: $($azResource | fl * | out-string)"
+        write-verbose "azresource by id and version: $($azResource | format-list * | out-string)"
+        $resource = @{
+            apiVersion = $resourceApiVersion
+            #dependsOn  = @()
+            type       = $azResource.ResourceType
+            location   = $azResource.Location
+            id         = $azResource.ResourceId
+            name       = $azResource.Name 
+            tags       = $azResource.Tags
+            properties = $azResource.properties
+        }
 
-        [void]$resources.Add(@{
-                apiVersion = $resourceApiVersion
-                #dependsOn  = @()
-                type       = $azResource.ResourceType
-                location   = $azResource.Location
-                id         = $azResource.ResourceId
-                name       = $azResourceName # $azResource.Name 
-                tags       = $azResource.Tags
-                properties = $azResource.properties
-            })
+        # add other arm objects. vmss sku is an example
+        foreach ($item in $azResource.psobject.properties) {
+            write-verbose "searching psobject for resourcemanager objects: item: $item"
+            if ($item.TypeNameOfValue -imatch 'Microsoft.Azure.Management.ResourceManager') {
+                write-verbose "adding psobject for resourcemanager objects: item: $item"
+                [void]$resource.Add($item.Name, $azresource."$($item.Name)")
+            }
+        }
+
+        [void]$resources.Add($resource)
     }
 
     if (!(create-jsonTemplate -resources $resources -jsonFile $templateJsonFile)) { return }
@@ -431,13 +449,13 @@ function write-log($data) {
             if ($job.Warning) {
                 write-warning (@($job.Warning.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | fl * | out-string))
+                $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceWarnings++
             }
             if ($job.Error) {
                 write-error (@($job.Error.ReadAll()) -join "`r`n")
                 $stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
-                $stringData.appendline(($job | fl * | out-string))
+                $stringData.appendline(($job | format-list * | out-string))
                 $global:resourceErrors++
             }
             if ($stringData.tostring().Trim().Length -lt 1) {
@@ -446,7 +464,7 @@ function write-log($data) {
         }
     }
     else {
-        $stringData = "$(get-date):$($data | fl * | out-string)"
+        $stringData = "$(get-date):$($data | format-list * | out-string)"
     }
 
     write-host $stringData
@@ -459,6 +477,7 @@ function write-progressInfo() {
     $deploymentOperations = Get-AzResourceGroupDeploymentOperation -ResourceGroupName $resourceGroupName -DeploymentName $deploymentName -ErrorAction silentlycontinue
     $status = "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes" #`r`n"
     write-verbose $status
+    $pattern = "/subscriptions/(?<subscriptionId>.+?)/resourceGroups/(?<resourceGroup>.+?)/providers/(?<provider>.+?)/(?<providerType>.+?)/(?<resource>.+)"
 
     $count = 0
     Write-Progress -Activity "deployment: $deploymentName resource patching: $resourceGroupName" -Status $status -id ($count++)
@@ -468,15 +487,17 @@ function write-progressInfo() {
         
         foreach ($operation in $deploymentOperations) {
             write-verbose ($operation | convertto-json)
-            $currentOperation = "$($operation.Properties.targetResource.resourceType) $($operation.Properties.targetResource.resourceName)"
-            $status = "$($operation.Properties.provisioningState) $($operation.Properties.statusCode) $($operation.Properties.timestamp) $($operation.Properties.duration)"
+            $result = [regex]::Match($operation.targetResource, $pattern, [text.regularexpressions.regexoptions]::IgnoreCase);
+            $providerType = $result.Groups['providerType'].Value
+            $resource = $result.Groups['resource'].Value
+            $currentOperation = "$($providerType):$($resource)"
+            $status = "$($operation.provisioningState):$($operation.statusCode)"
             
-            if ($operation.Properties.statusMessage) {
-                $status = "$status $($operation.Properties.statusMessage)"
+            if ($operation.statusMessage) {
+                $status = "$status $($operation.statusMessage)"
             }
             
-            $activity = "$($operation.Properties.provisioningOperation):$($currentOperation)"
-            Write-Progress -Activity $activity -id ($count++) -Status $status
+            Write-Progress -Activity $currentOperation -id ($count++) -Status $status
         }
     }
 
@@ -484,7 +505,7 @@ function write-progressInfo() {
         $error.RemoveRange($errorCount - 1, $error.Count - $errorCount)
     }
 
-    if($detail){
+    if ($detail) {
         $ErrorActionPreference = $VerbosePreference = 'continue'
     }
 }

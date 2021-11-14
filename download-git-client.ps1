@@ -2,6 +2,7 @@
 downloads git client for use 
 
 to run with no arguments:
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -UseBasicParsing|iex
 
 or use the following to save and pass arguments:
@@ -22,9 +23,9 @@ param(
     [switch]$clean,
     [switch]$force,
     [string]$gitReleaseApi = "https://api.github.com/repos/git-for-windows/git/releases/latest",
-    [string]$hubReleaseApi = "https://api.github.com/repos/github/hub/releases/latest", 
+    [string]$hubReleaseApi = "https://api.github.com/repos/cli/cli/releases/latest", #"https://api.github.com/repos/github/hub/releases/latest", 
     [string]$gitClientType = "Git-.+?-64-bit.exe",
-    [string]$hubClientType = "hub-windows-amd64-.+?.zip",
+    [string]$hubClientType = "gh_.+?_windows_amd64.zip", #"hub-windows-amd64-.+?.zip",
     [string]$minGitClientType = "mingit.+64"
 )
 
@@ -50,10 +51,10 @@ function main() {
     $destpath = $destpath.replace("\\","\").TrimEnd("\")
 
     if ($hub) {
-        Set-Alias git hub
+        Set-Alias git gh
         $gitClientType = $hubClientType
         $gitReleaseApi = $hubReleaseApi
-        $destPath = "$destPath\Hub"
+        $destPath = "$destPath\cli"
     }
     else {
         $destPath = "$destPath\Git"

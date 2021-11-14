@@ -4,6 +4,8 @@
 # in this example, ntsd.exe is being attached to the new process
 # v 1.0 06/26/2014
 # microsoft support
+# [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+#  invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/process-monitor.ps1" -outFile "$(get-location)\process-monitor.ps1"
 #-------------------------------------------------------------------------------------------------
  
 param(

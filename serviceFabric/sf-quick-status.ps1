@@ -1,6 +1,10 @@
 <#
+.SYNOPSIS
 quick script to enumerate different objects and health in cluster if sfx not available
 this may error depending on configuration and version even if cluster is healthy
+
+.LINK
+iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-quick-status.ps1" -outfile "$pwd\sf-quick-status.ps1";.\sf-quick-status.ps1;
 #>
 
 param(
@@ -21,23 +25,26 @@ else {
     $clusterEndpoint = $publicSettings.clusterEndpoint
     $endpointUri = [uri]::new($clusterEndpoint)
     $endpointHost = $endpointUri.Authority
+    $thumb = $publicSettings.certificate.thumbprint
+    $cert = (get-childitem -path Cert:\LocalMachine\my\$thumb)[-1]
 
     $error.Clear()
     write-host "Test-NetConnection -ComputerName $endpointHost -port 443"
-    Test-NetConnection -ComputerName $endpointHost -port 443
-    if ($error) {
+    $results = Test-NetConnection -ComputerName $endpointHost -port 443
+    if (!($results.tcptestsucceeded)) {
         write-error "$($error | out-string)"
         $error.clear()
-
     }
     else {
-        $response = invoke-webrequest -Uri $clusterEndpoint -CertificateThumbprint $publicSettings.certificate.thumbprint
+        write-host "invoke-webrequest -Uri $clusterEndpoint -Certificate $cert"
+        $response = invoke-webrequest -Uri $clusterEndpoint -Certificate $cert
+        
+        write-host "sfrp response" -ForegroundColor Yellow
         $response.BaseResponse
-        $cert = (get-childitem -path Cert:\LocalMachine\my\$thumb)[-1]
+        
         test-Certificate -Cert $cert -Policy SSL -AllowUntrustedRoot
         test-Certificate -Cert $cert -Policy BASE -AllowUntrustedRoot
         certutil -verifystore MY $thumb
-
     }
 }
 

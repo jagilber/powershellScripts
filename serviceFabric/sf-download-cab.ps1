@@ -1,4 +1,10 @@
-# script to download all sf package versions to extract .man file into separate directory for parsing sf .etl files
+<# 
+.SYNOPSIS
+script to download all sf package versions to extract .man file into separate directory for parsing sf .etl files
+.LINK
+iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-download-cab.ps1 -out $pwd/sf-download-cab.ps1;
+./sf-download-cab.ps1 
+#>
 
 param(
     [string]$sfversion,

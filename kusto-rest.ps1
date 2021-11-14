@@ -8,14 +8,15 @@ this script will setup Microsoft.IdentityModel.Clients Msal for use with powersh
 KustoObj will be created as $global:kusto to hold properties and run methods from
 
 use the following to save and pass arguments:
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1" -outFile "$pwd/kusto-rest.ps1";
 .\kusto-rest.ps1 -cluster %kusto cluster% -database %kusto database%
 
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 200330
-History    : add createresults
+Version    : 210322
+History    : add linux ps core support
 
 .EXAMPLE
 .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
@@ -132,8 +133,8 @@ param(
 $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "continue"
 $global:kusto = $null
-$global:identityPackageLocation  
-$global:nuget = "nuget.exe"
+$global:identityPackageLocation
+$packageVersion = "4.28.0"
 
 if ($updateScript) {
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/kusto-rest.ps1" -outFile  "$psscriptroot/kusto-rest.ps1";
@@ -142,49 +143,122 @@ if ($updateScript) {
 }
 
 function AddIdentityPackageType([string]$packageName, [string] $edition) {
-    [string]$nugetPackageDirectory = "$($env:USERPROFILE)\.nuget\packages"
+    # support ps core on linux
+    if ($IsLinux) { 
+        $env:USERPROFILE = $env:HOME
+    }
+    [string]$nugetPackageDirectory = "$($env:USERPROFILE)/.nuget/packages"
     [string]$nugetSource = "https://api.nuget.org/v3/index.json"
     [string]$nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
     [io.directory]::createDirectory($nugetPackageDirectory)
-    [string]$packageDirectory = "$nugetPackageDirectory\$packageName"
-    $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "lib\\$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
+    [string]$packageDirectory = "$nugetPackageDirectory/$packageName"
+    
+    $global:identityPackageLocation = get-identityPackageLocation $packageDirectory
 
     if (!$global:identityPackageLocation) {
-        if (!(test-path $nuget)) {
-            $nuget = "$env:temp\nuget.exe"
-            if (!(test-path $nuget)) {
-                invoke-webRequest $nugetDownloadUrl -outFile  $nuget
-            }
-        }
-        [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
+        if ($psedition -ieq 'core') {
+            $tempProjectFile = './temp.csproj'
+    
+            #dotnet new console 
+            $csproj = "<Project Sdk=`"Microsoft.NET.Sdk`">
+                    <PropertyGroup>
+                        <OutputType>Exe</OutputType>
+                        <TargetFramework>$edition</TargetFramework>
+                    </PropertyGroup>
+                    <ItemGroup>
+                        <PackageReference Include=`"$packageName`" Version=`"$packageVersion`" />
+                    </ItemGroup>
+                </Project>
+            "
 
-        if ($force -or !($localPackages -imatch $packageName)) {
-            write-host "$nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed"
-            . $nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed
-            $global:identityPackageLocation = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -match "$edition\\$packageName\.dll" | select-object FullName)[-1].FullName
+            out-file -InputObject $csproj -FilePath $tempProjectFile
+            write-host "dotnet restore --packages $packageDirectory --no-cache --no-dependencies $tempProjectFile"
+            dotnet restore --packages $packageDirectory --no-cache --no-dependencies $tempProjectFile
+    
+            remove-item "$pwd/obj" -re -fo
+            remove-item -path $tempProjectFile
         }
         else {
-            write-host "$packageName already installed" -ForegroundColor green
+            $nuget = "nuget.exe"    
+            if (!(test-path $nuget)) {
+                $nuget = "$env:temp/nuget.exe"
+                if (!(test-path $nuget)) {
+                    invoke-webRequest $nugetDownloadUrl -outFile  $nuget
+                }
+            }
+            [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
+
+            if ($force -or !($localPackages -imatch "$edition.$packageName")) {
+                write-host "$nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed"
+                . $nuget install $packageName -Source $nugetSource -outputdirectory $nugetPackageDirectory -verbosity detailed
+            }
+            else {
+                write-host "$packageName already installed" -ForegroundColor green
+            }
         }
     }
     
+    $global:identityPackageLocation = get-identityPackageLocation $packageDirectory
     write-host "identityDll: $($global:identityPackageLocation)" -ForegroundColor Green
     add-type -literalPath $global:identityPackageLocation
     return $true
 }
 
-if ($global:PSVersionTable.PSEdition -eq "Core") {
-    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp2.1")) {
-        write-error "unable to add package"
-        return $false
+function get-identityPackageLocation($packageDirectory) {
+    $pv = [version]::new($packageVersion)
+    $pv = [version]::new($pv.Major, $pv.Minor)
+
+    $versions = @{} 
+    $files = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "lib.$edition.$packageName\.dll")
+    write-host "existing identity dlls $($files|out-string)"
+
+    foreach ($file in @($files.fullname)) {
+        $versionString = [regex]::match($file, ".$packageName.([0-9.]+?).lib.$edition", [text.regularexpressions.regexoptions]::IgnoreCase).Groups[1].Value
+        if (!$versionString) { continue }
+
+        $version = [version]::new($versionString)
+        [void]$versions.add($file, [version]::new($version.Major, $version.Minor))
+    }
+
+    foreach ($version in $versions.GetEnumerator()) {
+        write-host "comparing file version:$($version.value) to configured version:$($pv)"
+        if ($version.value -ge $pv) {
+            return $version.Key
+        }
+    }
+    return $null
+}
+
+function get-msalLibrary() {
+    # Install latest AD client library
+    try {
+        if (([Microsoft.Identity.Client.ConfidentialClientApplication]) -and !$force) {
+            write-host "[Microsoft.Identity.Client.AzureCloudInstance] already loaded. skipping" -ForegroundColor Cyan
+            return
+        }
+    }
+    catch {
+        write-verbose "exception checking for identity client:$($error|out-string)"
+        $error.Clear()
+    }
+
+    if ($global:PSVersionTable.PSEdition -eq "Core") {
+        write-host "setting up microsoft.identity.client for .net core"
+        if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp2.1")) {
+            write-error "unable to add package"
+            return $false
+        }
+    }
+    else {
+        write-host "setting up microsoft.identity.client for .net framework"
+        if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net461")) {
+            write-error "unable to add package"
+            return $false
+        }
     }
 }
-else {
-    if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net45")) {
-        write-error "unable to add package"
-        return $false
-    }
-}
+
+get-msalLibrary
 
 # comment next line after microsoft.identity.client type has been imported into powershell session to troubleshoot 1 of 2
 invoke-expression @'
@@ -314,7 +388,7 @@ class KustoObj {
     
         if ($this.ViewResults -or $this.CreateResults) {
             $this.CreateResultTable()
-            if($this.ViewResults) {
+            if ($this.ViewResults) {
                 write-host ($this.ResultTable | out-string)
             }
         }
@@ -345,15 +419,15 @@ class KustoObj {
     [KustoObj] ExecFunctionWithTableName([string]$function) {
         $functionObj = ($this.FunctionObjs.getEnumerator() | where-object Name -imatch $function).Value
 
-        if(!$function -or !$functionObj -or $functionObj.parameters.length -lt 1) {
+        if (!$function -or !$functionObj -or $functionObj.parameters.length -lt 1) {
             write-warning "verify function '$function' and number of parameters '$($functionObj.parameters)'"
         }
         else {
             write-host "function:$function$($functionObj.parameters)" -foregroundcolor cyan
         }
 
-        if($this.Table) {
-            $this.Exec([string]::Format("{0}('{1}')",$function, $this.Table))
+        if ($this.Table) {
+            $this.Exec([string]::Format("{0}('{1}')", $function, $this.Table))
         }
         else {
             write-warning "table not set"
@@ -362,11 +436,11 @@ class KustoObj {
     }
 
     [KustoObj] ExecFunction([string]$function, [array]$parameters) {
-        if($parameters) {
-            $this.Exec([string]::Format("{0}('{1}')",$function,$parameters -join "','"))
+        if ($parameters) {
+            $this.Exec([string]::Format("{0}('{1}')", $function, $parameters -join "','"))
         }
         else {
-            $this.Exec([string]::Format("{0}()",$function))
+            $this.Exec([string]::Format("{0}()", $function))
         }
         return $this.Pipe()
     }
@@ -409,7 +483,6 @@ class KustoObj {
             return $this.Pipe()
         }
 
-        $this.Query = [regex]::Replace($this.Query, "//.+\n", "") 
         $this.Exec()
         return $this.Pipe()
     }
@@ -589,7 +662,7 @@ class KustoObj {
             return $false
         }
 
-        if($this.authenticationResult) {
+        if ($this.authenticationResult) {
             $expirationMinutes = $this.authenticationResult.ExpiresOn.Subtract((get-date)).TotalMinutes
         }
         write-verbose "token expires in: $expirationMinutes minutes"
@@ -598,7 +671,8 @@ class KustoObj {
             write-verbose "token valid: $($this.authenticationResult.ExpiresOn). use -force to force logon"
             return $true
         }
-        return $this.LogonMsal($resourceUrl, @("$resourceUrl/kusto.read", "$resourceUrl/kusto.write"))
+        #return $this.LogonMsal($resourceUrl, @("$resourceUrl/kusto.read", "$resourceUrl/kusto.write"))
+        return $this.LogonMsal($resourceUrl, @("$resourceUrl/user_impersonation"))
     }
 
     hidden [bool] LogonMsal([string]$resourceUrl, [string[]]$scopes) {
@@ -618,7 +692,7 @@ class KustoObj {
                 $cAppBuilder = $cAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
 
                 if ($global:PSVersionTable.PSEdition -eq "Core") {
-                    $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                    $cAppBuilder = $cAppBuilder.WithLogging($this.MsalLoggingCallback, [Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                 }
 
                 $this.confidentialClientApplication = $cAppBuilder.Build()
@@ -638,10 +712,10 @@ class KustoObj {
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
                 
-                if(!($this.publicClientApplication)) {
+                if (!($this.publicClientApplication)) {
                     if ($global:PSVersionTable.PSEdition -eq "Core") {
                         $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
-                        $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback,[Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
+                        $pAppBuilder = $pAppBuilder.WithLogging($this.MsalLoggingCallback, [Microsoft.Identity.Client.LogLevel]::Verbose, $true, $true )
                     }
                     else {
                         $pAppBuilder = $pAppBuilder.WithRedirectUri($this.redirectUri)
@@ -656,17 +730,28 @@ class KustoObj {
                 try {
                     write-host "preauth acquire token silent for account: $account" -foregroundcolor green
                     $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($defaultScope, $account).ExecuteAsync().Result
+                    if (!$this.authenticationResult) { throw }
                 }
                 catch [Exception] {
                     write-host "preauth acquire error: $_`r`n$($error | out-string)" -foregroundColor yellow
                     $error.clear()
-                    write-host "preauth acquire token interactive" -foregroundcolor yellow
-                    $this.authenticationResult = $this.publicClientApplication.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
+                    try {
+                        write-host "preauth acquire token interactive" -foregroundcolor yellow
+                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenInteractive($defaultScope).ExecuteAsync().Result
+                        if (!$this.authenticationResult) { throw }
+                    }
+                    catch [Exception] {
+                        write-host "preauth acquire token device" -foregroundcolor yellow
+                        $this.authenticationResult = $this.publicClientApplication.AcquireTokenWithDeviceCode($defaultScope, $this.MsalDeviceCodeCallback).ExecuteAsync().Result
+                        if (!$this.authenticationResult) { throw }
+                    }
                 }
 
+                write-host "authentication result: $($this.authenticationResult)"
                 $account = $this.publicClientApplication.GetAccountsAsync().Result[0]
+
                 #add kusto scopes after preauth
-                if($scopes) {
+                if ($scopes) {
                     try {
                         write-host "kusto acquire token silent" -foregroundcolor green
                         $this.authenticationResult = $this.publicClientApplication.AcquireTokenSilent($scopes, $account).ExecuteAsync().Result
@@ -691,7 +776,12 @@ class KustoObj {
         }
     }
 
-    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII){
+    [Threading.Tasks.Task] MsalDeviceCodeCallback([Microsoft.Identity.Client.DeviceCodeResult] $result) {
+        write-host "MSAL Device code result: $($result | convertto-json)"
+        return [threading.tasks.task]::FromResult(0)
+    }
+
+    [void] MsalLoggingCallback([Microsoft.Identity.Client.LogLevel] $level, [string]$message, [bool]$containsPII) {
         write-verbose "MSAL: $level $containsPII $message"
     }
 
@@ -829,9 +919,9 @@ class KustoObj {
         $this.exec('.show functions')
         $this.CreateResultTable()
 
-        foreach($function in $this.ResultTable) {
-            $this.Functions.Add($function.Name,$function.Name)
-            $this.FunctionObjs.Add($function.Name,$function)
+        foreach ($function in $this.ResultTable) {
+            $this.Functions.Add($function.Name, $function.Name)
+            $this.FunctionObjs.Add($function.Name, $function)
         }
         return $this.Pipe()
     }
@@ -841,8 +931,8 @@ class KustoObj {
         $this.exec('.show tables | project TableName')
         $this.CreateResultTable()
 
-        foreach($table in $this.ResultTable) {
-            $this.Tables.Add($table.TableName,$table.TableName)
+        foreach ($table in $this.ResultTable) {
+            $this.Tables.Add($table.TableName, $table.TableName)
         }
         return $this.Pipe()
     }
@@ -868,5 +958,3 @@ else {
     write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
     write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
 }
-
-

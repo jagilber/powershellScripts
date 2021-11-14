@@ -1,4 +1,11 @@
-# checks and installs webpi and sf sdk
+<# 
+.SYNOPSIS
+checks and installs webpi and sf sdk
+.LINK
+iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-install-sdk.ps1 -out $pwd/sf-install-sdk.ps1;
+./sf-install-sdk.ps1 
+#>
+
 
 param(
     [string]$sfsdk = 'C:\Program Files\Microsoft SDKs\Service Fabric\Compatibility\SdkRuntimeCompatibility.json',
