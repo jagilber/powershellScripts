@@ -7,10 +7,78 @@
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/schedule-task.ps1" -outFile "$pwd\schedule-task.ps1";
     .\schedule-task.ps1 -start -scriptFile https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/task.ps1 -overwrite
+
+.EXAMPLE 
+    download script file task.ps1, schedule task at startup and execute task immediately.
+    .\schedule-task.ps1 -start -scriptFile https://raw.githubusercontent.com/{{owner}}/{{repo}}/master/temp/task.ps1
+
+.EXAMPLE 
+    download script file task.ps1, schedule task for weekly execute on sunday at 3am and task immediately.
+    .\schedule-task.ps1 -triggerFrequency weekly -start -scriptFile https://raw.githubusercontent.com/{{owner}}/{{repo}}/master/temp/task.ps1
+
+.EXAMPLE 
+    schedule task for daily execute of inline powerhsell command get-winevent.
+    .\schedule-task.ps1 -triggerFrequency daily -action powershell -actionParameter '-Command {get-winevent -LogName Application | ? LevelDisplayName -notmatch 'information'}'
+
+.PARAMETER scriptFileStoragePath
+    [string] storage location for script file on machine referenced by scheduled task.
+
+.PARAMETER scriptFile
+    [string] optional script file to be used in scheduled task. can be drive letter, unc, or url. 
+    $scriptFile will be downloaded to $scriptFileStoragePath.
+    schedule-task.ps1 script $action and $actionParameter are by default configured to run powershell scripts.
+    $scriptFile if provided will be appended to $actionParameter in format $scriptFileStoragePath\$scriptFile.
+
+.PARAMETER taskName
+    [string] name of scheduled task.
+
+.PARAMETER action
+    [string] action for scheduled task to perform.
+
+.PARAMETER actionParameter
+    [string] action parameter(s) for $action.
+    $scriptFile if provided will be appended to $actionParameter in format $scriptFileStoragePath\$scriptFile.
+
+.PARAMETER triggerTime
+    [datetime]/[string] time to start trigger execution. 
+    see https://docs.microsoft.com/powershell/module/scheduledtasks/new-scheduledtasktrigger
+
+.PARAMETER triggerFrequency
+    [string] scheduled task trigger frequency, one of: 'startup', 'once', 'daily', 'weekly'
+
+.PARAMETER principal
+    [string] scheduled task authentication principal
+
+.PARAMETER principalLogonType
+    [string] principal logon type. 
+    one of: 'none', 'password', 's4u', 'interactive', 'serviceaccount', 'interactiveorpassword', 'group'
+
+.PARAMETER start
+    [switch] start scheduled task
+
+.PARAMETER runLevel
+    [string] scheduled task execution level. 
+    one of: 'highest', 'limited'
+
+.PARAMETER daysOfWeek
+    [string[]] days of week if $triggerFrequency equals 'weekly'.
+    one or more of: 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'
+
+.PARAMETER daysInterval
+    [int] time interval in days between scheduled task if $triggerFrequency equals 'daily'.
+
+.PARAMETER remove
+    [switch] remove existing scheduled task and returns.
+
+.PARAMETER taskSettingsParameters
+    [hashtable] optional additional task settings paramaters to be passed to new-taskschedulesettingsset command.
+    example: .\schedule-task.ps1 -triggerFrequency weekly -taskSettingsParameters @{restartCount=3;runOnlyIfNetworkAvailable=$true}
+    see https://docs.microsoft.com/powershell/module/scheduledtasks/new-scheduledtasksettingsset.
+
 #>
 
 param(
-    [string]$scriptFileStoragePath = 'c:\taskscripts', #$pwd, #$PSScriptRoot,
+    [string]$scriptFileStoragePath = 'c:\task-scripts', #$pwd, #$PSScriptRoot,
     [string]$scriptFile = '',
     [string]$taskName = 'az-vmss-cse-task',
     [string]$action = 'powershell.exe',
@@ -18,10 +86,9 @@ param(
     [string]$triggerTime = '3am',
     [ValidateSet('startup', 'once', 'daily', 'weekly')]
     [string]$triggerFrequency = 'startup',
-    [string]$principal = 'BUILTIN\ADMINISTRATORS', #'SYSTEM',
+    [string]$principal = 'SYSTEM',
     [ValidateSet('none', 'password', 's4u', 'interactive', 'serviceaccount', 'interactiveorpassword', 'group')]
-    [string]$principalLogonType = 'group',
-    [switch]$overwrite,
+    [string]$principalLogonType = 'serviceaccount',
     [switch]$start,
     [ValidateSet('highest', 'limited')]
     [string]$runLevel = 'limited',
@@ -49,7 +116,7 @@ write-output (whoami /groups)
 
 $global:currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
-if ($global:currentTask -and ($overwrite -or $remove)) {
+if ($global:currentTask) {
     write-output "deleting current task $taskname"
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
@@ -136,7 +203,7 @@ write-output "`$result = Register-ScheduledTask -TaskName $taskName `
     -Trigger $taskTrigger `
     -Settings $settings `
     -Principal $taskPrincipal `
-    -Force:$overwrite
+    -Force
 "
 
 $result = Register-ScheduledTask -TaskName $taskName `
@@ -144,7 +211,7 @@ $result = Register-ScheduledTask -TaskName $taskName `
     -Trigger $taskTrigger `
     -Settings $settings `
     -Principal $taskPrincipal `
-    -Force:$overwrite
+    -Force
 
 write-output ($result | convertto-json)
 write-output ($MyInvocation | convertto-json)
@@ -175,4 +242,5 @@ Stop-Transcript
 if(!$success) {
     throw [exception]::new("task not created $taskName")
 }
+
 return $error.Count

@@ -12,12 +12,12 @@ param (
     [string]$resourceGroupName = "",
     [int]$sleepSeconds = 10, 
     [int]$maxSleepCount = 360,
-    [string]$vmssName = "nt0",
+    [string]$vmssName = "", #"nt0",
     [string]$appGatewayName = "$($resourceGroupName)-ag",
     [string]$agAddressPrefix = "10.0.1.0/24",
     [string]$agSku = "Standard_Small",
     [string]$location = "",
-    [string]$vnetName = "VNet",
+    [string]$vnetName = "", #"VNet",
     [string]$agSubnetName = "Subnet-AG",
     #[string[]]$backendIpAddresses = @(), 
     [string]$agGatewayIpConfigName = "$($resourceGroupName)ApplicationGatewayIPConfig",
@@ -49,7 +49,7 @@ function main() {
         return
     }
 
-    if (!(Get-AzContext)) {
+    if (!(Get-AzResourceGroup | out-null)) {
         if (!(Connect-AzAccount)) { return }
     }
 
@@ -91,6 +91,12 @@ function check-subnet($vnet, $subnetName = $agSubnetName) {
     # ag needs separate subnet that is empty or only other ags
     write-host "Get-azVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet" -ForegroundColor Cyan
     $config = Get-azVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet
+    if(!$config){
+        $configs = @(Get-azVirtualNetworkSubnetConfig -VirtualNetwork $vnet)
+        if($configs.Count -eq 1){
+            $config = $configs[0]
+        }
+    }
 
     if (!$config.Id) {
         Write-Warning "unable to get subnet $subnetName $error"
@@ -102,7 +108,17 @@ function check-subnet($vnet, $subnetName = $agSubnetName) {
     return $config
 }
 function check-vmss() {
-    $vmss = Get-azVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $vmssScaleSetName
+    $vmss
+    if($vmssScaleSetName){
+        $vmss = Get-azVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $vmssScaleSetName
+    }
+    else {
+        $vmsss = @(Get-azVmss -ResourceGroupName $resourceGroupName)
+        if($vmsss.Count -eq 1){
+            $vmss = $vmsss[0]
+        }
+    }
+
     if (!$vmss) {
         write-warning "unable to enumerate existing vm scaleset $vmssScaleSetName"
         return $null
@@ -121,7 +137,16 @@ function check-vmss() {
 }
 
 function check-vnet ($name = $vnetName) {
-    $vnet = Get-azvirtualNetwork -Name $name -ResourceGroupName $resourceGroupName
+    if($name){
+        $vnet = Get-azvirtualNetwork -Name $name -ResourceGroupName $resourceGroupName
+    }
+    else {
+        $vnets = @(Get-azvirtualNetwork -ResourceGroupName $resourceGroupName)
+        if($vnets.Count -eq 1){
+            $vnet = $vnets[0]
+        }
+    }
+
     if (!$vnet) {
         write-warning "unable to enumerate existing vnet $vnet"
         return $null

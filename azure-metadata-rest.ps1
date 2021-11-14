@@ -105,8 +105,8 @@
 
 
     # acquire system managed identity oauth token from within node
-    (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
-    PS C:\Users\cloudadmin> (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
+    (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2021-02-01&resource=https://management.azure.com' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
+    PS C:\Users\cloudadmin> (iwr -Method GET -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2021-02-01&resource=https://management.azure.com' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
     {
         "access_token":  "eyJ0eXAiOiJKV...",
         "client_id":  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -119,9 +119,9 @@
     }
 
     # example instance rest query from within node
-    (iwr -Method GET -Uri 'http://169.254.169.254/metadata/instance?api-version=2018-02-01' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
+    (iwr -Method GET -Uri 'http://169.254.169.254/metadata/instance?api-version=2021-02-01' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
 
-    PS C:\Users\cloudadmin> (iwr -Method GET -Uri 'http://169.254.169.254/metadata/instance?api-version=2018-02-01' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
+    PS C:\Users\cloudadmin> (iwr -Method GET -Uri 'http://169.254.169.254/metadata/instance?api-version=2021-02-01' -Headers @{'Metadata'='true'}).content|convertfrom-json|convertto-json
     {
         "compute":  {
                         "location":  "eastus",
@@ -152,7 +152,8 @@
 param(
     $iterations = 1,
     $logFile = "$pwd\azure-metadata-rest.log",
-    $sleepMilliseconds = 1000
+    $sleepMilliseconds = 1000,
+    $apiVersion = "2021-02-01"
 )
 
 $error.Clear()
@@ -164,18 +165,18 @@ while($count -le $iterations) {
     # acquire system managed identity oauth token from within node
     $global:managementOauthResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
-        -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com' `
+        -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com" `
         -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
 
     $global:vaultOauthResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
-        -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net' `
+        -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net" `
         -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
 
     # example instance rest query from within node
     $global:instanceResult = (Invoke-WebRequest -Method GET `
         -UseBasicParsing `
-        -Uri 'http://169.254.169.254/metadata/instance?api-version=2018-02-01' `
+        -Uri "http://169.254.169.254/metadata/instance?api-version=$apiVersion" `
         -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
 
     if($error) {
@@ -188,7 +189,7 @@ while($count -le $iterations) {
 
     write-host $global:vaultOauthResult
     write-host $global:managementOauthResult
-    write-host $global:instanceResult
+    write-host ($global:instanceResult | convertto-json -Depth 99)
     start-sleep -Milliseconds $sleepMilliseconds
     $count++
 }

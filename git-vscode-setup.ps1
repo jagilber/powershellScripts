@@ -1,6 +1,11 @@
-<# script to setup git, hub, and vscode with common settings and extensions
-to download and execute script:
-iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1 -outfile $pwd\git-vscode-setup.ps1;. $pwd\git-vscode-setup.ps1
+<# 
+    script to setup git, hub, and vscode with common settings and extensions
+    to download and execute script:
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1 -outfile $pwd\git-vscode-setup.ps1;. $pwd\git-vscode-setup.ps1
+
+    or to just install vscode:
+    iwr https://vscode-update.azurewebsites.net/latest/win32-x64-user/stable -outFile .\VSCodeUserSetup-x64.exe
 #>
 
 param(

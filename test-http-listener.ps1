@@ -36,13 +36,18 @@ function main() {
         }
         else {
             # start as job so server can exit gracefully after 2 minutes of cancellation
-            if ($host.Name -ine "ServerRemoteHost") {
+            write-host "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
+            write-host "main:server:myinvocation: $($myinvocation |convertto-json -depth 2) asjob:$asjob"
+            if ($host.Name -ieq "ServerRemoteHost") {
             #if ($false) {
                 # called on foreground thread only
-                start-server -asjob $asJob
+                $asjob = $false
+                write-host "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
+                start-server -asjob $asjob
             }
             else {
-                start-server -asJob $true
+                write-host "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
+                start-server -asJob $asjob
             }
         }
 
@@ -121,15 +126,23 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
 }
 
 function start-server([bool]$asjob, [int]$serverPort = $port) {
-
+    write-host "enter:start-server:asjob:$asJob port:$serverPort"
     if($asjob) {
-        start-job -ScriptBlock { param($script, $params); . $script @params } -ArgumentList $MyInvocation.ScriptName, $scriptParams
+        start-job -ScriptBlock { 
+            param($script, $params)
+            write-host "enter:start-server backgroundjob:pid:$pid script:$script params:$params"
+            . $script @params 
+        } -ArgumentList $MyInvocation.ScriptName, $scriptParams
 
         while (get-job) {
             foreach ($job in get-job) {
                 $jobInfo = Receive-Job -Job $job | convertto-json -Depth 5
-                if ($jobInfo) { write-host $jobInfo }
-                if ($job.State -ine "running") {
+                if ($jobInfo) { 
+                    write-host $job.State
+                    write-verbose $jobInfo 
+                }
+                #if ($job.State -ine "running") {
+                if ($job.State -imatch "complete" -or $job.State -imatch "fail") {
                     Remove-Job -Job $job -Force
                 }
             }
@@ -138,6 +151,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
     }
 
+    write-host "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
     $http.Prefixes.Add("http://$(hostname):$serverPort/")

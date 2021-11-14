@@ -10,6 +10,7 @@ creates $nuget ps object with functions an properties to manage nuget packages
 # -allversions is broken in nuget.exe
 
 .EXAMPLE
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/scripts/nuget-functions.ps1" -outFile "$pwd/nuget-functions.ps1";
 .\nuget-functions.ps1;
 $nuget
@@ -25,8 +26,9 @@ class NugetObj {
     [string]$packageName = $null
     [string]$packageSource = $null
     [string]$globalPackages = "$($env:USERPROFILE)\.nuget\packages"
+    [string]$nugetFallbackFolder = "$($env:userprofile)\.dotnet\NuGetFallbackFolder"
     [bool]$allVersions = $false
-    [string]$verbose = "detailed" #"normal" # detailed, quiet
+    [string]$verbose = "normal" #"normal" # detailed, quiet
     [string]$nuget = "nuget.exe"
 
     NugetObj() {
@@ -35,7 +37,7 @@ class NugetObj {
         if (!(test-path $this.nuget)) {
             write-host "nuget does not exist"
             $this.nuget = "$env:temp\nuget.exe"
-            if(!(($env:path -split ';') -contains $env:temp)) {
+            if (!(($env:path -split ';') -contains $env:temp)) {
                 $env:path += ";$($env:temp)"
                 write-host "adding temp path"
             }
@@ -47,7 +49,7 @@ class NugetObj {
         }
         else {
             $this.nuget = "$pwd\nuget.exe"
-            if(!($env:path -split ';') -contains $pwd) {
+            if (!($env:path -split ';') -contains $pwd) {
                 $env:path += ";$($pwd)"
                 write-host "adding $pwd path"
             }
@@ -56,14 +58,14 @@ class NugetObj {
         $this.EnumLocals()
     }
 
-    [string[]] AddSource([string]$nugetSourceName,[string]$nugetSource,[string]$username,[string]$password) {
+    [string[]] AddSource([string]$nugetSourceName, [string]$nugetSource, [string]$username, [string]$password) {
         [void]$this.EnumSources()
         write-host "nuget sources add -name $nugetSourceName -source $nugetSource -username $userName -password $password"
         write-host (nuget sources add -name $nugetSourceName -source $nugetSource -username $userName -password $password)
         return $this.EnumSources()
     }
 
-    [string[]] AddSource([string]$nugetSourceName,[string]$nugetSource) {
+    [string[]] AddSource([string]$nugetSourceName, [string]$nugetSource) {
         [void]$this.EnumSources()
         write-host "nuget sources add -name $nugetSourceName -source $nugetSource"
         write-host (nuget sources add -name $nugetSourceName -source $nugetSource)
@@ -86,12 +88,31 @@ class NugetObj {
         write-host "nuget locals all -List"
         $this.locals = @{}
 
-        foreach($source in (nuget locals all -List)) {
+        foreach ($source in (nuget locals all -List)) {
             [string[]]$sourceProperties = $source -split ": "
-            $this.locals.Add($sourceProperties[0],$sourceProperties[1])
+            $this.locals.Add($sourceProperties[0], $sourceProperties[1])
+        }
+
+        if ((test-path $this.nugetFallbackFolder)) {
+            $this.locals.Add("nugetFallbackFolder", $this.nugetFallbackFolder)
         }
         write-host "$($this.locals | out-string)"
         return $this.locals
+    }
+
+    [hashtable] EnumLocalPackages ([string]$packageName) {
+        [hashtable]$results = @{}
+        foreach ($localSource in $this.locals.GetEnumerator()) {
+            foreach ($result in $this.EnumPackages($packageName, $localSource.Key, $null).GetEnumerator()) {
+                if (!$results.ContainsKey($result.Key)) {
+                    $results.Add($result.Key, $result.Value)
+                }
+                else {
+                    write-warning "$($result.key) already added"
+                }
+            }
+        }
+        return $results
     }
 
     [hashtable] EnumPackagesTag ([string]$packageName) {
@@ -103,69 +124,117 @@ class NugetObj {
     }
 
     [hashtable] EnumPackages ([string]$packageName) {
-        return $this.EnumPackages($packageName, $null, "packageid:")
+        return $this.EnumPackages($packageName, $null, "")
     }
 
-    [hashtable] EnumPackages ([string]$packageName,[string]$packageSource) {
-        return $this.EnumPackages($packageName, $packageSource, "packageid:")
+    [hashtable] EnumPackages ([string]$packageName, [string]$packageSource) {
+        return $this.EnumPackages($packageName, $packageSource, "")
     }
 
-    [hashtable] EnumPackages ([string]$packageName,[string]$packageSource,[string]$searchFilter) {
+    [hashtable] EnumPackages ([string]$packageName, [string]$packageSource, [string]$searchFilter) {
         $this.packagesource = $packageSource
-        #if(!$searchFilter) { $searchFilter = "packageid:" }
+        $this.packages = @{}
+        $sourcePackages = $null
+        [string]$all = ""
+        [string]$sourcePackage = ""
+        [string]$packageId = "packageid:"
 
-        if($this.locals.Contains($packageSource)) {
+        if ($searchFilter) {
+            $packageId = ""
+        }
+
+        if ($this.locals.Contains($packageSource)) {
             write-host "converting local package source $packageSource to $($this.locals[$packageSource])" -ForegroundColor cyan
             $this.packageSource = $this.locals[$packageSource].trimend('\')
         }
-        elseif($this.sources.Contains($packageSource)) {
+        elseif ($this.sources.Contains($packageSource)) {
             write-host "converting source package source $packageSource to $($this.sources[$packageSource].sourcePath)" -ForegroundColor cyan
             $this.packageSource = $this.sources[$packageSource].sourcePath.trimend('\')
         }
 
-        $this.packages = @{}
-        $sourcePackages = $null
-        [string]$all = ""
-
-        if($this.allVersions)
-        {
+        if ($this.allVersions) {
             $all = " -allVersions"
         }
 
-        if($this.packageSource) { 
-            write-host "nuget list $searchFilter$packageName -verbosity $($this.verbose)$all -prerelease -Source $($this.packageSource)"
-            $sourcePackages = nuget list "$searchFilter$packageName" -verbosity $($this.verbose)$($all) -prerelease -Source $($this.packageSource)
-        }
-        else {
-            write-host "nuget list $searchFilter$packageName -verbosity $($this.verbose)$all -prerelease"
-            $sourcePackages = nuget list "$searchFilter$packageName" -verbosity $($this.verbose)$($all) -prerelease 
+        if ($this.packageSource) {
+            $sourcePackage = " -Source $($this.packageSource)"
         }
 
-        foreach($package in $sourcePackages) {
+        write-host "nuget list $($packageId)$packageName$($searchFilter) -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+        $sourcePackages = nuget list "$($packageId)$($packageName)$($searchFilter)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+
+        if ($sourcePackages.Length -lt 1 -or ($sourcePackages.Contains('No Packages found.') -and $searchFilter)) {
+            write-warning "no packages found, trying with searchfilter first $searchFilter"
+            write-host "nuget list $($searchFilter)$packageName -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($searchFilter)$($packageName)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or ($sourcePackages.Contains('No Packages found.') -and $searchFilter)) {
+            write-warning "no packages found, trying without searchfilter $searchFilter"
+            write-host "nuget list $packageName -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($packageName)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or $sourcePackages.Contains('No Packages found.')) {
+            $searchFilter = '*'
+            write-warning "no packages found, trying with filter $searchFilter"
+            write-host "nuget list $packageName$searchFilter -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($packageName)$($searchFilter)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or $sourcePackages.Contains('No Packages found.')) {
+            $searchFilter = '*'
+            write-warning "no packages found, trying with filter $searchFilter"
+            write-host "nuget list $searchFilter$packageName -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease"
+            $sourcePackages = nuget list "$($searchFilter)$($packageName)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        if ($sourcePackages.Length -lt 1 -or $sourcePackages.Contains('No Packages found.')) {
+            $searchFilter = '*'
+            write-warning "no packages found, trying with filter $searchFilter"
+            write-host "nuget list $searchFilter$packageName$searchFilter -verbosity $($this.verbose)$all -prerelease$sourcePackage"
+            $sourcePackages = nuget list "$($searchFilter)$($packageName)$($searchFilter)" -verbosity $($this.verbose)$($all)$($sourcePackage) -prerelease
+        }
+
+        foreach ($package in $sourcePackages) {
             write-host "checking package: $package"
-            if($package -ilike 'No Packages found.' -and $searchFilter) {
-                write-warning "$package, trying without searchfilter $searchFilter"
-                return $this.EnumPackages($packageName, $packageSource, $null)
-            } 
-            elseif ($package -ilike 'No Packages found.') {
+            if ($package -ilike 'No Packages found.') {
                 write-error $package
                 return $this.packages
             }
 
             [string[]]$packageProperties = $package -split " "
-            try {
-                $this.packages.Add($packageProperties[0], $packageProperties[1])
-                write-host "$($packageProperties[0]) $($packageProperties[1])"
+            [string]$resultName = $null
+            [string]$resultVersion = $null
 
-                if($this.allVersions) {
-                    $matches = [regex]::Matches((iwr "https://www.nuget.org/packages/$($packageProperties[0])/").Content, "/packages/$($packageProperties[0])/([\d\.-]*?)`"")
-                    foreach($match in $matches) {
+            try {
+                $resultName = $packageProperties[0]
+                $resultVersion = $packageProperties[1]
+
+                if ($resultName -inotmatch $packageName) {
+                    write-host "$resultName does not match packagename:$packageName, skipping."
+                    continue
+                }
+
+                if ($searchFilter -and $searchFilter -ne '*') {
+                    if ($resultName -inotmatch $searchFilter) {
+                        write-host "$resultName does not match searchfilter:$searchFilter, skipping."
+                        continue
+                    }
+                }
+
+                $this.packages.Add($resultName, $resultVersion)
+                write-host "$resultName $resultVersion"
+
+                if ($this.allVersions) {
+                    $matches = [regex]::Matches((Invoke-WebRequest "https://www.nuget.org/packages/$resultName/").Content, "/packages/$resultName/([\d\.-]*?)`"")
+                    foreach ($match in $matches) {
                         write-host "`t$($match.Groups[1].Value)"
                     }
                 }
             }
             catch {
-                write-host "$($packageProperties[0]) $($packageProperties[1]) already added"
+                write-host "$resultName $resultVersion already added"
             }
         }
         return $this.packages
@@ -177,13 +246,13 @@ class NugetObj {
         $results = (nuget sources List)
         $source = @{}
 
-        foreach($result in $results) {
+        foreach ($result in $results) {
             $result = $result.trim()
-            if(!$result) { continue }
+            if (!$result) { continue }
             $pattern = "(?<sourceNumber>\d+?)\.\s+?(?<sourceName>[^\s].+?)\s+?\[(?<sourceEnabled>.+?)\]"
             $match = [regex]::match($result, $pattern)
 
-            if($match.success) {
+            if ($match.success) {
                 $source = @{}
                 $source.sourceNumber = ($match.groups['sourceNumber'].value)
                 $source.sourceName = ($match.groups['sourceName'].value)
@@ -204,13 +273,17 @@ class NugetObj {
         }
 
         #write-host "$($this.sources | out-string)"
-        write-host ($this.sources.values | select sourceNumber, sourceName, sourcePath, sourceEnabled| sort sourceNumber | out-string)
+        write-host ($this.sources.values | Select-Object sourceNumber, sourceName, sourcePath, sourceEnabled | Sort-Object sourceNumber | out-string)
         return $this.sources
     }
 
     [string[]] GetDirectories([string]$sourcePath, [string]$sourcePattern) {
         write-host "getdirectories: $sourcePath $sourcePattern"
-         return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern + "*", [io.searchOption]::TopDirectoryOnly))
+        return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern + "*", [io.searchOption]::TopDirectoryOnly))
+    }
+
+    [string[]] InstallPackage([string]$packageName) {
+        return $this.InstallPackage($packageName, 'nuget.org', $null, $null)
     }
 
     [string[]] InstallPackage([string]$packageName) {
@@ -225,14 +298,14 @@ class NugetObj {
         $pre = $null
         $source = $null
         $outputDirectory = $null
-        if($packagesDirectory) { $outputDirectory = " -directdownload -outputdirectory $packagesDirectory"}
-        if($prerelease) { $pre = " -prerelease"}
-        if($packageSource) {$source = " -source $packageSource" }
+        if ($packagesDirectory) { $outputDirectory = " -directdownload -outputdirectory $packagesDirectory" }
+        if ($prerelease) { $pre = " -prerelease" }
+        if ($packageSource) { $source = " -source $packageSource" }
 
         write-host "nuget install $packageName$source$outputDirectory -nocache -verbosity $($this.verbose)$pre" -ForegroundColor magenta
         $this.ExecuteNuget("install $packageName$source$outputDirectory -nocache -verbosity $($this.verbose)$pre")
 
-        if($packagesDirectory) {
+        if ($packagesDirectory) {
             write-host "install finished. checking $packagesDirectory" -ForegroundColor darkmagenta    
             return $this.GetDirectories($packagesDirectory, $packageName)
         }
@@ -250,29 +323,29 @@ class NugetObj {
         $error.clear()
         write-host "executing:nuget.exe $arguments" -ForegroundColor Green
         start-process -filepath nuget -argumentlist $arguments -wait -nonewwindow
-        if($error) {
+        if ($error) {
             write-warning ($error | out-string)
             $error.clear()
         }
     }
 
     [bool] RemoveLocalPackage([string]$packageName, [string]$packageVersion = $null, [string]$packageSource = $null) {
-        if(!$packageSource) { $this.packageSource = $this.globalPackages }
+        if (!$packageSource) { $this.packageSource = $this.globalPackages }
         $folders = @()
         $versionFolders = @()
 
-        if($this.locals.contains($packageSource)) {
+        if ($this.locals.contains($packageSource)) {
             $folders = $this.GetDirectories($this.locals[$packageSource], $packageName)
 
-            if($packageVersion) {
-                foreach($folder in $folders) {
+            if ($packageVersion) {
+                foreach ($folder in $folders) {
                     $versionFolders += $this.GetDirectories($folder, $packageVersion)
                 }
 
                 $folders = $versionFolders
             }
 
-            foreach($folder in $folders) {
+            foreach ($folder in $folders) {
                 write-warning "deleting folder $folder"
                 #[io.directory]::Delete($folder, $true)
             }
@@ -285,7 +358,7 @@ class NugetObj {
     }
 
     [bool] RemoveLocalPackagesCache([string]$packageSource) {
-        if($this.locals.contains($packageSource)) {
+        if ($this.locals.contains($packageSource)) {
             write-host "nuget locals $packageSource -clear -verbosity $($this.verbose)"
             write-host (nuget locals $packageSource -clear -verbosity ($this.verbose))
             return $true
@@ -303,13 +376,13 @@ class NugetObj {
     }
 
     [void] Restore() {
-        $this.Restore($null,$null)
+        $this.Restore($null, $null)
     }
 
-    [void] Restore([string]$configurationFile,[string]$packagesDirectory) {
+    [void] Restore([string]$configurationFile, [string]$packagesDirectory) {
         [string]$outputDirectory = $null
-        if(!$packagesDirectory) { $outputDirectory = "-packagesDirectory $($this.globalPackages)" }
-        if($configurationFile) {
+        if (!$packagesDirectory) { $outputDirectory = "-packagesDirectory $($this.globalPackages)" }
+        if ($configurationFile) {
             write-host (nuget restore $configurationFile -verbosity ($this.verbose)$outputDirectory)
         }
         else {
@@ -320,7 +393,7 @@ class NugetObj {
 
 #if(!$global:nuget)
 #{
-    $global:nuget = [NugetObj]::new()
+$global:nuget = [NugetObj]::new()
 #}
 $nuget | Get-Member
 write-host "use `$nuget object to set properties and run methods. example: `$nuget.Sources" -ForegroundColor Green

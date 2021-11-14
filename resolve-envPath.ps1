@@ -1,5 +1,10 @@
 <#
+.SYNOPSIS
     resolves path to directory or file on local system using current and path variables
+.LINK
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/resolve-envPath.ps1" -outFile "$pwd\resolve-envPath.ps1";
+    .\resolve-envPath.ps1 -item nuget
+
 #>
 
 param(

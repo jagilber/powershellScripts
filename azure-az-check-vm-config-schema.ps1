@@ -1,3 +1,10 @@
+<#
+    script to enumerate os versions from azure
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-check-vm-config-schema.ps1" -out "$pwd\azure-az-check-vm-config-schema.ps1";
+    .\azure-az-check-vm-config-schema.ps1
+    .\azure-az-check-vm-config-schema.ps1 -location eastus -showDetail > c:\temp\output.json
+#>
+
 param(
     [string]$location = "eastus",
     [string]$vmSize = "Basic_A1",
