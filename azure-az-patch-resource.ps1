@@ -89,6 +89,11 @@ function main () {
         Connect-AzAccount
     }
 
+    if (!(Get-AzContext)) {
+        write-host "connecting to azure"
+        Connect-AzAccount
+    }
+
     $global:startTime = get-date
 
     if (!$resourceGroupName -or !$templateJsonFile) {
