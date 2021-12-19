@@ -3,6 +3,7 @@
     update standalone cluster manifest
 
 .LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-standalone-update-manifest.ps1" -outFile "$pwd\sf-standalone-update-manifest.ps1";
     .\sf-standalone-update-manifest.ps1 -newManifest "$pwd\ClusterManifest.new.xml"
 #>
