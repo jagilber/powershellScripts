@@ -1,6 +1,11 @@
 <#
 download windbg appx package
 # https://serverfault.com/questions/1018220/how-do-i-install-an-app-from-windows-store-using-powershell
+
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/windbg/download-appx-package.ps1" -outFile "$pwd\download-appx-package.ps1";
+    .\download-appx-package.ps1
+
 #>
 
 param(
