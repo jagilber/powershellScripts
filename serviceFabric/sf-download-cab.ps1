@@ -2,6 +2,7 @@
 .SYNOPSIS
 script to download all sf package versions to extract .man file into separate directory for parsing sf .etl files
 .LINK
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-download-cab.ps1 -out $pwd/sf-download-cab.ps1;
 ./sf-download-cab.ps1 
 #>
@@ -10,8 +11,9 @@ param(
     [string]$sfversion,
     [switch]$all,
     [string]$sfPackageUrl = "https://go.microsoft.com/fwlink/?LinkID=824848&clcid=0x409",
+    [string]$programDir = "c:\Program Files\Microsoft Service Fabric",
     [switch]$force,
-    [bool]$removeCab = $true,
+    [bool]$removeCab = $false,
     [string]$outputFolder = $pwd,
     [bool]$extract = $true,
     [bool]$install = $false
@@ -55,6 +57,9 @@ foreach ($package in $packages) {
 }
 
 if($install){
-    $sfBinDir = "$outputFolder\$($package.Version)\bin\Fabric\Fabric.Code"
+    $sfBinDir = "$programDir\bin\Fabric\Fabric.Code"
+    write-host "Copy-Item `"$outputFolder\$($package.Version)`" $programDir -Recurse -Force"
+    Copy-Item "$outputFolder\$($package.Version)" $programDir -Recurse -Force
+    write-host "start-process -Wait -FilePath `"$sfBinDir\FabricSetup.exe`" -ArgumentList `"/operation:install`" -WorkingDirectory $sfBinDir -NoNewWindow"
     start-process -Wait -FilePath "$sfBinDir\FabricSetup.exe" -ArgumentList "/operation:install" -WorkingDirectory $sfBinDir -NoNewWindow
 }
