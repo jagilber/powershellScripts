@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     powershell script to connect to existing managed service fabric cluster with connect-servicefabriccluster cmdlet
-
+{{cluster id}}.sfmc.azclient.ms
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-connect.ps1" -outFile "$pwd/sf-managed-connect.ps1";
@@ -15,9 +15,8 @@ using namespace System.Security.Cryptography.X509Certificates;
 [cmdletbinding()]
 param(
     $clusterendpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
-    #[Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true)]
     $thumbprint,
-    $commonname,
     [Parameter(Mandatory = $true)]
     $resourceGroup,
     $clustername = $resourceGroup,
@@ -27,13 +26,6 @@ param(
     $clusterExplorerPort = 19080,
     $subscriptionId
 )
-
-# proxy test
-#$proxyString = "http://127.0.0.1:5555"
-#$proxyUri = new-object System.Uri($proxyString)
-#[Net.WebRequest]::DefaultWebProxy = new-object System.Net.WebProxy ($proxyUri, $true)
-#$proxy = [System.Net.CredentialCache]::DefaultCredentials
-#[System.Net.WebRequest]::DefaultWebProxy.Credentials = $proxy
 
 #Add-azAccount
 $PSModuleAutoLoadingPreference = 2
@@ -54,17 +46,7 @@ function main() {
 
     $findValue = $thumbprint
     $findType = 'FindByThumbprint'
-
-    if($commonname) {
-        $findValue = $commonname
-        $findType = 'FindBySubjectName'
-    }
-
-    if(!$findValue) {
-        write-error "thumbprint or commonname must be provided"
-        return
-    }
-
+    
     $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
     write-host "current public ip:$publicIp" -ForegroundColor Green
 
