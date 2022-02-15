@@ -286,10 +286,6 @@ class NugetObj {
         return $this.InstallPackage($packageName, 'nuget.org', $null, $null)
     }
 
-    [string[]] InstallPackage([string]$packageName) {
-        return $this.InstallPackage($packageName, 'nuget.org', $null, $null)
-    }
-
     [string[]] InstallPackage([string]$packageName, [string]$packageSource = $null) {
         return $this.InstallPackage($packageName, $packageSource, $null, $null)
     }
