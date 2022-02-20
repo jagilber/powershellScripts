@@ -5,7 +5,7 @@
     enable system / user managed identity on scaleset:
         Update-AzVmss -ResourceGroupName sfcluster -Name nt0 -IdentityType "SystemAssigned"
 
-    add vmss managed identity to keyvault to read secrets with RBAC
+    add vmss managed identity to keyvault with read secrets permission
     
     convert certificate to base64 string and add as new secret value
         $base64String = [convert]::ToBase64String([io.file]::ReadAllBytes($certFile))
