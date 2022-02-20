@@ -3,11 +3,14 @@
     example script to import certificate from keyvault using azure managed identity from a configured vm scaleset node
 
     enable system / user managed identity on scaleset:
-    PS C:\> Update-AzVmss -ResourceGroupName sfcluster -Name nt0 -IdentityType "SystemAssigned"
+        Update-AzVmss -ResourceGroupName sfcluster -Name nt0 -IdentityType "SystemAssigned"
 
     add vmss managed identity to keyvault to read secrets with RBAC
+    
+    convert certificate to base64 string and add as new secret value
+        $base64String = [convert]::ToBase64String([io.file]::ReadAllBytes($certFile))
 
-    use custom script extension (cse) or similar to deploy to vmss with ARM template
+    use custom script extension (cse) or similar to deploy a script to vmss with ARM template
 
 .LINK
     to download and test from vmss node with managed identity enabled:
@@ -15,12 +18,32 @@
     invoke-webrequest https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-secret.ps1 -outfile $pwd/azure-metadata-import-secret.ps1;
 
 .EXAMPLE
-    .\azure-metadata-import-secret.ps1 -secretUrl 'https://digicertinter.vault.azure.net/secrets/interCA/500187f7814d30b298d4823c1656cd06' -base64
+    .\azure-metadata-import-secret.ps1 -secretUrl 'https://<keyvaultName>.vault.azure.net/secrets/<secretName>/<secretVersion>' -base64
+
+MIT License
+Copyright (c) Microsoft Corporation. All rights reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE
+
 #>
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$secretUrl = '', #'https://digicertinter.vault.azure.net/secrets/interCA/500187f7814d30b298d4823c1656cd06',
+    [string]$secretUrl = '',
     [string]$certStoreLocation = 'cert:\LocalMachine\CA', #'cert:\LocalMachine\Root', #'cert:\LocalMachine\My',
     [switch]$base64,
     [switch]$pfx
