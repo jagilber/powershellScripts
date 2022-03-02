@@ -90,7 +90,14 @@ class NugetObj {
 
         foreach ($source in (nuget locals all -List)) {
             [string[]]$sourceProperties = $source -split ": "
-            $this.locals.Add($sourceProperties[0], $sourceProperties[1])
+            $packageDirectoryName = $sourceProperties[0]
+            $packageDirectory = $sourceProperties[1]
+
+            if(!(test-path $packageDirectory)) {
+                mkdir $packageDirectory
+            }
+
+            $this.locals.Add($packageDirectoryName, $packageDirectory)
         }
 
         if ((test-path $this.nugetFallbackFolder)) {
