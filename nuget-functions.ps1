@@ -36,9 +36,14 @@ class NugetObj {
         $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
         if (!(test-path $this.nuget)) {
             write-host "nuget does not exist"
-            $this.nuget = "$env:temp\nuget.exe"
-            if (!(($env:path -split ';') -contains $env:temp)) {
-                $env:path += ";$($env:temp)"
+            $tmpdir = $env:temp
+            if(!($tmpdir)) {
+                $tmpdir = $pwd
+            }
+
+            $this.nuget = "$tmpdir\nuget.exe"
+            if (!(($env:path -split ';') -contains $tmpdir)) {
+                $env:path += ";$tmpdir"
                 write-host "adding temp path"
             }
 
