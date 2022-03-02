@@ -1,3 +1,5 @@
+<#
+.SYNOPSIS
 # script to add reboot resource to service fabric template using cluster upgrade
 # https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-diagnostics-eventstore
 # Set-AzServiceFabricSetting -ResourceGroupName 'Group1' -Name 'Contoso01SFCluster'  -Section 'upgradeDescription' -Parameter 'forceRestart' -Value true
@@ -10,6 +12,13 @@
 
 # ps command with static configuration change can be used but if change is not permanent, reverting change will cause 2nd udwalk
 # Set-AzServiceFabricSetting -ResourceGroupName sfjagilber1nt3 -Name sfjagilber1nt3  -Section FabricHost -Parameter FailureReportingTimeout -Value 61
+
+.LINK
+To download and execute:
+    [net.servicePointManager]::Expect100Continue = $true;
+    [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/desktop-heap.ps1" -outFile "$pwd\desktop-heap.ps1";.\desktop-heap.ps1
+#>
 
 param(
   [Parameter(Mandatory = $true)]
