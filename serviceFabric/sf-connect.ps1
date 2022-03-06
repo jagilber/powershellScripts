@@ -16,6 +16,7 @@ using namespace System.Security.Cryptography.X509Certificates;
 param(
     $clusterendpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
     $thumbprint,
+    $subjectName,
     $resourceGroup,
     $clustername = $resourceGroup,
     [ValidateSet('LocalMachine', 'CurrentUser')]
@@ -94,7 +95,7 @@ function main() {
 
     if ($result.tcpTestSucceeded) {
         write-host "able to connect to $($clusterFqdn):$($clusterExplorerPort)" -ForegroundColor Green
-        get-certValidationHttp -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
+    #    get-certValidationHttp -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
     }
     else {
         write-error "unable to connect to $($clusterFqdn):$($clusterExplorerPort)"
@@ -151,28 +152,39 @@ function get-certValidationHttp([string] $url) {
 }
 
 function get-certValidationTcp([string] $url, [int]  $port) {
-    write-host "get-certValidationTcp:$($url) $($certFile)" -ForegroundColor Green
+    #$ipAddress = [dns]::resolve($url).AddressList[0]
+    write-host "get-certValidationTcp:$ipAddress $url $certFile" -ForegroundColor Green
     $error.Clear()
     $tcpClient = [Net.Sockets.TcpClient]::new($url, $port)
-    # $sslStream = [sslstream]::new($tcpClient.GetStream(),`
-    #     $true,`
-    #     [net.servicePointManager]::ServerCertificateValidationCallback,`
-    #     $null)
-$sslStream = [sslstream]::new($tcpClient.GetStream(),$false)
+    #  $sslStream = [sslstream]::new($tcpClient.GetStream(),`
+    #      $false,`
+    #      [net.servicePointManager]::ServerCertificateValidationCallback,`
+    #      $null)
+    #  $sslStream = [sslstream]::new($tcpClient.GetStream(),`
+    #      $false,`
+    #      [System.Net.Security.RemoteCertificateValidationCallback]($global:securityCallback.ValidationCallback),`
+    #      [System.Net.Security.LocalCertificateSelectionCallback]($global:securityCallback.LocalCallback))
+    $sslStream = [sslstream]::new($tcpClient.GetStream(), $false)
+    #$sslStream = [sslstream]::new($tcpClient.GetStream(),$false, [net.servicePointManager]::ServerCertificateValidationCallback)
     # $webRequest.ServerCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
     # $webRequest.Timeout = 1000 #ms
-
+    #$sslStream.AuthenticateAsClient($url)
+    #$sslStream.AuthenticateAsClient('sfjagilber')
     try { 
         $sslAuthenticationOptions = [SslClientAuthenticationOptions]::new()
-            
         $sslAuthenticationOptions.AllowRenegotiation = $true
         $sslAuthenticationOptions.CertificateRevocationCheckMode = 0
         $sslAuthenticationOptions.EncryptionPolicy = 1
-        $sslAuthenticationOptions.RemoteCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
-        $sslAuthenticationOptions.TargetHost = $url
+        $sslAuthenticationOptions.EnabledSslProtocols = 3072 # tls 1.2 #(3072 -bor 12288)
+        #$sslAuthenticationOptions.ClientCertificates = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new((get-clientCert $thumbprint $storeLocation))
+        $sslAuthenticationOptions.ClientCertificates = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new((get-clientCert $thumbprint $storeLocation))
+        $sslAuthenticationOptions.LocalCertificateSelectionCallback = [System.Net.Security.LocalCertificateSelectionCallback]($global:securityCallback.LocalCallback)
+        $sslAuthenticationOptions.RemoteCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($global:securityCallback.ValidationCallback)
+        $sslAuthenticationOptions.TargetHost = $subjectName
         # $sslAuthenticationOptions.
         ## todo: not working
         # https://docs.microsoft.com/en-us/dotnet/api/system.net.security.sslstream.authenticateasclient?view=net-5.0
+        write-host "sslAuthenticationOptions:$($sslAuthenticationOptions | convertto-json)" -ForegroundColor Cyan
         $sslStream.AuthenticateAsClient($sslAuthenticationOptions)
 
         #$sslStream.AuthenticateAsClient('sfjagilber') #($url)
@@ -180,9 +192,24 @@ $sslStream = [sslstream]::new($tcpClient.GetStream(),$false)
         # return $null
     }
     catch [System.Exception] {
-        Write-Host "get-certValidationTcp:first catch getresponse: $($url) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
-        $error.Clear()
+        Write-Host "get-certValidationTcp:first catch getresponse: $url $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
+        #$error.Clear()
     }
+}
+
+function get-clientCert($thumbprint, $storeLocation) {
+    $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\My -Recurse | Where-Object Thumbprint -eq $thumbprint)
+    #[System.Security.Cryptography.X509Certificates.X509Certificate[]]$certArr = @(0) * $pscerts.length
+    #$certArr = @(0) * $pscerts.length
+    #for($i = 0;$i -lt $pscerts.length;$i++){
+    #    $certArr[$i] = [System.Security.Cryptography.X509Certificates.X509Certificate]::new($pscerts[$i])
+    #}
+    [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]] $certCol = [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]]::new()
+    foreach ($cert in $pscerts) {
+        [void]$certCol.Add([System.Security.Cryptography.X509Certificates.X509Certificate]::new($cert))
+    }
+    #return $pscerts # $certCol.ToArray()
+    return $certCol.ToArray()
 }
 
 function set-callback() {
@@ -206,6 +233,29 @@ function set-callback() {
                 write-host "validation callback:errors:$($policyErrors | out-string)" -ForegroundColor Cyan
                 write-verbose  "validation callback:errors:$($policyErrors | convertto-json)"
                 return $true
+            }
+            [System.Security.Cryptography.X509Certificates.X509Certificate] LocalCallback(
+                [object]$senderObject, 
+                [string]$targetHost,
+                [System.Security.Cryptography.X509Certificates.X509CertificateCollection]$certCol, 
+                [System.Security.Cryptography.X509Certificates.X509Certificate]$remoteCert, 
+                [string[]]$issuers
+            ) {
+                write-host "validation callback:sender:$($senderObject | out-string)" -ForegroundColor Cyan
+                write-verbose "validation callback:sender:$($senderObject | convertto-json)"
+        
+                write-host "validation callback:targethost:$($targetHost | out-string)" -ForegroundColor Cyan
+                write-verbose "validation callback:targethost:$($targetHost | convertto-json)"
+
+                write-host "validation callback:certCol:$($certCol | Format-List * |out-string)" -ForegroundColor Cyan
+                write-verbose  "validation callback:certCol:$($certCol | convertto-json)"
+        
+                write-host "validation callback:remotecert:$($remoteCert | Format-List * |out-string)" -ForegroundColor Cyan
+                write-verbose  "validation callback:remotecert:$($remoteCert | convertto-json)"
+        
+                write-host "validation callback:issuers:$($issuers | out-string)" -ForegroundColor Cyan
+                write-verbose  "validation callback:issuers:$($issuers | convertto-json)"
+                return $remoteCert
             }
         }
 
