@@ -60,7 +60,7 @@ class NugetObj {
 
     [string[]] AddSourceNugetOrg() {
         [void]$this.EnumSources()
-        return $this.AddSource('nuget.org','https://www.nuget.org/api/v2/')
+        return $this.AddSource('nuget.org', 'https://www.nuget.org/api/v2/')
     }
 
     [string[]] AddSource([string]$nugetSourceName, [string]$nugetSource, [string]$username, [string]$password) {
@@ -98,7 +98,7 @@ class NugetObj {
             $packageDirectoryName = $sourceProperties[0]
             $packageDirectory = $sourceProperties[1]
 
-            if(!(test-path $packageDirectory)) {
+            if (!(test-path $packageDirectory)) {
                 mkdir $packageDirectory
             }
 
@@ -110,6 +110,12 @@ class NugetObj {
         }
         write-host "$($this.locals | out-string)"
         return $this.locals
+    }
+
+    [hashtable] EnumLocalsPath([string]$localName) {
+        if (!$this.locals) { $this.EnumLocals() }
+        $outputDirectory = ($this.locals.GetEnumerator() | Where-Object Name -ieq $localName).Value
+        return $outputDirectory
     }
 
     [hashtable] EnumLocalPackages ([string]$packageName) {
@@ -289,13 +295,35 @@ class NugetObj {
         return $this.sources
     }
 
+    [string[]] GetDirectories([string]$sourcePattern) {
+        return $this.GetDirectories($this.globalPackages, $sourcePattern)
+    }
+
     [string[]] GetDirectories([string]$sourcePath, [string]$sourcePattern) {
         write-host "getdirectories: $sourcePath $sourcePattern"
+        if (!(test-path $sourcePath)) {
+            $sourcePath = $this.EnumLocalsPath($sourcePath)
+        }
+
         return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern + "*", [io.searchOption]::TopDirectoryOnly))
     }
 
+    [string[]] GetFiles([string]$sourcePattern) {
+        return $this.GetFiles($this.globalPackages, $sourcePattern)
+    }
+
+    [string[]] GetFiles([string]$sourcePath, [string]$sourcePattern) {
+        write-host "getfiles: $sourcePath $sourcePattern"
+        if (!(test-path $sourcePath)) {
+            $sourcePath = $this.EnumLocalsPath($sourcePath)
+        }
+
+        write-host "[io.directory]::GetFiles(`"$sourcePath`", $sourcePattern + `"*`", [io.searchOption]::AllDirectories)"
+        return @([io.directory]::GetFiles("$sourcePath", $sourcePattern + "*", [io.searchOption]::AllDirectories))
+    }
+
     [string[]] InstallPackage([string]$packageName) {
-        if(!$this.EnumSources().GetEnumerator().name -contains 'nuget.org'){
+        if (!$this.EnumSources().GetEnumerator().name -contains 'nuget.org') {
             $this.AddSourceNugetOrg()
         }
         return $this.InstallPackage($packageName, 'nuget.org', $this.globalPackages, $null)
@@ -310,8 +338,8 @@ class NugetObj {
         $source = $null
         $outputDirectory = $null
         if ($packagesDirectory) { 
-            if(!(test-path $packagesDirectory)) {
-                $packagesDirectory = ($this.EnumLocals().GetEnumerator() | where-object Name -ieq $packagesDirectory).Value
+            if (!(test-path $packagesDirectory)) {
+                $packagesDirectory = $this.EnumLocalsPath($packagesDirectory)
             }
             $outputDirectory = " -directdownload -outputdirectory $packagesDirectory" 
         }
