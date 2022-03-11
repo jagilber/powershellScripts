@@ -58,6 +58,11 @@ class NugetObj {
         $this.EnumLocals()
     }
 
+    [string[]] AddSourceNugetOrg() {
+        [void]$this.EnumSources()
+        return $this.AddSource('nuget.org','https://www.nuget.org/api/v2/')
+    }
+
     [string[]] AddSource([string]$nugetSourceName, [string]$nugetSource, [string]$username, [string]$password) {
         [void]$this.EnumSources()
         write-host "nuget sources add -name $nugetSourceName -source $nugetSource -username $userName -password $password"
@@ -290,7 +295,10 @@ class NugetObj {
     }
 
     [string[]] InstallPackage([string]$packageName) {
-        return $this.InstallPackage($packageName, 'nuget.org', $null, $null)
+        if(!$this.EnumSources().GetEnumerator().name -contains 'nuget.org'){
+            $this.AddSourceNugetOrg()
+        }
+        return $this.InstallPackage($packageName, 'nuget.org', $this.globalPackages, $null)
     }
 
     [string[]] InstallPackage([string]$packageName, [string]$packageSource = $null) {
@@ -301,7 +309,12 @@ class NugetObj {
         $pre = $null
         $source = $null
         $outputDirectory = $null
-        if ($packagesDirectory) { $outputDirectory = " -directdownload -outputdirectory $packagesDirectory" }
+        if ($packagesDirectory) { 
+            if(!(test-path $packagesDirectory)) {
+                $packagesDirectory = ($this.EnumLocals().GetEnumerator() | where-object Name -ieq $packagesDirectory).Value
+            }
+            $outputDirectory = " -directdownload -outputdirectory $packagesDirectory" 
+        }
         if ($prerelease) { $pre = " -prerelease" }
         if ($packageSource) { $source = " -source $packageSource" }
 
