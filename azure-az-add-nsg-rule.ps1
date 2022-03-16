@@ -9,10 +9,14 @@ param(
     [string]$resourceGroup = '',
     [string]$nsgRuleName = "remote-rule",
     [int]$priority = 100,
-    [string[]]$ports = @('*'), #@('3389', '19000', '19080', '19081', '22'),
+    [string[]]$destPorts = @('*'), #@('3389', '19000', '19080', '19081', '22'),
     [string[]]$existingNsgNames = @(),
+    [ValidateSet('allow','deny')]
     [string]$access = "Allow",
-    [string[]]$sourceAddressPrefix = @(((Invoke-RestMethod https://ipinfo.io/json).ip)), #,'AzureDevOps','AzureTrafficManager','ServiceFabric'), # *
+    [ValidateSet('inbound','outbound')]
+    [string]$direction = "inbound",
+    [string[]]$sourceAddressPrefix = @(((Invoke-RestMethod https://ipinfo.io/json).ip)), #,'*','AzureDevOps','AzureTrafficManager','ServiceFabric'), # *
+    [string[]]$destAddressPrefix = @('*'), #,'*','AzureDevOps','AzureTrafficManager','ServiceFabric'), # *
     [switch]$force,
     [switch]$remove,
     [switch]$wait
@@ -75,17 +79,17 @@ function modify-nsgRule($nsg) {
     }
 
     write-host "adding rule:
-    Add-AzNetworkSecurityRuleConfig -Name $nsgRuleName `
-        -NetworkSecurityGroup $nsg `
-        -Description $nsgRuleName `
-        -Access $access `
-        -Protocol Tcp `
-        -Direction Inbound `
-        -Priority $priority `
-        -SourceAddressPrefix $sourceAddressPrefix `
-        -SourcePortRange * `
-        -DestinationAddressPrefix * `
-        -DestinationPortRange $ports
+    Add-AzNetworkSecurityRuleConfig -Name $nsgRuleName ``
+        -NetworkSecurityGroup $nsg ``
+        -Description $nsgRuleName ``
+        -Access $access ``
+        -Protocol Tcp ``
+        -Direction $direction ``
+        -Priority $priority ``
+        -SourceAddressPrefix $sourceAddressPrefix ``
+        -SourcePortRange * ``
+        -DestinationAddressPrefix $destAddressPrefix ``
+        -DestinationPortRange $destPorts
     " -ForegroundColor Green
 
     Add-AzNetworkSecurityRuleConfig -Name $nsgRuleName `
@@ -93,12 +97,12 @@ function modify-nsgRule($nsg) {
         -Description $nsgRuleName `
         -Access $access `
         -Protocol Tcp `
-        -Direction Inbound `
+        -Direction $direction `
         -Priority $priority `
         -SourceAddressPrefix $sourceAddressPrefix `
         -SourcePortRange * `
-        -DestinationAddressPrefix * `
-        -DestinationPortRange $ports
+        -DestinationAddressPrefix $destAddressPrefix `
+        -DestinationPortRange $destPorts
 
     write-host "setting rule: Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg" -ForegroundColor Green
     Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg
