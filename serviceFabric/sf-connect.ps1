@@ -21,6 +21,7 @@ param(
     $clustername = $resourceGroup,
     [ValidateSet('LocalMachine', 'CurrentUser')]
     $storeLocation = "CurrentUser",
+    $storeName = 'My',
     $clusterendpointPort = 19000,
     $clusterExplorerPort = 19080
 )
@@ -95,18 +96,18 @@ function main() {
 
     if ($result.tcpTestSucceeded) {
         write-host "able to connect to $($clusterFqdn):$($clusterExplorerPort)" -ForegroundColor Green
-    #    get-certValidationHttp -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
+        get-certValidationHttp -url "https://$($clusterFqdn):$($clusterExplorerPort)/Explorer/index.html#/"
     }
     else {
         write-error "unable to connect to $($clusterFqdn):$($clusterExplorerPort)"
     }
-
-    write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $managementEndpoint `
-        -ServerCertThumbprint $thumbprint `
-        -StoreLocation $storeLocation `
-        -X509Credential `
-        -FindType FindByThumbprint `
-        -FindValue $thumbprint `
+    
+    write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $managementEndpoint ``
+        -ServerCertThumbprint $thumbprint ``
+        -StoreLocation $storeLocation ``
+        -X509Credential ``
+        -FindType FindByThumbprint ``
+        -FindValue $thumbprint ``
         -verbose" -ForegroundColor Green
 
     # this sets wellknown local variable $ClusterConnection
@@ -135,7 +136,7 @@ function main() {
 }
 
 function get-certValidationHttp([string] $url) {
-    write-host "get-certValidationHttp:$($url) $($certFile)" -ForegroundColor Green
+    write-host "get-certValidationHttp:$($url)" -ForegroundColor Green
     $error.Clear()
     $webRequest = [Net.WebRequest]::Create($url)
     $webRequest.ServerCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
@@ -146,14 +147,17 @@ function get-certValidationHttp([string] $url) {
         # return $null
     }
     catch [System.Exception] {
-        Write-Verbose "get-certValidationHttp:first catch getresponse: $($url) $($certFile) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
+        Write-Verbose "get-certValidationHttp:first catch getresponse: $($url) $($error | Format-List * | out-string)`r`n$($_.Exception|Format-List *)" 
         $error.Clear()
     }
 }
 
 function get-certValidationTcp([string] $url, [int]  $port) {
+    # fabric doesnt use 3way handshake
+    get-systemFabric $url $port
+    return
     #$ipAddress = [dns]::resolve($url).AddressList[0]
-    write-host "get-certValidationTcp:$ipAddress $url $certFile" -ForegroundColor Green
+    write-host "get-certValidationTcp:$ipAddress $url" -ForegroundColor Green
     $error.Clear()
     $tcpClient = [Net.Sockets.TcpClient]::new($url, $port)
     #  $sslStream = [sslstream]::new($tcpClient.GetStream(),`
@@ -164,19 +168,19 @@ function get-certValidationTcp([string] $url, [int]  $port) {
     #      $false,`
     #      [System.Net.Security.RemoteCertificateValidationCallback]($global:securityCallback.ValidationCallback),`
     #      [System.Net.Security.LocalCertificateSelectionCallback]($global:securityCallback.LocalCallback))
-    $sslStream = [sslstream]::new($tcpClient.GetStream(), $false)
+    $sslStream = [system.net.security.sslstream]::new($tcpClient.GetStream(), $false)
     #$sslStream = [sslstream]::new($tcpClient.GetStream(),$false, [net.servicePointManager]::ServerCertificateValidationCallback)
     # $webRequest.ServerCertificateValidationCallback = [net.servicePointManager]::ServerCertificateValidationCallback
     # $webRequest.Timeout = 1000 #ms
     #$sslStream.AuthenticateAsClient($url)
     #$sslStream.AuthenticateAsClient('sfjagilber')
     try { 
-        $sslAuthenticationOptions = [SslClientAuthenticationOptions]::new()
+        $sslAuthenticationOptions = [system.net.security.SslClientAuthenticationOptions]::new()
         $sslAuthenticationOptions.AllowRenegotiation = $true
         $sslAuthenticationOptions.CertificateRevocationCheckMode = 0
         $sslAuthenticationOptions.EncryptionPolicy = 1
         $sslAuthenticationOptions.EnabledSslProtocols = 3072 # tls 1.2 #(3072 -bor 12288)
-        #$sslAuthenticationOptions.ClientCertificates = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new((get-clientCert $thumbprint $storeLocation))
+        #$sslAuthenticationOptions.ClientCertificates = (get-clientCert $thumbprint $storeLocation)
         $sslAuthenticationOptions.ClientCertificates = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new((get-clientCert $thumbprint $storeLocation))
         $sslAuthenticationOptions.LocalCertificateSelectionCallback = [System.Net.Security.LocalCertificateSelectionCallback]($global:securityCallback.LocalCallback)
         $sslAuthenticationOptions.RemoteCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($global:securityCallback.ValidationCallback)
@@ -197,18 +201,52 @@ function get-certValidationTcp([string] $url, [int]  $port) {
     }
 }
 
+function get-systemFabric([string] $url, [int]  $port) {
+    # creates $nuget object
+    invoke-webRequest 'https://aka.ms/nuget-functions.ps1' | Invoke-Expression
+
+    $systemFabricDll = $nuget.GetFiles("System.Fabric.dll")[-1]
+    if (!$systemFabricDll) {
+        $nuget.InstallPackage('Microsoft.ServiceFabric')
+    }
+    $systemFabricDll = $nuget.GetFiles("System.Fabric.dll")[-1]
+    if (!$systemFabricDll) {
+        wrrite-error "unable to find / load system.fabric. try running from machine with service fabric installed"
+        return
+    }
+    
+    add-type -path $systemFabricDll
+    [fabric.x509credentials]$sfcredentials = [fabric.x509credentials]::new()
+
+    $sfcredentials.FindType = 'FindByThumbprint'
+    $sfcredentials.FindValue = $thumbprint
+    $sfcredentials.StoreLocation = $storeLocation
+    $sfcredentials.StoreName = $storeName
+    $sfcredentials.RemoteCertThumbprints.Add($thumbprint)
+    #$x509Name = [fabric.X509Name]::new('certificate name', $thumbprint)
+    #$sfcredentials.RemoteX509Names.Add($x509Name)
+    $sfcredentials
+
+    # https://docs.microsoft.com/en-us/dotnet/api/system.fabric.fabricclient.-ctor?f1url=%3FappId%3DDev16IDEF1%26l%3DEN-US%26k%3Dk(System.Fabric.FabricClient.%2523ctor);k(DevLang-csharp)%26rd%3Dtrue&view=azure-dotnet
+    [string[]]$hosts = @("$($url):$port")
+    [fabric.fabricclient]$global:fc = [fabric.fabricclient]::new($sfcredentials, $hosts)
+    $global:fc.ClusterManager.GetClusterManifestAsync().Result
+}
+
 function get-clientCert($thumbprint, $storeLocation) {
-    $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\My -Recurse | Where-Object Thumbprint -eq $thumbprint)
+    $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Thumbprint -eq $thumbprint)
     #[System.Security.Cryptography.X509Certificates.X509Certificate[]]$certArr = @(0) * $pscerts.length
     #$certArr = @(0) * $pscerts.length
     #for($i = 0;$i -lt $pscerts.length;$i++){
     #    $certArr[$i] = [System.Security.Cryptography.X509Certificates.X509Certificate]::new($pscerts[$i])
     #}
     [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]] $certCol = [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]]::new()
+    #[System.Security.Cryptography.X509Certificates.X509CertificateCollection]$certCol = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new()
     foreach ($cert in $pscerts) {
         [void]$certCol.Add([System.Security.Cryptography.X509Certificates.X509Certificate]::new($cert))
     }
     #return $pscerts # $certCol.ToArray()
+    write-host "certcol: $($certCol | convertto-json)"
     return $certCol.ToArray()
 }
 
