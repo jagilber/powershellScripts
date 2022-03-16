@@ -305,7 +305,7 @@ class NugetObj {
             $sourcePath = $this.EnumLocalsPath($sourcePath)
         }
 
-        return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern + "*", [io.searchOption]::TopDirectoryOnly))
+        return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern, [io.searchOption]::TopDirectoryOnly))
     }
 
     [string[]] GetFiles([string]$sourcePattern) {
@@ -318,8 +318,8 @@ class NugetObj {
             $sourcePath = $this.EnumLocalsPath($sourcePath)
         }
 
-        write-host "[io.directory]::GetFiles(`"$sourcePath`", $sourcePattern + `"*`", [io.searchOption]::AllDirectories)"
-        return @([io.directory]::GetFiles("$sourcePath", $sourcePattern + "*", [io.searchOption]::AllDirectories))
+        write-host "[io.directory]::GetFiles(`"$sourcePath`", $sourcePattern, [io.searchOption]::AllDirectories)"
+        return @([io.directory]::GetFiles("$sourcePath", $sourcePattern, [io.searchOption]::AllDirectories))
     }
 
     [string[]] InstallPackage([string]$packageName) {
