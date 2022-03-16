@@ -29,6 +29,8 @@ param (
 )
 
 $PSModuleAutoLoadingPreference = 1
+#add-type -LiteralPath 'C:\Program Files\WindowsPowerShell\Modules\Az.ServiceFabric\3.0.1\Microsoft.Azure.PowerShell.Cmdlets.ServiceFabric.dll'
+#add-type -AssemblyName Microsoft.Azure.PowerShell.Cmdlets.ServiceFabric
 
 function main () {
     $fabricSettingsArray = [collections.Generic.List[Microsoft.Azure.Commands.ServiceFabric.Models.PSSettingsSectionDescription]]::new()
