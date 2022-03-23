@@ -59,6 +59,9 @@ query string or command to execute against a kusto database
 .PARAMETER table
 [string]optional kusto table for import
 
+.PARAMETER headers
+[string]optional kusto table headers for import ['columnname']:columntype,
+
 .PARAMETER resultFile
 [string]optional json file name and path to store raw result content
 
@@ -112,6 +115,7 @@ param(
     [bool]$fixDuplicateColumns,
     [bool]$removeEmptyColumns = $true,
     [string]$table,
+    [string]$headers,
     [string]$identityPackageLocation,
     [string]$resultFile, # = ".\result.json",
     [bool]$createResults = $true,
@@ -273,6 +277,7 @@ class KustoObj {
     [string]$Database = $database
     [bool]$FixDuplicateColumns = $fixDuplicateColumns
     [bool]$Force = $force
+    [string]$Headers = $headers
     [int]$Limit = $limit
     [hashtable]$parameters = $parameters
     hidden [Microsoft.Identity.Client.PublicClientApplication] $publicClientApplication = $null
@@ -574,7 +579,14 @@ class KustoObj {
         $this.Exec(".ingest inline into table ['$table'] <| $($csv.tostring())")
         return $this.Pipe()
     }
-    
+
+    [KustoObj] ImportCsv([string]$csvFile, [string]$table, [string]$headers) {
+        $this.Headers = $headers
+        $this.Table = $table
+        $this.ImportCsv($csvFile)
+        return $this.Pipe()
+    }
+
     [KustoObj] ImportCsv([string]$csvFile, [string]$table) {
         $this.Table = $table
         $this.ImportCsv($csvFile)
@@ -593,7 +605,7 @@ class KustoObj {
         #$this.Post($csv)
     
         $sr = new-object io.streamreader($csvFile) 
-        [string]$headers = $sr.ReadLine()
+        [string]$tempHeaders = $sr.ReadLine()
         [text.StringBuilder]$csv = New-Object text.StringBuilder
     
         while ($sr.peek() -ge 0) {
@@ -603,23 +615,28 @@ class KustoObj {
         $sr.close()
         $formattedHeaderList = @{ }
         [string]$formattedHeaders = "("
-    
-        foreach ($header in ($headers.Split(',').trim())) {
-            $columnCount = 0
-            if (!$header) { $header = 'column' }
-            [string]$normalizedHeader = $header.trim('`"').Replace(" ", "_")
-            $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
-            $uniqueHeader = $normalizedHeader
-    
-            while ($formattedHeaderList.ContainsKey($uniqueHeader)) {
-                $uniqueHeader = $normalizedHeader + ++$columnCount
+        if(!$this.Headers) {
+            foreach ($header in ($tempHeaders.Split(',').trim())) {
+                $columnCount = 0
+                if (!$header) { $header = 'column' }
+                [string]$normalizedHeader = $header.trim('`"').Replace(" ", "_")
+                $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
+                $uniqueHeader = $normalizedHeader
+        
+                while ($formattedHeaderList.ContainsKey($uniqueHeader)) {
+                    $uniqueHeader = $normalizedHeader + ++$columnCount
+                }
+                    
+                $formattedHeaderList.Add($uniqueHeader, "")
+                $formattedHeaders += "['$($uniqueHeader)']:string, "
             }
-                
-            $formattedHeaderList.Add($uniqueHeader, "")
-            $formattedHeaders += "['$($uniqueHeader)']:string, "
+            $this.Headers = $formattedHeaders
         }
-            
+        else {
+            $formattedHeaders += $this.Headers
+        }
         $formattedHeaders = $formattedHeaders.trimend(', ')
+
         $formattedHeaders += ")"
     
         #$this.Exec(".drop table ['$($this.Table)'] ifexists")
