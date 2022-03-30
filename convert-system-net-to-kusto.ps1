@@ -55,10 +55,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 
 public static class dotNet
 {
@@ -183,80 +180,85 @@ function main() {
     catch {
         write-error ($error | out-string)
     }
-    finally {
-        [dotnet]::CloseInputFile()
-        [dotnet]::CloseOutputFile()
-    }
 }
 
 function parse-file($inputFile, $outputFile) {
-    write-host "process file: $inputfile $outputfile"
-    [dotnet]::OpenInputFile($inputFile)
-    [dotnet]::OpenOutputFile($outputFile)
-    $i = 0
+    try {
+        write-host "process file: $inputfile $outputfile"
+        [dotnet]::OpenInputFile($inputFile)
+        [dotnet]::OpenOutputFile($outputFile)
+        $i = 0
     
-    foreach ($line in [dotnet]::ReadLines()) {
-        #write-host "checking line:$(($i++).ToString())"
-        Write-verbose "checking line:$(($i).ToString()) $line"
-        if ($line -eq $null) {
-            return
-        }
-
-        if ($line.length -lt 1) { continue }
-
-        if ((is-match $line $typePattern)) {
-            if ($lineobj.data -and $lineobj.dateTime -and $lineObj.pid) { 
-                if ($excludeLevel -and [dotnet]::IsMatch($lineObj.level, $excludeLevel)) {
-                    write-verbose "level excluded, skipping"
-                }
-                else {
-                    Write-verbose "add: $($lineObj| Format-List *)"
-                    $formattedString = "$($lineobj.dateTime),$($lineobj.type),$($lineobj.level),$($lineobj.pid),$($lineobj.tid),`"`"`"$($lineobj.data.replace('"',"'"))`"`"`",$($lineobj.ref)"
-                    [dotnet]::WriteLine($formattedString)
-                }
-                $lineObj = $lineObjTemplate.Clone()
-            }
-                    
-            $results = get-matches $line $typePattern
-            $lineobj.type = $results.Groups['type'].value
-            $lineobj.tid = $results.Groups['tid'].value
-            $lineobj.level = $results.Groups['level'].value
-            $lineobj.data = $results.Groups['data'].value
-
-            if ($excludeLevel -and [dotnet]::IsMatch($lineObj.level, $excludeLevel)) {
-                write-verbose "level excluded, skipping2"
-                continue
+        foreach ($line in [dotnet]::ReadLines()) {
+            #write-host "checking line:$(($i++).ToString())"
+            Write-verbose "checking line:$(($i).ToString()) $line"
+            if ($line -eq $null) {
+                return
             }
 
-            $results = @(get-matches $line $referencePattern)
-            $refs = @{}
-            #$refs = [collections.arraylist]::new()
-            foreach ($result in $results) {
-                $ref = $refObj.Clone()
-                $ref.refName = $result.Groups['refName'].value
-                $ref.refId = $result.Groups['refId'].value
-                if ($ref.refName) {
-                    if (!$refNames.Contains($ref.refName)) {
-                        [void]$refNames.Add($ref.refName)
+            if ($line.length -lt 1) { continue }
+
+            if ((is-match $line $typePattern)) {
+                if ($lineobj.data -and $lineobj.dateTime -and $lineObj.pid) { 
+                    if ($excludeLevel -and [dotnet]::IsMatch($lineObj.level, $excludeLevel)) {
+                        write-verbose "level excluded, skipping"
                     }
-                    [void]$refs.Add($ref.refName, $ref.refId)
-                    #[void]$refs.Add($ref)
+                    else {
+                        Write-verbose "add: $($lineObj| Format-List *)"
+                        $formattedString = "$($lineobj.dateTime),$($lineobj.type),$($lineobj.level),$($lineobj.pid),$($lineobj.tid),`"`"`"$($lineobj.data.replace('"',"'"))`"`"`",$($lineobj.ref)"
+                        [dotnet]::WriteLine($formattedString)
+                    }
+                    $lineObj = $lineObjTemplate.Clone()
+                }
+                    
+                $results = get-matches $line $typePattern
+                $lineobj.type = $results.Groups['type'].value
+                $lineobj.tid = $results.Groups['tid'].value
+                $lineobj.level = $results.Groups['level'].value
+                $lineobj.data = $results.Groups['data'].value
+
+                if ($excludeLevel -and [dotnet]::IsMatch($lineObj.level, $excludeLevel)) {
+                    write-verbose "level excluded, skipping2"
+                    continue
+                }
+
+                $results = @(get-matches $line $referencePattern)
+                $refs = @{}
+                #$refs = [collections.arraylist]::new()
+                foreach ($result in $results) {
+                    $ref = $refObj.Clone()
+                    $ref.refName = $result.Groups['refName'].value
+                    $ref.refId = $result.Groups['refId'].value
+                    if ($ref.refName) {
+                        if (!$refNames.Contains($ref.refName)) {
+                            [void]$refNames.Add($ref.refName)
+                        }
+                        [void]$refs.Add($ref.refName, $ref.refId)
+                        #[void]$refs.Add($ref)
+                    }
+                }
+                if ($refs) {
+                    $lineobj.ref = '"' + ($refs | convertto-json -Compress).replace('"', "`"`"") + '"'
                 }
             }
-            if ($refs) {
-                $lineobj.ref = '"' + ($refs | convertto-json -Compress).replace('"', "`"`"") + '"'
+            elseif ((is-match $line $processPattern)) {
+                $lineobj.pid = get-match $line $processPattern
+            }
+            elseif ((is-match $line $datePattern)) {
+                $lineobj.dateTime = get-match $line $datePattern
+            }
+            else {
+                Write-verbose "no match $($line.Substring(0,$line.Length))"
+                $lineobj.data = $lineobj.data + ', ' + $line
             }
         }
-        elseif ((is-match $line $processPattern)) {
-            $lineobj.pid = get-match $line $processPattern
-        }
-        elseif ((is-match $line $datePattern)) {
-            $lineobj.dateTime = get-match $line $datePattern
-        }
-        else {
-            Write-verbose "no match $($line.Substring(0,$line.Length))"
-            $lineobj.data = $lineobj.data + ', ' + $line
-        }
+    }
+    catch {
+        write-error ($error | out-string)
+    }
+    finally {
+        [dotnet]::CloseInputFile()
+        [dotnet]::CloseOutputFile()
     }
 }
 
