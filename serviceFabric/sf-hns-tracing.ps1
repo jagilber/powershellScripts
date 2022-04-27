@@ -113,6 +113,23 @@ foreach ($guid in $guids) {
 
 }
 
+write-host "
+Start-EtwTraceSession -Name $traceName ``
+    -LogFileMode $logFileMode ``
+    -LocalFilePath $traceFilePath ``
+    -MaximumFileSize $maxFileSizeMb ``
+    -MaximumBuffers $maxBuffers ``
+    -BufferSize $bufferSize
+"
+
+Start-EtwTraceSession -Name $traceName `
+    -LogFileMode $logFileMode `
+    -LocalFilePath $traceFilePath `
+    -MaximumFileSize $maxFileSizeMb `
+    -MaximumBuffers $maxBuffers `
+    -BufferSize $bufferSize
+
+
 Get-AutologgerConfig -Name $traceName | format-list *
 logman query -ets #$traceName
 write-host "finished"
