@@ -15,8 +15,8 @@ https://docs.microsoft.com/powershell/module/eventtracingmanagement/new-autologg
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-auto-etl-tracing.ps1" -outFile "$pwd\sf-auto-etl-tracing.ps1";
-.\sf-auto-etl-tracing.ps1
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-etl-auto-tracing.ps1" -outFile "$pwd\sf-etl-auto-tracing.ps1";
+.\sf-etl-auto-tracing.ps1
 
 #>
 
