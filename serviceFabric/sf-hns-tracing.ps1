@@ -3,7 +3,7 @@
 service fabric hns etl tracing script
 
 .DESCRIPTION
-script will create a permanent ETL tracing session using powershell Autologger cmdlets.
+script will create a permanent ETL tracing session across reboots using powershell Autologger cmdlets.
 default destination ($traceFilePath) is configured location used by FabricDCA for log staging.
 files saved in D:\SvcFab\Log\CrashDumps\ will by uploaded by FabricDCA to 'sflogs' storage account.
 after upload, local files will be deleted by FabricDCA automatically.
@@ -89,7 +89,7 @@ New-AutologgerConfig -Name $traceName ``
     -MaximumFileSize $maxFileSizeMb ``
     -MaximumBuffers $maxBuffers ``
     -BufferSize $bufferSize
-"
+" -ForegroundColor Cyan
 
 New-AutologgerConfig -Name $traceName `
     -LogFileMode $logFileMode `
@@ -104,7 +104,7 @@ foreach ($guid in $guids) {
         -Guid $guid ``
         -Level $level ``
         -MatchAnyKeyword $keyword
-    "
+    " -ForegroundColor Cyan
 
     Add-EtwTraceProvider -AutologgerName $traceName `
         -Guid $guid `
@@ -120,7 +120,7 @@ Start-EtwTraceSession -Name $traceName ``
     -MaximumFileSize $maxFileSizeMb ``
     -MaximumBuffers $maxBuffers ``
     -BufferSize $bufferSize
-"
+" -ForegroundColor Cyan
 
 Start-EtwTraceSession -Name $traceName `
     -LogFileMode $logFileMode `
@@ -129,8 +129,7 @@ Start-EtwTraceSession -Name $traceName `
     -MaximumBuffers $maxBuffers `
     -BufferSize $bufferSize
 
-
 Get-AutologgerConfig -Name $traceName | format-list *
 logman query -ets #$traceName
-write-host "finished"
+write-host "finished. to disable tracing, rerun script with -remove switch." -ForegroundColor Cyan
 
