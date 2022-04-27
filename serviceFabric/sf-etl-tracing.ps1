@@ -15,8 +15,8 @@ https://docs.microsoft.com/powershell/module/eventtracingmanagement/Start-EtwTra
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-hns-tracing.ps1" -outFile "$pwd\sf-hns-tracing.ps1";
-.\sf-hns-tracing.ps1
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-etl-tracing.ps1" -outFile "$pwd\sf-etl-tracing.ps1";
+.\sf-etl-tracing.ps1
 
 #>
 
