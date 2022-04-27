@@ -38,7 +38,7 @@ param(
     $bufferSize = 1024,
     
     # ETW trace session name
-    $traceName = 'hns',
+    $traceName = 'sf-etl-auto',
     
     # 6 == everything
     $level = 6,
