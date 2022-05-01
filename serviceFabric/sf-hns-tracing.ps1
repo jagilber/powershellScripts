@@ -51,7 +51,8 @@ param(
     $autoLogFileMode = 2,
 
     # output file name and path
-    $traceFilePath = 'D:\SvcFab\Log\CrashDumps\hns%d.etl',
+    $traceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-hns%d.etl',
+    $autoTraceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-hns.etl',
     
     # output file size in MB
     $maxFileSizeMb = 64,
@@ -112,7 +113,7 @@ if ($remove) { return }
 write-host "
 New-AutologgerConfig -Name $traceName ``
     -LogFileMode $autoLogFileMode ``
-    -LocalFilePath $traceFilePath ``
+    -LocalFilePath $autoTraceFilePath ``
     -MaximumFileSize $autoMaxFileSizeMb ``
     -MaximumBuffers $maxBuffers ``
     -BufferSize $bufferSize ``
@@ -121,7 +122,7 @@ New-AutologgerConfig -Name $traceName ``
 
 New-AutologgerConfig -Name $traceName `
     -LogFileMode $autoLogFileMode `
-    -LocalFilePath $traceFilePath `
+    -LocalFilePath $autoTraceFilePath `
     -MaximumFileSize $autoMaxFileSizeMb `
     -MaximumBuffers $maxBuffers `
     -BufferSize $bufferSize `
