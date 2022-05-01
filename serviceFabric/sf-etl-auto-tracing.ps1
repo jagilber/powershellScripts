@@ -50,13 +50,13 @@ param(
     # autologger does NOT support new file https://docs.microsoft.com/en-us/windows/win32/etw/configuring-and-starting-an-autologger-session
     # only support sequential, append, and circular
     [ValidateSet(0,1,2,4)]
-    $logFileMode = 2, # circular
+    $logFileMode = 2, # 0 - none; 1 - sequential; 2 - circular; 4 - append;
 
     # output file name and path
     $traceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-auto.etl', #'D:\SvcFab\Log\CrashDumps\sfauto%d.etl',
     
     # output file size in MB
-    $maxFileSizeMb = 64,
+    $maxFileSizeMb = 1024,
     
     # max ETW trace buffers
     $maxBuffers = 16,
@@ -91,6 +91,11 @@ $error.Clear()
 if ((Get-AutologgerConfig -Name $traceName)) {
     write-warning "Remove-AutologgerConfig -Name $traceName"
     Remove-AutologgerConfig -Name $traceName
+}
+
+if ((Get-EtwTraceSession -Name $traceName)) {
+    write-warning "Stop-EtwTraceSession -Name $traceName"
+    Stop-EtwTraceSession -Name $traceName
 }
 
 if ($remove) { return }
