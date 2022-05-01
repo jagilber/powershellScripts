@@ -48,11 +48,11 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 param(
     # new file https://docs.microsoft.com/windows/win32/etw/logging-mode-constants
     $logFileMode = 8,
-    $autoLogFileMode = 2,
+    $autoLogFileMode = 4,
 
     # output file name and path
     $traceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-hns%d.etl',
-    $autoTraceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-hns.etl',
+    $autoTraceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-hns-auto.etl',
     
     # output file size in MB
     $maxFileSizeMb = 64,
@@ -65,7 +65,7 @@ param(
     $bufferSize = 1024,
     
     # ETW trace session name
-    $traceName = 'hns',
+    $traceName = 'sf-hns',
     
     # 6 == everything
     $level = 6,
@@ -108,7 +108,13 @@ if ((Get-AutologgerConfig -Name $traceName)) {
     Remove-AutologgerConfig -Name $traceName
 }
 
+if ((Get-EtwTraceSession -Name $traceName)) {
+    write-warning "Stop-EtwTraceSession -Name $traceName"
+    Stop-EtwTraceSession -Name $traceName
+}
+
 if ($remove) { return }
+
 # for persistent etw trace session
 write-host "
 New-AutologgerConfig -Name $traceName ``
@@ -117,6 +123,7 @@ New-AutologgerConfig -Name $traceName ``
     -MaximumFileSize $autoMaxFileSizeMb ``
     -MaximumBuffers $maxBuffers ``
     -BufferSize $bufferSize ``
+    -ClockType System ``
     -Start Enabled
 " -ForegroundColor Cyan
 
@@ -126,6 +133,7 @@ New-AutologgerConfig -Name $traceName `
     -MaximumFileSize $autoMaxFileSizeMb `
     -MaximumBuffers $maxBuffers `
     -BufferSize $bufferSize `
+    -ClockType System `
     -Start Enabled
 
 # for current etw trace session
