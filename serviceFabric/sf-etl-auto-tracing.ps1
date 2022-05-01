@@ -1,16 +1,17 @@
 <#
 .SYNOPSIS 
-service fabric permanent etl tracing script
+service fabric persistent etl tracing script
 
 .DESCRIPTION
-script will create a permanent ETL tracing session across reboots using powershell Autologger cmdlets.
+script will create a persistent ETL tracing session across reboots using powershell Autologger cmdlets.
 default destination ($traceFilePath) is configured location used by FabricDCA for log staging.
 files saved in D:\SvcFab\Log\CrashDumps\ will by uploaded by FabricDCA to 'sflogs' storage account fabriccrashdumps-{{cluster id}} container.
 after upload, local files will be deleted by FabricDCA automatically.
 default argument values should work for most scenarios.
 add / remove etw tracing guids as needed. see get-etwtraceprovider / logman query providers
 to remove tracing use -remove switch.
-
+ 
+https://docs.microsoft.com/windows/win32/etw/logging-mode-constants
 https://docs.microsoft.com/powershell/module/eventtracingmanagement/new-autologgerconfig
 
 Microsoft Privacy Statement: https://privacy.microsoft.com/en-US/privacystatement
@@ -46,11 +47,13 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 
 [cmdletbinding()]
 param(
-    # new file https://docs.microsoft.com/windows/win32/etw/logging-mode-constants
-    $logFileMode = 8,
+    # autologger does NOT support new file https://docs.microsoft.com/en-us/windows/win32/etw/configuring-and-starting-an-autologger-session
+    # only support sequential, append, and circular
+    [ValidateSet(0,1,2,4)]
+    $logFileMode = 2, # circular
 
     # output file name and path
-    $traceFilePath = 'D:\SvcFab\Log\CrashDumps\sfauto%d.etl',
+    $traceFilePath = 'D:\SvcFab\Log\CrashDumps\sf-auto.etl', #'D:\SvcFab\Log\CrashDumps\sfauto%d.etl',
     
     # output file size in MB
     $maxFileSizeMb = 64,
@@ -58,7 +61,7 @@ param(
     # max ETW trace buffers
     $maxBuffers = 16,
     
-    # buffer size in MB
+    # buffer size in KB
     $bufferSize = 1024,
     
     # ETW trace session name
@@ -92,6 +95,7 @@ if ((Get-AutologgerConfig -Name $traceName)) {
 
 if ($remove) { return }
 
+# for persistent etw trace session
 write-host "
 New-AutologgerConfig -Name $traceName ``
     -LogFileMode $logFileMode ``
@@ -110,6 +114,7 @@ New-AutologgerConfig -Name $traceName `
     -BufferSize $bufferSize `
     -Start Enabled
 
+# for current etw trace session
 write-host "
 Start-EtwTraceSession -Name $traceName ``
     -LogFileMode $logFileMode ``
@@ -125,7 +130,6 @@ Start-EtwTraceSession -Name $traceName `
     -MaximumFileSize $maxFileSizeMb `
     -MaximumBuffers $maxBuffers `
     -BufferSize $bufferSize
-
 
 foreach ($guid in $traceGuids) {
     write-host "adding $guid

@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS 
-service fabric etl tracing script
+service fabric non persistent etl tracing script
 
 .DESCRIPTION
-script will create a dynamic ETL tracing using powershell ETW session cmdlets.
+script will create a non persistent ETL tracing using powershell ETW session cmdlets.
 default destination ($traceFilePath) is configured location used by FabricDCA for log staging.
 files saved in D:\SvcFab\Log\CrashDumps\ will by uploaded by FabricDCA to 'sflogs' storage account fabriccrashdumps-{{cluster id}} container.
 after upload, local files will be deleted by FabricDCA automatically.
@@ -57,7 +57,8 @@ param(
         ),
     [string]$traceName = 'sf-etl',
     # new file https://docs.microsoft.com/windows/win32/etw/logging-mode-constants
-    $logFileMode = 8,
+    [ValidateSet(0,1,2,4,8)]
+    $logFileMode = 8, # new file
 
     # output file name and path
     $traceFilePath = 'D:\SvcFab\Log\CrashDumps\sf%d.etl',
@@ -68,7 +69,7 @@ param(
     # max ETW trace buffers
     $maxBuffers = 16,
 
-    # buffer size in MB
+    # buffer size in KB
     $bufferSize = 1024,
 
     # 6 == everything

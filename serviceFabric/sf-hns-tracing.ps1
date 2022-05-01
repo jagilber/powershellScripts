@@ -48,17 +48,19 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 param(
     # new file https://docs.microsoft.com/windows/win32/etw/logging-mode-constants
     $logFileMode = 8,
+    $autoLogFileMode = 2,
 
     # output file name and path
     $traceFilePath = 'D:\SvcFab\Log\CrashDumps\hns%d.etl',
     
     # output file size in MB
     $maxFileSizeMb = 64,
+    $autoMaxFileSizeMb = 1024,
     
     # max ETW trace buffers
     $maxBuffers = 16,
     
-    # buffer size in MB
+    # buffer size in KB
     $bufferSize = 1024,
     
     # ETW trace session name
@@ -106,25 +108,26 @@ if ((Get-AutologgerConfig -Name $traceName)) {
 }
 
 if ($remove) { return }
-
+# for persistent etw trace session
 write-host "
 New-AutologgerConfig -Name $traceName ``
-    -LogFileMode $logFileMode ``
+    -LogFileMode $autoLogFileMode ``
     -LocalFilePath $traceFilePath ``
-    -MaximumFileSize $maxFileSizeMb ``
+    -MaximumFileSize $autoMaxFileSizeMb ``
     -MaximumBuffers $maxBuffers ``
     -BufferSize $bufferSize ``
     -Start Enabled
 " -ForegroundColor Cyan
 
 New-AutologgerConfig -Name $traceName `
-    -LogFileMode $logFileMode `
+    -LogFileMode $autoLogFileMode `
     -LocalFilePath $traceFilePath `
-    -MaximumFileSize $maxFileSizeMb `
+    -MaximumFileSize $autoMaxFileSizeMb `
     -MaximumBuffers $maxBuffers `
     -BufferSize $bufferSize `
     -Start Enabled
 
+# for current etw trace session
 write-host "
 Start-EtwTraceSession -Name $traceName ``
     -LogFileMode $logFileMode ``
