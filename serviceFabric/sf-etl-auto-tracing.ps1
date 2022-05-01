@@ -98,7 +98,8 @@ New-AutologgerConfig -Name $traceName ``
     -LocalFilePath $traceFilePath ``
     -MaximumFileSize $maxFileSizeMb ``
     -MaximumBuffers $maxBuffers ``
-    -BufferSize $bufferSize
+    -BufferSize $bufferSize ``
+    -Start Enabled
 " -ForegroundColor Cyan
 
 New-AutologgerConfig -Name $traceName `
@@ -106,22 +107,8 @@ New-AutologgerConfig -Name $traceName `
     -LocalFilePath $traceFilePath `
     -MaximumFileSize $maxFileSizeMb `
     -MaximumBuffers $maxBuffers `
-    -BufferSize $bufferSize
-
-foreach ($guid in $traceGuids) {
-    write-host "adding $guid
-    Add-EtwTraceProvider -AutologgerName $traceName ``
-        -Guid $guid ``
-        -Level $level ``
-        -MatchAnyKeyword $keyword
-    " -ForegroundColor Cyan
-
-    Add-EtwTraceProvider -AutologgerName $traceName `
-        -Guid $guid `
-        -Level $level `
-        -MatchAnyKeyword $keyword
-
-}
+    -BufferSize $bufferSize `
+    -Start Enabled
 
 write-host "
 Start-EtwTraceSession -Name $traceName ``
@@ -138,6 +125,33 @@ Start-EtwTraceSession -Name $traceName `
     -MaximumFileSize $maxFileSizeMb `
     -MaximumBuffers $maxBuffers `
     -BufferSize $bufferSize
+
+
+foreach ($guid in $traceGuids) {
+    write-host "adding $guid
+    Add-EtwTraceProvider -AutologgerName $traceName ``
+        -Guid $guid ``
+        -Level $level ``
+        -MatchAnyKeyword $keyword
+    " -ForegroundColor Cyan
+
+    Add-EtwTraceProvider -AutologgerName $traceName `
+        -Guid $guid `
+        -Level $level `
+        -MatchAnyKeyword $keyword
+
+    write-host "adding $guid
+    Add-EtwTraceProvider -SessionName $traceName ``
+        -Guid $guid ``
+        -Level $level ``
+        -MatchAnyKeyword $keyword
+    " -ForegroundColor Cyan
+
+    Add-EtwTraceProvider -SessionName $traceName `
+        -Guid $guid `
+        -Level $level `
+        -MatchAnyKeyword $keyword
+}
 
 Get-AutologgerConfig -Name $traceName | format-list *
 logman query -ets #$traceName
