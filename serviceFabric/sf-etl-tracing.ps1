@@ -178,7 +178,6 @@ function start-command() {
             -Guid $guid `
             -Level $level `
             -MatchAnyKeyword $keyword
-
     }
 
     Get-EtwTraceSession -Name $traceName | format-list *
