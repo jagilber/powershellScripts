@@ -17,9 +17,9 @@ param(
     $clusterendpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
     [Parameter(Mandatory = $true)]
     $thumbprint,
-    [Parameter(Mandatory = $true)]
-    $resourceGroup,
-    $clustername = $resourceGroup,
+    #[Parameter(Mandatory = $true)]
+    #$resourceGroup,
+    #$clustername = $resourceGroup,
     [ValidateSet('LocalMachine', 'CurrentUser')]
     $storeLocation = "CurrentUser",
     $clusterendpointPort = 19000,
@@ -57,17 +57,36 @@ function main() {
     $DebugPreference = "continue"
     $global:ClusterConnection = $null
 
-    $cluster = Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -Name $clustername
-    $global:cluster | ConvertTo-Json -Depth 99
+    if(!(get-module -ListAvailable az)){
+        install-module az
+    }
+
+    if(!(get-command get-azresource)){
+        import-module az
+    }
+
+    #$global:cluster = Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -Name $clustername
+    $global:cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000","")
+    if(!$cluster){
+        write-error "unable to find cluster $clusterEndpoint"
+        return
+    }
+
+    $cluster | ConvertTo-Json -Depth 99
 
     if(!$subscriptionId) {
         $subscriptionId = (get-azcontext).Subscription.id
     }
 
-    $serverThumbprint = (Get-AzResource -ResourceId "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.ServiceFabric/managedclusters/$clusterName").Properties.clusterCertificateThumbprints
+    $clusterId = $cluster.Id
+    write-host "(Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints" -ForegroundColor Green
+    $serverThumbprint = (Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints
+
     if(!$serverThumbprint){
         write-error "unable to get server thumbprint"
         return
+    }else {
+        write-host "using server thumbprint:$serverThumbprint" -ForegroundColor Cyan
     }
 
     if ($managementEndpoint -inotmatch ':\d{2,5}$') {
