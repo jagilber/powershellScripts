@@ -80,7 +80,6 @@ foreach ($application in $applications) {
             else {
                 write-host "replica is ready $($replica | convertto-json -depth 99)" -ForegroundColor green
             }
-            #>
             if ($replica.ReconfigurationInformation -and $replica.ReconfiguraitonInformation.ReconfigurationPhase -and $replica.ReconfiguraitonInformation.ReconfigurationPhase -ine "None") {
                 write-warning "reconfiguration phase not equal None $($replica.ReconfiguraitonInformation.ReconfigurationPhase)"
                 [void]$badReplicas.add($replica, $nodeName)
@@ -89,6 +88,7 @@ foreach ($application in $applications) {
             else {
                 write-host "replica not being reconfigured $($replica | convertto-json -depth 99)" -ForegroundColor green
             }
+            #>
         }
     }
 }
