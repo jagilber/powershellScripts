@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS 
-service fabric restart stateful / remove stateless replicas in warning state
+service fabric restart stateful / remove stateless replicas in warning state.
+run from working node or connect-servicefabriccluster prior to running script if not on node.
 
 .DESCRIPTION
 
