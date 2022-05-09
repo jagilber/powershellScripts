@@ -259,6 +259,13 @@ function main() {
     $error.Clear() 
     $ret = $null
 
+    write-host "
+        Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup ``
+            -TemplateFile $templateFile ``
+            -Mode Complete ``
+            -TemplateParameterObject $templateParameters ``
+            @additionalParameters
+    " -ForegroundColor Cyan
     $ret = Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup `
         -TemplateFile $templateFile `
         -Mode Complete `
@@ -269,6 +276,16 @@ function main() {
         Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)"
         return 1
     }
+
+    write-host "
+        New-azResourceGroupDeployment -Name $deploymentName ``
+            -ResourceGroupName $resourceGroup ``
+            -DeploymentDebugLogLevel All ``
+            -TemplateFile $templateFile ``
+            -TemplateParameterObject $templateParameters ``
+            -Verbose ``
+            @additionalParameters
+    " -ForegroundColor Cyan
 
     if (!$test) {
         write-host "$([DateTime]::Now) creating deployment"
