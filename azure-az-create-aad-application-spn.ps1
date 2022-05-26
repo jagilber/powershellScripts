@@ -4,7 +4,7 @@
     to enable script execution, you may need to Set-ExecutionPolicy Bypass -Force
 
     # can be used with scripts for example
-    # connect-azaccount -ServicePrincipal -CertificateThumbprint $cert.Thumbprint -ApplicationId $app.ApplicationId -TenantId $tenantId
+    # connect-azaccount -ServicePrincipal -CertificateThumbprint $cert.Thumbprint -ApplicationId $app.AppId -TenantId $tenantId
     # requires free AAD base subscription
     # https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal#provide-credentials-through-automated-powershell-script
     
@@ -29,6 +29,7 @@ param(
     [ValidateSet('key', 'cert', 'certthumb')]
     [string]$logonType = 'cert'
 )
+$PSModuleAutoLoadingPreference = 2
 
 function main() {
     $retryCount = 10
@@ -88,7 +89,7 @@ function main() {
         $app | convertto-json -depth 5
 
         if ((read-host "AAD application exists: $($aadDisplayName). Do you want to delete?[y|n]") -imatch "y") {
-            remove-azADApplication -objectId $app.objectId -Force
+            remove-azADApplication -objectId $app.Id #-Force
             $app = $null
             $id = Get-azADServicePrincipal -SearchString $aadDisplayName
         
@@ -156,6 +157,7 @@ function main() {
             }
             
             write-host "New-azADApplication -DisplayName $aadDisplayName `
+                -IsDeviceOnlyAuthSupported `
                 -HomePage $uri `
                 -IdentifierUris $uri `
                 -CertValue $certValue `
@@ -166,6 +168,7 @@ function main() {
 
             if ($replyUrls) {
                 $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -IsDeviceOnlyAuthSupported `
                     -HomePage $uri `
                     -IdentifierUris $uri `
                     -CertValue $certValue `
@@ -176,6 +179,7 @@ function main() {
             }
             else {
                 $app = New-azADApplication -DisplayName $aadDisplayName `
+                    -IsDeviceOnlyAuthSupported `
                     -HomePage $uri `
                     -IdentifierUris $uri `
                     -CertValue $certValue `
@@ -184,7 +188,16 @@ function main() {
                     -verbose #-Debug 
             }
             
-            $appCredential = New-AzADAppCredential -ObjectId $app.ObjectId `
+            write-host "new-azadpplication result: $($app | convertto-json)"
+            #$appCredential = New-AzADAppCredential -ObjectId $app.ObjectId `
+            write-host "
+                $appCredential = New-AzADAppCredential -ObjectId $($app.Id) `
+                    -CertValue $certValue `
+                    -EndDate $($cert.NotAfter) `
+                    -StartDate $($cert.NotBefore) `
+                    -verbose #-Debug 
+            "
+            $appCredential = New-AzADAppCredential -ObjectId $app.Id `
                 -CertValue $certValue `
                 -EndDate ($cert.NotAfter) `
                 -StartDate ($cert.NotBefore) `
@@ -276,9 +289,9 @@ function main() {
             #todo check if principal exists
             $error.clear()
             start-sleep -Seconds 10
-            write-host "attempt $count New-azADServicePrincipal -ApplicationId $($app.ApplicationId)" # -DisplayName $aadDisplayName"
+            write-host "attempt $count New-azADServicePrincipal -ApplicationId $($app.AppId)" # -DisplayName $aadDisplayName"
             
-            New-azADServicePrincipal -ApplicationId ($app.ApplicationId) #-DisplayName $aadDisplayName
+            New-azADServicePrincipal -ApplicationId ($app.AppId) #-DisplayName $aadDisplayName
             
             if (!$error) {
                 break
@@ -299,17 +312,17 @@ function main() {
                 start-sleep -Seconds 10
                 write-host "attempt $($count) to add role assignments read and contribute"
                 
-                New-azRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.ApplicationId)
+                New-azRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName ($app.AppId)
                 
                 if (!$error) {
                     write-host "role assignments read added" -ForegroundColor green
-                    write-host "to remove 'read' permissions, run: Remove-azRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $($app.ApplicationId)"
+                    write-host "to remove 'read' permissions, run: Remove-azRoleAssignment -RoleDefinitionName Reader -ServicePrincipalName $($app.AppId)"
                 }
 
                 if (!$error) {
-                    New-azRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.ApplicationId)
+                    New-azRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName ($app.AppId)
                     write-host "role assignments contribute added" -ForegroundColor green
-                    write-host "to remove 'contributor' permissions, run: Remove-azRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $($app.ApplicationId)"
+                    write-host "to remove 'contributor' permissions, run: Remove-azRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $($app.AppId)"
                     break
                 }
             }
@@ -327,14 +340,14 @@ function main() {
         }
 
         if ($logontype -ieq 'cert' -or $logontype -ieq 'certthumb') {
-            write-host "for use in script: connect-azaccount -ServicePrincipal -CertificateThumbprint $($cert.Thumbprint) -ApplicationId $($app.ApplicationId) -TenantId $($tenantId)"
+            write-host "for use in script: connect-azaccount -ServicePrincipal -CertificateThumbprint $($cert.Thumbprint) -ApplicationId $($app.AppId) -TenantId $($tenantId)"
             write-host "certificate thumbprint: $($cert.Thumbprint)"
             
         }
     } 
 
     $app
-    write-host "application id: $($app.ApplicationId)" -ForegroundColor Cyan
+    write-host "application id: $($app.AppId)" -ForegroundColor Cyan
     write-host "tenant id: $($tenantId)" -ForegroundColor Cyan
     write-host "application identifier Uri: $($uri)" -ForegroundColor Cyan
     write-host "clientsecret: $($clientSecret)" -ForegroundColor Cyan
@@ -346,7 +359,7 @@ function main() {
     write-host "thumbprint: $($thumbprint)" -ForegroundColor Cyan
     write-host "pfx path: $($pfxPath)" -ForegroundColor Cyan
     $global:thumbprint = $thumbprint
-    $global:applicationId = $app.Applicationid
+    $global:applicationId = $app.AppId
     $global:tenantId = $tenantId
     $global:clientSecret = $clientSecret
     $global:certValue = $certValue
