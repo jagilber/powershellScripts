@@ -23,7 +23,7 @@ param(
 
 $ErrorActionPreference = "continue"
 $error.Clear()
-$aadDisplayName = "azure-az-rest-logon/$($env:Computername)"
+$aadDisplayName = "azure-az-rest-logon--$($env:Computername)"
 $cert = $null
 $resourceArg = $resource
 $endpointArg = $endpoint
