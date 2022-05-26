@@ -4,6 +4,26 @@
     # sfmc uses a 'server thumbprint' managed by cluster that rotates regularly
     # this thumbprint is needed to connect to cluster 
     # currently there is no method to keep server thumbprint in sync with static connection information in ado
+
+.FUNCTIONALITY
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/utility/powershell?view=azure-devops
+- task: AzurePowerShell@5
+  inputs:
+    azureSubscription: 'Microsoft Azure Internal Consumption(bedf79d7-6500-409e-b475-c4d0003bb6a7)'
+    serviceConnection: serviceFabricConnection
+    ScriptType: InlineScript
+    Inline: |
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+        invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-service-connection.ps1" -outFile "$pwd/sf-managed-ado-service-connection.ps1";
+        ./sf-managed-ado-service-connection.ps1
+    errorActionPreference: continue
+    verbosePreference: continue
+    debugPreference: continue
+    azurePowerShellVersion: LatestVersion
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+    connectionName: 'serviceFabricConnection'
+
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-service-connection.ps1" -outFile "$pwd/sf-managed-ado-service-connection.ps1";
@@ -35,6 +55,7 @@ write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($url)) 
 
 $result = invoke-RestMethod @parameters
 $result | Format-List *
+write-host "result members: $($result|get-member)"
 write-host ($result | convertto-json)
 $result.value | ConvertTo-Json
 
@@ -56,7 +77,10 @@ if (!(get-azresourcegroup)) {
 $serviceConnection = $result.value
 $serviceConnectionThumbprint = $serviceConnection.authorization.parameters.servercertthumbprint
 write-host "service connection thumbprint:$serviceConnectionThumbprint" -ForegroundColor Cyan
-
+write-host "test"
+$bytes = [System.Convert]::FromBase64String($serviceConnection.Authorization.Parameters.Certificate)
+write-host "bytes:$($bytes)"
+write-host "end test"
 $serviceConnectionId = $serviceConnection.Id
 $serviceConnectionFqdn = $serviceConnection.url.replace('tcp://', '')
 write-host "$cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $serviceConnectionFqdn"
@@ -86,6 +110,7 @@ write-host "checking thumbprints:
     server thumbprint:$serverThumbprint
 "
 if ($serviceConnectionThumbprint -ieq $serverThumbprint) {
+    write-host "service connection server thumbprint are the same"
     return
 }
 else {
