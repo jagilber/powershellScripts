@@ -339,7 +339,12 @@ class NugetObj {
         $outputDirectory = $null
         if ($packagesDirectory) { 
             if (!(test-path $packagesDirectory)) {
-                $packagesDirectory = $this.EnumLocalsPath($packagesDirectory)
+                write-host "checking: $packagesDirectory"
+                $outputDirectory = $this.EnumLocalsPath($packagesDirectory)
+                if (!$outputDirectory) {
+                    write-host "creating path: $packagesDirectory"
+                    mkdir $packagesDirectory
+                }    
             }
             $outputDirectory = " -directdownload -outputdirectory $packagesDirectory" 
         }
