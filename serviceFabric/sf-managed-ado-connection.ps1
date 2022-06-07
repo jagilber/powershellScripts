@@ -92,7 +92,7 @@ write-host "`$cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -i
 $cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $serviceConnectionFqdn
 
 if (!($cluster)) {
-    write-error "unable to find cluster $clusterEndpoint"
+    write-error "unable to find cluster for fqdn: $serviceConnectionFqdn"
     return
 }
 $cluster | ConvertTo-Json -Depth 99
