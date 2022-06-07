@@ -205,7 +205,6 @@ function update-adoSfConnection($serviceConnection, $serverThumbprint, $pfxCertB
     try {
         $auth = $serviceConnection.Authorization
         write-host "executing task.setvariable for endpoint auth: $($auth|convertto-json)"
-        #write-host "##vso[task.setvariable variable=ENDPOINT_AUTH_$serviceConnectionName;issecret=true;isreadonly=true;isoutput=true]$($auth|convertto-json -depth 99 -compress)"
         write-host "##vso[task.setvariable variable=ENDPOINT_AUTH_$serviceConnectionName;]$($auth|convertto-json -depth 99 -compress)"
         if ($error) {
             write-warning "error updating env var: $($error | out-string)"
