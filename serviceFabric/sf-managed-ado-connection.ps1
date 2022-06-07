@@ -37,7 +37,6 @@ steps:
         [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
         invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
         ./sf-managed-ado-connection.ps1
-        
         write-host "finished inline"
       errorActionPreference: continue
       verbosePreference: continue
