@@ -254,3 +254,4 @@ ModelManifest.xml
 **/gather
 **/Configuration
 .vscode
+secrets.ps1
