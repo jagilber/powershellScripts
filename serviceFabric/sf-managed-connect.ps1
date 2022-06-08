@@ -152,7 +152,8 @@ function main() {
         -FindType $findType `
         -FindValue $findValue `
         -Verbose
-
+        
+    $result
     write-host "Get-ServiceFabricClusterConnection" -ForegroundColor Green
 
     write-host "============================" -ForegroundColor Green

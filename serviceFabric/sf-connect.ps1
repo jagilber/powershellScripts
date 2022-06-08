@@ -130,7 +130,7 @@ function main() {
         -FindValue $thumbprint `
         -Verbose
 
-
+    $result
     write-host "Get-ServiceFabricClusterConnection" -ForegroundColor Green
 
     write-host "============================" -ForegroundColor Green
@@ -192,7 +192,7 @@ function get-certValidationHttp([string] $url) {
 
 function get-certValidationTcp([string] $url, [int]  $port, [object]$certCollection) {
     # fabric doesnt use 3way handshake
-    get-systemFabric $url $port
+    #get-systemFabric $url $port
     return
     #$ipAddress = [dns]::resolve($url).AddressList[0]
     write-host "get-certValidationTcp:$ipAddress $url" -ForegroundColor Green
