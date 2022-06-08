@@ -40,6 +40,8 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
 function main() {
+    $StartTime = (Get-Date)
+    write-host "starting:$startTime"
     set-callback
     $error.Clear()
     if (!(get-command Connect-ServiceFabricCluster)) {
@@ -48,6 +50,11 @@ function main() {
             write-error "unable to import servicefabric powershell module. try executing script from a working node."
             return
         }
+    }
+
+    $certCollection = get-clientCert -thumbprint $thumbprint -storeLocation $storeLocation -storeName $storeName
+    if(!$certCollection) {
+        return
     }
 
     $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
@@ -82,7 +89,7 @@ function main() {
 
     if ($result.tcpTestSucceeded) {
         write-host "able to connect to $($clusterFqdn):$($clusterEndpointPort)" -ForegroundColor Green
-        get-certValidationTcp -url $clusterFqdn -port $clusterEndpointPort
+        get-certValidationTcp -url $clusterFqdn -port $clusterEndpointPort -certCollection $certCollection
     }
     else {
         write-error "unable to connect to $($clusterFqdn):$($clusterEndpointPort)"
@@ -105,16 +112,19 @@ function main() {
     write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $managementEndpoint ``
         -ServerCertThumbprint $thumbprint ``
         -StoreLocation $storeLocation ``
+        -StoreName $storeName ``
         -X509Credential ``
         -FindType FindByThumbprint ``
         -FindValue $thumbprint ``
         -verbose" -ForegroundColor Green
-
+    
+        $error.Clear()
     # this sets wellknown local variable $ClusterConnection
-    Connect-ServiceFabricCluster `
+    $result = Connect-ServiceFabricCluster `
         -ConnectionEndpoint $managementEndpoint `
         -ServerCertThumbprint $thumbprint `
         -StoreLocation $storeLocation `
+        -StoreName $storeName `
         -X509Credential `
         -FindType FindByThumbprint `
         -FindValue $thumbprint `
@@ -126,6 +136,34 @@ function main() {
     write-host "============================" -ForegroundColor Green
     Get-ServiceFabricClusterConnection
     $DebugPreference = "silentlycontinue"
+
+    if (!$result -or $error) {
+        write-warning "error detected. pausing to capture window events"
+        start-sleep -seconds 10
+        #$StartTime = (Get-Date).AddMinutes(-1)
+        $EndTime = (get-date)
+        $level = @(0..5)
+        $data = ''
+        write-host "
+            `$global:events = Get-WinEvent -Oldest -Force -FilterHashtable @{
+                Logname   = 'Microsoft-ServiceFabric*'
+                StartTime = $StartTime
+                EndTime   = $EndTime
+                Level     = $level
+                Data      = $data
+            }
+        "
+        $global:events = Get-WinEvent -Oldest -Force -FilterHashtable @{
+            Logname   = 'Microsoft-ServiceFabric*'
+            StartTime = $StartTime
+            EndTime   = $EndTime
+            Level     = $level
+            Data      = $data
+        }
+
+        write-host "service fabric windows events:"
+        $global:events
+    }
 
     # set global so commands can be run outside of script
     $global:ClusterConnection = $ClusterConnection
@@ -152,7 +190,7 @@ function get-certValidationHttp([string] $url) {
     }
 }
 
-function get-certValidationTcp([string] $url, [int]  $port) {
+function get-certValidationTcp([string] $url, [int]  $port, [object]$certCollection) {
     # fabric doesnt use 3way handshake
     get-systemFabric $url $port
     return
@@ -181,7 +219,7 @@ function get-certValidationTcp([string] $url, [int]  $port) {
         $sslAuthenticationOptions.EncryptionPolicy = 1
         $sslAuthenticationOptions.EnabledSslProtocols = 3072 # tls 1.2 #(3072 -bor 12288)
         #$sslAuthenticationOptions.ClientCertificates = (get-clientCert $thumbprint $storeLocation)
-        $sslAuthenticationOptions.ClientCertificates = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new((get-clientCert $thumbprint $storeLocation))
+        $sslAuthenticationOptions.ClientCertificates = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new($certCollection)
         $sslAuthenticationOptions.LocalCertificateSelectionCallback = [System.Net.Security.LocalCertificateSelectionCallback]($global:securityCallback.LocalCallback)
         $sslAuthenticationOptions.RemoteCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]($global:securityCallback.ValidationCallback)
         $sslAuthenticationOptions.TargetHost = $subjectName
@@ -233,20 +271,22 @@ function get-systemFabric([string] $url, [int]  $port) {
     $global:fc.ClusterManager.GetClusterManifestAsync().Result
 }
 
-function get-clientCert($thumbprint, $storeLocation) {
+function get-clientCert($thumbprint, $storeLocation, $storeName) {
     $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Thumbprint -eq $thumbprint)
-    #[System.Security.Cryptography.X509Certificates.X509Certificate[]]$certArr = @(0) * $pscerts.length
-    #$certArr = @(0) * $pscerts.length
-    #for($i = 0;$i -lt $pscerts.length;$i++){
-    #    $certArr[$i] = [System.Security.Cryptography.X509Certificates.X509Certificate]::new($pscerts[$i])
-    #}
     [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]] $certCol = [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]]::new()
-    #[System.Security.Cryptography.X509Certificates.X509CertificateCollection]$certCol = [System.Security.Cryptography.X509Certificates.X509CertificateCollection]::new()
+
     foreach ($cert in $pscerts) {
         [void]$certCol.Add([System.Security.Cryptography.X509Certificates.X509Certificate]::new($cert))
     }
-    #return $pscerts # $certCol.ToArray()
+
     write-host "certcol: $($certCol | convertto-json)"
+
+    if(!$certCol){
+        write-error "certificate with thumbprint:$thumbprint not found in certstore:$storeLocation\$storeName"
+        return $null
+    }
+
+    Write-host "certificate with thumbprint:$thumbprint found in certstore:$storeLocation\$storeName" -ForegroundColor Green
     return $certCol.ToArray()
 }
 
