@@ -80,7 +80,7 @@ steps:
     Inline: |
      write-host "starting inline"
      [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
+     invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
       ./sf-managed-ado-connection.ps1
       write-host "finished inline"
     errorActionPreference: continue
@@ -318,6 +318,14 @@ function update-adoSfConnection($adoRestEndpointUrl, $serviceConnection, $server
     catch { 
         write-host "exception $($error | out-string)"
         return $null
+    }
+    finally {
+        $authorizationParameters = $null
+        $serviceConnection = $null
+        $adoAuthHeader = $null
+        $parameters = $null
+        $pfxCertBase64 = $null
+        $serverThumbprint = $null
     }
 }
 
