@@ -7,12 +7,14 @@
     ADO AzurePowershell task must pass the following variables:
         $env:certificateName
         $env:keyVaultName
-        $env:sfServiceConnectionName
+        $env:sfmcServiceConnectionName
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
     ./sf-managed-ado-connection.ps1
 
+.EXAMPLE
+# build pipeline yaml example
 trigger:
   - master
 
@@ -21,7 +23,7 @@ pool:
 
 variables:
   System.Debug: true
-  sfServiceConnectionName: serviceFabricConnection
+  sfmcServiceConnectionName: serviceFabricConnection
   azureSubscriptionName: 
   keyVaultName: 
   certificateName: 
@@ -46,7 +48,7 @@ steps:
       accessToken: $(System.AccessToken)
       keyVaultName: $(keyVaultName)
       certificateName: $(certificateName)
-      sfServiceConnectionName: $(sfServiceConnectionName)
+      sfmcServiceConnectionName: $(sfmcServiceConnectionName)
 
   - task: ServiceFabricPowerShell@1
     inputs:
@@ -58,9 +60,34 @@ steps:
         $env:connection
         [environment]::getenvironmentvariables().getenumerator()|sort Name
 
+.EXAMPLE
+# release pipeline yaml pseudo example
+steps:
+- task: AzurePowerShell@5
+  displayName: 'Azure PowerShell script: InlineScript'
+  inputs:
+    azureSubscription: 
+    ScriptType: InlineScript
+    Inline: |
+     write-host "starting inline"
+     [environment]::getenvironmentvariables()
+     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
+      ./sf-managed-ado-connection.ps1
+      write-host "finished inline"
+    errorActionPreference: continue
+    azurePowerShellVersion: LatestVersion
+    pwsh: true
 #>
+
 [cmdletbinding()]
 param(
+    $apiVersion = '7.1-preview.4',
+    $accessToken = $env:SYSTEM_ACCESSTOKEN,
+    $sfmcServiceConnectionName = $env:SFMCSERVICECONNECTIONNAME,
+    $keyVaultName = $env:SFMCKEYVAULTNAME,
+    $certificateName = $env:SFMCCERTIFICATENAME,
+    $writeDebug = $env:SYSTEM_DEBUG
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -69,62 +96,75 @@ function main() {
     write-host "starting script:$([datetime]::now.tostring('o'))"
     $psversiontable
     [environment]::getenvironmentvariables().getenumerator() | Sort-Object Name
+    if($writeDebug) {
+        $DebugPreference = $VerbosePreference = 'continue'
+    }
 
-    $serviceConnection = get-adoSfConnection
+    $adoRestEndpointUrl = "$env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
+    $serviceConnection = get-adoSfConnection -url $adoRestEndpointUrl
     $adoServerCertThumbprint = $serviceConnection.Authorization.Parameters.servercertthumbprint
-    write-host "adoServerCertThumbprint: $adoServerCertThumbprint"
+
+    write-verbose "adoServerCertThumbprint: $adoServerCertThumbprint"
     write-host "adoServerCertThumbprint length: $($adoServerCertThumbprint.length)"
     write-host "serviceConnection certificate length: $($serviceConnection.Authorization.Parameters.Certificate.length)"
 
     $pfxCertBase64 = get-azKvPfxCertificateBase64 -serviceConnection $serviceConnection
     $serverThumbprint = get-sfmcArmServerThumbprint -serviceConnection $serviceConnection
+    
     if ($adoServerCertThumbprint -ieq $serverThumbprint) {
         write-host "certificate thumbprints match. returning."
-        write-host "$adoServerCertThumbprint -ieq $serverThumbprint"
+        write-verbose "$adoServerCertThumbprint -ieq $serverThumbprint"
         return $true
     }
     else {
         write-host "certificate thumbprints do not match. continuing."
-        write-host "$adoServerCertThumbprint -ne $serverThumbprint"
+        write-verbose "$adoServerCertThumbprint -ne $serverThumbprint"
     }
 
-    update-adoSfConnection -serviceConnection $serviceConnection -serverThumbprint $serverThumbprint -pfxCertBase64 $pfxCertBase64
+    update-adoSfConnection -url $adoRestEndpointUrl `
+        -serviceConnection $serviceConnection `
+        -serverThumbprint $serverThumbprint `
+        -pfxCertBase64 $pfxCertBase64
     write-host "finished script:$([datetime]::now.tostring('o'))"
 }
 
-function get-adoSfConnection () {
+function get-adoSfConnection ($adoRestEndpointUrl) {
     #
     # get current ado sf connection
     #
     write-host "getting service fabric service connection"
-    #$url = "$env:SYSTEM_COLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
-    $url = "$env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
     
     $adoAuthHeader = @{
-        'authorization' = "Bearer $env:accessToken"
+        'authorization' = "Bearer $accessToken"
         'content-type'  = 'application/json'
     }
+
     $bodyParameters = @{
         'type'          = 'servicefabric'
-        'api-version'   = '7.1-preview.4'
-        'endpointNames' = $env:sfServiceConnectionName
+        'api-version'   = $apiVersion
+        'endpointNames' = $sfmcServiceConnectionName
     }
+
     $parameters = @{
-        Uri         = $url
+        Uri         = $adoRestEndpointUrl
         Method      = 'GET'
         Headers     = $adoAuthHeader
         Erroraction = 'continue'
         Body        = $bodyParameters
     }
-    write-host "ado connection parameters: $($parameters | convertto-json)"
-    write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($url)) -headers $adoAuthHeader"
+
+    write-verbose "ado connection parameters: $($parameters | convertto-json)"
+    write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($adoRestEndpointUrl)) -headers $adoAuthHeader"
+   
     $error.clear()
     $adoConnection = invoke-RestMethod @parameters
     write-host "ado connection result: $($adoConnection | convertto-json)"
+
     if ($error) {
         write-error "exception: $($error | out-string)"
         return $null
     }
+
     write-host "ado connection: $($adoConnection.value)"
     $serviceConnection = @($adoConnection.value)[0]
     return $serviceConnection
@@ -134,7 +174,6 @@ function get-azKvPfxCertificateBase64($serviceConnection) {
     #
     # get cert from keyvault
     #
-    # From https://docs.microsoft.com/en-us/powershell/module/az.keyvault/get-azkeyvaultcertificate?view=azps-5.8.0
     # Export new Key Vault Certificate as PFX
     try {
         $securePassword = $null
@@ -142,16 +181,18 @@ function get-azKvPfxCertificateBase64($serviceConnection) {
             $securePassword = $serviceConnection.Authorization.Parameters.CertificatePassword | ConvertTo-SecureString -AsPlainText -Force
         }
 
-        write-host "get-azkeyvaultCertificate -vaultName $env:keyVaultName -name $env:certificateName"
-        $certificate = get-azkeyvaultCertificate -vaultName $env:keyVaultName -name $env:certificateName
-        write-host "get-azkeyvaultCertificate result: $($certificate | convertto-json)"
-        $secret = Get-AzKeyVaultSecret -VaultName $env:keyVaultName -Name $certificate.Name -AsPlainText;
+        write-host "get-azkeyvaultCertificate -vaultName $keyVaultName -name $certificateName"
+        $certificate = get-azkeyvaultCertificate -vaultName $keyVaultName -name $certificateName
+        write-verbose "get-azkeyvaultCertificate result: $($certificate | convertto-json)"
+
+        $secret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $certificate.Name -AsPlainText;
         $secretByte = [Convert]::FromBase64String($secret)
         $x509Cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
-        $type = [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx
+        $type = [Security.Cryptography.X509Certificates.X509ContentType]::Pfx
         $pfxFileByte = $x509Cert.Export($type, $securePassword);
-        $pfxCertBase64 = [System.Convert]::ToBase64String($pfxFileByte)
-        write-host "pfxcertbase64: $pfxCertBase64"
+        $pfxCertBase64 = [Convert]::ToBase64String($pfxFileByte)
+
+        write-verbose "pfxcertbase64: $pfxCertBase64"
         write-host "certInfo length:$($certificate.length)"
     }
     catch {
@@ -177,8 +218,8 @@ function get-sfmcArmServerThumbprint($serviceConnection) {
         write-error "unable to enumerate resource groups"
         return
     }
-    #todo cleanup might not be 19000
-    $serviceConnectionFqdn = $serviceConnection.url.replace('tcp://', '').replace(':19000', '')
+    
+    $serviceConnectionFqdn = [regex]::Match($serviceConnection.url, "tcp://(.+?):").Groups[1].Value
     write-host "`$cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $serviceConnectionFqdn"
     $cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $serviceConnectionFqdn
 
@@ -187,7 +228,7 @@ function get-sfmcArmServerThumbprint($serviceConnection) {
         return
     }
 
-    write-host "get-servicefabricmanagedcluster result $($cluster | ConvertTo-Json -Depth 99)"
+    write-verbose "get-servicefabricmanagedcluster result $($cluster | ConvertTo-Json -Depth 99)"
     $clusterId = $cluster.Id
     write-host "(Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints" -ForegroundColor Green
     $serverThumbprint = @((Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints)[0]
@@ -197,12 +238,12 @@ function get-sfmcArmServerThumbprint($serviceConnection) {
         return $false
     }
     else {
-        write-host "server thumbprint:$serverThumbprint" -ForegroundColor Cyan
+        write-verbose "server thumbprint:$serverThumbprint" -ForegroundColor Cyan
     }
     return $serverThumbprint
 }
 
-function update-adoSfConnection($serviceConnection, $serverThumbprint, $pfxCertBase64) {
+function update-adoSfConnection($adoRestEndpointUrl, $serviceConnection, $serverThumbprint, $pfxCertBase64) {
     #
     # update auth params
     #
@@ -215,27 +256,29 @@ function update-adoSfConnection($serviceConnection, $serverThumbprint, $pfxCertB
         certificate          = $pfxCertBase64
         certificatePassword  = $serviceConnection.Authorization.Parameters.CertificatePassword
     }
-    write-host "new authorization parameters:$($authorizationParameters|convertto-json)"
+
+    write-verbose "new authorization parameters:$($authorizationParameters|convertto-json)"
     $serviceConnection.authorization.parameters = $authorizationParameters
 
     $adoAuthHeader = @{
-        'authorization' = "Bearer $env:accessToken"
+        'authorization' = "Bearer $accessToken"
         'content-type'  = 'application/json'
     }
-    #$url = "$env:SYSTEM_COLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
-    $url = "$env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
-    $url += "/$($serviceConnectionName)?api-version=7.1-preview.4"
+
+    $adoRestEndpointUrl += "/$($serviceConnectionName)?api-version=$apiVersion"
     $parameters = @{
-        Uri         = $url
+        Uri         = $adoRestEndpointUrl
         Method      = 'PUT'
         Headers     = $adoAuthHeader
         Erroraction = 'continue'
         Body        = ($serviceConnection | convertto-json -compress -depth 99)
     }
-    write-host "new service connection parameters: $($parameters | convertto-json -Depth 99)"
-    write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($url)) -headers $adoAuthHeader"
+
+    write-verbose "new service connection parameters: $($parameters | convertto-json -Depth 99)"
+    write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($adoRestEndpointUrl)) -headers $adoAuthHeader"
 
     $error.clear()
+
     try {
         $result = invoke-restMethod @parameters
         if ($error) {
@@ -246,11 +289,12 @@ function update-adoSfConnection($serviceConnection, $serverThumbprint, $pfxCertB
             write-host "endpoint updated successfully"
         }
 
-        write-host "ado update result: $($result | convertto-json)"
+        write-verbose "ado update result: $($result | convertto-json)"
     }
     catch {
         write-host "update exception $($_)`r`n$($error | out-string)"
     }
+
     try {
         $auth = $serviceConnection.Authorization
         write-host "executing task.setvariable for endpoint auth: $($auth|convertto-json)"
@@ -259,12 +303,12 @@ function update-adoSfConnection($serviceConnection, $serverThumbprint, $pfxCertB
             write-warning "error updating env var: $($error | out-string)"
             return $null
         }
+        return $true
     }
     catch { 
         write-host "exception $($error | out-string)"
         return $null
     }
-    return $true
 }
 
 main
