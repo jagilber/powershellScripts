@@ -95,7 +95,7 @@ param(
     $sfmcServiceConnectionName = $env:SFMCSERVICECONNECTIONNAME,
     $keyVaultName = $env:SFMCKEYVAULTNAME,
     $certificateName = $env:SFMCCERTIFICATENAME,
-    $writeDebug = $env:SYSTEM_DEBUG -ieq 'true'
+    $writeDebug = ($env:SYSTEM_DEBUG -ieq 'true')
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -184,7 +184,7 @@ function get-azKvPfxCertificateBase64($serviceConnection) {
     #
     # get cert from keyvault
     #
-    # Export new Key Vault Certificate as PFX
+    # Export Key Vault Certificate as PFX
     try {
         $securePassword = $null
         if ($serviceConnection.Authorization.Parameters.CertificatePassword) {
