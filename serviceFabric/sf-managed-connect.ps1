@@ -183,17 +183,22 @@ function main() {
             Level     = $level
             Data      = $data
         }
-
+        
         write-host "service fabric windows events:"
         $global:events
     }
-    
+
+    #write-host "get-event"
+    #Get-Event
+
     # set global so commands can be run outside of script
     $global:ClusterConnection = $ClusterConnection
     $currentVerbose = $VerbosePreference
     $currentDebug = $DebugPreference
     $VerbosePreference = $currentVerbose
     $DebugPreference = $currentDebug
+
+    write-host "finished"
 }
 
 function get-certValidationHttp([string] $url) {
