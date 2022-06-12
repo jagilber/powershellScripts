@@ -97,7 +97,9 @@ function get-adoSfConnection () {
     # get current ado sf connection
     #
     write-host "getting service fabric service connection"
-    $url = "$env:SYSTEM_COLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
+    #$url = "$env:SYSTEM_COLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
+    $url = "$env:SYSTEM_TEAMFOUNDATIONCOLLELCTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
+    
     $adoAuthHeader = @{
         'authorization' = "Bearer $env:accessToken"
         'content-type'  = 'application/json'
