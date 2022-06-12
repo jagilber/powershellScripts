@@ -222,7 +222,8 @@ function update-adoSfConnection($serviceConnection, $serverThumbprint, $pfxCertB
         'authorization' = "Bearer $env:accessToken"
         'content-type'  = 'application/json'
     }
-    $url = "$env:SYSTEM_COLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
+    #$url = "$env:SYSTEM_COLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
+    $url = "$env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
     $url += "/$($serviceConnectionName)?api-version=7.1-preview.4"
     $parameters = @{
         Uri         = $url
