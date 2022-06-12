@@ -39,6 +39,11 @@ This App registration is needed to set the RBAC permissions on the Azure Keyvaul
 
 ## Azure Keyvault Permissions
 
+After the Azure Service Connection has been created, the keyvault access policy containing the client certificate needs to modified.
+The app registration for the Azure connection is added the the Access Policies.
+The app registration name is in the format of: %organization%-%project%-%subscriptionId%.
+
+
 ## Azure Devops Permissions
 
 ### Service Connection Permissions
