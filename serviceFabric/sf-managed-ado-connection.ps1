@@ -15,19 +15,12 @@
 
 .EXAMPLE
 # build pipeline yaml example
-trigger:
-  - master
-
-pool:
-  vmImage: "windows-latest"
-
 variables:
   System.Debug: true
-  sfmcServiceConnectionName: serviceFabricConnection
   azureSubscriptionName: 
-  keyVaultName: 
-  certificateName: 
-  timeoutSec: 600
+  sfmcCertificateName: 
+  sfmcKeyVaultName: 
+  sfmcServiceConnectionName: serviceFabricConnection
 
 steps:
   - task: AzurePowerShell@5
@@ -41,27 +34,20 @@ steps:
         ./sf-managed-ado-connection.ps1
         write-host "finished inline"
       errorActionPreference: continue
-      verbosePreference: continue
-      debugPreference: continue
       azurePowerShellVersion: LatestVersion
     env:
-      accessToken: $(System.AccessToken)
-      keyVaultName: $(keyVaultName)
-      certificateName: $(certificateName)
+      sfmcCertificateName: $(sfmcCertificateName)
+      sfmcKeyVaultName: $(sfmcKeyVaultName)
       sfmcServiceConnectionName: $(sfmcServiceConnectionName)
-
-  - task: ServiceFabricPowerShell@1
-    inputs:
-      clusterConnection: "serviceFabricConnection"
-      ScriptType: "InlineScript"
-      Inline: |
-        $verbosePreference = $debugpreference = 'continue'
-        $psversiontable
-        $env:connection
-        [environment]::getenvironmentvariables().getenumerator()|sort Name
+      system_accessToken: $(System.AccessToken)
 
 .EXAMPLE
 # release pipeline yaml pseudo example
+# uses variables:
+#  sfmcCertificateName
+#  sfmcKeyvaultName
+#  sfmcServiceConnectionName
+
 steps:
 - task: AzurePowerShell@5
   displayName: 'Azure PowerShell script: InlineScript'
@@ -70,7 +56,6 @@ steps:
     ScriptType: InlineScript
     Inline: |
      write-host "starting inline"
-     [environment]::getenvironmentvariables()
      [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
      invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
       ./sf-managed-ado-connection.ps1
@@ -94,10 +79,11 @@ $PSModuleAutoLoadingPreference = 2
 
 function main() {
     write-host "starting script:$([datetime]::now.tostring('o'))"
-    $psversiontable
-    [environment]::getenvironmentvariables().getenumerator() | Sort-Object Name
-    if($writeDebug) {
+
+    if ($writeDebug) {
         $DebugPreference = $VerbosePreference = 'continue'
+        $psversiontable
+        [environment]::getenvironmentvariables().getenumerator() | Sort-Object Name    
     }
 
     $adoRestEndpointUrl = "$env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
