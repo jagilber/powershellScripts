@@ -9,11 +9,11 @@ The steps below describe how to use a builtin task with provided powershell scri
 
 ## Requirements
 
-- location to store powershell script used in task: https://aka.ms/sf-managed-ado-connection.ps1
-- service fabric managed cluster 'client' certificate has to be stored in azure key vault and be accessible from ADO pipeline / release
-- ADO Azure service connection to subscription with managed cluster
-- service connection in ADO permissions allowing access to update connection from ADO pipeline / release
-- AzurePowershell task executing script must be executed before any Service Fabric task and must be in the  same job
+- location to store powershell script used in task that is available from ADO pipeline: https://aka.ms/sf-managed-ado-connection.ps1
+- service fabric managed cluster 'client' certificate has to be stored in azure key vault and be accessible from ADO pipeline / release.
+- ADO Azure service connection to subscription with managed cluster.
+- service connection in ADO permissions allowing access to update connection from ADO pipeline / release.
+- AzurePowershell task executing script must be executed before any Service Fabric task and must be in the same job.
 
 ## Process
 
@@ -21,14 +21,15 @@ The provided ADO configurations and powershell script performs the following:
 
 - Builtin task AzurePowershell:
     - provides the connection to Azure for querying managed cluster and key vault resources.
-    - downloads and executes powershell script sf-managed-ado-connection.ps1
+    - downloads and executes powershell script sf-managed-ado-connection.ps1.
 - Powershell script does the following:
-    1. connects to ADO service endpoint REST url to enumerate service fabric connection
-    2. connects to Azure to query service fabric managed cluster by service connection url
-    3. compares server thumbprint from azure resource and from service connection
+    1. connects to ADO service endpoint REST url to enumerate service fabric connection.
+    2. connects to Azure to query service fabric managed cluster by service connection url.
+    3. compares server thumbprint from azure resource and from service connection.
     4. if thumbprint is different:
         1. connects to Azure to query key vault for 'client' certificate to create base64 string for ADO connection.
         2. updates ADO service endpoint via REST with new server thumbprint.
+        3. ##vso[task.setvariable variable=ENDPOINT_AUTH_$serviceConnectionName;] is written to update connection thumbprint for subsequent tasks.
 
 ## Azure Service Connection
 
@@ -110,8 +111,14 @@ steps:
 
 ```
 
+## Troubleshooting
+
+Use logging from task to assist with issues.
+Enabling System.Debug in build yaml or in release variables will provide additional write-verbose output from script but will include sensitive security information.
+
 ## Example 
 
 ```text
+
 
 ```
