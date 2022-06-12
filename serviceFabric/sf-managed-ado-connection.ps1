@@ -87,7 +87,7 @@ param(
     $sfmcServiceConnectionName = $env:SFMCSERVICECONNECTIONNAME,
     $keyVaultName = $env:SFMCKEYVAULTNAME,
     $certificateName = $env:SFMCCERTIFICATENAME,
-    $writeDebug = $env:SYSTEM_DEBUG
+    $writeDebug = $env:SYSTEM_DEBUG -ieq 'true'
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -101,27 +101,28 @@ function main() {
     }
 
     $adoRestEndpointUrl = "$env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI/$env:SYSTEM_TEAMPROJECTID/_apis/serviceendpoint/endpoints"
-    $serviceConnection = get-adoSfConnection -url $adoRestEndpointUrl
+    $serviceConnection = get-adoSfConnection -adoRestEndpointUrl $adoRestEndpointUrl
     $adoServerCertThumbprint = $serviceConnection.Authorization.Parameters.servercertthumbprint
 
     write-verbose "adoServerCertThumbprint: $adoServerCertThumbprint"
     write-host "adoServerCertThumbprint length: $($adoServerCertThumbprint.length)"
     write-host "serviceConnection certificate length: $($serviceConnection.Authorization.Parameters.Certificate.length)"
 
-    $pfxCertBase64 = get-azKvPfxCertificateBase64 -serviceConnection $serviceConnection
     $serverThumbprint = get-sfmcArmServerThumbprint -serviceConnection $serviceConnection
     
     if ($adoServerCertThumbprint -ieq $serverThumbprint) {
         write-host "certificate thumbprints match. returning."
         write-verbose "$adoServerCertThumbprint -ieq $serverThumbprint"
-        return $true
+        return
     }
     else {
         write-host "certificate thumbprints do not match. continuing."
         write-verbose "$adoServerCertThumbprint -ne $serverThumbprint"
     }
 
-    update-adoSfConnection -url $adoRestEndpointUrl `
+    $pfxCertBase64 = get-azKvPfxCertificateBase64 -serviceConnection $serviceConnection
+
+    update-adoSfConnection -adoRestEndpointUrl $adoRestEndpointUrl `
         -serviceConnection $serviceConnection `
         -serverThumbprint $serverThumbprint `
         -pfxCertBase64 $pfxCertBase64
@@ -230,7 +231,7 @@ function get-sfmcArmServerThumbprint($serviceConnection) {
 
     write-verbose "get-servicefabricmanagedcluster result $($cluster | ConvertTo-Json -Depth 99)"
     $clusterId = $cluster.Id
-    write-host "(Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints" -ForegroundColor Green
+    write-host "(Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints"
     $serverThumbprint = @((Get-AzResource -ResourceId $clusterId).Properties.clusterCertificateThumbprints)[0]
 
     if (!$serverThumbprint) {
@@ -238,7 +239,7 @@ function get-sfmcArmServerThumbprint($serviceConnection) {
         return $false
     }
     else {
-        write-verbose "server thumbprint:$serverThumbprint" -ForegroundColor Cyan
+        write-verbose "server thumbprint:$serverThumbprint"
     }
     return $serverThumbprint
 }
