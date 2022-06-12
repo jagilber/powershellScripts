@@ -29,7 +29,7 @@ The provided ADO configurations and powershell script performs the following:
     4. if thumbprint is different:
         1. connects to Azure to query key vault for 'client' certificate to create base64 string for ADO connection.
         2. updates ADO service endpoint via REST with new server thumbprint.
-        3. ##vso[task.setvariable variable=ENDPOINT_AUTH_$serviceConnectionName;] is written to update connection thumbprint for subsequent tasks.
+        3. writes ##vso[task.setvariable variable=ENDPOINT_AUTH_$serviceConnectionName;] to update connection thumbprint for subsequent tasks.
 
 ## Azure Service Connection
 
@@ -46,6 +46,19 @@ This App registration is needed to set the RBAC permissions on the Azure Keyvaul
 ### Oauth token
 
 Oauth token needs to be enabled for access to ADO REST API.
+
+## Poweshell commands
+
+Powershell commands to download and execute script.
+Replace "```https://aka.ms/sf-managed-ado-connection.ps1```" with location for sf-managed-ado-connection.ps1 url.
+
+```powershell
+write-host "starting inline"
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
+./sf-managed-ado-connection.ps1
+write-host "finished inline"
+```
 
 ## Using AzurePowershell builtin task in a build pipeline
 
