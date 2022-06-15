@@ -17,13 +17,13 @@ param(
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml')]
     $contentType = 'application/json',
+    $apiVersion = '7.1-preview.4',
     $body = @{
         'type'          = 'servicefabric'
         'api-version'   = $apiVersion
         'endpointNames' = 'serviceFabricConnection'
     },
-    $headers = @{},
-    $apiVersion = '7.1-preview.4'
+    $headers = @{}
 )
 
 function main() {
