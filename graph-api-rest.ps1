@@ -1,27 +1,23 @@
 <#
-test ado rest script using pat
-ado auth not using pat uses rbac and 'api permissions' needes to be modified on app registation to add 'devops' permissions before token will work
+test graph rest script 
+https://docs.microsoft.com/en-us/graph/auth-v2-user
 #>
 
 param(
     $tenantId = '',
     $apiVersion = 'v1.0', #'beta'
     $graphApiUrl = "https://graph.microsoft.com/v1.0/$tenantId/",
-    $query = '',
+    $query = 'applications',#'$metadata#applications',
     $clientId,
     $clientSecret,
     $pat,
     [ValidateSet("get", "post", "put")]
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml')]
-    $contentType = 'application/json',
-    $body = @{
-        'type'          = 'servicefabric'
-        'api-version'   = $apiVersion
-        'endpointNames' = 'serviceFabricConnection'
-    },
-    $headers = @{'accept' = '*/*' },
-    $scope = 'user.read mail.read'
+    $contentType = 'application/json', # '*/*',
+    $body = @{},
+    $headers = @{'accept' = $contentType },
+    $scope = '.default' # 'user.read mail.read'
 )
 
 function main() {
@@ -32,11 +28,11 @@ function main() {
     $global:accessToken = $null
     if (!$pat) {
         if (get-restAuthToken) {
-            get-restSfConnection
+            call-graphQuery
         }
     }
     else {
-        get-restSfConnection
+        call-graphQuery
     }
 }
 
@@ -60,7 +56,7 @@ function get-restAuthToken() {
         #'scope' = [web.httpUtility]::urlencode("https://graph.microsoft.com/$clientId/.default") #$scope
         #'scope' = "https://graph.microsoft.com/$clientId/.default" #$scope
         #'scope' = "/.default" #$scope
-        'scope' = ".default"
+        'scope' = $scope #".default"
         'grant_type'    = 'client_credentials' #'authorization_code' #'client_credentials'
         'client_secret' = $clientSecret
         'redirect_uri' = [web.httpUtility]::urlencode('http://localhost/')
@@ -86,7 +82,7 @@ function get-restAuthToken() {
     return ($global:accessToken -ne $null)
 }
 
-function get-restSfConnection () {
+function call-graphQuery () {
     #
     # get current ado sf connection
     #
