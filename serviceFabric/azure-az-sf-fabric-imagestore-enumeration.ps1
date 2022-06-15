@@ -6,13 +6,11 @@
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-fabric-imagestore-enumeration.ps1" -outFile "$pwd\azure-az-sf-fabric-imagestore-enumeration.ps1";
-.\azure-az-sf-fabric-imagestore-enumeration.ps1 -resourceGroup {{cluster resource group}} -clusterName {{cluster name}}
+.\azure-az-sf-fabric-imagestore-enumeration.ps1
 
 #>
 
 param (
-    [string]$resourceGroup = '',
-    [string]$clusterName = ''
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -40,6 +38,6 @@ function get-storeInfo([string]$relativePath = '', [switch]$recurse) {
         }
     }
     return $results
-}    
+}
 
 main
