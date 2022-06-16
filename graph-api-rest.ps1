@@ -68,7 +68,7 @@ function get-restAuth() {
         #'grant_type'    = $grantType #'client_credentials' #'authorization_code'
         'client_secret' = $clientSecret
         'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
-        'prompt' = 'none'
+       # 'prompt' = 'admin_consent' #'prompt'
     }
 
     $params = @{
