@@ -10,11 +10,11 @@ https://login.microsoftonline.com/common/adminconsent?client_id=6731de76-14a6-49
 #>
 
 param(
-    $tenantId = '',
+    $tenantId = 'common',
     [ValidateSet('v1.0', 'beta')]
-    $apiVersion = 'v1.0', #'beta'
-    $graphApiUrl = "https://graph.microsoft.com/$apiVersion/",#$tenantId/",
-    $query = '$metadata',# 'applications', #'$metadata#applications',
+    $apiVersion = 'beta', #'v1.0'
+    $graphApiUrl = "https://graph.microsoft.com/$apiVersion/$tenantId/",
+    $query = 'applications', #'$metadata#applications',
     $clientId,
     $clientSecret,
     $pat,
@@ -24,9 +24,9 @@ param(
     $contentType = 'application/json', # '*/*',
     $body = @{},
     $headers = @{'accept' = $contentType },
-    $scope = 'https://graph.microsoft.com/.default',# [web.httpUtility]::urlencode('https://graph.microsoft.com/Application.Read.All offline_access user.read mail.read user.read'), #"https://graph.microsoft.com/.default",#'Application.Read.All offline_access user.read mail.read', #'.default', #'user_impersonation', 
-    $grantType = 'client_credentials', #'authorization_code',#'client_credentials', #'authorization_code'
-    $redirectUrl = 'http://localhost/myapp/permissions'#myapp/' #[web.httpUtility]::urlencode('http://localhost/myapp/')#('graphApiApp://auth')#('http://localhost/')#('graphApiApp://auth') #('http://localhost/') #('https://localhost/myapp')#
+    $scope = 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
+    $grantType = 'client_credentials', #'authorization_code'
+    $redirectUrl = 'http://localhost/'
 )
 
 function main() {
@@ -36,11 +36,11 @@ function main() {
     }
     $global:accessToken = $null
     if (!$pat) {
-        #if (get-restAuth -and get-restToken) {
-        #if (get-restToken) {
+        if (get-restAuth -and get-restToken) {
+            #if (get-restToken) {
             get-restToken
             call-graphQuery
-       # }
+        }
     }
     else {
         call-graphQuery
@@ -54,10 +54,8 @@ function get-restAuth() {
     write-host "auth request"
     $global:result = $null
     $error.clear()
-    #$endpoint = "https://login.windows.net/$tenantId/oauth2/v2.0/token"
     $endpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize"
     $headers = @{
-        #'host'         = 'login.microsoftonline.com'
         'content-type' = 'application/x-www-form-urlencoded'
     }
 
@@ -67,10 +65,8 @@ function get-restAuth() {
         'state'         = '12345'
         'scope'         = $scope
         'response_mode' = 'query'
-        #'grant_type'    = $grantType #'client_credentials' #'authorization_code'
         'client_secret' = $clientSecret
         'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
-       # 'prompt' = 'admin_consent' #'prompt'
     }
 
     $params = @{
@@ -105,7 +101,7 @@ function get-restToken() {
     $headers = @{
         'host'         = 'login.microsoftonline.com'
         'content-type' = 'application/x-www-form-urlencoded'
-        'accept' = '*/*'
+        'accept'       = '*/*'
     }
 
     $Body = @{
@@ -146,14 +142,18 @@ function call-graphQuery () {
     if ($pat) {
         $base64pat = [Convert]::ToBase64String([System.Text.ASCIIEncoding]::ASCII.GetBytes([string]::Format("{0}:{1}", "", $pat)));
         $adoAuthHeader = @{
-            'authorization' = "Basic $base64pat"
-            'content-type'  = $contentType
+            'authorization'     = "Basic $base64pat"
+            'content-type'      = $contentType
+            'consistency-level' = 'eventually'
+            'accept'            = $contentType
         }
     }
     else {
         $adoAuthHeader = @{
-            'authorization' = "Bearer $global:accessToken"
-            'content-type'  = $contentType
+            'authorization'     = "Bearer $global:accessToken"
+            'content-type'      = $contentType
+            'consistency-level' = 'eventually'
+            'accept'            = $contentType
         }
     }
     
@@ -165,10 +165,10 @@ function call-graphQuery () {
         Body        = $body
     }
 
-    write-host "ado connection parameters: $($parameters | convertto-json)"
+    write-host "graph connection parameters: $($parameters | convertto-json)"
     write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($parameters.Uri)) -headers $adoAuthHeader"
     $error.clear()
-    $global:result = invoke-RestMethod @parameters
+    $global:result = invoke-restMethod @parameters
     write-host "rest result: $($global:result | convertto-json)"
 
     if ($error) {
