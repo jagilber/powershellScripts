@@ -3,6 +3,9 @@ test graph rest script
 https://docs.microsoft.com/en-us/graph/auth-v2-user
 https://login.microsoftonline.com/common/adminconsent?client_id={client-id}
 https://login.microsoftonline.com/common/adminconsent?client_id=
+https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow
+https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow
+https://login.microsoftonline.com/common/adminconsent?client_id=6731de76-14a6-49ae-97bc-6eba6914391e&state=12345&redirect_uri=http://localhost/myapp/permissions
 #>
 
 param(
@@ -20,9 +23,9 @@ param(
     $contentType = 'application/json', # '*/*',
     $body = @{},
     $headers = @{'accept' = $contentType },
-    $scope = "https://graph.microsoft.com/.default",#'Application.Read.All offline_access user.read mail.read', #'.default', #'user_impersonation', 
-    $grantType = 'client_credentials', #'authorization_code'
-    $redirectUrl = [web.httpUtility]::urlencode('http://localhost/myapp')#('graphApiApp://auth')#('http://localhost/')#('graphApiApp://auth') #('http://localhost/') #('https://localhost/myapp')#
+    $scope = [web.httpUtility]::urlencode('https://graph.microsoft.com/Application.Read.All offline_access user.read mail.read user.read'), #"https://graph.microsoft.com/.default",#'Application.Read.All offline_access user.read mail.read', #'.default', #'user_impersonation', 
+    $grantType = 'authorization_code',#'client_credentials', #'authorization_code'
+    $redirectUrl = 'http://localhost/myapp/' #[web.httpUtility]::urlencode('http://localhost/myapp/')#('graphApiApp://auth')#('http://localhost/')#('graphApiApp://auth') #('http://localhost/') #('https://localhost/myapp')#
 )
 
 function main() {
@@ -32,8 +35,8 @@ function main() {
     }
     $global:accessToken = $null
     if (!$pat) {
-        #if (get-restAuth -and get-restToken) {
-        if (get-restToken) {
+        if (get-restAuth -and get-restToken) {
+        #if (get-restToken) {
             call-graphQuery
         }
     }
@@ -64,14 +67,15 @@ function get-restAuth() {
         'response_mode' = 'query'
         #'grant_type'    = $grantType #'client_credentials' #'authorization_code'
         'client_secret' = $clientSecret
-        'redirect_uri'  = $redirectUrl #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
+        'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
+        'prompt' = 'none'
     }
 
     $params = @{
         ContentType = 'application/x-www-form-urlencoded'
         #   Headers     = $headers 
         Body        = $Body
-        Method      = 'Post'
+        Method      = 'get'
         URI         = $endpoint
     }
 
@@ -80,12 +84,12 @@ function get-restAuth() {
     write-host $clientSecret
     $error.Clear()
 
-    $result = Invoke-RestMethod @params -Verbose -Debug
-    write-host "result: $($result | convertto-json)"
+    $global:authresult = Invoke-WebRequest @params -Verbose -Debug
+    write-host "result: $($global:authresult | convertto-json)"
     write-host "rest auth finished"
     #$global:accessToken = $result.access_token
-    $result | out-file c:\temp\test.txt
-    return ($result -ne $null)
+    $global:authresult | out-file c:\temp\test.txt
+    return ($global:authresult -ne $null)
 }
 
 function get-restToken() {
@@ -99,6 +103,7 @@ function get-restToken() {
     $headers = @{
         'host'         = 'login.microsoftonline.com'
         'content-type' = 'application/x-www-form-urlencoded'
+        'accept' = '*/*'
     }
 
     $Body = @{
