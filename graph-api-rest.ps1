@@ -1,6 +1,7 @@
 <#
 test graph rest script 
 https://myapps.microsoft.com/ <--- can only be accessed from 'work' account
+have to set 'api permissions' on app registration. add 'microsoft graph' 'application permissions'
 https://docs.microsoft.com/en-us/graph/auth-v2-user
 https://login.microsoftonline.com/common/adminconsent?client_id={client-id}
 https://login.microsoftonline.com/common/adminconsent?client_id=
