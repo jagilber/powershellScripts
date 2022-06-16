@@ -26,7 +26,7 @@ param(
     $headers = @{'accept' = $contentType },
     $scope = 'https://graph.microsoft.com/.default',# [web.httpUtility]::urlencode('https://graph.microsoft.com/Application.Read.All offline_access user.read mail.read user.read'), #"https://graph.microsoft.com/.default",#'Application.Read.All offline_access user.read mail.read', #'.default', #'user_impersonation', 
     $grantType = 'client_credentials', #'authorization_code',#'client_credentials', #'authorization_code'
-    $redirectUrl = 'http://localhost/myapp/' #[web.httpUtility]::urlencode('http://localhost/myapp/')#('graphApiApp://auth')#('http://localhost/')#('graphApiApp://auth') #('http://localhost/') #('https://localhost/myapp')#
+    $redirectUrl = 'http://localhost/myapp/permissions'#myapp/' #[web.httpUtility]::urlencode('http://localhost/myapp/')#('graphApiApp://auth')#('http://localhost/')#('graphApiApp://auth') #('http://localhost/') #('https://localhost/myapp')#
 )
 
 function main() {
