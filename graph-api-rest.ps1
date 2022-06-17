@@ -8,6 +8,9 @@ https://login.microsoftonline.com/common/adminconsent?client_id=
 https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow
 https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow
 https://login.microsoftonline.com/common/adminconsent?client_id=6731de76-14a6-49ae-97bc-6eba6914391e&state=12345&redirect_uri=http://localhost/myapp/permissions
+https://stackoverflow.com/questions/66106927/webview2-in-powershell-winform-gui
+BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
+
 #>
 #using namespace System.Windows.Forms
 #using namespace System.Drawing
@@ -20,7 +23,7 @@ param(
     $query = 'applications', #'$metadata#applications',
     $clientId,
     $clientSecret,
-    [ValidateSet("get", "post", "put")]
+    [ValidateSet("get", "post")]
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml', '*/*')]
     $contentType = 'application/json', # '*/*',
@@ -28,8 +31,9 @@ param(
     $headers = @{'accept' = $contentType },
     $scope = 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     $grantType = 'client_credentials', #'authorization_code'
-    $redirectUrl = 'http://localhost/',
-    $force
+    $redirectUrl = 'http://localhost',
+    [switch]$force,
+    [switch]$auth
 )
 
 function main() {
@@ -38,6 +42,9 @@ function main() {
         return
     }
 
+    if ($auth) {
+        get-restAuth
+    }
     if (!$global:accessToken -or $force) {
         get-restToken
     }
@@ -53,19 +60,21 @@ function get-restAuth() {
     $global:result = $null
     $error.clear()
     $endpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize"
+    #$endpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     $headers = @{
         'content-type' = 'application/x-www-form-urlencoded'
     }
 
     $Body = @{
         'client_id'     = $clientId
-        'response_type' = 'code'
+        'response_type' = 'code' #'form_post' #'code'
         'state'         = '12345'
-        'scope'         = $scope
+        'scope'         = 'https://graph.microsoft.com/offline_access openid mail.read' # $scope
         'response_mode' = 'query'
-        'prompt'        = 'none' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
-        'client_secret' = $clientSecret
+        'prompt'        = 'login' # 'select_account' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
+        #'client_secret' = $clientSecret
         'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
+       #'redirect_uri'  = "https://login.microsoftonline.com/$tenantId/oauth2/nativeclient" #$redirectUrl #"urn:ietf:wg:oauth:2.0:oob" # https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
     }
 
     $params = @{
@@ -134,7 +143,7 @@ function get-restAuth() {
     # $form.ShowDialog()
 
     # # Clean up.
-    # $form.Dispose()
+    $form.Dispose()
     return ($global:authresult -ne $null)
 }
 
