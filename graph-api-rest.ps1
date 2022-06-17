@@ -9,6 +9,8 @@ https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-c
 https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow
 https://login.microsoftonline.com/common/adminconsent?client_id=6731de76-14a6-49ae-97bc-6eba6914391e&state=12345&redirect_uri=http://localhost/myapp/permissions
 #>
+#using namespace System.Windows.Forms
+#using namespace System.Drawing
 
 param(
     $tenantId = 'common',
@@ -37,9 +39,8 @@ function main() {
     }
     $global:accessToken = $null
     if (!$pat) {
-        if (get-restAuth -and get-restToken) {
-            #if (get-restToken) {
-            get-restToken
+        #if (get-restAuth -and get-restToken) {
+        if (get-restToken) {
             call-graphQuery
         }
     }
@@ -49,6 +50,7 @@ function main() {
 }
 
 function get-restAuth() {
+    # able to display but only throws errors 
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
     $global:accessToken = $null
@@ -66,6 +68,7 @@ function get-restAuth() {
         'state'         = '12345'
         'scope'         = $scope
         'response_mode' = 'query'
+        'prompt' = 'none' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
         'client_secret' = $clientSecret
         'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
     }
@@ -84,10 +87,59 @@ function get-restAuth() {
     $error.Clear()
 
     $global:authresult = Invoke-WebRequest @params -Verbose -Debug
-    write-host "result: $($global:authresult | convertto-json)"
+    write-host "auth result: $($global:authresult)"
     write-host "rest auth finished"
-    #$global:accessToken = $result.access_token
-    $global:authresult | out-file c:\temp\test.txt
+#    $global:authresult.Content | out-file c:\temp\test.html
+    #todo unable to get dialog to work correctly. not sure if its due to js or trusted sites or way im testing
+   Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing 
+
+   [xml]$xaml = @"
+   <Window 
+       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:local="clr-namespace:WpfApp2"
+       x:Name="Window" Title="$($MyInvocation.ScriptName)" WindowStartupLocation = "CenterScreen" ResizeMode="CanResize"
+       ShowInTaskbar = "True" Background = "lightgray" Width="1200" Height="800"> 
+        <WebBrowser Name='WebBrowser1'/>
+   </Window>
+"@
+
+#Source="file://c:/temp/test.html"
+$Reader = (New-Object System.Xml.XmlNodeReader $xaml) 
+$Form = [Windows.Markup.XamlReader]::Load($reader) 
+
+#AutoFind all controls
+$xaml.SelectNodes("//*[@*[contains(translate(name(.),'n','N'),'Name')]]")  | ForEach-Object { 
+    New-Variable -Name $_.Name -Value $Form.FindName($_.Name) -Force 
+}
+$content = $global:authresult.Content
+$WebBrowser1.navigatetostring($content)
+
+[void]$Form.ShowDialog() 
+    # # Load the WinForms assembly.
+    # Add-Type -AssemblyName System.Windows.Forms
+
+    # # Create a form.
+    # $form = [Form] @{
+    #     ClientSize = [Point]::new(1000, 1000)
+    #     Text       = "WebBrowser-Control Demo"
+    # }
+
+    # # Create a web-browser control, make it as large as the inside of the form,
+    # # and assign the HTML text.
+    # $global:webBrowser = [WebBrowser] @{
+    #     ClientSize   = $form.ClientSize
+    #     DocumentText = $global:authresult.Content
+    # }
+
+    # # Add the web-browser control to the form...
+    # $form.Controls.Add($global:webBrowser)
+
+    # # ... and display the form as a dialog (synchronously).
+    # $form.ShowDialog()
+
+    # # Clean up.
+    # $form.Dispose()
     return ($global:authresult -ne $null)
 }
 
