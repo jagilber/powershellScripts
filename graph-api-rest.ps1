@@ -20,7 +20,6 @@ param(
     $query = 'applications', #'$metadata#applications',
     $clientId,
     $clientSecret,
-    $pat,
     [ValidateSet("get", "post", "put")]
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml', '*/*')]
@@ -29,31 +28,27 @@ param(
     $headers = @{'accept' = $contentType },
     $scope = 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     $grantType = 'client_credentials', #'authorization_code'
-    $redirectUrl = 'http://localhost/'
+    $redirectUrl = 'http://localhost/',
+    $force
 )
 
 function main() {
-    if (!(!$pat -or !(!$clientId -or !$clientSecret)) -or !$organization -or !$project) {
-        write-error '$pat or $clientid and $clientSecret, $organization, and $project all need to be specified'
+    if (!$clientId -and !$clientSecret) {
+        write-error '$clientid and $clientSecret need to be specified'
         return
     }
-    $global:accessToken = $null
-    if (!$pat) {
-        #if (get-restAuth -and get-restToken) {
-        if (get-restToken) {
-            call-graphQuery
-        }
+
+    if (!$global:accessToken -or $force) {
+        get-restToken
     }
-    else {
-        call-graphQuery
-    }
+
+    call-graphQuery
 }
 
 function get-restAuth() {
     # able to display but only throws errors 
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
-    $global:accessToken = $null
     write-host "auth request"
     $global:result = $null
     $error.clear()
@@ -68,7 +63,7 @@ function get-restAuth() {
         'state'         = '12345'
         'scope'         = $scope
         'response_mode' = 'query'
-        'prompt' = 'none' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
+        'prompt'        = 'none' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
         'client_secret' = $clientSecret
         'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
     }
@@ -89,11 +84,11 @@ function get-restAuth() {
     $global:authresult = Invoke-WebRequest @params -Verbose -Debug
     write-host "auth result: $($global:authresult)"
     write-host "rest auth finished"
-#    $global:authresult.Content | out-file c:\temp\test.html
+    #    $global:authresult.Content | out-file c:\temp\test.html
     #todo unable to get dialog to work correctly. not sure if its due to js or trusted sites or way im testing
-   Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing 
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing 
 
-   [xml]$xaml = @"
+    [xml]$xaml = @"
    <Window 
        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -104,18 +99,18 @@ function get-restAuth() {
    </Window>
 "@
 
-#Source="file://c:/temp/test.html"
-$Reader = (New-Object System.Xml.XmlNodeReader $xaml) 
-$Form = [Windows.Markup.XamlReader]::Load($reader) 
+    #Source="file://c:/temp/test.html"
+    $Reader = (New-Object System.Xml.XmlNodeReader $xaml) 
+    $Form = [Windows.Markup.XamlReader]::Load($reader) 
 
-#AutoFind all controls
-$xaml.SelectNodes("//*[@*[contains(translate(name(.),'n','N'),'Name')]]")  | ForEach-Object { 
-    New-Variable -Name $_.Name -Value $Form.FindName($_.Name) -Force 
-}
-$content = $global:authresult.Content
-$WebBrowser1.navigatetostring($content)
+    #AutoFind all controls
+    $xaml.SelectNodes("//*[@*[contains(translate(name(.),'n','N'),'Name')]]")  | ForEach-Object { 
+        New-Variable -Name $_.Name -Value $Form.FindName($_.Name) -Force 
+    }
+    $content = $global:authresult.Content
+    $WebBrowser1.navigatetostring($content)
 
-[void]$Form.ShowDialog() 
+    [void]$Form.ShowDialog() 
     # # Load the WinForms assembly.
     # Add-Type -AssemblyName System.Windows.Forms
 
@@ -146,7 +141,7 @@ $WebBrowser1.navigatetostring($content)
 function get-restToken() {
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
-    $global:accessToken = $null
+
     write-host "rest logon"
     $global:result = $null
     $error.clear()
@@ -192,24 +187,12 @@ function call-graphQuery () {
     #
     write-host "getting service fabric service connection"
 
-    if ($pat) {
-        $base64pat = [Convert]::ToBase64String([System.Text.ASCIIEncoding]::ASCII.GetBytes([string]::Format("{0}:{1}", "", $pat)));
-        $adoAuthHeader = @{
-            'authorization'     = "Basic $base64pat"
-            'content-type'      = $contentType
-            'consistency-level' = 'eventually'
-            'accept'            = $contentType
-        }
+    $adoAuthHeader = @{
+        'authorization'     = "Bearer $global:accessToken"
+        'content-type'      = $contentType
+        'consistency-level' = 'eventually'
+        'accept'            = $contentType
     }
-    else {
-        $adoAuthHeader = @{
-            'authorization'     = "Bearer $global:accessToken"
-            'content-type'      = $contentType
-            'consistency-level' = 'eventually'
-            'accept'            = $contentType
-        }
-    }
-    
     $parameters = @{
         Uri         = $graphApiUrl + $query
         Method      = $method
