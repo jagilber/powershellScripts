@@ -16,9 +16,7 @@ https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oid
 schema:
 https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration
 #>
-#using namespace System.Windows.Forms
-#using namespace System.Drawing
-
+[cmdletbinding()]
 param(
     $tenantId = 'common',
     [ValidateSet('v1.0', 'beta')]
@@ -33,12 +31,14 @@ param(
     $contentType = 'application/json', # '*/*',
     $body = @{},
     $headers = @{'accept' = $contentType },
-    $scope = 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
+    $scope = 'user.read openid profile', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     $grantType = 'client_credentials', #'authorization_code'
     $redirectUrl = 'http://localhost',
     [switch]$force,
     [switch]$auth
 )
+
+$global:logonResult = $null
 
 function main() {
     if (!$clientId -and !$clientSecret) {
@@ -46,10 +46,8 @@ function main() {
         return
     }
 
-    if ($auth) {
+    if (!$global:accessToken -or ($global:accessTokenExpiration -lt (get-date)) -or $force) {
         get-restAuth
-    }
-    if (!$global:accessToken -or $force) {
         get-restToken
     }
 
@@ -57,35 +55,21 @@ function main() {
 }
 
 function get-restAuth() {
-    # able to display but only throws errors 
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
     write-host "auth request"
-    $global:result = $null
     $error.clear()
-    $endpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize"
-    #$endpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-    $headers = @{
-        'content-type' = 'application/x-www-form-urlencoded'
-    }
+    $endpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/devicecode"
 
     $Body = @{
-        'client_id'     = $clientId
-        'response_type' = 'code' #'form_post' #'code'
-        'state'         = '12345'
-        'scope'         = 'https://graph.microsoft.com/offline_access openid mail.read' # $scope
-        'response_mode' = 'query'
-        'prompt'        = 'login' # 'select_account' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
-        #'client_secret' = $clientSecret
-        'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
-       #'redirect_uri'  = "https://login.microsoftonline.com/$tenantId/oauth2/nativeclient" #$redirectUrl #"urn:ietf:wg:oauth:2.0:oob" # https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
+        'client_id' = $clientId
+        'scope'     = $scope
     }
 
     $params = @{
         ContentType = 'application/x-www-form-urlencoded'
-        #   Headers     = $headers 
         Body        = $Body
-        Method      = 'get'
+        Method      = 'post'
         URI         = $endpoint
     }
 
@@ -94,103 +78,70 @@ function get-restAuth() {
     write-host $clientSecret
     $error.Clear()
 
-    $global:authresult = Invoke-WebRequest @params -Verbose -Debug
-    write-host "auth result: $($global:authresult)"
+    $global:authresult = Invoke-RestMethod @params -Verbose -Debug
+    write-host "auth result: $($global:authresult | convertto-json)"
     write-host "rest auth finished"
-    #    $global:authresult.Content | out-file c:\temp\test.html
-    #todo unable to get dialog to work correctly. not sure if its due to js or trusted sites or way im testing
-    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing 
-
-    [xml]$xaml = @"
-   <Window 
-       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-       xmlns:local="clr-namespace:WpfApp2"
-       x:Name="Window" Title="$($MyInvocation.ScriptName)" WindowStartupLocation = "CenterScreen" ResizeMode="CanResize"
-       ShowInTaskbar = "True" Background = "lightgray" Width="1200" Height="800"> 
-        <WebBrowser Name='WebBrowser1'/>
-   </Window>
-"@
-
-    #Source="file://c:/temp/test.html"
-    $Reader = (New-Object System.Xml.XmlNodeReader $xaml) 
-    $Form = [Windows.Markup.XamlReader]::Load($reader) 
-
-    #AutoFind all controls
-    $xaml.SelectNodes("//*[@*[contains(translate(name(.),'n','N'),'Name')]]")  | ForEach-Object { 
-        New-Variable -Name $_.Name -Value $Form.FindName($_.Name) -Force 
-    }
-    $content = $global:authresult.Content
-    $WebBrowser1.navigatetostring($content)
-
-    [void]$Form.ShowDialog() 
-    # # Load the WinForms assembly.
-    # Add-Type -AssemblyName System.Windows.Forms
-
-    # # Create a form.
-    # $form = [Form] @{
-    #     ClientSize = [Point]::new(1000, 1000)
-    #     Text       = "WebBrowser-Control Demo"
-    # }
-
-    # # Create a web-browser control, make it as large as the inside of the form,
-    # # and assign the HTML text.
-    # $global:webBrowser = [WebBrowser] @{
-    #     ClientSize   = $form.ClientSize
-    #     DocumentText = $global:authresult.Content
-    # }
-
-    # # Add the web-browser control to the form...
-    # $form.Controls.Add($global:webBrowser)
-
-    # # ... and display the form as a dialog (synchronously).
-    # $form.ShowDialog()
-
-    # # Clean up.
-    $form.Dispose()
     return ($global:authresult -ne $null)
 }
 
 function get-restToken() {
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
+    # will fail on device code until complete
+    $startTime = (get-date).AddSeconds($global:authresult.expires_in)
 
     write-host "rest logon"
-    $global:result = $null
+    $global:logonResult = $null
     $error.clear()
     $endpoint = "https://login.windows.net/$tenantId/oauth2/v2.0/token"
     $headers = @{
-        'host'         = 'login.microsoftonline.com'
         'content-type' = 'application/x-www-form-urlencoded'
-        'accept'       = '*/*'
+        'accept'       = $contentType
     }
 
     $Body = @{
-        'client_id'     = $clientId
-        'scope'         = $scope
-        'grant_type'    = $grantType #'client_credentials' #'authorization_code'
-        'client_secret' = $clientSecret
-        'redirect_uri'  = $redirectUrl #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
+        'client_id'   = $clientId
+        'device_code' = $global:authresult.device_code
+        'grant_type'  = "urn:ietf:params:oauth:grant-type:device_code" #$grantType #'client_credentials' #'authorization_code'
     }
 
     $params = @{
-        #    ContentType = 'application/x-www-form-urlencoded'
         Headers = $headers 
         Body    = $Body
         Method  = 'Post'
         URI     = $endpoint
     }
 
-    write-host ($body | convertto-json)
-    write-host ($params | convertto-json)
-    write-host $clientSecret
-    $error.Clear()
+    write-verbose ($params | convertto-json)
 
-    $result = Invoke-RestMethod @params -Verbose -Debug
-    write-host "result: $($result | convertto-json)"
-    write-host "rest logon finished"
-    $global:accessToken = $result.access_token
+    while ($startTime -gt (get-date)) {
+        $error.Clear()
 
+        try {
+            $global:logonResult = Invoke-RestMethod @params -Verbose -Debug
+            write-host "logon result: $($global:logonResult | convertto-json)"
+            $global:accessToken = $global:logonResult.access_token
+            $global:accessTokenExpiration = ((get-date).AddSeconds($global:logonResult.expires_in))
+            return ($global:accessToken -ne $null)
+        }
+        catch [System.Exception] {
+            $errorMessage = ($_ | convertfrom-json)
+
+            if ($errorMessage -and !($errorMessage.error -ieq 'authorization_pending')) {
+                write-host "exception: $($error | out-string)`r`n this: $($_)`r`n"
+                write-host "logon error: $($errorMessage | convertto-json)"
+                write-host "breaking"
+                break
+            }
+            else {
+                write-host "waiting for device token result..." -ForegroundColor Yellow
+                write-host "$($global:authresult.message)" -ForegroundColor Green
+                start-sleep -seconds $global:authresult.interval
+            }
+        }
+    }
+
+    write-host "rest logon returning"
     return ($global:accessToken -ne $null)
 }
 
@@ -217,15 +168,15 @@ function call-graphQuery () {
     write-host "graph connection parameters: $($parameters | convertto-json)"
     write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($parameters.Uri)) -headers $adoAuthHeader"
     $error.clear()
-    $global:result = invoke-restMethod @parameters
-    write-host "rest result: $($global:result | convertto-json)"
+    $global:logonResult = invoke-restMethod @parameters
+    write-host "rest result: $($global:logonResult | convertto-json)"
 
     if ($error) {
         write-error "exception: $($error | out-string)"
         return $null
     }
 
-    return $global:result
+    return $global:logonResult
 }
 
 main
