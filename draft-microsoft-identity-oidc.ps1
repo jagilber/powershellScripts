@@ -1,5 +1,5 @@
 <#
-test graph rest script 
+test oidc rest script 
 https://myapps.microsoft.com/ <--- can only be accessed from 'work' account
 have to set 'api permissions' on app registration. add 'microsoft graph' 'application permissions'
 https://docs.microsoft.com/en-us/graph/auth-v2-user
@@ -35,7 +35,7 @@ param(
     $headers = @{'accept' = $contentType },
     $scope = 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     $grantType = 'client_credentials', #'authorization_code'
-    $redirectUrl = 'http://localhost',
+    $redirectUrl = 'http://localhost/',
     [switch]$force,
     [switch]$auth
 )
@@ -71,10 +71,11 @@ function get-restAuth() {
 
     $Body = @{
         'client_id'     = $clientId
-        'response_type' = 'code' #'form_post' #'code'
+        'response_type' = 'id_token code' #'code'
         'state'         = '12345'
-        'scope'         = 'https://graph.microsoft.com/offline_access openid mail.read' # $scope
-        'response_mode' = 'query'
+        'nonce' = [guid]::newGuid()
+        'scope'         = 'openid' # $scope
+        'response_mode' = 'form_post' #'query'
         'prompt'        = 'login' # 'select_account' #'consent' #'admin_consent'# 'consent' #'select_account' #'none'
         #'client_secret' = $clientSecret
         'redirect_uri'  = $redirectUrl #"https://login.microsoftonline.com/common/oauth2/nativeclient" #"urn:ietf:wg:oauth:2.0:oob"#$redirectUrl
@@ -83,9 +84,9 @@ function get-restAuth() {
 
     $params = @{
         ContentType = 'application/x-www-form-urlencoded'
-        #   Headers     = $headers 
+          # Headers     = $headers 
         Body        = $Body
-        Method      = 'get'
+        Method      = 'post'
         URI         = $endpoint
     }
 
@@ -112,7 +113,6 @@ function get-restAuth() {
    </Window>
 "@
 
-    #Source="file://c:/temp/test.html"
     $Reader = (New-Object System.Xml.XmlNodeReader $xaml) 
     $Form = [Windows.Markup.XamlReader]::Load($reader) 
 
@@ -121,6 +121,8 @@ function get-restAuth() {
         New-Variable -Name $_.Name -Value $Form.FindName($_.Name) -Force 
     }
     $content = $global:authresult.Content
+    $Source="file://c:/temp/test.html"
+    $content | out-file 'c:\temp\test.html'
     $WebBrowser1.navigatetostring($content)
 
     [void]$Form.ShowDialog() 
