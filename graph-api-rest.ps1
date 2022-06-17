@@ -52,6 +52,7 @@ function main() {
     }
 
     call-graphQuery
+    write-host "use: `$global:restQuery"
 }
 
 function get-restAuth() {
@@ -72,10 +73,8 @@ function get-restAuth() {
         Method      = 'post'
         URI         = $endpoint
     }
-
-    write-host ($body | convertto-json)
+    
     write-host ($params | convertto-json)
-    write-host $clientSecret
     $error.Clear()
 
     $global:authresult = Invoke-RestMethod @params -Verbose -Debug
@@ -168,15 +167,15 @@ function call-graphQuery () {
     write-host "graph connection parameters: $($parameters | convertto-json)"
     write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($parameters.Uri)) -headers $adoAuthHeader"
     $error.clear()
-    $global:logonResult = invoke-restMethod @parameters
-    write-host "rest result: $($global:logonResult | convertto-json)"
+    $global:restQuery = invoke-restMethod @parameters
+    write-host "rest result: $($global:restQuery| convertto-json)"
 
     if ($error) {
         write-error "exception: $($error | out-string)"
         return $null
     }
 
-    return $global:logonResult
+    return $global:restQuery
 }
 
 main
