@@ -300,7 +300,7 @@ class NugetObj {
     }
 
     [string[]] GetDirectories([string]$sourcePath, [string]$sourcePattern) {
-        write-host "getdirectories: $sourcePath $sourcePattern"
+        write-host "getdirectories: $sourcePath\$sourcePattern"
         if (!(test-path $sourcePath)) {
             $sourcePath = $this.EnumLocalsPath($sourcePath)
         }
