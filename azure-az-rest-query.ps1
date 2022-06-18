@@ -1,9 +1,15 @@
 <#
+.SYNOPSIS
 https://docs.microsoft.com/en-us/rest/api/
 https://docs.microsoft.com/en-us/rest/api/compute/virtualmachines
 .\azure-az-rest-query.ps1 -query resources
 .\azure-az-rest-query.ps1 -query resourceGroups
 .\azure-az-rest-query.ps1 -query providers/Microsoft.Compute
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-rest-query.ps1" -outFile "$pwd\azure-az-rest-query.ps1";
+    .\azure-az-rest-query.ps1
 #>
 
 param(
@@ -17,7 +23,7 @@ param(
     $method = "get",
     [ValidateSet('application/x-www-form-urlencoded','application/json','application/xml')]
     $contentType = 'application/x-www-form-urlencoded',
-    $clientid = $global:clientId,
+    $clientid = ($global:clientId, '1950a258-227b-4e31-a9cf-717495945fc2' -ne $null)[0],
     $body=@{},
     $headers=@{}
 )

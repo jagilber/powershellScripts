@@ -1,20 +1,28 @@
 <#
+.SYNOPSIS
 test graph rest script 
-https://myapps.microsoft.com/ <--- can only be accessed from 'work' account
-have to set 'api permissions' on app registration. add 'microsoft graph' 'application permissions'
-https://docs.microsoft.com/en-us/graph/auth-v2-user
-https://login.microsoftonline.com/common/adminconsent?client_id={client-id}
-https://login.microsoftonline.com/common/adminconsent?client_id=
-https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow
-https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow
-https://login.microsoftonline.com/common/adminconsent?client_id=6731de76-14a6-49ae-97bc-6eba6914391e&state=12345&redirect_uri=http://localhost/myapp/permissions
-https://stackoverflow.com/questions/66106927/webview2-in-powershell-winform-gui
-BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
-https://docs.microsoft.com/en-us/azure/active-directory/develop/sample-v2-code
 
-https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc
-schema:
-https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration
+.NOTES
+    https://myapps.microsoft.com/ <--- can only be accessed from 'work' account
+    have to set 'api permissions' on app registration. add 'microsoft graph' 'application permissions'
+    https://docs.microsoft.com/en-us/graph/auth-v2-user
+    https://login.microsoftonline.com/common/adminconsent?client_id={client-id}
+    https://login.microsoftonline.com/common/adminconsent?client_id=
+    https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow
+    https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow
+    https://login.microsoftonline.com/common/adminconsent?client_id=6731de76-14a6-49ae-97bc-6eba6914391e&state=12345&redirect_uri=http://localhost/myapp/permissions
+    https://stackoverflow.com/questions/66106927/webview2-in-powershell-winform-gui
+    BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
+    https://docs.microsoft.com/en-us/azure/active-directory/develop/sample-v2-code
+
+    https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc
+    schema:
+    https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/graph-api-rest.ps1" -outFile "$pwd\graph-api-rest.ps1";
+    .\graph-api-rest.ps1
 #>
 [cmdletbinding()]
 param(
