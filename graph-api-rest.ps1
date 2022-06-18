@@ -39,10 +39,10 @@ param(
     $contentType = 'application/json', # '*/*',
     $body = @{},
     $headers = @{'accept' = $contentType },
-    $scope = 'user.read openid profile Application.Read.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
+    $scope = 'user.read openid profile Application.ReadWrite.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     [ValidateSet('urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'authorization_code')]
     $grantType = 'urn:ietf:params:oauth:grant-type:device_code', #'client_credentials', #'authorization_code'
-    $redirectUrl = 'http://localhost',
+    #$redirectUrl = 'http://localhost',
     [switch]$force
 )
 
