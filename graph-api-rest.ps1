@@ -23,7 +23,7 @@ param(
     $apiVersion = 'beta', #'v1.0'
     $graphApiUrl = "https://graph.microsoft.com/$apiVersion/$tenantId/",
     $query = 'applications', #'$metadata#applications',
-    $clientId,
+    $clientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e', # well-known aad client id generated on connect
     $clientSecret,
     [ValidateSet("get", "post")]
     $method = "get",
