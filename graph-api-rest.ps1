@@ -23,7 +23,7 @@ param(
     $apiVersion = 'beta', #'v1.0'
     $graphApiUrl = "https://graph.microsoft.com/$apiVersion/$tenantId/",
     $query = 'applications', #'$metadata#applications',
-    $clientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e', # well-known aad client id generated on connect
+    $clientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e', # well-known ps aad client id generated on connect
     $clientSecret,
     [ValidateSet("get", "post")]
     $method = "get",
@@ -31,11 +31,11 @@ param(
     $contentType = 'application/json', # '*/*',
     $body = @{},
     $headers = @{'accept' = $contentType },
-    $scope = 'user.read openid profile', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
-    $grantType = 'client_credentials', #'authorization_code'
+    $scope = 'user.read openid profile Application.Read.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
+    [ValidateSet('urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'authorization_code')]
+    $grantType = 'urn:ietf:params:oauth:grant-type:device_code', #'client_credentials', #'authorization_code'
     $redirectUrl = 'http://localhost',
-    [switch]$force,
-    [switch]$auth
+    [switch]$force
 )
 
 $global:logonResult = $null
@@ -101,7 +101,7 @@ function get-restToken() {
     $Body = @{
         'client_id'   = $clientId
         'device_code' = $global:authresult.device_code
-        'grant_type'  = "urn:ietf:params:oauth:grant-type:device_code" #$grantType #'client_credentials' #'authorization_code'
+        'grant_type'  = $grantType #'client_credentials' #'authorization_code'
     }
 
     $params = @{
@@ -126,16 +126,16 @@ function get-restToken() {
         catch [System.Exception] {
             $errorMessage = ($_ | convertfrom-json)
 
-            if ($errorMessage -and !($errorMessage.error -ieq 'authorization_pending')) {
+            if ($errorMessage -and ($errorMessage.error -ieq 'authorization_pending')) {
+                write-host "waiting for device token result..." -ForegroundColor Yellow
+                write-host "$($global:authresult.message)" -ForegroundColor Green
+                start-sleep -seconds $global:authresult.interval
+            }
+            else {
                 write-host "exception: $($error | out-string)`r`n this: $($_)`r`n"
                 write-host "logon error: $($errorMessage | convertto-json)"
                 write-host "breaking"
                 break
-            }
-            else {
-                write-host "waiting for device token result..." -ForegroundColor Yellow
-                write-host "$($global:authresult.message)" -ForegroundColor Green
-                start-sleep -seconds $global:authresult.interval
             }
         }
     }
