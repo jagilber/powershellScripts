@@ -1,8 +1,14 @@
 <#
+.SYNOPSIS
     script to authenticate for Azure Resource Manager REST API
     requires az* modules, setting up an azure ad application spn, and a self signed cert
     see azure-az-create-aad-application-spn.ps1 to setup the ad application and cert
     output is in $global:token and is used by .\azure-az-rest-query.ps1 script
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-rest-logon.ps1" -outFile "$pwd\azure-az-rest-logon.ps1";
+    .\azure-az-rest-logon.ps1
 #>
 
 [cmdletbinding()]
@@ -10,7 +16,7 @@ param(
     [string]$certSubject,
     [string]$thumbPrint,
     [string]$certStore = "Cert:\CurrentUser\My",
-    [string]$clientId,
+    [string]$clientId = "1950a258-227b-4e31-a9cf-717495945fc2",
     [string]$clientSecret,
     [string]$tenantId,
     [switch]$force,
