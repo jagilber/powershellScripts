@@ -21,8 +21,8 @@ test graph rest script
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/graph-api-rest.ps1" -outFile "$pwd\graph-api-rest.ps1";
-    .\graph-api-rest.ps1
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/ms-graph-api-rest.ps1" -outFile "$pwd\ms-graph-api-rest.ps1";
+    .\ms-graph-api-rest.ps1
 #>
 [cmdletbinding()]
 param(
@@ -38,11 +38,13 @@ param(
     [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml', '*/*')]
     $contentType = 'application/json', # '*/*',
     $body = @{},
+    $accessToken = $global:accessToken,
     $headers = @{
-        'accept' = $contentType
+        'authorization'    = "Bearer $accessToken"
+        'accept'           = $contentType
         'consistencylevel' = 'eventual'
-        'content-type' = $contentType
-     },
+        'content-type'     = $contentType
+    },
     $scope = 'user.read openid profile Application.ReadWrite.All User.ReadWrite.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     [ValidateSet('urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'authorization_code')]
     $grantType = 'urn:ietf:params:oauth:grant-type:device_code', #'client_credentials', #'authorization_code'
@@ -64,7 +66,7 @@ function main() {
     }
 
     call-graphQuery
-    write-host "use: `$global:restQuery" -ForegroundColor Cyan
+    write-host "use: `$global:restResults" -ForegroundColor Cyan
 }
 
 function get-restAuth() {
@@ -161,33 +163,40 @@ function call-graphQuery () {
     # call graph api
     #
     write-host "getting service fabric service connection"
+    $adoAuthHeader = $headers.Clone()
+    $adoAuthHeader.authorization = "Bearer $global:accessToken"
+    $uri = $graphApiUrl + $query
+    $global:restResults = [collections.ArrayList]::new()
 
-    $adoAuthHeader = @{
-        'authorization'     = "Bearer $global:accessToken"
-        #'content-type'      = $contentType
-        'consistencylevel' = 'eventual'
-        'accept'            = $contentType
+    while ($true) {
+        $parameters = @{
+            Uri         = $uri
+            Method      = $method
+            Headers     = $adoAuthHeader
+            Erroraction = 'continue'
+            Body        = $body
+        }
+
+        write-host "graph connection parameters: $($parameters | convertto-json)"
+        write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($parameters.Uri)) -headers $adoAuthHeader"
+        $error.clear()
+        $global:restQuery = invoke-restMethod @parameters
+        $global:restResults.Add($global:restQuery.value)
+        write-host "rest result: $($global:restQuery| convertto-json)"
+
+        if ($error) {
+            write-error "exception: $($error | out-string)"
+            return $null
+        }
+        if(!($restQuery.'@odata.nextLink')){
+            write-verbose "no next link"
+            break
+        }
+        else{
+            $uri = $restQuery.'@odata.nextLink'
+        }
     }
-    $parameters = @{
-        Uri         = $graphApiUrl + $query
-        Method      = $method
-        Headers     = $adoAuthHeader
-        Erroraction = 'continue'
-        Body        = $body
-    }
-
-    write-host "graph connection parameters: $($parameters | convertto-json)"
-    write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($parameters.Uri)) -headers $adoAuthHeader"
-    $error.clear()
-    $global:restQuery = invoke-restMethod @parameters
-    write-host "rest result: $($global:restQuery| convertto-json)"
-
-    if ($error) {
-        write-error "exception: $($error | out-string)"
-        return $null
-    }
-
-    return $global:restQuery
+    return $global:restResults
 }
 
 main
