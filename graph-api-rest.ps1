@@ -38,8 +38,12 @@ param(
     [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml', '*/*')]
     $contentType = 'application/json', # '*/*',
     $body = @{},
-    $headers = @{'accept' = $contentType },
-    $scope = 'user.read openid profile Application.ReadWrite.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
+    $headers = @{
+        'accept' = $contentType
+        'consistencylevel' = 'eventual'
+        'content-type' = $contentType
+     },
+    $scope = 'user.read openid profile Application.ReadWrite.All User.ReadWrite.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     [ValidateSet('urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'authorization_code')]
     $grantType = 'urn:ietf:params:oauth:grant-type:device_code', #'client_credentials', #'authorization_code'
     #$redirectUrl = 'http://localhost',
@@ -60,7 +64,7 @@ function main() {
     }
 
     call-graphQuery
-    write-host "use: `$global:restQuery"
+    write-host "use: `$global:restQuery" -ForegroundColor Cyan
 }
 
 function get-restAuth() {
@@ -160,8 +164,8 @@ function call-graphQuery () {
 
     $adoAuthHeader = @{
         'authorization'     = "Bearer $global:accessToken"
-        'content-type'      = $contentType
-        'consistency-level' = 'eventually'
+        #'content-type'      = $contentType
+        'consistencylevel' = 'eventual'
         'accept'            = $contentType
     }
     $parameters = @{
