@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-test graph rest script 
+    microsoft graph rest api script 
 
 .NOTES
     https://myapps.microsoft.com/ <--- can only be accessed from 'work' account
@@ -28,7 +28,7 @@ param(
     $apiVersion = 'beta', #'v1.0'
     $graphApiUrl = "https://graph.microsoft.com/$apiVersion/$tenantId/",
     $query = 'applications', #'$metadata#applications',
-    $clientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e', # well-known ps aad client id generated on connect
+    $clientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e', # well-known ps graph client id generated on connect
     $clientSecret,
     [ValidateSet("get", "post")]
     $method = "get",
@@ -58,7 +58,6 @@ function main() {
     }
 
     if (!$global:accessToken -or ($global:accessTokenExpiration -lt (get-date)) -or $force) {
-        get-restAuth
         get-restToken
     }
 
@@ -69,7 +68,7 @@ function main() {
 function get-restAuth() {
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
-    write-host "auth request"
+    write-host "auth request" -ForegroundColor Green
     $error.clear()
     $uri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/devicecode"
 
@@ -97,11 +96,9 @@ function get-restAuth() {
 
 function get-restToken() {
     # requires app registration api permissions with 'devops' added
-    # so cannot use internally
-    # will fail on device code until complete
-    $startTime = (get-date).AddSeconds($global:authresult.expires_in)
+    # will retry on device code until complete
 
-    write-host "rest logon"
+    write-host "token request" -ForegroundColor Green
     $global:logonResult = $null
     $error.clear()
     $uri = "https://login.windows.net/$tenantId/oauth2/v2.0/token"
@@ -110,10 +107,28 @@ function get-restToken() {
         'accept'       = $contentType
     }
 
-    $Body = @{
-        'client_id'   = $clientId
-        'device_code' = $global:authresult.device_code
-        'grant_type'  = $grantType #'client_credentials' #'authorization_code'
+    if ($grantType -ieq 'urn:ietf:params:oauth:grant-type:device_code') {
+        get-restAuth
+        $Body = @{
+            'client_id'   = $clientId
+            'device_code' = $global:authresult.device_code
+            'grant_type'  = $grantType 
+        }
+    }
+    elseif ($grantType -ieq 'client_credentials') {
+        $Body = @{
+            'client_id'     = $clientId
+            'client_secret' = $clientSecret
+            'grant_type'    = $grantType 
+        }
+    }
+    elseif ($grantType -ieq 'authorization_code') {
+        get-restAuth
+        $Body = @{
+            'client_id'  = $clientId
+            'code'       = $global:authresult.code
+            'grant_type' = $grantType 
+        }
     }
 
     $params = @{
@@ -125,6 +140,8 @@ function get-restToken() {
 
     write-verbose ($params | convertto-json)
     write-host "invoke-restMethod $uri" -ForegroundColor Cyan
+
+    $startTime = (get-date).AddSeconds($global:authresult.expires_in)
 
     while ($startTime -gt (get-date)) {
         $error.Clear()
@@ -158,10 +175,8 @@ function get-restToken() {
 }
 
 function call-graphQuery () {
-    #
-    # call graph api
-    #
-    write-host "executing graph query"
+    write-host "executing graph query" -ForegroundColor Green
+
     $adoAuthHeader = $headers.Clone()
     $adoAuthHeader.authorization = "Bearer $global:accessToken"
     $uri = $graphApiUrl + $query
@@ -178,6 +193,7 @@ function call-graphQuery () {
 
         Write-Verbose "graph connection parameters: $($parameters | convertto-json)"
         write-host "invoke-restMethod $uri" -ForegroundColor Cyan
+        
         $error.clear()
         $global:restQuery = invoke-restMethod @parameters
         [void]$global:restResults.Add($global:restQuery.value)
@@ -187,6 +203,7 @@ function call-graphQuery () {
             write-error "exception: $($error | out-string)"
             return $null
         }
+
         if (!($restQuery.'@odata.nextLink')) {
             write-verbose "no next link"
             break
