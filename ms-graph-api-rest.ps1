@@ -27,20 +27,18 @@ param(
     [ValidateSet('v1.0', 'beta')]
     $apiVersion = 'beta', #'v1.0'
     $graphApiUrl = "https://graph.microsoft.com/$apiVersion/$tenantId/",
-    $query = 'applications', #'$metadata#applications',
+    $query = 'applications', #'users', # 'servicePrincipals',
     $clientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e', # well-known ps graph client id generated on connect
     $clientSecret,
     [ValidateSet("get", "post")]
     $method = "get",
-    [ValidateSet('application/x-www-form-urlencoded', 'application/json', 'application/xml', '*/*')]
-    $contentType = 'application/json', # '*/*',
     $body = @{},
     $accessToken = $global:accessToken,
     $headers = @{
         'authorization'    = "Bearer $accessToken"
-        'accept'           = $contentType
+        'accept'           = 'application/json'
         'consistencylevel' = 'eventual'
-        'content-type'     = $contentType
+        'content-type'     = 'application/json'
     },
     $scope = 'user.read openid profile Application.ReadWrite.All User.ReadWrite.All Directory.ReadWrite.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     [ValidateSet('urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'authorization_code')]
@@ -58,14 +56,14 @@ function main() {
     }
 
     if (!$global:accessToken -or ($global:accessTokenExpiration -lt (get-date)) -or $force) {
-        get-restToken
+        get-restToken -tenantId $tenantId -grantType $grantType -clientId $clientId -clientSecret $clientSecret -scope $scope
     }
 
     call-graphQuery
     write-host "use: `$global:restResults" -ForegroundColor Cyan
 }
 
-function get-restAuth() {
+function get-restAuth($tenantId, $clientId, $scope, $uri) {
     # requires app registration api permissions with 'devops' added
     # so cannot use internally
     write-host "auth request" -ForegroundColor Green
@@ -91,10 +89,10 @@ function get-restAuth() {
     write-host "auth result: $($global:authresult | convertto-json)"
     write-host "rest auth finished"
 
-    return ($global:authresult -ne $null)
+    return $global:authresult
 }
 
-function get-restToken() {
+function get-restToken($tenantId, $grantType, $clientId, $clientSecret, $scope) {
     # requires app registration api permissions with 'devops' added
     # will retry on device code until complete
 
@@ -104,11 +102,11 @@ function get-restToken() {
     $uri = "https://login.windows.net/$tenantId/oauth2/v2.0/token"
     $headers = @{
         'content-type' = 'application/x-www-form-urlencoded'
-        'accept'       = $contentType
+        'accept'       = 'application/json'
     }
 
     if ($grantType -ieq 'urn:ietf:params:oauth:grant-type:device_code') {
-        get-restAuth
+        $global:authResult = get-restAuth -tenantId $tenantId -clientId $clientId -scope $scope
         $Body = @{
             'client_id'   = $clientId
             'device_code' = $global:authresult.device_code
@@ -123,7 +121,7 @@ function get-restToken() {
         }
     }
     elseif ($grantType -ieq 'authorization_code') {
-        get-restAuth
+        $global:authResult = get-restAuth
         $Body = @{
             'client_id'  = $clientId
             'code'       = $global:authresult.code
@@ -171,7 +169,7 @@ function get-restToken() {
     }
 
     write-host "rest logon returning"
-    return ($global:accessToken -ne $null)
+    return $global:accessToken
 }
 
 function call-graphQuery () {
@@ -193,7 +191,7 @@ function call-graphQuery () {
 
         Write-Verbose "graph connection parameters: $($parameters | convertto-json)"
         write-host "invoke-restMethod $uri" -ForegroundColor Cyan
-        
+
         $error.clear()
         $global:restQuery = invoke-restMethod @parameters
         [void]$global:restResults.Add($global:restQuery.value)
