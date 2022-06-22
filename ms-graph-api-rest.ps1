@@ -59,8 +59,11 @@ function main() {
         get-restToken -tenantId $tenantId -grantType $grantType -clientId $clientId -clientSecret $clientSecret -scope $scope
     }
 
-    call-graphQuery
+    $results = call-graphQuery
+    $global:restResultsJson = $results | convertto-json -depth 5
+
     write-host "use: `$global:restResults" -ForegroundColor Cyan
+    write-host "use: `$global:restResultsJson" -ForegroundColor Cyan
 }
 
 function get-restAuth($tenantId, $clientId, $scope, $uri) {
