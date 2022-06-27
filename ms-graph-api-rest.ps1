@@ -64,6 +64,7 @@ function main() {
 
     write-host "use: `$global:restResults" -ForegroundColor Cyan
     write-host "use: `$global:restResultsJson" -ForegroundColor Cyan
+    return $results
 }
 
 function get-restAuth($tenantId, $clientId, $scope, $uri) {
