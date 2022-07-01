@@ -40,7 +40,7 @@ param(
         'consistencylevel' = 'eventual'
         'content-type'     = 'application/json'
     },
-    $scope = 'user.read openid profile Application.ReadWrite.All User.ReadWrite.All Directory.ReadWrite.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
+    $scope = 'user.read openid profile Application.ReadWrite.All User.ReadWrite.All Directory.ReadWrite.All Domain.Read.All', # 'https://graph.microsoft.com/.default', #'Application.Read.All offline_access user.read mail.read',
     [ValidateSet('urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'authorization_code')]
     $grantType = 'urn:ietf:params:oauth:grant-type:device_code', #'client_credentials', #'authorization_code'
     #$redirectUrl = 'http://localhost',
@@ -143,9 +143,10 @@ function get-restToken($tenantId, $grantType, $clientId, $clientSecret, $scope) 
     write-verbose ($params | convertto-json)
     write-host "invoke-restMethod $uri" -ForegroundColor Cyan
 
-    $startTime = (get-date).AddSeconds($global:authresult.expires_in)
+    $endTime = (get-date).AddSeconds($global:authresult.expires_in)
 
-    while ($startTime -gt (get-date)) {
+    while ($endTime -gt (get-date)) {
+        write-verbose "logon timeout: $endTime current time: $(get-date)"
         $error.Clear()
 
         try {
