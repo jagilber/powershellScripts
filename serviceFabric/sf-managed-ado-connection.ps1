@@ -54,15 +54,18 @@ steps:
         write-host "starting inline"
         [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
         invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
-        ./sf-managed-ado-connection.ps1
+        ./sf-managed-ado-connection.ps1 -accessToken $env:accessToken `
+          -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
+          -keyVaultName $env:keyVaultName `
+          -certificateName $env:certificateName
         write-host "finished inline"
       errorActionPreference: continue
       azurePowerShellVersion: LatestVersion
     env:
-      sfmcCertificateName: $(sfmcCertificateName)
-      sfmcKeyVaultName: $(sfmcKeyVaultName)
+      accessToken: $(System.AccessToken)
+      keyVaultName: $(sfmcKeyVaultName)
+      certificateName: $(sfmcCertificateName)
       sfmcServiceConnectionName: $(sfmcServiceConnectionName)
-      system_accessToken: $(System.AccessToken)
 
 .EXAMPLE
 # release pipeline yaml pseudo example
@@ -81,7 +84,10 @@ steps:
      write-host "starting inline"
      [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
      invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
-      ./sf-managed-ado-connection.ps1
+     ./sf-managed-ado-connection.ps1 -accessToken $env:accessToken `
+          -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
+          -keyVaultName $env:keyVaultName `
+          -certificateName $env:certificateName
       write-host "finished inline"
     errorActionPreference: continue
     azurePowerShellVersion: LatestVersion
@@ -168,7 +174,7 @@ function get-adoSfConnection ($adoRestEndpointUrl) {
    
     $error.clear()
     $adoConnection = invoke-RestMethod @parameters
-    write-host "ado connection result: $($adoConnection | convertto-json)"
+    write-host "ado connection result: $($adoConnection | convertto-json -depth 5)"
 
     if ($error) {
         write-error "exception: $($error | out-string)"
