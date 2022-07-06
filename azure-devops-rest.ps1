@@ -27,7 +27,7 @@ param(
 )
 
 function main() {
-    if(!(!$pat -or !(!$cliendId -or !$clientSecret)) -or !$organization -or !$project) {
+    if(!($pat -or !($cliendId -or $clientSecret)) -or !$organization -or !$project) {
         write-error '$pat or $clientid and $clientSecret, $organization, and $project all need to be specified'
         return
     }
@@ -110,7 +110,7 @@ function get-adoSfConnection () {
     write-host "invoke-restMethod -uri $([system.web.httpUtility]::UrlDecode($url)) -headers $adoAuthHeader"
     $error.clear()
     $global:result = invoke-RestMethod @parameters
-    write-host "rest result: $($global:result | convertto-json)"
+    write-host "rest result: $($global:result | convertto-json -Depth 99)"
     if ($error) {
         write-error "exception: $($error | out-string)"
         return $null
