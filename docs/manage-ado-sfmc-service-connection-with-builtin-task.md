@@ -240,6 +240,8 @@ steps:
 
 ## Testing
 
+To test configuration, modify thumbprint in the service fabric service connection to a different thumbprint. Below is a working yaml file that can be used for testing. Set correct branch and populate variables to use.
+
 ### Build pipeline test yaml
 
 ```yaml
@@ -253,9 +255,8 @@ variables:
   System.Debug: true
   sfmcServiceConnectionName: serviceFabricConnection
   azureSubscriptionName: armServiceConnection
-  sfmcKeyVaultName: sfmcCluster
-  sfmcCertificateName: sfmcCluster
-  timeoutSec: 600
+  sfmcKeyVaultName: 
+  sfmcCertificateName: 
 
 steps:
   - task: AzurePowerShell@5
