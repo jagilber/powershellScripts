@@ -94,7 +94,8 @@ The app registration for the Azure connection is added the the Access Policies.
 Navigate to Azure key vault in portal and select Access Policies.
 The Azure service connection needs read access to both the certificate and certificate secret.
 If using a template, select 'Secret & Certificate Management' as shown below.
-Find the azure service connection app registration service principal by searching for ADO organization.
+For 'Select Principal', select 'None selected' to find the azure service connection app registration service principal.
+Search by typing in ADO organization name.
 The service principal name is in the format of: %organization%-%project%-%subscriptionId%.
 When finished with configuration, save changes.
 
@@ -146,7 +147,7 @@ Required pipeline variables:
 - sfmcServiceConnectionName - name of ADO Azure Service Fabric connection.
 - system_accessToken - $(System.AccessToken) - system variable containing ADO token used by script to modify service connection.
 
-### AzurePowerShell InlineScript powershell commands:
+### AzurePowerShell InlineScript powershell commands
 
 ```powershell
 write-host "starting inline"
@@ -191,9 +192,28 @@ steps:
 
 ## AzurePowershell builtin task in a release pipeline example
 
+Create / Modify Service Fabric Release pipeline.
+In 'Tasks' view, select the '+' button to add a new task.
+
+![](media/2022-07-17-18-06-53.png)
+
+![](media/2022-07-17-18-08-35.png)
+
+Search for 'Azure Powershell' and 'Add' task.
+
+![](media/2022-07-17-18-10-11.png)
+
+Move task above the Service Fabric task(s) and populate settings as shown below.
+When completed, save pipeline.
+
+![](media/2022-07-17-18-17-48.png)
+
+
 ### Release pipeline variables
 
-![](media/2022-07-17-15-42-33.png)
+Navigate to the Release pipeline 'Variables' tab to set the Release pipeline variables as shown below.
+
+![](media/2022-07-17-18-23-47.png)
 
 ### release pipeline yaml pseudo example
 
@@ -219,18 +239,65 @@ steps:
     pwsh: true
 ```
 
-```json
+## Testing
+
+### Build pipeline test yaml
+
+```yaml
+trigger:
+  - master
+
+pool:
+  vmImage: "windows-latest"
+
+variables:
+  System.Debug: true
+  sfmcServiceConnectionName: serviceFabricConnection
+  azureSubscriptionName: armServiceConnection
+  sfmcKeyVaultName: sfmcCluster
+  sfmcCertificateName: sfmcCluster
+  timeoutSec: 600
+
+steps:
+  - task: AzurePowerShell@5
+    inputs:
+      azureSubscription: $(azureSubscriptionName)
+      ScriptType: "InlineScript"
+      Inline: |
+        write-host "starting inline"
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+        invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
+        ./sf-managed-ado-connection.ps1 -accessToken $env:system_accessToken `
+          -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
+          -keyVaultName $env:sfmckeyVaultName `
+          -certificateName $env:sfmccertificateName
+        write-host "finished inline"
+      errorActionPreference: continue
+      verbosePreference: continue
+      debugPreference: continue
+      azurePowerShellVersion: LatestVersion
+    env:
+      system_accessToken: $(System.AccessToken)
+
+  - task: ServiceFabricPowerShell@1
+    inputs:
+      clusterConnection: $(sfmcServiceConnectionName)
+      ScriptType: "InlineScript"
+      Inline: |
+        $verbosePreference = $debugpreference = 'continue'
+        $psversiontable
+        $env:connection
+        [environment]::getenvironmentvariables().getenumerator()|sort Name
 
 ```
+
 
 ## Troubleshooting
 
 Use logging from task to assist with issues.
 Enabling System.Debug in build yaml or in release variables will provide additional write-verbose output from script but will include sensitive security information.
 
-## Example 
+### AzurePowerShell Example log
 
-```text
-
-
+```powershell
 ```
