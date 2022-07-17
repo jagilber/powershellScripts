@@ -86,8 +86,8 @@ steps:
      invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
      ./sf-managed-ado-connection.ps1 -accessToken $env:accessToken `
           -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
-          -keyVaultName $env:keyVaultName `
-          -certificateName $env:certificateName
+          -keyVaultName $env:sfmcKeyVaultName `
+          -certificateName $env:sfmcCertificateName
       write-host "finished inline"
     errorActionPreference: continue
     azurePowerShellVersion: LatestVersion
