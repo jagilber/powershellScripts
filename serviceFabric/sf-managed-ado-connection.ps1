@@ -54,18 +54,15 @@ steps:
         write-host "starting inline"
         [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
         invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
-        ./sf-managed-ado-connection.ps1 -accessToken $env:accessToken `
+        ./sf-managed-ado-connection.ps1 -accessToken $env:system_accessToken `
           -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
-          -keyVaultName $env:keyVaultName `
-          -certificateName $env:certificateName
+          -keyVaultName $env:sfmcKeyVaultName `
+          -certificateName $env:sfmcCertificateName
         write-host "finished inline"
       errorActionPreference: continue
       azurePowerShellVersion: LatestVersion
     env:
-      accessToken: $(System.AccessToken)
-      keyVaultName: $(sfmcKeyVaultName)
-      certificateName: $(sfmcCertificateName)
-      sfmcServiceConnectionName: $(sfmcServiceConnectionName)
+      system_accessToken: $(System.AccessToken)
 
 .EXAMPLE
 # release pipeline yaml pseudo example
