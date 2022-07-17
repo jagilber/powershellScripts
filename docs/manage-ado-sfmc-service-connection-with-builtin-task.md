@@ -70,8 +70,6 @@ MIIKRAIBAzCCCgAGCSqGSIb3DQEHAaCCCfEEggntMIIJ6TCCBhoGCSqGSIb3DQEHAaCCBgsEggYHMIIG
 
 ## Azure Service Connection
 
-### Creating Azure service connection
-
 Create the Azure Service Connection to provide connectivity to Azure from ADO pipelines.
 When service connection is created, an Azure App Registration is also created.
 This App registration is needed to set the RBAC permissions on the Azure Keyvault.
@@ -95,8 +93,6 @@ The app registration for the Azure connection is added the the Access Policies.
 The app registration name is in the format of: %organization%-%project%-%subscriptionId%.
 
 ## Service Fabric Service Connection
-
-### Creating Service Fabric service connection
 
 Create / Modify the Service Fabric Service Connection to provide connectivity to Service Fabric managed cluster from ADO pipelines.
 For this configuration, only 'Certificate Based' authentication is supported.
@@ -137,6 +133,19 @@ Required pipeline variables:
 - sfmcKeyVaultName - name of Azure key vault containing admin client certificate.
 - sfmcServiceConnectionName - name of ADO Azure Service Fabric connection.
 - system_accessToken - $(System.AccessToken) - system variable containing ADO token used by script to modify service connection.
+
+### AzurePowerShell InlineScript powershell commands:
+
+```powershell
+write-host "starting inline"
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
+./sf-managed-ado-connection.ps1 -accessToken $env:system_accessToken `
+  -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
+  -keyVaultName $env:sfmcKeyVaultName `
+  -certificateName $env:sfmcCertificateName
+write-host "finished inline"
+```
 
 ## AzurePowershell builtin task in a build pipeline example
 
