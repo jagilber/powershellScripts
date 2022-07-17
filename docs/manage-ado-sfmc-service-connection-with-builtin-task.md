@@ -98,7 +98,7 @@ The app registration name is in the format of: %organization%-%project%-%subscri
 
 ### Creating Service Fabric service connection
 
-Create the Service Fabric Service Connection to provide connectivity to Service Fabric managed cluster from ADO pipelines.
+Create / Modify the Service Fabric Service Connection to provide connectivity to Service Fabric managed cluster from ADO pipelines.
 For this configuration, only 'Certificate Based' authentication is supported.
 To enumerate the 'server' certificate thumbprint from a managed cluster, provide resource id to cluster for powershell command: (Get-AzResource -ResourceId $resourceId).Properties.clusterCertificateThumbprints.
 See [Connect to a Service Fabric managed cluster](https://docs.microsoft.com/en-us/azure/service-fabric/how-to-managed-cluster-connect) for additional information.
@@ -112,8 +112,9 @@ write-host $serverThumbprint
 ```
 
 This connection requires the following information:
+
 - Authentication - Certificate Based
-- Cluster Endpoint - cluster url using tcp:// uri. example: tcp://mycluster.eastus.cloudapp.azure.com:19000
+- Cluster Endpoint - cluster connection endpoint url using tcp:// uri. example: tcp://mycluster.eastus.cloudapp.azure.com:19000
 - Server Certificate Lookup - Thumbprint.
 - Server Certificate Thumbprint - as described above.
 - Client Certificate - admin client pfx certificate in base64 string format as described above.
@@ -121,45 +122,31 @@ This connection requires the following information:
 - Service connection name.
 
 Example:
+
 ![](media/2022-07-17-14-29-08.png)
 
-## Azure Devops Permissions
+## Using AzurePowershell builtin task in a pipeline
 
+To use powershell script in a build pipeline, an AzurePowershell task has to be used.
+This task must run before any service fabric tasks and in the same job.
 
+Required pipeline variables:
 
-### Service Connection Permissions
+- azureSubscriptionName - name of ADO Azure service connection.
+- sfmcCertificateName - name of admin client cerficate in Azure key vault.
+- sfmcKeyVaultName - name of Azure key vault containing admin client certificate.
+- sfmcServiceConnectionName - name of ADO Azure Service Fabric connection.
+- system_accessToken - $(System.AccessToken) - system variable containing ADO token used by script to modify service connection.
 
-### Oauth token
-
-Oauth token needs to be enabled for access to ADO REST API.
-
-## Poweshell commands
-
-Powershell commands to download and execute script.
-Replace "```https://aka.ms/sf-managed-ado-connection.ps1```" with location for sf-managed-ado-connection.ps1 url.
-
-```powershell
-write-host "starting inline"
-[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/sf-managed-ado-connection.ps1";
-./sf-managed-ado-connection.ps1 -accessToken $env:system_accessToken `
-  -sfmcServiceConnectionName $env:sfmcServiceConnectionName `
-  -keyVaultName $env:sfmcKeyVaultName `
-  -certificateName $env:sfmcCertificateName
-write-host "finished inline"
-```
-
-## Using AzurePowershell builtin task in a build pipeline
-
-### build pipeline yaml example
+## AzurePowershell builtin task in a build pipeline example
 
 ```yaml
 variables:
   System.Debug: true
-  azureSubscriptionName: 
-  sfmcCertificateName: 
-  sfmcKeyVaultName: 
-  sfmcServiceConnectionName: 
+  azureSubscriptionName: armServiceConnection
+  sfmcCertificateName: sfmc-cluster-devops
+  sfmcKeyVaultName: sfmcCluster
+  sfmcServiceConnectionName: serviceFabricConnection
 
 steps:
   - task: AzurePowerShell@5
@@ -184,22 +171,21 @@ steps:
       system_accessToken: $(System.AccessToken)
 ```
 
-## Using AzurePowershell builtin task in a release pipeline
+## AzurePowershell builtin task in a release pipeline example
 
+### Release pipeline variables
+
+![](media/2022-07-17-15-42-33.png)
 
 ### release pipeline yaml pseudo example
 
 ```yaml
-# uses release pipeline variables:
-#  sfmcCertificateName
-#  sfmcKeyvaultName
-#  sfmcServiceConnectionName
 
 steps:
 - task: AzurePowerShell@5
   displayName: 'Azure PowerShell script: InlineScript'
   inputs:
-    azureSubscription: 
+    azureSubscription: $(azureSubscriptionName)
     ScriptType: InlineScript
     Inline: |
      write-host "starting inline"
