@@ -195,8 +195,6 @@ steps:
 Create / Modify Service Fabric Release pipeline.
 In 'Tasks' view, select the '+' button to add a new task.
 
-![](media/2022-07-17-18-06-53.png)
-
 ![](media/2022-07-17-18-08-35.png)
 
 Search for 'Azure Powershell' and 'Add' task.
@@ -212,6 +210,7 @@ When completed, save pipeline.
 ### Release pipeline variables
 
 Navigate to the Release pipeline 'Variables' tab to set the Release pipeline variables as shown below.
+When completed, save pipeline.
 
 ![](media/2022-07-17-18-23-47.png)
 
