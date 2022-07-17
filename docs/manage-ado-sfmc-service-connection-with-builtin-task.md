@@ -90,19 +90,31 @@ This App registration is needed to set the RBAC permissions on the Azure Keyvaul
 
 After the Azure Service Connection has been created, the key vault access policy containing the client certificate needs to modified.
 The app registration for the Azure connection is added the the Access Policies.
-The app registration name is in the format of: %organization%-%project%-%subscriptionId%.
+
+Navigate to Azure key vault in portal and select Access Policies.
+The Azure service connection needs read access to both the certificate and certificate secret.
+If using a template, select 'Secret & Certificate Management' as shown below.
+Find the azure service connection app registration service principal by searching for ADO organization.
+The service principal name is in the format of: %organization%-%project%-%subscriptionId%.
+When finished with configuration, save changes.
+
+![](media/2022-07-17-17-15-07.png)
 
 ## Service Fabric Service Connection
 
 Create / Modify the Service Fabric Service Connection to provide connectivity to Service Fabric managed cluster from ADO pipelines.
 For this configuration, only 'Certificate Based' authentication is supported.
-To enumerate the 'server' certificate thumbprint from a managed cluster, provide resource id to cluster for powershell command: (Get-AzResource -ResourceId $resourceId).Properties.clusterCertificateThumbprints.
+
+### Enumerate certificate thumbprint
+
+To enumerate the 'server' certificate thumbprint from a managed cluster, provide resource group name, cluster name, and subscription id for powershell command.
 See [Connect to a Service Fabric managed cluster](https://docs.microsoft.com/en-us/azure/service-fabric/how-to-managed-cluster-connect) for additional information.
 
-Example:
-
 ```powershell
-$resourceId = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroup/providers/Microsoft.ServiceFabric/managedclusters/mysfcluster'
+$resourceGroupName = ''
+$clusterName = ''
+$subscriptionId = ''
+$resourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.ServiceFabric/managedclusters/$clusterName"
 $serverThumbprint = (Get-AzResource -ResourceId $resourceId).Properties.clusterCertificateThumbprints
 write-host $serverThumbprint
 ```
@@ -174,9 +186,6 @@ steps:
       errorActionPreference: continue
       azurePowerShellVersion: LatestVersion
     env:
-      sfmcCertificateName: $(sfmcCertificateName)
-      sfmcKeyVaultName: $(sfmcKeyVaultName)
-      sfmcServiceConnectionName: $(sfmcServiceConnectionName)
       system_accessToken: $(System.AccessToken)
 ```
 
