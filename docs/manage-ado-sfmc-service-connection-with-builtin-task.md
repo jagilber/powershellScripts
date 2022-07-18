@@ -160,7 +160,9 @@ invoke-webRequest "https://aka.ms/sf-managed-ado-connection.ps1" -outFile "$pwd/
 write-host "finished inline"
 ```
 
-## AzurePowershell builtin task in a build pipeline example
+## AzurePowershell builtin task in a build pipeline
+
+To use the script to manage service fabric service connection in a build pipeline, perform the following:
 
 ```yaml
 variables:
@@ -190,9 +192,16 @@ steps:
       system_accessToken: $(System.AccessToken)
 ```
 
-## AzurePowershell builtin task in a release pipeline example
+## AzurePowershell builtin task in a release pipeline
+
+To use script to manage service fabric service connection in a release pipeline, perform the following:
 
 Create / Modify Service Fabric Release pipeline.
+In 'Tasks' view, select 'Agent job'.
+Under 'Additional options', check 'Allow script to access the OAuth token'
+
+![](media/2022-07-18-10-01-20.png)
+
 In 'Tasks' view, select the '+' button to add a new task.
 
 ![](media/2022-07-17-18-08-35.png)
