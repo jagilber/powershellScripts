@@ -15,7 +15,9 @@ param(
     $apiVer = "6.2-preview",
     $gatewayHost = "https://localhost:19080",
     [ValidateSet('CurrentUser', 'LocalMachine')]
-    $store = 'CurrentUser'
+    $store = 'CurrentUser',
+    $certificatePath = '',
+    $certificatePassword = ''
 )
 
 Clear-Host
@@ -40,7 +42,13 @@ add-type @"
 
 function main() {
     $result = $Null
-    $cert = Get-ChildItem -Path cert:\$store -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
+
+    if((test-path $certificatePath)){
+        $cert = [security.cryptography.x509Certificates.x509Certificate2]::new($pfxFile, $certificatePassword);
+    }
+    else {
+        $cert = Get-ChildItem -Path cert:\$store -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
+    }
 
     $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime)&EndTimeUtc=$($endTime)"
 
