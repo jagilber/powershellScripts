@@ -40,7 +40,7 @@
 param (
     [string]$resourceGroupName = 'fabriclogs-standalone',
     [string]$containerName = "fabriclogs-00000000-0000-0000-0000-000000000000", #"fabriclogs-$((get-date).tostring('yyMMddhh-mmss-ffff') + [guid]::NewGuid().tostring().Substring(18))",
-    [string]$storageAccountName = "0000000000000", #"sflogs$($resourceGroupName.gethashcode())",
+    [string]$storageAccountName = "2200000000000000", #"sflogs$([math]::abs($containerName.gethashcode()))",
     [string]$location = 'eastus',
     [string]$path,
     [switch]$detail,
@@ -51,7 +51,7 @@ set-strictMode -Version 3.0
 $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
-$fileCounter = 0
+$global:fileCounter = 0
 
 function main() {
 
@@ -119,7 +119,7 @@ function main() {
     write-host "time elapsed:  $(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes`r`n"
     write-parameters
     write-host "sas:$($global:sas)" -ForegroundColor Cyan
-    write-host "bloburi:$($global:bloburi)" -ForegroundColor Green
+    write-host "bloburi+sas:$($global:bloburi)" -ForegroundColor Green
     write-host "finished $(get-date)"
 }
 
@@ -190,30 +190,53 @@ function upload-files() {
         return $false
     }
     foreach ($file in $files) {
-        write-host "checking file: $($file)"
-        $relativeFile = $file.fullname.replace($path, '').replace('\', '/')
-        write-host "relative path: $relativeFile"
-        upload-blob -containerName $containerName -context $context -file $file -blobUri $relativeFile
-        $fileCounter++
+        if (!($file.Attributes -imatch 'directory')) {
+            write-host "checking file: $($file)"
+            $relativeFile = $file.fullname.replace($path, '').replace('\', '/').TrimStart('/')
+            write-host "relative path: $relativeFile"
+            # temp until new collectsfdata build is pushed
+            #$relativeFile = ([io.path]::GetDirectoryName($relativeFile).trim("\/") + "/" + $fileCounter + [io.path]::GetExtension($relativeFile)).replace('\', '/').Trim('/')
+            
+            if ($file.extension -ieq '.zip') {
+                $tempFolder = $file.fullname.replace($file.extension,'') # "$path/$([io.path]::getfilenamewithoutextension($relativeFile))"
+                if (!(test-path $tempFolder)) {
+                    Expand-Archive -Path $file.fullname -DestinationPath $tempFolder -Force
+                }
+                # temp upload-blob -containerName $containerName -context $context -file $file.fullname -blobUri $relativeFile
+                $tempFile = @(get-childitem -path $tempFolder)[0].fullname
+                $newFileName = "$fileCounter$([io.path]::GetExtension($tempFile).replace('\', '/').Trim('/'))"
+                rename-item -path $tempFile -NewName $newFileName
+                $tempFile = @(get-childitem -path $tempFolder)[0].fullname
+                $relativeFile = ([io.path]::GetDirectoryName($relativeFile).trim("\/") + "/" + $fileCounter + [io.path]::GetExtension($tempFile)).replace('\', '/').Trim('/')
+                upload-blob -containerName $containerName -context $context -file $tempfile -blobUri $relativeFile
+                remove-item -Path $tempFolder -Force -recurse
+            }
+            else {
+                $tempFile = $file.fullname
+                upload-blob -containerName $containerName -context $context -file $tempfile -blobUri $relativeFile
+            }
+            $global:fileCounter++
+        }
     }
 }
 
 function upload-blob($containerName, $context, $file, $blobUri) {
     $BlobHT = @{
-        File             = $file.fullname
+        File             = $file
         Container        = $ContainerName
         Blob             = $blobUri
         Context          = $Context
         StandardBlobTier = 'Cool'
+        MetaData         = @{LastModified = '2022-08-02T14:00:00' }
     }
 
     write-host "Set-AzStorageBlobContent $($BlobHT | convertto-json)"
-    Set-AzStorageBlobContent @BlobHT
+    Set-AzStorageBlobContent @BlobHT -Force
 }
 
 function write-parameters() {
     write-host "path: $path" -ForegroundColor Cyan
-    write-host "total files: $fileCounter" -ForegroundColor Cyan
+    write-host "total files: $global:fileCounter" -ForegroundColor Cyan
     write-host "resource group name: $resourceGroupName" -ForegroundColor Cyan
     write-host "container name: $containerName" -ForegroundColor Cyan
     write-host "storage account name: $storageAccountName" -ForegroundColor Cyan
