@@ -213,6 +213,7 @@ function upload-files() {
             }
             else {
                 $tempFile = $file.fullname
+                $relativeFile = ([io.path]::GetDirectoryName($relativeFile).trim("\/") + "/" + $fileCounter + [io.path]::GetExtension($relativeFile)).replace('\', '/').Trim('/')
                 upload-blob -containerName $containerName -context $context -file $tempfile -blobUri $relativeFile
             }
             $global:fileCounter++
