@@ -14,26 +14,61 @@ param(
     [switch]$force
 )
 
-if ($force -or !(test-path $sfsdk)) {
-    if (!(test-path $webpiCmd)) {
-        $webpiMsi = "$env:temp\webpi.msi"
+function main () {
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+    if (!$isAdmin -and $force) {
+        write-error "restarting script as administrator."
+        $command = "powershell.exe"
 
-        write-host "downloading webpi" -foregroundColor cyan
-        write-host "invoke-webRequest $webpiUrl -outFile $webpiMsi"
-        invoke-webRequest "$webpiUrl" -outFile "$webpiMsi"
+        if ($PSVersionTable.PSEdition -ieq 'core') {
+            $command = "pwsh.exe"
+        }
 
-        write-host "installing webpi" -foregroundColor cyan
-        write-host "start-process -filePath $webpiMsi -argumentlist /quiet /norestart -wait"
-        start-process -filePath "$webpiMsi" -argumentlist "/quiet /norestart" -wait
+        write-host "start-process -wait -verb RunAs -FilePath $command -ArgumentList `"-file $($MyInvocation.ScriptName) --force:$force -noexit -workingDirectory $pwd`""
+        start-process -wait -verb RunAs -FilePath $command -ArgumentList "-file $($MyInvocation.ScriptName) --force:$force -noexit -interactive -workingDirectory $pwd"
+        return
+    }
+    elseif (!$isAdmin) {
+        write-error "restart script as administrator."
+        return
     }
 
-    write-host "installing sf sdk" -foregroundColor cyan
-    write-host "start-process -filePath $webpiCmd -argumentList /install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot -wait"
+    if ($force -or !(test-path $sfsdk)) {
+        $webpiMsi = "$env:temp\webpi.msi"
 
-    start-process -filePath "$webpiCmd" -argumentList "/install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot" -wait
-    write-host "finished"
+        if (!(test-path $webpiMsi)) {
+            write-host "downloading webpi" -foregroundColor cyan
+            write-host "invoke-webRequest $webpiUrl -outFile $webpiMsi"
+            if (!(invoke-webRequest "$webpiUrl" -outFile "$webpiMsi")) {
+                write-error "unable to download $webpiMsi"
+                if (!$force) {return}
+            }
+        }
+
+        write-host "installing webpi" -foregroundColor cyan
+        write-host "start-process -wait -filePath $webpiMsi -argumentlist /package $webpiMsi /quiet /norestart"
+
+        if (!(start-process -wait -filePath msiexec.exe -argumentlist "/package $webpiMsi /quiet /norestart")) {
+            write-error "unable to install $webpiMsi"
+            if (!$force) {return}
+        }
+
+        write-host "installing sf sdk" -foregroundColor cyan
+        write-host "start-process -wait -filePath $webpiCmd -argumentList /install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot"
+
+        if (!(start-process -wait -filePath "$webpiCmd" -argumentList "/install /products:MicrosoftAzure-ServiceFabric-CoreSDK /acceptEULA /suppressReboot")) {
+            write-error "unable to install $webpiMsi"
+            if (!$force) {return}
+        }
+
+        write-host (get-content $sfsdk)
+        write-host "finished"
+    }
+    else {
+        write-host "sf sdk already installed. use -force to install latest" -foregroundColor cyan
+        write-host (get-content $sfsdk)
+    }
 }
-else {
-    write-host "sf sdk already installed. use -force to install latest" -foregroundColor cyan
-    write-host (get-content $sfsdk)
-}
+
+main
+start-sleep -Seconds 10
