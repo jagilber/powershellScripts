@@ -1,7 +1,7 @@
 <#
 test sf aad scripts
 place in clouddrive dir in shell.azure.com
-
+iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/aad-test.ps1 -outFile $pwd/aad-test.ps1
 #>
 param(
     $tenantId = "$((get-azcontext).tenant.id)",
