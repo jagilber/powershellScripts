@@ -6,8 +6,10 @@ place in clouddrive dir in shell.azure.com
 param(
     $tenantId = "$((get-azcontext).tenant.id)",
     $clusterName = "",#'sfcluster',
-    $location = 'eastus'
+    $location = 'eastus',
+    [switch]$remove
 )
+
 $errorActionPreference = 'continue'
 $curDir = $pwd
 $startTime = get-date
@@ -32,19 +34,23 @@ try{
         -WebApplicationReplyUrl $replyUrl `
         -AddResourceAccess `
         -WebApplicationUri $webApplicationUri `
-        -Verbose
+        -Verbose `
+        -remove:$remove
+
     write-host $configObj
 
     .\SetupUser.ps1 -ConfigObj $configobj `
         -UserName 'TestUser' `
         -Password 'P@ssword!123' `
-        -Verbose
+        -Verbose `
+        -remove:$remove
 
     .\SetupUser.ps1 -ConfigObj $configobj `
         -UserName 'TestAdmin' `
         -Password 'P@ssword!123' `
         -IsAdmin `
-        -Verbose
+        -Verbose `
+        -remove:$remove
 }
 finally {
     write-host "$(get-date) stopping transcript $translog"
