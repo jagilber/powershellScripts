@@ -97,8 +97,12 @@ steps:
       clusterEndpoint: xxxxxx.xxxxx.cloudapp.azure.com
   ```
 
-- Verify configured Azure AD user is able to logon successfully to cluster using SFX or powershell.
+- Verify configured Azure AD user is able to logon successfully to cluster using SFX or powershell. The 'servicefabric' module is installed as part of Service Fabric SDK.
+
   ```powershell
+  import-module servicefabric
+  import-module az.resources
+
   $clusterEndpoint = 'mysftestcluster.eastus.cloudapp.azure.com'
   $clusterName = 'mysftestcluster'
 
