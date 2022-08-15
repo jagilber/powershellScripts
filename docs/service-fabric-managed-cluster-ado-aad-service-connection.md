@@ -35,6 +35,7 @@ Create / Modify the Service Fabric Service Connection to provide connectivity to
 For maintenance free configuration, only 'Azure Active Directory credential' authentication  and 'Common Name' server certificate lookup is supported.
 
 #### Service Fabric Service Connection Properties
+
 - **Authentication method:** Select 'Azure Active Directory credential'.
 - **Cluster Endpoint:** Enter connection endpoint for cluster. This is in the format of tcp://{{cluster name}}.{{azure region}}.cloudapp.azure.com:{{cluster endpoint port}}.
   - Example: tcp://mysftestcluster.eastus.cloudapp.azure.com:19000
@@ -83,15 +84,17 @@ steps:
   ```yaml
   - powershell: |
       $psversiontable
-      $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
-      write-host "current public ip:$publicIp" -ForegroundColor Green
       [environment]::getenvironmentvariables().getenumerator()|sort Name
+      $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
+      write-host "---`r`ncurrent public ip:$publicIp" -ForegroundColor Green
+      write-host "test-netconnection $env:clusterEndpoint -p $env:clusterPort"
       $result = test-netconnection $env:clusterEndpoint -p $env:clusterPort
-      write-host "test net connection result: $result"
-    errorActionPreference: continue
+      write-host "test net connection result: $($result | fl * | out-string)"
+      if(!($result.TcpTestSucceeded)) { throw }
+    errorActionPreference: stop
     displayName: "PowerShell Troubleshooting Script"
-    failOnStderr: false
-    ignoreLASTEXITCODE: true
+    failOnStderr: true
+    ignoreLASTEXITCODE: false
     env:  
       clusterPort: 19000
       clusterEndpoint: xxxxxx.xxxxx.cloudapp.azure.com
