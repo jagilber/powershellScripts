@@ -1,11 +1,13 @@
 # How to configure Azure Devops Service Fabric Managed Cluster Service Connection
 
-Service Fabric Managed Clusters completely manage the 'server' certificate including the rollover process before certificate expires.
+
+The steps below describe how to configure the ADO service connection for Service Fabric managed clusters with Azure Active Directory (AAD / Azure AD). This solution requires both the use of Azure AD and the use of Azure provided build agents in ADO.
+
+Service Fabric Managed Clusters provision and manage the 'server' certificate including the rollover process before certificate expiration.
 There is currently no notification when this occurs.
 Azure Devops (ADO) service connections that use X509 Certificate authentication requires the configuration of the server certificate thumbprint.
 When the certificate is rolled over, the Service Fabric service connection will fail to connect to cluster causing pipelines to fail.
 
-The steps below describe how to configure the ADO service connection for Service Fabric managed clusters with Azure Active Directory (AAD / Azure AD). This solution requires both the use of Azure AD and the use of Azure provided build agents in ADO.
 
 ## Requirements
 
@@ -49,6 +51,25 @@ For maintenance free configuration, only 'Azure Active Directory credential' aut
   ![](media/sfmc-ado-service-connection.png)
 
 ## Troubleshooting
+
+- Test network connectivity. Add a powershell task to pipeline to run 'test-netconnection' command to cluster endpoint, providing tcp port. Default port is 19000.
+  - Example:
+  ```yaml
+  - powershell: |
+    $psversiontable
+    $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
+    write-host "current public ip:$publicIp" -ForegroundColor Green
+    [environment]::getenvironmentvariables().getenumerator()|sort Name
+    $result = test-netconnection $env:clusterEndpoint -p $env:clusterPort
+    write-host "test net connection result: $result"
+  errorActionPreference: continue
+  displayName: "PowerShell Troubleshooting Script"
+  failOnStderr: false
+  ignoreLASTEXITCODE: true
+  env:  
+    clusterPort: 19000
+    clusterEndpoint: xxxxxx.xxxxx.cloudapp.azure.com
+  ```
 
 - Verify configured Azure AD user is able to logon successfully to cluster using SFX or powershell.
   ```powershell
