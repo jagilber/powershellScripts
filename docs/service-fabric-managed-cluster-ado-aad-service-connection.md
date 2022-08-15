@@ -24,7 +24,7 @@ The steps below describe how to configure the ADO service connection for Service
 
 - Verify [Requirements](#requirements).
 - In Azure Devops, create / modify the 'Service Fabric' service connection to be used with the build / release pipelines for the managed clusteer.
-- 
+- Test connection.
 
 
 ### Service Fabric Service Connection
@@ -37,7 +37,7 @@ For maintenance free configuration, only 'Azure Active Directory credential' aut
 - **Cluster Endpoint:** Enter connection endpoint for cluster. This is in the format of tcp://{{cluster name}}.{{azure region}}.cloudapp.azure.com:{{cluster endpoint port}}.
   - Example: tcp://mysftestcluster.eastus.cloudapp.azure.com:19000
 - **Server Certificate Lookup (optional):** Select 'Common Name'.
-- **Server Common Name** Enter the managed cluster server certificate common name. The common name format is {{cluster guid id no dashes}}.sfmc.azclient.ms. This name can also be found in the cluster manifest in Service Fabric Explorer (SFX).
+- **Server Common Name** Enter the managed cluster server certificate common name. The common name format is {{cluster guid id with no dashes}}.sfmc.azclient.ms. This name can also be found in the cluster manifest in Service Fabric Explorer (SFX).
   - Example: d3cfe121611d4c178f75821596a37056.sfmc.azclient.ms
 
     ![](media/sfmc-cluster-id.png)
@@ -47,9 +47,22 @@ For maintenance free configuration, only 'Azure Active Directory credential' aut
 - **Service connection name:** Enter a descriptive name of connection.
 
   ![](media/sfmc-ado-service-connection.png)
-  
+
 ## Troubleshooting
 
-Use logging from task to assist with issues.
-Enabling System.Debug in build yaml or in release variables will provide additional write-verbose output from script but will include sensitive security information.
+- Verify configured Azure AD user is able to logon successfully to cluster using SFX or powershell.
+  ```powershell
+  $clusterEndpoint = 'mysftestcluster.eastus.cloudapp.azure.com'
+  $clusterName = 'mysftestcluster'
+
+  $clusterResource = Get-AzResource -Name $clusterName -ResourceType 'Microsoft.ServiceFabric/managedclusters'
+  $serverCertThumbprint = $clusterResource.Properties.clusterCertificateThumbprints
+
+  Connect-ServiceFabricCluster -ConnectionEndpoint $clusterEndpoint `
+    -AzureActiveDirectory `
+    -ServerCertThumbprint $serverCertThumbprint `
+    -Verbose
+  ```
+- Use logging from task to assist with issues.
+- Enabling System.Debug in build yaml or in release variables will provide additional output.
 
