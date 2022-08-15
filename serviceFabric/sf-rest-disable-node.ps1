@@ -73,7 +73,7 @@ function main() {
     $body = @{DeactivationIntent = $deactivationIntent } | convertto-json
 
     $global:result = call-rest -url $url -cert $cert -method post -body $body
-    if($global:result.error){
+    if ($global:result.error) {
         write-host "$($global:result | convertto-json)" -ForegroundColor Red
         write-host "disable failed" -ForegroundColor Red
     }
