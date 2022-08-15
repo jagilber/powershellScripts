@@ -26,7 +26,7 @@ When the certificate is rolled over, the Service Fabric service connection will 
 
 - Verify [Requirements](#requirements).
 - In Azure Devops, create / modify the 'Service Fabric' service connection to be used with the build / release pipelines for the managed clusteer.
-- Test connection.
+- [Test](#test) connection.
 
 
 ### Service Fabric Service Connection
@@ -50,25 +50,51 @@ For maintenance free configuration, only 'Azure Active Directory credential' aut
 
   ![](media/sfmc-ado-service-connection.png)
 
-## Troubleshooting
+## Test
 
+Use builtin task 'Service Fabric PowerShell' in pipeline to test connection.
+
+```yaml
+trigger:
+  - main
+
+pool:
+  vmImage: "windows-latest"
+
+variables:
+  System.Debug: true
+  sfmcServiceConnectionName: serviceFabricConnection
+
+steps:
+  - task: ServiceFabricPowerShell@1
+    inputs:
+      clusterConnection: $(sfmcServiceConnectionName)
+      ScriptType: "InlineScript"
+      Inline: |
+        $psversiontable
+        $env:connection
+        [environment]::getenvironmentvariables().getenumerator()|sort Name
+```
+
+## Troubleshooting
+- Error: ##[debug]System.AggregateException: One or more errors occurred. ---> System.Fabric.FabricTransientException: Could not ping any of the provided Service Fabric gateway endpoints. ---> System.Runtime.InteropServices.COMException: Exception from HRESULT: 0x80071C49
 - Test network connectivity. Add a powershell task to pipeline to run 'test-netconnection' command to cluster endpoint, providing tcp port. Default port is 19000.
   - Example:
   ```yaml
   - powershell: |
-    $psversiontable
-    $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
-    write-host "current public ip:$publicIp" -ForegroundColor Green
-    [environment]::getenvironmentvariables().getenumerator()|sort Name
-    $result = test-netconnection $env:clusterEndpoint -p $env:clusterPort
-    write-host "test net connection result: $result"
-  errorActionPreference: continue
-  displayName: "PowerShell Troubleshooting Script"
-  failOnStderr: false
-  ignoreLASTEXITCODE: true
-  env:  
-    clusterPort: 19000
-    clusterEndpoint: xxxxxx.xxxxx.cloudapp.azure.com
+      $psversiontable
+      $publicIp = (Invoke-RestMethod https://ipinfo.io/json).ip
+      write-host "current public ip:$publicIp" -ForegroundColor Green
+      [environment]::getenvironmentvariables().getenumerator()|sort Name
+      $result = test-netconnection $env:clusterEndpoint -p $env:clusterPort
+      write-host "test net connection result: $result"
+    errorActionPreference: continue
+    displayName: "PowerShell Troubleshooting Script"
+    failOnStderr: false
+    ignoreLASTEXITCODE: true
+    env:  
+      clusterPort: 19000
+      clusterEndpoint: xxxxxx.xxxxx.cloudapp.azure.com
   ```
 
 - Verify configured Azure AD user is able to logon successfully to cluster using SFX or powershell.
