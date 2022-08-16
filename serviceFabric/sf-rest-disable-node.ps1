@@ -64,34 +64,47 @@ function main() {
         $cert = Get-ChildItem -Path cert:\$store -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
     }
 
+    if (!$cert) {
+        write-error "unable to find cert $gatewayCertThumb"
+        return
+    }
+
     $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)"
+    $url = "$($gatewayHost)/Nodes/$($nodeName)?$($eventArgs)"
+    
+    # verify node name as post will not return error for bad node name
+    $global:result = call-rest -url $url -cert $cert -method get
+    if ($global:result.StatusCode -ne 200) {
+        write-error "unable to find node: $nodeName"
+        return
+    }
+    
 
     write-host "disabling node:$nodeName"
+    $url = "$($gatewayHost)/Nodes/$($nodeName)/$/Deactivate?$($eventArgs)"
 
-    $url = "$($gatewayHost)/Nodes/$nodeName/$/Deactivate?$($eventArgs)"
     # Pause, Restart, RemoveData
-    $body = @{DeactivationIntent = $deactivationIntent } | convertto-json
+    $body = @{ DeactivationIntent = $deactivationIntent } | convertto-json
 
     $global:result = call-rest -url $url -cert $cert -method post -body $body
-    if ($global:result.error) {
-        write-host "$($global:result | convertto-json)" -ForegroundColor Red
+    if ($global:result.StatusCode -ne 200) {
+        write-host "$($global:result)" -ForegroundColor Red
         write-host "disable failed" -ForegroundColor Red
     }
     else {
-        write-host "$($global:result | convertto-json)" -ForegroundColor Cyan
+        write-host "$($global:result)" -ForegroundColor Cyan
         write-host "disable successful" -ForegroundColor Green
     }
-    
 }
 
 function call-rest($url, $cert, $method, $body) {
     if ($PSVersionTable.PSEdition -ieq 'core') {
-        write-host "Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint) -SkipCertificateCheck -SkipHttpErrorCheck" -ForegroundColor Cyan
-        return Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert -SkipCertificateCheck -SkipHttpErrorCheck
+        write-host "Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint) -SkipCertificateCheck -SkipHttpErrorCheck" -ForegroundColor Cyan
+        return Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert -SkipCertificateCheck -SkipHttpErrorCheck
     }
     else {
-        write-host "Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint)" -ForegroundColor Cyan
-        return Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert
+        write-host "Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint)" -ForegroundColor Cyan
+        return Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert
     }
 }
 
