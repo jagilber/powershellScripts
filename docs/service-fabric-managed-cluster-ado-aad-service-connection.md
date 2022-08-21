@@ -1,6 +1,5 @@
 # How to configure Azure Devops Service Fabric Managed Cluster Service Connection
 
-
 The steps below describe how to configure the ADO service connection for Service Fabric managed clusters with Azure Active Directory (AAD / Azure AD). This solution requires both the use of Azure AD and the use of Azure provided build agents in ADO.
 
 Service Fabric Managed Clusters provision and manage the 'server' certificate including the rollover process before certificate expiration.
@@ -11,7 +10,7 @@ When the certificate is rolled over, the Service Fabric service connection will 
 
 ## Requirements
 
-- Service Fabric managed cluster security with Azure Active Directory enabled. See [Service Fabric cluster security scenarios](https://docs.microsoft.com/azure/service-fabric/service-fabric-cluster-security#client-to-node-azure-active-directory-security-on-azure) for additional information.
+- Service Fabric managed cluster security with Azure Active Directory enabled. See [Service Fabric cluster security scenarios](https://docs.microsoft.com/azure/service-fabric/service-fabric-cluster-security#client-to-node-azure-active-directory-security-on-azure) and []() for additional information.
 
   ![](media/sfmc-enable-aad.png)
 
