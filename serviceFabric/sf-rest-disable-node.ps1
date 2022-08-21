@@ -103,12 +103,12 @@ function main() {
 
 function call-rest($url, $cert, $method, $body) {
     if ($PSVersionTable.PSEdition -ieq 'core') {
-        write-host "Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint) -SkipCertificateCheck -SkipHttpErrorCheck" -ForegroundColor Cyan
-        return Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert -SkipCertificateCheck -SkipHttpErrorCheck
+        write-host "Invoke-WebRequest -Uri $url -TimeoutSec $timeoutSec -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint) -SkipCertificateCheck -SkipHttpErrorCheck" -ForegroundColor Cyan
+        return Invoke-WebRequest -Uri $url -TimeoutSec $timeoutSec -UseBasicParsing -Method $method -body $body -Certificate $cert -SkipCertificateCheck -SkipHttpErrorCheck
     }
     else {
-        write-host "Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint)" -ForegroundColor Cyan
-        return Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert
+        write-host "Invoke-WebRequest -Uri $url -TimeoutSec $timeoutSec -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint)" -ForegroundColor Cyan
+        return Invoke-WebRequest -Uri $url -TimeoutSec $timeoutSec -UseBasicParsing -Method $method -body $body -Certificate $cert
     }
 }
 
