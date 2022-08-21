@@ -70,15 +70,11 @@ function main() {
     }
 
     $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)"
-    $url = "$($gatewayHost)/Nodes/$($nodeName)?$($eventArgs)"
+    $checkUrl = "$($gatewayHost)/Nodes/$($nodeName)?$($eventArgs)"
     
-    # verify node name as post will not return error for bad node name
-    $global:result = call-rest -url $url -cert $cert -method get
-    if ($global:result.StatusCode -ne 200) {
-        write-error "unable to find node: $nodeName"
+    if (!(check-nodeStatus -url $checkUrl)) {
         return
     }
-    
 
     write-host "disabling node:$nodeName"
     $url = "$($gatewayHost)/Nodes/$($nodeName)/$/Deactivate?$($eventArgs)"
@@ -95,6 +91,8 @@ function main() {
         write-host "$($global:result)" -ForegroundColor Cyan
         write-host "disable successful" -ForegroundColor Green
     }
+
+    check-nodeStatus -url $checkUrl
 }
 
 function call-rest($url, $cert, $method, $body) {
@@ -106,6 +104,18 @@ function call-rest($url, $cert, $method, $body) {
         write-host "Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $($cert.thumbprint)" -ForegroundColor Cyan
         return Invoke-WebRequest -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -body $body -Certificate $cert
     }
+}
+
+function check-nodeStatus($url) {
+    # verify node name as post will not return error for bad node name
+    $global:result = call-rest -url $url -cert $cert -method get
+    if ($global:result.StatusCode -ne 200) {
+        write-error "unable to find node: $nodeName"
+        return $false
+    }
+
+    write-host "current node status:`r`n$($global:result | convertfrom-json | convertto-json)" -ForegroundColor Cyan
+    return $true
 }
 
 function set-callback() {
