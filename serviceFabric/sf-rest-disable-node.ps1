@@ -17,12 +17,12 @@ param(
     [ValidateSet('Pause', 'Restart', 'RemoveData')]
     [Parameter(Mandatory = $true)]
     $deactivationIntent,
-    $timeoutSec = 100,
-    $apiVer = "6.2-preview",
     [ValidateSet('CurrentUser', 'LocalMachine')]
     $store = 'CurrentUser',
     $certificatePath = '',
-    $certificatePassword = ''
+    $certificatePassword = '',
+    $timeoutSec = 100,
+    $apiVer = "6.2-preview"
 )
 
 Clear-Host
@@ -35,6 +35,12 @@ function main() {
         set-callback
     }
 
+    if(!($gatewayHost.startswith('http')) -or !($gatewayHost.endswith('19080')))
+    {
+        write-error "gatewayHost format is: https://{{cluster}}.{{location}}.cloudapp.azure.com:19080"
+        return
+    }
+    
     $managementEndpoint = $gatewayHost.Replace("19000", "19080").Replace("https://", "")
     $clusterFqdn = [regex]::match($managementEndpoint, "(?:http.//|^)(.+?)(?:\:|$|/)").Groups[1].Value
 
