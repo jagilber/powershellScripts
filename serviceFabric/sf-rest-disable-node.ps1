@@ -58,7 +58,7 @@ function main() {
     $error.Clear()
 
     if ($certificatePath -and (test-path $certificatePath)) {
-        $cert = [security.cryptography.x509Certificates.x509Certificate2]::new($pfxFile, $certificatePassword);
+        $cert = [security.cryptography.x509Certificates.x509Certificate2]::new($certificatePath, $certificatePassword);
     }
     else {
         $cert = Get-ChildItem -Path cert:\$store -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
