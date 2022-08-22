@@ -6,7 +6,7 @@
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-export-arm-template.ps1" -outFile "$pwd/azure-az-export-arm-template.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/draft_azure-az-export-arm-template.ps1" -outFile "$pwd/azure-az-export-arm-template.ps1";
     ./azure-az-export-arm-template.ps1 -resourceGroupName <resource group name>
 
 .DESCRIPTION  
@@ -26,8 +26,9 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 210322.1
-    todo       : merge capacity and instance count
+    Version    : 220822
+    todo       : update download link
+                 merge capacity and instance count
                  rename and hide unused parameters for addnodetype
                  update readmes
     History    : 
