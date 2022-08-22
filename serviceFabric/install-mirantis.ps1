@@ -143,7 +143,7 @@ function write-event($data) {
 
 function execute-script([string]$script, [string] $arguments) {
     write-host "Invoke-Expression -Command `"$script $arguments`""
-    return Invoke-Expression -Command "$script $arguments" -
+    return Invoke-Expression -Command "$script $arguments"
 }
 function get-dockerVersion() {
     $error.clear()
