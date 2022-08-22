@@ -43,9 +43,9 @@ function main() {
 
     if (!(test-path $installFile)) {
         "Downloading [$url]`nSaving at [$installFile]" 
-        write-host "$result = Invoke-WebRequest -UseBasicParsing -Uri $mirantisInstallUrl -OutFile $installFile"
-        $result = Invoke-WebRequest -UseBasicParsing -Uri $mirantisInstallUrl -OutFile $installFile
-        write-host "invoke-webrequest result:$($result | Format-List *)"
+        write-host "$result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)"
+        $result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)
+        write-host "downloadFile result:$($result | Format-List *)"
     }
 
     $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
