@@ -27,7 +27,6 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
 function main() {
-    $installLog = "$psscriptroot\install.log"
     $transcriptLog = "$psscriptroot\transcript.log"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -76,7 +75,6 @@ function main() {
 
     write-host "install result:$($result | Format-List * | out-string)"
     Write-Host "installed docker version final:$(get-dockerVersion)"
-    write-host "install log:`r`n$(Get-Content -raw $installLog)"
     write-host "restarting OS:$restart"
 
     Stop-Transcript
