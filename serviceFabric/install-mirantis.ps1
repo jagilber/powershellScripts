@@ -2,17 +2,16 @@
 .SYNOPSIS
     example script to install docker on virtual machine scaleset using custom script extension
     use custom script extension in ARM template
-    save file to url that vmss nodes have access to during provisioning
+    save script file to url that vmss nodes have access to during provisioning
     
 .NOTES
     v 1.0
-    use: https://docker.microsoft.com/download to get download links
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
-
 #>
+
 param(
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [version]$version = '0.0.0.0', # latest
@@ -48,9 +47,10 @@ function main() {
         write-host "downloadFile result:$($result | Format-List *)"
         write-host "fixing -usebasicparsing in $installFile"
         # temp fix for usebasicparsing error in install.ps1
-        add-UseBasicParsing
+        add-UseBasicParsing -scriptFile $installFile
     }
 
+    # install.ps1 using write-host to output string data. have to capture with 6>&1
     $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
     write-host "current versions: $currentVersions"
     
@@ -91,24 +91,29 @@ function main() {
 }
 
 function add-UseBasicParsing($scriptFile) {
-    $scriptLines = [io.file]::ReadAllLines($scriptFile)
-    $pattern = "(?:invoke-webrequest.+-UseBasicParsing.+$)|(?<fix>invoke-webrequest.+$)"
     $newLine
+    $scriptLines = [io.file]::ReadAllLines($scriptFile)
     $newScript = [collections.arraylist]::new()
+    write-host "updating $scriptFile to use -UseBasicParsing"
 
     foreach ($line in $scriptLines) {
         $newLine = $line
         if ([regex]::IsMatch($line, 'Invoke-WebRequest', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            write-host "found command $line"
             if (![regex]::IsMatch($line, '-UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
                 $newLine = [regex]::Replace($line, 'Invoke-WebRequest', 'Invoke-WebRequest -UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                write-host "updating command $line to $newLine"
             }
         }
         [void]$newScript.Add($newLine)
     }
 
     $newScriptContent = [string]::Join([Environment]::NewLine, $newScript.ToArray())
+    rename-item $scriptFile -NewName "$scriptFile.oem" -force
+    write-host "saving new script $scriptFile"
     out-file -InputObject $newScriptContent -FilePath $scriptFile -Force
 }
+
 function register-event() {
     try {
         if ($registerEvent) {
@@ -149,7 +154,7 @@ function get-dockerVersion() {
     }
     elseif ((docker) -and !$error) {
         Write-Warning "warning:docker in non default directory"
-        $dockerInfo = (. $dockerExe version)
+        $dockerInfo = (docker version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
     else {
