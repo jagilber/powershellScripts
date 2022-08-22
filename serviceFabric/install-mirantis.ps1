@@ -67,14 +67,17 @@ function main() {
 
     if ($installedVersion -ge $version) {
         write-event "docker $installedVersion already installed"
-        return
+        $restart = $false
     }
+    else {
+        # fix for usebasicparsing?
+        start-process -FilePath ie4uinit.exe -Wait -NoNewWindow
+        $result = execute-script -script $installFile -arguments '-verbose 6>&1'
 
-    $result = execute-script -script $installFile -arguments '-verbose 6>&1'
-
-    write-host "install result:$($result | Format-List * | out-string)"
-    Write-Host "installed docker version final:$(get-dockerVersion)"
-    write-host "restarting OS:$restart"
+        write-host "install result:$($result | Format-List * | out-string)"
+        Write-Host "installed docker version final:$(get-dockerVersion)"
+        write-host "restarting OS:$restart"
+    }
 
     Stop-Transcript
     write-event (get-content -raw $transcriptLog)
@@ -125,7 +128,7 @@ function get-dockerVersion() {
         $dockerInfo = (. $dockerExe version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
-    elseif((docker) -and !$error){
+    elseif ((docker) -and !$error) {
         Write-Warning "warning:docker in non default directory"
         $dockerInfo = (. $dockerExe version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
