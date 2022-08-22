@@ -15,10 +15,10 @@
 #>
 param(
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
-    [version]$version = '0.0.0.0',
+    [version]$version = '0.0.0.0', # latest
     [bool]$registerEvent = $true,
     [string]$registerEventSource = 'CustomScriptExtensionPS',
-    [switch]$restart
+    [bool]$restart = $true
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -31,12 +31,11 @@ function main() {
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
     if (!$isAdmin) {
-        Write-Warning "restart script as administrator"
+        Write-Error "restart script as administrator"
         return
     }
     
     register-event
-
     Start-Transcript -Path $transcriptLog
 
     $installFile = "$psscriptroot\$([io.path]::GetFileName($mirantisInstallUrl))"
@@ -44,8 +43,8 @@ function main() {
 
     if (!(test-path $installFile)) {
         "Downloading [$url]`nSaving at [$installFile]" 
-        write-host "$result = Invoke-WebRequest -Uri $mirantisInstallUrl -OutFile $installFile"
-        $result = Invoke-WebRequest -Uri $mirantisInstallUrl -OutFile $installFile
+        write-host "$result = Invoke-WebRequest -UseBasicParsing -Uri $mirantisInstallUrl -OutFile $installFile"
+        $result = Invoke-WebRequest -UseBasicParsing -Uri $mirantisInstallUrl -OutFile $installFile
         write-host "invoke-webrequest result:$($result | Format-List *)"
     }
 
@@ -115,15 +114,19 @@ function write-event($data) {
 }
 
 function execute-script([string]$script, [string] $arguments) {
-    write-host "
-        Invoke-Expression -Command `"$script $arguments`"
-    "
+    write-host "Invoke-Expression -Command `"$script $arguments`""
     return Invoke-Expression -Command "$script $arguments"
 }
 
 function get-dockerVersion() {
-    $dockerExe = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
+    $error.clear()
+    $dockerExe = 'C:\Program Files\Docker\docker.exe'
     if ((test-path $dockerExe)) {
+        $dockerInfo = (. $dockerExe version)
+        $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
+    }
+    elseif((docker) -and !$error){
+        Write-Warning "warning:docker in non default directory"
         $dockerInfo = (. $dockerExe version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
