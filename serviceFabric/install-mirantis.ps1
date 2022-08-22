@@ -46,6 +46,9 @@ function main() {
         write-host "$result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)"
         $result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)
         write-host "downloadFile result:$($result | Format-List *)"
+        write-host "fixing -usebasicparsing in $installFile"
+        # temp fix for usebasicparsing error in install.ps1
+        add-UseBasicParsing
     }
 
     $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
@@ -70,8 +73,6 @@ function main() {
         $restart = $false
     }
     else {
-        # fix for usebasicparsing?
-        start-process -FilePath ie4uinit.exe -Wait -NoNewWindow
         $result = execute-script -script $installFile -arguments '-verbose 6>&1'
 
         write-host "install result:$($result | Format-List * | out-string)"
@@ -89,6 +90,25 @@ function main() {
     return $result
 }
 
+function add-UseBasicParsing($scriptFile) {
+    $scriptLines = [io.file]::ReadAllLines($scriptFile)
+    $pattern = "(?:invoke-webrequest.+-UseBasicParsing.+$)|(?<fix>invoke-webrequest.+$)"
+    $newLine
+    $newScript = [collections.arraylist]::new()
+
+    foreach ($line in $scriptLines) {
+        $newLine = $line
+        if ([regex]::IsMatch($line, 'Invoke-WebRequest', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            if (![regex]::IsMatch($line, '-UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                $newLine = [regex]::Replace($line, 'Invoke-WebRequest', 'Invoke-WebRequest -UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            }
+        }
+        [void]$newScript.Add($newLine)
+    }
+
+    $newScriptContent = [string]::Join([Environment]::NewLine, $newScript.ToArray())
+    out-file -InputObject $newScriptContent -FilePath $scriptFile -Force
+}
 function register-event() {
     try {
         if ($registerEvent) {
@@ -118,9 +138,8 @@ function write-event($data) {
 
 function execute-script([string]$script, [string] $arguments) {
     write-host "Invoke-Expression -Command `"$script $arguments`""
-    return Invoke-Expression -Command "$script $arguments"
+    return Invoke-Expression -Command "$script $arguments" -
 }
-
 function get-dockerVersion() {
     $error.clear()
     $dockerExe = 'C:\Program Files\Docker\docker.exe'
