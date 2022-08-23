@@ -18,7 +18,7 @@ param(
     [bool]$restart = $true,
     [bool]$allowUpgrade = $false,
     [bool]$registerEvent = $true,
-    [string]$registerEventSource = 'CustomScriptExtensionPS',
+    [string]$registerEventSource = 'CustomScriptExtensionPS'
 )
 
 $PSModuleAutoLoadingPreference = 2
