@@ -15,9 +15,9 @@
 param(
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [version]$version = '0.0.0.0', # latest
-    [bool]$restart = $true,
-    [bool]$allowUpgrade = $false,
-    [bool]$installContainerD = $false,
+    [switch]$norestart,
+    [switch]$allowUpgrade,
+    [switch]$installContainerD,
     [bool]$registerEvent = $true,
     [string]$registerEventSource = 'CustomScriptExtensionPS'
 )
@@ -29,6 +29,7 @@ $ErrorActionPreference = 'continue'
 
 function main() {
     $error.Clear()
+
     $transcriptLog = "$psscriptroot\transcript.log"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -62,7 +63,7 @@ function main() {
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
 
-    if ($version -ieq [version]::new(0, 0, 0, 0)) {
+    if (!$version -or $version -ieq [version]::new(0, 0, 0, 0)) {
         $version = $latestDockerVersion
     }
 
@@ -73,15 +74,15 @@ function main() {
 
     if ($installedVersion -eq $version) {
         write-host "docker $installedVersion already installed and is equal to $version. skipping install."
-        $restart = $false
+        $norestart = $true
     }
     elseif ($installedVersion -ge $version) {
         write-host "docker $installedVersion already installed and is newer than $version. skipping install."
-        $restart = $false
+        $norestart = $true
     }
     elseif ($installedVersion -ne '0.0.0.0' -and ($installedVersion -lt $version -and !$allowUpgrade)) {
         write-host "docker $installedVersion already installed and is older than $version. allowupgrade:$allowUpgrade. skipping install."
-        $restart = $false
+        $norestart = $true
     }
     else {
         write-host "installing docker."
@@ -98,7 +99,7 @@ function main() {
     Stop-Transcript
     write-event (get-content -raw $transcriptLog)
 
-    if ($restart) {
+    if (!$norestart) {
         Restart-Computer -Force
     }
 
