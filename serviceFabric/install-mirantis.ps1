@@ -191,10 +191,10 @@ function write-event($data) {
     write-host $data
     $level = 'Information'
 
-    if ($error) {
-        $level = 'Error'
-        $data = "$data`r`nerrors:`r`n$($error | out-string)"
-    }
+    # if ($error) {
+    #     $level = 'Error'
+    #     $data = "$data`r`nerrors:`r`n$($error | out-string)"
+    # }
 
     try {
         if ($registerEvent) {
