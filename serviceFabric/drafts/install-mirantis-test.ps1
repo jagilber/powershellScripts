@@ -9,7 +9,7 @@
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/install-mirantis-test.ps1" -outFile "$pwd\install-mirantis.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
 #>
 
 param(
@@ -27,7 +27,7 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
 function main() {
-    $error.clear()
+    $error.Clear()
     $transcriptLog = "$psscriptroot\transcript.log"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -47,16 +47,16 @@ function main() {
         write-host "$result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)"
         $result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)
         write-host "downloadFile result:$($result | Format-List *)"
-        write-host "fixing -usebasicparsing in $installFile"
+
         # temp fix for usebasicparsing error in install.ps1
-        # add-UseBasicParsing -scriptFile $installFile
+        add-UseBasicParsing -scriptFile $installFile
     }
 
     # install.ps1 using write-host to output string data. have to capture with 6>&1
-    $currentVersions = execute-script -script $installFile -arguments '-showVersions' # 6>&1'
+    $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
     write-host "current versions: $currentVersions"
-    $match = [regex]::Match($currentVersions, 'docker: (?<docker>.+?)containerd: (?<containerd>.+)', [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::Singleline)
-    $currentDockerVersions = @($match.Captures[0].Groups['docker'].Value.Replace(" ", "").Split(","))
+    
+    $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
     write-host "current docker versions: $currentDockerVersions"
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
@@ -65,7 +65,7 @@ function main() {
         $version = $latestDockerVersion
     }
 
-    $currentContainerDVersions = @($match.Captures[0].Groups['containerd'].Value.Replace(" ", "").Split(","))
+    $currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
     write-host "current containerd versions: $currentContainerDVersions"
 
     $installedVersion = get-dockerVersion
@@ -78,16 +78,15 @@ function main() {
         write-host "docker $installedVersion already installed and is newer than $version. skipping install."
         $restart = $false
     }
-    elseif ($installedVersion -lt $version -and !$allowUpgrade) {
+    elseif ($installedVersion -ne '0.0.0.0' -and ($installedVersion -lt $version -and !$allowUpgrade)) {
         write-host "docker $installedVersion already installed and is older than $version. allowupgrade:$allowUpgrade. skipping install."
         $restart = $false
     }
     else {
         write-host "installing docker."
-        $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) -verbose 6>&1"
+        $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) -EngineOnly -verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
-        Write-Host "installed docker version final:$(get-dockerVersion)"
         write-host "restarting OS:$restart"
     }
 
@@ -105,7 +104,7 @@ function add-UseBasicParsing($scriptFile) {
     $newLine
     $scriptLines = [io.file]::ReadAllLines($scriptFile)
     $newScript = [collections.arraylist]::new()
-    write-host "updating $scriptFile to use -UseBasicParsing"
+    write-host "updating $scriptFile to use -UseBasicParsing for Invoke-WebRequest"
 
     foreach ($line in $scriptLines) {
         $newLine = $line
@@ -127,34 +126,26 @@ function add-UseBasicParsing($scriptFile) {
 
 function execute-script([string]$script, [string] $arguments) {
     write-host "Invoke-Expression -Command `"$script $arguments`""
-    #powershell -ExecutionPolicy Unrestricted -File install_mirantis.ps1
-    $exe = 'powershell.exe'
-
-    if ($psedition -ieq 'core') {
-        $exe = 'pwsh.exe'
-    }
-
-    $args = "-ExecutionPolicy Unrestricted -File $script $arguments"
-    $result = run-process -processName $exe -arguments $args -wait $true
-    #return Invoke-Expression -Command "$script $arguments"
-    return $result
+    return Invoke-Expression -Command "$script $arguments"
 }
 
 function get-dockerVersion() {
     $dockerExe = 'C:\Program Files\Docker\docker.exe'
     if ((test-path $dockerExe)) {
+        write-host "found $dockerExe"
         $dockerInfo = (. $dockerExe version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
-    elseif ((docker) -and !$error) {
+    elseif ((invoke-expression 'docker')) {
         Write-Warning "warning:docker in non default directory"
         $dockerInfo = (docker version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
     else {
+        write-host "docker not found"
         $installedVersion = [version]::new(0, 0, 0, 0)
     }
-
+    
     $error.clear()
     write-host "installed docker version:$installedVersion"
     return $installedVersion
@@ -174,7 +165,7 @@ function get-latestVersion([string[]] $versions) {
             }
         }
         catch {
-            $error.clear()
+            $error.Clear()
             continue
         }
     }
@@ -196,47 +187,14 @@ function register-event() {
     }
 }
 
-function run-process([string] $processName, [string] $arguments, [bool] $wait = $false) {
-    write-host "Running process $processName $arguments"
-    $exitVal = 0
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $true
-    $process.StartInfo.RedirectStandardError = $true
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $true
-    $process.StartInfo.WorkingDirectory = get-location
-
-    [void]$process.Start()
-    if ($wait -and !$process.HasExited) {
-        [void]$process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        write-host "Process output:$stdOut"
-
-        if (![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0") {
-            write-host "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
-    }
-    elseif ($wait) {
-        write-host "Process ended before capturing output."
-    }
-    
-    #return $exitVal
-    return $stdOut
-}
-
 function write-event($data) {
     write-host $data
     $level = 'Information'
 
-    if ($error) {
-        $level = 'Error'
-        $data = "$data`r`nerrors:`r`n$($error | out-string)"
-    }
+    # if ($error) {
+    #     $level = 'Error'
+    #     $data = "$data`r`nerrors:`r`n$($error | out-string)"
+    # }
 
     try {
         if ($registerEvent) {
