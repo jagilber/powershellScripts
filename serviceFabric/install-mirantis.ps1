@@ -9,7 +9,7 @@
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
 #>
 
 param(
@@ -45,17 +45,17 @@ function main() {
         write-host "$result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)"
         $result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)
         write-host "downloadFile result:$($result | Format-List *)"
+        write-host "fixing -usebasicparsing in $installFile"
+        # temp fix for usebasicparsing error in install.ps1
+        add-UseBasicParsing -scriptFile $installFile
     }
 
     # install.ps1 using write-host to output string data. have to capture with 6>&1
     $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
     write-host "current versions: $currentVersions"
     
-    $matches = [regex]::Matches($s,'docker: (?<docker>.+?)containerd: (?<containerd>.+)$',[Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::Singleline)
-
-    $currentDockerVersions = @($matches.captures[0].Groups['docker'].Value.TrimStart('docker:').Replace(" ", "").Split(","))
+    $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
     write-host "current docker versions: $currentDockerVersions"
-
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
 
@@ -63,7 +63,7 @@ function main() {
         $version = $latestDockerVersion
     }
 
-    $currentContainerDVersions = @($matches.captures[0].Groups['containerd'].Value.TrimStart('containerd:').Replace(" ", "").Split(","))
+    $currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
     write-host "current containerd versions: $currentContainerDVersions"
 
     $installedVersion = get-dockerVersion
@@ -90,15 +90,60 @@ function main() {
     return $result
 }
 
-function execute-script([string]$script, [string] $arguments) {
-    $exe = 'powershell.exe'
+function add-UseBasicParsing($scriptFile) {
+    $newLine
+    $scriptLines = [io.file]::ReadAllLines($scriptFile)
+    $newScript = [collections.arraylist]::new()
+    write-host "updating $scriptFile to use -UseBasicParsing"
 
-    if ($psedition -ieq 'core') {
-        $exe = 'pwsh.exe'
+    foreach ($line in $scriptLines) {
+        $newLine = $line
+        if ([regex]::IsMatch($line, 'Invoke-WebRequest', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            write-host "found command $line"
+            if (![regex]::IsMatch($line, '-UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                $newLine = [regex]::Replace($line, 'Invoke-WebRequest', 'Invoke-WebRequest -UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                write-host "updating command $line to $newLine"
+            }
+        }
+        [void]$newScript.Add($newLine)
     }
 
-    $result = run-process -processName $exe -arguments "$script $arguments" -wait $true
-    return $result
+    $newScriptContent = [string]::Join([Environment]::NewLine, $newScript.ToArray())
+    rename-item $scriptFile -NewName "$scriptFile.oem" -force
+    write-host "saving new script $scriptFile"
+    out-file -InputObject $newScriptContent -FilePath $scriptFile -Force
+}
+
+function register-event() {
+    try {
+        if ($registerEvent) {
+            if (!(get-eventlog -LogName 'Application' -Source $registerEventSource -ErrorAction silentlycontinue)) {
+                New-EventLog -LogName 'Application' -Source $registerEventSource
+            }
+        }
+    }
+    catch {
+        write-host "exception:$($error | out-string)"
+        $error.clear()
+    }
+}
+
+function write-event($data) {
+    write-host $data
+
+    try {
+        if ($registerEvent) {
+            Write-EventLog -LogName 'Application' -Source $registerEventSource -Message $data -EventId 1000
+        }
+    }
+    catch {
+        $error.Clear()
+    }
+}
+
+function execute-script([string]$script, [string] $arguments) {
+    write-host "Invoke-Expression -Command `"$script $arguments`""
+    return Invoke-Expression -Command "$script $arguments"
 }
 
 function get-dockerVersion() {
@@ -140,70 +185,6 @@ function get-latestVersion([string[]] $versions) {
     }
 
     return $latestVersion
-}
-
-function register-event() {
-    try {
-        if ($registerEvent) {
-            if (!(get-eventlog -LogName 'Application' -Source $registerEventSource -ErrorAction silentlycontinue)) {
-                New-EventLog -LogName 'Application' -Source $registerEventSource
-            }
-        }
-    }
-    catch {
-        write-host "exception:$($error | out-string)"
-        $error.clear()
-    }
-}
-
-function run-process([string] $processName, [string] $arguments, [bool] $wait = $false)
-{
-    write-host "Running process $processName $arguments"
-    $exitVal = 0
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $true
-    $process.StartInfo.RedirectStandardError = $true
-    $process.StartInfo.FileName = $processName
-    $process.StartInfo.Arguments = $arguments
-    $process.StartInfo.CreateNoWindow = $true
-    $process.StartInfo.WorkingDirectory = get-location
-
-    [void]$process.Start()
-    if($wait -and !$process.HasExited)
-    {
-        [void]$process.WaitForExit($processWaitMs)
-        $exitVal = $process.ExitCode
-        $stdOut = $process.StandardOutput.ReadToEnd()
-        $stdErr = $process.StandardError.ReadToEnd()
-        write-host "Process output:$stdOut"
-
-        if(![System.String]::IsNullOrEmpty($stdErr) -and $stdErr -notlike "0")
-        {
-            write-host "Error:$stdErr `n $Error"
-            $Error.Clear()
-        }
-    }
-    elseif($wait)
-    {
-        write-host "Process ended before capturing output."
-    }
-    
-    #return $exitVal
-    return $stdOut
-}
-
-function write-event($data) {
-    write-host $data
-
-    try {
-        if ($registerEvent) {
-            Write-EventLog -LogName 'Application' -Source $registerEventSource -Message $data -EventId 1000
-        }
-    }
-    catch {
-        $error.Clear()
-    }
 }
 
 main
