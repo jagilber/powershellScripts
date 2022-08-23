@@ -7,6 +7,35 @@
 .NOTES
     v 1.0
 
+"virtualMachineProfile": {
+    "extensionProfile": {
+        "extensions": [
+            {
+                "name": "CustomScriptExtension",
+                "properties": {
+                    "publisher": "Microsoft.Compute",
+                    "type": "CustomScriptExtension",
+                    "typeHandlerVersion": "1.10",
+                    "autoUpgradeMinorVersion": true,
+                    "settings": {
+                        "fileUris": [
+                            "https://aka.ms/install-mirantis.ps1"
+                        ],
+                        "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1"
+                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -version '0.0.0.0'" // latest
+                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -version '0.0.0.0'" // latest
+                    }
+                }
+            },
+            {
+                "name": "[concat(parameters('vmNodeType0Name'),'_ServiceFabricNode')]",
+                "properties": {
+                    "provisionAfterExtensions": [
+                        "CustomScriptExtension"
+                    ],
+                    "type": "ServiceFabricNode",
+
+
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
@@ -14,7 +43,7 @@
 
 param(
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
-    [version]$version = '0.0.0.0', # latest
+    [string]$dockerVersion = '0.0.0.0', # latest
     [switch]$norestart,
     [switch]$allowUpgrade,
     [switch]$installContainerD,
@@ -54,18 +83,7 @@ function main() {
         add-UseBasicParsing -scriptFile $installFile
     }
 
-    # install.ps1 using write-host to output string data. have to capture with 6>&1
-    $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
-    write-host "current versions: $currentVersions"
-    
-    $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
-    write-host "current docker versions: $currentDockerVersions"
-    $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
-    write-host "latest docker version: $latestDockerVersion"
-
-    if (!$version -or $version -ieq [version]::new(0, 0, 0, 0)) {
-        $version = $latestDockerVersion
-    }
+    $version = set-dockerVersion
 
     $currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
     write-host "current containerd versions: $currentContainerDVersions"
@@ -87,7 +105,7 @@ function main() {
     else {
         write-host "installing docker."
         $engineOnly = $null
-        if(!$installContainerD) {
+        if (!$installContainerD) {
             $engineOnly = "-EngineOnly "
         }
         $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) $engineOnly-verbose 6>&1"
@@ -191,6 +209,31 @@ function register-event() {
         write-host "exception:$($error | out-string)"
         $error.clear()
     }
+}
+
+function set-dockerVersion($dockerVersion) {
+    # install.ps1 using write-host to output string data. have to capture with 6>&1
+    $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
+    write-host "current versions: $currentVersions"
+        
+    $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
+    write-host "current docker versions: $currentDockerVersions"
+    $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
+    write-host "latest docker version: $latestDockerVersion"
+
+    try{
+        $version = [version]::new($dockerVersion)
+    }
+    catch{
+        $version = [version]::new(0, 0, 0, 0)
+    }
+    
+    if ($version -ieq [version]::new(0, 0, 0, 0)) {
+        $version = $latestDockerVersion
+    }
+
+    write-host "setting target version to: $version"
+    return $version
 }
 
 function write-event($data) {
