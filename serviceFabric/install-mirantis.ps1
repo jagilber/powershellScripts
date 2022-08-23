@@ -87,7 +87,6 @@ function main() {
         $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) -verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
-        Write-Host "installed docker version final:$(get-dockerVersion)"
         write-host "restarting OS:$restart"
     }
 
