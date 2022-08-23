@@ -27,6 +27,7 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
 function main() {
+    $error.Clear()
     $transcriptLog = "$psscriptroot\transcript.log"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -46,7 +47,7 @@ function main() {
         write-host "$result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)"
         $result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)
         write-host "downloadFile result:$($result | Format-List *)"
-        write-host "fixing -usebasicparsing in $installFile"
+
         # temp fix for usebasicparsing error in install.ps1
         add-UseBasicParsing -scriptFile $installFile
     }
@@ -104,7 +105,7 @@ function add-UseBasicParsing($scriptFile) {
     $newLine
     $scriptLines = [io.file]::ReadAllLines($scriptFile)
     $newScript = [collections.arraylist]::new()
-    write-host "updating $scriptFile to use -UseBasicParsing"
+    write-host "updating $scriptFile to use -UseBasicParsing for Invoke-WebRequest"
 
     foreach ($line in $scriptLines) {
         $newLine = $line
@@ -122,33 +123,6 @@ function add-UseBasicParsing($scriptFile) {
     rename-item $scriptFile -NewName "$scriptFile.oem" -force
     write-host "saving new script $scriptFile"
     out-file -InputObject $newScriptContent -FilePath $scriptFile -Force
-}
-
-function register-event() {
-    try {
-        if ($registerEvent) {
-            if (!(get-eventlog -LogName 'Application' -Source $registerEventSource -ErrorAction silentlycontinue)) {
-                New-EventLog -LogName 'Application' -Source $registerEventSource
-            }
-        }
-    }
-    catch {
-        write-host "exception:$($error | out-string)"
-        $error.clear()
-    }
-}
-
-function write-event($data) {
-    write-host $data
-
-    try {
-        if ($registerEvent) {
-            Write-EventLog -LogName 'Application' -Source $registerEventSource -Message $data -EventId 1000
-        }
-    }
-    catch {
-        $error.Clear()
-    }
 }
 
 function execute-script([string]$script, [string] $arguments) {
@@ -190,11 +164,45 @@ function get-latestVersion([string[]] $versions) {
             }
         }
         catch {
+            $error.Clear()
             continue
         }
     }
 
     return $latestVersion
+}
+
+function register-event() {
+    try {
+        if ($registerEvent) {
+            if (!(get-eventlog -LogName 'Application' -Source $registerEventSource -ErrorAction silentlycontinue)) {
+                New-EventLog -LogName 'Application' -Source $registerEventSource
+            }
+        }
+    }
+    catch {
+        write-host "exception:$($error | out-string)"
+        $error.clear()
+    }
+}
+
+function write-event($data) {
+    write-host $data
+    $level = 'Information'
+
+    if ($error) {
+        $level = 'Error'
+        $data = "$data`r`nerrors:`r`n$($error | out-string)"
+    }
+
+    try {
+        if ($registerEvent) {
+            Write-EventLog -LogName 'Application' -Source $registerEventSource -Message $data -EventId 1000 -EntryType $level
+        }
+    }
+    catch {
+        $error.Clear()
+    }
 }
 
 main
