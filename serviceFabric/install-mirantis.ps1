@@ -9,15 +9,16 @@
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/install-mirantis.ps1" -outFile "$pwd\install-mirantis.ps1";
 #>
 
 param(
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [version]$version = '0.0.0.0', # latest
+    [bool]$restart = $true,
+    [bool]$allowUpgrade = $false,
     [bool]$registerEvent = $true,
     [string]$registerEventSource = 'CustomScriptExtensionPS',
-    [bool]$restart = $true
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -59,7 +60,7 @@ function main() {
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
 
-    if ($version -ieq [version]::new(0, 0, 0, 0).Version) {
+    if ($version -ieq [version]::new(0, 0, 0, 0)) {
         $version = $latestDockerVersion
     }
 
@@ -68,12 +69,21 @@ function main() {
 
     $installedVersion = get-dockerVersion
 
-    if ($installedVersion -ge $version) {
-        write-event "docker $installedVersion already installed"
+    if ($installedVersion -eq $version) {
+        write-host "docker $installedVersion already installed and is equal to $version. skipping install."
+        $restart = $false
+    }
+    elseif ($installedVersion -ge $version) {
+        write-host "docker $installedVersion already installed and is newer than $version. skipping install."
+        $restart = $false
+    }
+    elseif ($installedVersion -lt $version -and !$allowUpgrade) {
+        write-host "docker $installedVersion already installed and is older than $version. allowupgrade:$allowUpgrade. skipping install."
         $restart = $false
     }
     else {
-        $result = execute-script -script $installFile -arguments '-verbose 6>&1'
+        write-host "installing docker."
+        $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) -verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
         Write-Host "installed docker version final:$(get-dockerVersion)"
@@ -159,7 +169,7 @@ function get-dockerVersion() {
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
     else {
-        $installedVersion = [version]::new(0, 0, 0, 0).Version
+        $installedVersion = [version]::new(0, 0, 0, 0)
     }
     
     write-host "installed docker version:$installedVersion"
@@ -170,7 +180,7 @@ function get-latestVersion([string[]] $versions) {
     $latestVersion = [version]::new()
     
     if (!$versions) {
-        return [version]::new(0, 0, 0, 0).Version
+        return [version]::new(0, 0, 0, 0)
     }
     foreach ($version in $versions) {
         try {
