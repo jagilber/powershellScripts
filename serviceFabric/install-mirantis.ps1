@@ -78,7 +78,7 @@ function main() {
         write-host "docker $installedVersion already installed and is newer than $version. skipping install."
         $restart = $false
     }
-    elseif ($installedVersion -lt $version -and !$allowUpgrade) {
+    elseif ($installedVersion -ne '0.0.0.0' -and ($installedVersion -lt $version -and !$allowUpgrade)) {
         write-host "docker $installedVersion already installed and is older than $version. allowupgrade:$allowUpgrade. skipping install."
         $restart = $false
     }
@@ -131,21 +131,23 @@ function execute-script([string]$script, [string] $arguments) {
 }
 
 function get-dockerVersion() {
-    $error.clear()
     $dockerExe = 'C:\Program Files\Docker\docker.exe'
     if ((test-path $dockerExe)) {
+        write-host "found $dockerExe"
         $dockerInfo = (. $dockerExe version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
-    elseif ((docker) -and !$error) {
+    elseif ((invoke-expression 'docker')) {
         Write-Warning "warning:docker in non default directory"
         $dockerInfo = (docker version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
     else {
+        write-host "docker not found"
         $installedVersion = [version]::new(0, 0, 0, 0)
     }
     
+    $error.clear()
     write-host "installed docker version:$installedVersion"
     return $installedVersion
 }
