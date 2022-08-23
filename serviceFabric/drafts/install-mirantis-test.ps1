@@ -17,6 +17,7 @@ param(
     [version]$version = '0.0.0.0', # latest
     [bool]$restart = $true,
     [bool]$allowUpgrade = $false,
+    [bool]$installContainerD = $false,
     [bool]$registerEvent = $true,
     [string]$registerEventSource = 'CustomScriptExtensionPS'
 )
@@ -84,7 +85,11 @@ function main() {
     }
     else {
         write-host "installing docker."
-        $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) -EngineOnly -verbose 6>&1"
+        $engineOnly = $null
+        if(!$installContainerD) {
+            $engineOnly = "-EngineOnly "
+        }
+        $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) $engineOnly-verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
         write-host "restarting OS:$restart"
