@@ -284,7 +284,7 @@ function set-dockerVersion($dockerVersion) {
         }
         catch {
             $version = [version]::new($nullVersion)
-            write-warning "exception setting version to `$dockerVersion ($dockerVersion)"
+            write-warning "exception setting version to `$dockerVersion ($dockerVersion)`r`n$($error | out-string)"
         }
     
         if ($version -ieq [version]::new($nullVersion)) {
