@@ -59,7 +59,7 @@ template json :
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
     [switch]$allowUpgrade,
-    [switch]$disableContainerDInstall,
+    [switch]$installContainerD,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [switch]$uninstall,
     [switch]$norestart,
@@ -127,7 +127,7 @@ function main() {
     }
     else {
         $engineOnly = $null
-        if ($disableContainerDInstall) {
+        if (!$installContainerD) {
             $engineOnly = "-EngineOnly "
         }
     
