@@ -164,6 +164,7 @@ function get-dockerVersion() {
     }
     elseif (is-dockerInstalled) {
         $path = Get-WmiObject win32_service | Where-Object { $psitem.Name -like $dockerServiceName } | select-object PathName
+        $path =[regex]::match($path.PathName,"`"(.+)`"").Value
         $installedVersion = [diagnostics.fileVersionInfo]::GetVersionInfo($path)
         Write-Warning "warning:docker installed but not running: $path"
     }
@@ -202,7 +203,7 @@ function get-latestVersion([string[]] $versions) {
 function is-dockerInstalled() {
     $retval = $false
 
-    if ((get-service -name $dockerServiceName)) {
+    if ((get-service -name $dockerServiceName -ErrorAction SilentlyContinue)) {
         $retval = $true
     }
     
@@ -213,7 +214,7 @@ function is-dockerInstalled() {
 
 function is-dockerRunning() {
     $retval = $false
-    if (get-process -Name $dockerProcessName) {
+    if (get-process -Name $dockerProcessName -ErrorAction SilentlyContinue) {
         if (invoke-expression 'docker version') {
             $retval = $true
         }
