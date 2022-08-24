@@ -62,7 +62,7 @@ $eventLogName = 'Application'
 $dockerProcessName = 'dockerd'
 $dockerServiceName = 'docker'
 $transcriptLog = "$psscriptroot\transcript.log"
-$defaultDockerExe = 'C:\Program Files\Docker\docker.exe'
+$defaultDockerExe = 'C:\Program Files\Docker\dockerd.exe'
 $nullVersion = '0.0.0.0'
 $versionMap = @{}
 
@@ -260,7 +260,7 @@ function set-dockerVersion($dockerVersion) {
     # install.ps1 using write-host to output string data. have to capture with 6>&1
     $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
     write-host "current versions: $currentVersions"
-        
+    $version = [version]::new($nullVersion)
     $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
     # map string to [version] for 0's
     foreach ($stringVersion in $currentDockerVersions) {
@@ -274,22 +274,26 @@ function set-dockerVersion($dockerVersion) {
     write-host "current containerd versions: $currentContainerDVersions"
 
     if ($dockerVersion -ieq 'latest' -or $allowUpgrade) {
+        write-host "setting version to latest"
         $version = $latestDockerVersion
     }
     else {
         try {
             $version = [version]::new($dockerVersion)
+            write-host "setting version to `$dockerVersion"
         }
         catch {
             $version = [version]::new($nullVersion)
+            write-warning "exception setting version to $dockerVersion"
         }
     
         if ($version -ieq [version]::new($nullVersion)) {
             $version = $latestDockerVersion
+            write-host "setting version to latest docker version"
         }
     }
 
-    write-host "setting target version to: $version"
+    write-host "returning target install version: $version"
     return $version
 }
 
