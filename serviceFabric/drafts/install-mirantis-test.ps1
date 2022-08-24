@@ -15,7 +15,7 @@ parameters.json :
   "parameters": {
     "customScriptExtensionFile": {
       "value": "install-mirantis.ps1"
-      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -disableContainerDInstall"
+      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -installContainerD"
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -allowUpgrade"
     },
     "customScriptExtensionFileUri": {
