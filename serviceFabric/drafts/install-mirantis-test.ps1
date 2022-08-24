@@ -5,7 +5,7 @@
     save script file to url that vmss nodes have access to during provisioning
     
 .NOTES
-    v 1.0
+    v 1.0.1
 
 "virtualMachineProfile": {
     "extensionProfile": {
@@ -22,8 +22,9 @@
                             "https://aka.ms/install-mirantis.ps1"
                         ],
                         "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1"
-                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -version '0.0.0.0'" // latest
-                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -version '0.0.0.0'" // latest
+                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '0.0.0.0'" // latest
+                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '20.10.12'" // specific version
+                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '20.10.12' -allowUpgrade" // specific version and upgrade to newer version
                     }
                 }
             },
@@ -83,11 +84,7 @@ function main() {
         add-UseBasicParsing -scriptFile $installFile
     }
 
-    $version = set-dockerVersion
-
-    $currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
-    write-host "current containerd versions: $currentContainerDVersions"
-
+    $version = set-dockerVersion -dockerVersion $dockerVersion
     $installedVersion = get-dockerVersion
 
     if ($installedVersion -eq $version) {
@@ -111,6 +108,7 @@ function main() {
         $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) $engineOnly-verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
+        write-host "installed docker version:$(get-dockerVersion)"
         write-host "restarting OS:$restart"
     }
 
@@ -155,23 +153,23 @@ function execute-script([string]$script, [string] $arguments) {
 
 function get-dockerVersion() {
     $dockerExe = 'C:\Program Files\Docker\docker.exe'
-    if ((test-path $dockerExe)) {
-        write-host "found $dockerExe"
-        $dockerInfo = (. $dockerExe version)
-        $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
-    }
-    elseif ((invoke-expression 'docker')) {
-        Write-Warning "warning:docker in non default directory"
+    if (is-dockerRunning) {
+        $path = (Get-Process -Name dockerd).Path
+        write-host "docker installed and running: $path"
         $dockerInfo = (docker version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
+    elseif (is-dockerInstalled) {
+        $path = Get-WmiObject win32_service | Where-Object { Name -like 'docker' } | select-object PathName
+        $installedVersion = [diagnostics.fileVersionInfo]::GetVersionInfo($path)
+        Write-Warning "warning:docker installed but not running: $path"
+    }
     else {
-        write-host "docker not found"
+        write-host "docker not installed"
         $installedVersion = [version]::new(0, 0, 0, 0)
     }
-    
-    $error.clear()
-    write-host "installed docker version:$installedVersion"
+
+    write-host "installed docker defaultPath:$($dockerExe -ieq $path) path:$path version:$installedVersion"
     return $installedVersion
 }
 
@@ -197,6 +195,30 @@ function get-latestVersion([string[]] $versions) {
     return $latestVersion
 }
 
+function is-dockerInstalled() {
+    $retval = $false
+
+    if ((get-service -name docker)) {
+        $retval = $true
+    }
+    
+    $error.clear()
+    write-host "docker installed:$retval"
+    return $retval
+}
+
+function is-dockerRunning() {
+    $retval = $false
+    if (get-process -Name dockerd) {
+        if (invoke-expression 'docker version') {
+            $retval = $true
+        }
+    }
+    
+    write-host "docker running:$retval"
+    return $retval
+}
+
 function register-event() {
     try {
         if ($registerEvent) {
@@ -220,16 +242,23 @@ function set-dockerVersion($dockerVersion) {
     write-host "current docker versions: $currentDockerVersions"
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
+    $currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
+    write-host "current containerd versions: $currentContainerDVersions"
 
-    try{
-        $version = [version]::new($dockerVersion)
-    }
-    catch{
-        $version = [version]::new(0, 0, 0, 0)
-    }
-    
-    if ($version -ieq [version]::new(0, 0, 0, 0)) {
+    if ($dockerVersion -ieq 'latest' -or $allowUpgrade) {
         $version = $latestDockerVersion
+    }
+    else {
+        try {
+            $version = [version]::new($dockerVersion)
+        }
+        catch {
+            $version = [version]::new(0, 0, 0, 0)
+        }
+    
+        if ($version -ieq [version]::new(0, 0, 0, 0)) {
+            $version = $latestDockerVersion
+        }
     }
 
     write-host "setting target version to: $version"
@@ -240,10 +269,10 @@ function write-event($data) {
     write-host $data
     $level = 'Information'
 
-    # if ($error) {
-    #     $level = 'Error'
-    #     $data = "$data`r`nerrors:`r`n$($error | out-string)"
-    # }
+    if ($error) {
+        #     $level = 'Error'
+        $data = "$data`r`nerrors:`r`n$($error | out-string)"
+    }
 
     try {
         if ($registerEvent) {
