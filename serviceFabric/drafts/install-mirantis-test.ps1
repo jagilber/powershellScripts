@@ -57,10 +57,14 @@ $ErrorActionPreference = 'continue'
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 
+$eventLogName = 'Application'
+$dockerProcessName = 'dockerd'
+$dockerServiceName = 'docker'
+$transcriptLog = "$psscriptroot\transcript.log"
+$defaultDockerExe = 'C:\Program Files\Docker\docker.exe'
+
 function main() {
     $error.Clear()
-
-    $transcriptLog = "$psscriptroot\transcript.log"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
     if (!$isAdmin) {
@@ -69,7 +73,7 @@ function main() {
     }
     
     register-event
-    Start-Transcript -Path $transcriptLog
+    start-transcript -Path $transcriptLog
 
     $installFile = "$psscriptroot\$([io.path]::GetFileName($mirantisInstallUrl))"
     write-host "installation file:$installFile"
@@ -112,11 +116,11 @@ function main() {
         write-host "restarting OS:$restart"
     }
 
-    Stop-Transcript
+    stop-transcript
     write-event (get-content -raw $transcriptLog)
 
     if (!$norestart) {
-        Restart-Computer -Force
+        restart-computer -Force
     }
 
     return $result
@@ -152,15 +156,14 @@ function execute-script([string]$script, [string] $arguments) {
 }
 
 function get-dockerVersion() {
-    $dockerExe = 'C:\Program Files\Docker\docker.exe'
     if (is-dockerRunning) {
-        $path = (Get-Process -Name dockerd).Path
+        $path = (Get-Process -Name $dockerProcessName).Path
         write-host "docker installed and running: $path"
         $dockerInfo = (docker version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
     elseif (is-dockerInstalled) {
-        $path = Get-WmiObject win32_service | Where-Object { Name -like 'docker' } | select-object PathName
+        $path = Get-WmiObject win32_service | Where-Object { $psitem.Name -like $dockerServiceName } | select-object PathName
         $installedVersion = [diagnostics.fileVersionInfo]::GetVersionInfo($path)
         Write-Warning "warning:docker installed but not running: $path"
     }
@@ -169,7 +172,7 @@ function get-dockerVersion() {
         $installedVersion = [version]::new(0, 0, 0, 0)
     }
 
-    write-host "installed docker defaultPath:$($dockerExe -ieq $path) path:$path version:$installedVersion"
+    write-host "installed docker defaultPath:$($defaultDockerExe -ieq $path) path:$path version:$installedVersion"
     return $installedVersion
 }
 
@@ -179,6 +182,7 @@ function get-latestVersion([string[]] $versions) {
     if (!$versions) {
         return [version]::new(0, 0, 0, 0)
     }
+
     foreach ($version in $versions) {
         try {
             $currentVersion = [version]::new($version)
@@ -198,7 +202,7 @@ function get-latestVersion([string[]] $versions) {
 function is-dockerInstalled() {
     $retval = $false
 
-    if ((get-service -name docker)) {
+    if ((get-service -name $dockerServiceName)) {
         $retval = $true
     }
     
@@ -209,7 +213,7 @@ function is-dockerInstalled() {
 
 function is-dockerRunning() {
     $retval = $false
-    if (get-process -Name dockerd) {
+    if (get-process -Name $dockerProcessName) {
         if (invoke-expression 'docker version') {
             $retval = $true
         }
@@ -222,8 +226,8 @@ function is-dockerRunning() {
 function register-event() {
     try {
         if ($registerEvent) {
-            if (!(get-eventlog -LogName 'Application' -Source $registerEventSource -ErrorAction silentlycontinue)) {
-                New-EventLog -LogName 'Application' -Source $registerEventSource
+            if (!(get-eventlog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue)) {
+                New-EventLog -LogName $eventLogName -Source $registerEventSource
             }
         }
     }
@@ -276,7 +280,7 @@ function write-event($data) {
 
     try {
         if ($registerEvent) {
-            Write-EventLog -LogName 'Application' -Source $registerEventSource -Message $data -EventId 1000 -EntryType $level
+            Write-EventLog -LogName $eventLogName -Source $registerEventSource -Message $data -EventId 1000 -EntryType $level
         }
     }
     catch {
