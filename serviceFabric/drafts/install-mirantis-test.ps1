@@ -22,7 +22,7 @@
                             "https://aka.ms/install-mirantis.ps1"
                         ],
                         "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1"
-                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '0.0.0.0'" // latest
+                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion $nullVersion" // latest
                         //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '20.10.12'" // specific version
                         //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '20.10.12' -allowUpgrade" // specific version and upgrade to newer version
                     }
@@ -43,11 +43,12 @@
 #>
 
 param(
-    [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [string]$dockerVersion = '0.0.0.0', # latest
-    [switch]$norestart,
     [switch]$allowUpgrade,
     [switch]$installContainerD,
+    [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
+    [switch]$uninstall,
+    [switch]$norestart,
     [bool]$registerEvent = $true,
     [string]$registerEventSource = 'CustomScriptExtensionPS'
 )
@@ -62,9 +63,11 @@ $dockerProcessName = 'dockerd'
 $dockerServiceName = 'docker'
 $transcriptLog = "$psscriptroot\transcript.log"
 $defaultDockerExe = 'C:\Program Files\Docker\docker.exe'
+$nullVersion = '0.0.0.0'
+$versionMap = @{}
 
 function main() {
-    $error.Clear()
+
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
     if (!$isAdmin) {
@@ -74,6 +77,7 @@ function main() {
     
     register-event
     start-transcript -Path $transcriptLog
+    $error.Clear()
 
     $installFile = "$psscriptroot\$([io.path]::GetFileName($mirantisInstallUrl))"
     write-host "installation file:$installFile"
@@ -83,15 +87,19 @@ function main() {
         write-host "$result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)"
         $result = [net.webclient]::new().DownloadFile($mirantisInstallUrl, $installFile)
         write-host "downloadFile result:$($result | Format-List *)"
-
-        # temp fix for usebasicparsing error in install.ps1
-        add-UseBasicParsing -scriptFile $installFile
     }
+
+    # temp fix
+    add-UseBasicParsing -scriptFile $installFile
 
     $version = set-dockerVersion -dockerVersion $dockerVersion
     $installedVersion = get-dockerVersion
 
-    if ($installedVersion -eq $version) {
+    if ($uninstall -and (is-dockerInstalled)) {
+        write-warning "uninstalling docker. uninstall:$uninstall"
+        $result = execute-script -script $installFile -arguments "-Uninstall -verbose 6>&1"
+    }
+    elseif ($installedVersion -eq $version) {
         write-host "docker $installedVersion already installed and is equal to $version. skipping install."
         $norestart = $true
     }
@@ -99,17 +107,18 @@ function main() {
         write-host "docker $installedVersion already installed and is newer than $version. skipping install."
         $norestart = $true
     }
-    elseif ($installedVersion -ne '0.0.0.0' -and ($installedVersion -lt $version -and !$allowUpgrade)) {
+    elseif ($installedVersion -ne $nullVersion -and ($installedVersion -lt $version -and !$allowUpgrade)) {
         write-host "docker $installedVersion already installed and is older than $version. allowupgrade:$allowUpgrade. skipping install."
         $norestart = $true
     }
     else {
-        write-host "installing docker."
         $engineOnly = $null
         if (!$installContainerD) {
             $engineOnly = "-EngineOnly "
         }
-        $result = execute-script -script $installFile -arguments "-DockerVersion $($version.tostring()) $engineOnly-verbose 6>&1"
+    
+        write-host "installing docker."
+        $result = execute-script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
         write-host "installed docker version:$(get-dockerVersion)"
@@ -128,6 +137,7 @@ function main() {
 
 function add-UseBasicParsing($scriptFile) {
     $newLine
+    $updated = $false
     $scriptLines = [io.file]::ReadAllLines($scriptFile)
     $newScript = [collections.arraylist]::new()
     write-host "updating $scriptFile to use -UseBasicParsing for Invoke-WebRequest"
@@ -139,15 +149,23 @@ function add-UseBasicParsing($scriptFile) {
             if (![regex]::IsMatch($line, '-UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
                 $newLine = [regex]::Replace($line, 'Invoke-WebRequest', 'Invoke-WebRequest -UseBasicParsing', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
                 write-host "updating command $line to $newLine"
+                $updated = $true
             }
         }
         [void]$newScript.Add($newLine)
     }
 
-    $newScriptContent = [string]::Join([Environment]::NewLine, $newScript.ToArray())
-    rename-item $scriptFile -NewName "$scriptFile.oem" -force
-    write-host "saving new script $scriptFile"
-    out-file -InputObject $newScriptContent -FilePath $scriptFile -Force
+    if ($updated) {
+        $newScriptContent = [string]::Join([Environment]::NewLine, $newScript.ToArray())
+        $tempFile = "$scriptFile.oem"
+        if ((test-path $tempFile)) {
+            remove-item $tempFile -Force
+        }
+    
+        rename-item $scriptFile -NewName $tempFile -force
+        write-host "saving new script $scriptFile"
+        out-file -InputObject $newScriptContent -FilePath $scriptFile -Force    
+    }
 }
 
 function execute-script([string]$script, [string] $arguments) {
@@ -164,13 +182,13 @@ function get-dockerVersion() {
     }
     elseif (is-dockerInstalled) {
         $path = Get-WmiObject win32_service | Where-Object { $psitem.Name -like $dockerServiceName } | select-object PathName
-        $path =[regex]::match($path.PathName,"`"(.+)`"").Value
+        $path = [regex]::match($path.PathName, "`"(.+)`"").Value
         $installedVersion = [diagnostics.fileVersionInfo]::GetVersionInfo($path)
         Write-Warning "warning:docker installed but not running: $path"
     }
     else {
         write-host "docker not installed"
-        $installedVersion = [version]::new(0, 0, 0, 0)
+        $installedVersion = [version]::new($nullVersion)
     }
 
     write-host "installed docker defaultPath:$($defaultDockerExe -ieq $path) path:$path version:$installedVersion"
@@ -181,7 +199,7 @@ function get-latestVersion([string[]] $versions) {
     $latestVersion = [version]::new()
     
     if (!$versions) {
-        return [version]::new(0, 0, 0, 0)
+        return [version]::new($nullVersion)
     }
 
     foreach ($version in $versions) {
@@ -244,6 +262,11 @@ function set-dockerVersion($dockerVersion) {
     write-host "current versions: $currentVersions"
         
     $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
+    # map string to [version] for 0's
+    foreach ($stringVersion in $currentDockerVersions) {
+        [void]$versionMap.Add([version]::new($stringVersion).ToString(), $stringVersion)
+    }
+    write-host "version map:`r`n$($versionMap | out-string)"
     write-host "current docker versions: $currentDockerVersions"
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
@@ -258,10 +281,10 @@ function set-dockerVersion($dockerVersion) {
             $version = [version]::new($dockerVersion)
         }
         catch {
-            $version = [version]::new(0, 0, 0, 0)
+            $version = [version]::new($nullVersion)
         }
     
-        if ($version -ieq [version]::new(0, 0, 0, 0)) {
+        if ($version -ieq [version]::new($nullVersion)) {
             $version = $latestDockerVersion
         }
     }
