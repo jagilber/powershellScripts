@@ -59,6 +59,7 @@ template json :
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
     [switch]$allowUpgrade,
+    [switch]$hypervIsolation,
     [switch]$installContainerD,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [switch]$uninstall,
@@ -108,6 +109,22 @@ function main() {
 
     $version = set-dockerVersion -dockerVersion $dockerVersion
     $installedVersion = get-dockerVersion
+
+    if($hypervIsolation) {
+        $hypervInstalled = (get-windowsFeature -name hyper-v).Installed
+        write-host "hyper-v feature installed:$hypervInstalled"
+        
+        if(!$uninstall -and !$hypervInstalled) {
+            write-host "installing hyper-v features"
+            install-windowsfeature -name hyper-v
+            install-windowsfeature -name rsat-hyper-v-tools
+            install-windowsfeature -name hyper-v-tools
+            install-windowsfeature -name hyper-v-powershell
+        }
+        #elseif($uninstall -and $hypervInstalled) {
+        #    remove-windowsfeature -name hyper-v
+        #}
+    }
 
     if ($uninstall -and (is-dockerInstalled)) {
         write-warning "uninstalling docker. uninstall:$uninstall"
