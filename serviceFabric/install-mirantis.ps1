@@ -5,7 +5,7 @@
     save script file to url that vmss nodes have access to during provisioning
     
 .NOTES
-    v 1.0.1
+    v 1.0.2
 
 
 parameters.json :
@@ -15,6 +15,7 @@ parameters.json :
   "parameters": {
     "customScriptExtensionFile": {
       "value": "install-mirantis.ps1"
+      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -hypervIsolation"
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -installContainerD"
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -allowUpgrade"
     },
@@ -59,6 +60,7 @@ template json :
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
     [switch]$allowUpgrade,
+    [switch]$hypervIsolation,
     [switch]$installContainerD,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [switch]$uninstall,
@@ -108,6 +110,22 @@ function main() {
 
     $version = set-dockerVersion -dockerVersion $dockerVersion
     $installedVersion = get-dockerVersion
+
+    if($hypervIsolation) {
+        $hypervInstalled = (get-windowsFeature -name hyper-v).Installed
+        write-host "hyper-v feature installed:$hypervInstalled"
+        
+        if(!$uninstall -and !$hypervInstalled) {
+            write-host "installing hyper-v features"
+            install-windowsfeature -name hyper-v
+            install-windowsfeature -name rsat-hyper-v-tools
+            install-windowsfeature -name hyper-v-tools
+            install-windowsfeature -name hyper-v-powershell
+        }
+        #elseif($uninstall -and $hypervInstalled) {
+        #    remove-windowsfeature -name hyper-v
+        #}
+    }
 
     if ($uninstall -and (is-dockerInstalled)) {
         write-warning "uninstalling docker. uninstall:$uninstall"
