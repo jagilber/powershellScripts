@@ -280,16 +280,16 @@ function set-dockerVersion($dockerVersion) {
     else {
         try {
             $version = [version]::new($dockerVersion)
-            write-host "setting version to `$dockerVersion"
+            write-host "setting version to `$dockerVersion ($dockerVersion)"
         }
         catch {
             $version = [version]::new($nullVersion)
-            write-warning "exception setting version to $dockerVersion"
+            write-warning "exception setting version to `$dockerVersion ($dockerVersion)"
         }
     
         if ($version -ieq [version]::new($nullVersion)) {
             $version = $latestDockerVersion
-            write-host "setting version to latest docker version"
+            write-host "setting version to latest docker version $latestDockerVersion"
         }
     }
 
