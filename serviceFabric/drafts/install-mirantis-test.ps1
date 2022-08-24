@@ -323,7 +323,7 @@ function write-event($data) {
     $level = 'Information'
 
     if ($error) {
-        #     $level = 'Error'
+        $level = 'Error'
         $data = "$data`r`nerrors:`r`n$($error | out-string)"
     }
 
