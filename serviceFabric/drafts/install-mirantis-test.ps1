@@ -15,7 +15,7 @@ parameters.json :
   "parameters": {
     "customScriptExtensionFile": {
       "value": "install-mirantis.ps1"
-      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -installContainerD"
+      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -disableContainerDInstall"
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -allowUpgrade"
     },
     "customScriptExtensionFileUri": {
@@ -59,12 +59,12 @@ template json :
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
     [switch]$allowUpgrade,
-    [switch]$installContainerD,
+    [switch]$disableContainerDInstall,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
     [switch]$uninstall,
     [switch]$norestart,
     [bool]$registerEvent = $true,
-    [string]$registerEventSource = 'CustomScriptExtensionPS'
+    [string]$registerEventSource = 'CustomScriptExtension'
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -127,7 +127,7 @@ function main() {
     }
     else {
         $engineOnly = $null
-        if (!$installContainerD) {
+        if ($disableContainerDInstall) {
             $engineOnly = "-EngineOnly "
         }
     
