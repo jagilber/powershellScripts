@@ -7,6 +7,22 @@
 .NOTES
     v 1.0.1
 
+
+parameters.json :
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "customScriptExtensionFile": {
+      "value": "install-mirantis.ps1"
+      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -installContainerD"
+      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -allowUpgrade"
+    },
+    "customScriptExtensionFileUri": {
+      "value": "https://aka.ms/install-mirantis.ps1"
+    },
+
+template json :
 "virtualMachineProfile": {
     "extensionProfile": {
         "extensions": [
@@ -19,12 +35,10 @@
                     "autoUpgradeMinorVersion": true,
                     "settings": {
                         "fileUris": [
-                            "https://aka.ms/install-mirantis.ps1"
+                            "[parameters('customScriptExtensionFileUri')]"
                         ],
-                        "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1"
-                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion $nullVersion" // latest
-                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '20.10.12'" // specific version
-                        //"commandToExecute": "powershell -ExecutionPolicy Unrestricted -File .\\install-mirantis.ps1 -dockerVersion '20.10.12' -allowUpgrade" // specific version and upgrade to newer version
+                        "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File .\\', parameters('customScriptExtensionFile'))]"
+                    }
                     }
                 }
             },
@@ -122,7 +136,7 @@ function main() {
 
         write-host "install result:$($result | Format-List * | out-string)"
         write-host "installed docker version:$(get-dockerVersion)"
-        write-host "restarting OS:$restart"
+        write-host "restarting OS:$(!$norestart)"
     }
 
     stop-transcript
@@ -182,7 +196,9 @@ function get-dockerVersion() {
     }
     elseif (is-dockerInstalled) {
         $path = Get-WmiObject win32_service | Where-Object { $psitem.Name -like $dockerServiceName } | select-object PathName
-        $path = [regex]::match($path.PathName, "`"(.+)`"").Value
+        write-host "docker exe path:$path"
+        $path = [regex]::match($path.PathName, "`"(.+)`"").Groups[1].Value
+        write-host "docker exe clean path:$path"
         $installedVersion = [diagnostics.fileVersionInfo]::GetVersionInfo($path)
         Write-Warning "warning:docker installed but not running: $path"
     }
@@ -260,16 +276,21 @@ function set-dockerVersion($dockerVersion) {
     # install.ps1 using write-host to output string data. have to capture with 6>&1
     $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
     write-host "current versions: $currentVersions"
+    
     $version = [version]::new($nullVersion)
     $currentDockerVersions = @($currentVersions[0].ToString().TrimStart('docker:').Replace(" ", "").Split(","))
+    
     # map string to [version] for 0's
     foreach ($stringVersion in $currentDockerVersions) {
         [void]$versionMap.Add([version]::new($stringVersion).ToString(), $stringVersion)
     }
+    
     write-host "version map:`r`n$($versionMap | out-string)"
     write-host "current docker versions: $currentDockerVersions"
+    
     $latestDockerVersion = get-latestVersion -versions $currentDockerVersions
     write-host "latest docker version: $latestDockerVersion"
+    
     $currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
     write-host "current containerd versions: $currentContainerDVersions"
 
