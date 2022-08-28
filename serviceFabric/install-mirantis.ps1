@@ -15,7 +15,7 @@ parameters.json :
   "parameters": {
     "customScriptExtensionFile": {
       "value": "install-mirantis.ps1"
-      //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -hypervIsolation"
+      //"value": "install-mirantis.ps1 -hypervIsolation"
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -installContainerD"
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -allowUpgrade"
     },
@@ -338,15 +338,15 @@ function set-dockerVersion($dockerVersion) {
 
 function write-event($data) {
     write-host $data
-    $level = 'Information'
-
-    if ($error) {
-        $level = 'Error'
-        $data = "$data`r`nerrors:`r`n$($error | out-string)"
-    }
-
     try {
         if ($registerEvent) {
+            $level = 'Information'
+
+            if ($error -or ($data -imatch "fail|exception|error")) {
+                $level = 'Error'
+                $data = "$data`r`nerrors:`r`n$($error | out-string)"
+            }
+
             Write-EventLog -LogName $eventLogName -Source $registerEventSource -Message $data -EventId 1000 -EntryType $level
         }
     }
