@@ -73,6 +73,36 @@ template json :
                     ],
                     "type": "ServiceFabricNode",
 
+.PARAMETER dockerVersion
+[string] Version of docker to install. Default will be to install latest version.
+Format '0.0.0.'
+
+.PARAMETER allowUpgrade
+[switch] Allow upgrade of docker. Default is to not upgrade version of docker.
+
+.PARAMETER hypervIsolation
+[switch] Install hyper-v feature / components. Default is to not install hyper-v feature.
+Mirantis install will install container feature.
+
+.PARAMETER installContainerD
+[switch] Install containerd. Default is  to not install containerd.
+containerd is not needed for docker functionality.
+
+.PARAMETER mirantisInstallUrl
+[string] Mirantis installation script url. Default is 'https://get.mirantis.com/install.ps1'
+
+.PARAMETER uninstall
+[switch] Uninstall docker only. This will not uninstall containerd or hyper-v feature. 
+
+.PARAMETER norestart
+[switch] No restart after installation of docker and container feature. By default, after installation, node is restarted.
+Use of -norestart is not supported.
+
+.PARAMETER registerEvent
+[bool] If true, will write installation summary information to the Application event log. Default is true.
+
+.PARAMETER registerEventSource
+[string] Register event source name used to write installation summary information to the Application event log.. Default name is 'CustomScriptExtension'.
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
@@ -149,9 +179,9 @@ function main() {
         #}
     }
 
-    if ($uninstall -and (is-dockerInstalled)) {
+    if ($uninstall -and (confirm-dockerInstalled)) {
         write-warning "uninstalling docker. uninstall:$uninstall"
-        $result = execute-script -script $installFile -arguments "-Uninstall -verbose 6>&1"
+        $result = start-script -script $installFile -arguments "-Uninstall -verbose 6>&1"
     }
     elseif ($installedVersion -eq $version) {
         write-host "docker $installedVersion already installed and is equal to $version. skipping install."
@@ -172,7 +202,7 @@ function main() {
         }
     
         write-host "installing docker."
-        $result = execute-script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-verbose 6>&1"
+        $result = start-script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-verbose 6>&1"
 
         write-host "install result:$($result | Format-List * | out-string)"
         write-host "installed docker version:$(get-dockerVersion)"
@@ -222,19 +252,38 @@ function add-UseBasicParsing($scriptFile) {
     }
 }
 
-function execute-script([string]$script, [string] $arguments) {
-    write-host "Invoke-Expression -Command `"$script $arguments`""
-    return Invoke-Expression -Command "$script $arguments"
+function confirm-dockerInstalled() {
+    $retval = $false
+
+    if ((get-service -name $dockerServiceName -ErrorAction SilentlyContinue)) {
+        $retval = $true
+    }
+    
+    $error.clear()
+    write-host "docker installed:$retval"
+    return $retval
+}
+
+function confirm-dockerRunning() {
+    $retval = $false
+    if (get-process -Name $dockerProcessName -ErrorAction SilentlyContinue) {
+        if (invoke-expression 'docker version') {
+            $retval = $true
+        }
+    }
+    
+    write-host "docker running:$retval"
+    return $retval
 }
 
 function get-dockerVersion() {
-    if (is-dockerRunning) {
+    if (confirm-dockerRunning) {
         $path = (Get-Process -Name $dockerProcessName).Path
         write-host "docker installed and running: $path"
         $dockerInfo = (docker version)
         $installedVersion = [version][regex]::match($dockerInfo, 'Version:\s+?(\d.+?)\s').groups[1].value
     }
-    elseif (is-dockerInstalled) {
+    elseif (confirm-dockerInstalled) {
         $path = Get-WmiObject win32_service | Where-Object { $psitem.Name -like $dockerServiceName } | select-object PathName
         write-host "docker exe path:$path"
         $path = [regex]::match($path.PathName, "`"(.+)`"").Groups[1].Value
@@ -274,30 +323,6 @@ function get-latestVersion([string[]] $versions) {
     return $latestVersion
 }
 
-function is-dockerInstalled() {
-    $retval = $false
-
-    if ((get-service -name $dockerServiceName -ErrorAction SilentlyContinue)) {
-        $retval = $true
-    }
-    
-    $error.clear()
-    write-host "docker installed:$retval"
-    return $retval
-}
-
-function is-dockerRunning() {
-    $retval = $false
-    if (get-process -Name $dockerProcessName -ErrorAction SilentlyContinue) {
-        if (invoke-expression 'docker version') {
-            $retval = $true
-        }
-    }
-    
-    write-host "docker running:$retval"
-    return $retval
-}
-
 function register-event() {
     try {
         if ($registerEvent) {
@@ -314,7 +339,7 @@ function register-event() {
 
 function set-dockerVersion($dockerVersion) {
     # install.ps1 using write-host to output string data. have to capture with 6>&1
-    $currentVersions = execute-script -script $installFile -arguments '-showVersions 6>&1'
+    $currentVersions = start-script -script $installFile -arguments '-showVersions 6>&1'
     write-host "current versions: $currentVersions"
     
     $version = [version]::new($nullVersion)
@@ -356,6 +381,11 @@ function set-dockerVersion($dockerVersion) {
 
     write-host "returning target install version: $version"
     return $version
+}
+
+function start-script([string]$script, [string] $arguments) {
+    write-host "Invoke-Expression -Command `"$script $arguments`""
+    return Invoke-Expression -Command "$script $arguments"
 }
 
 function write-event($data) {
