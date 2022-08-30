@@ -640,7 +640,7 @@ class SFTemplate {
         $this.RemoveUnusedParameters()
         $this.ModifyLbResources()
         $this.ModifyVmssResources()
-        $this.ModifyClusterResource()
+    #    $this.ModifyClusterResourceDeploy()
     
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
@@ -736,7 +736,7 @@ class SFTemplate {
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
         $parameterExclusions = $this.ModifyStorageResourcesDeploy()
         $this.ModifyVmssResourcesDeploy()
-        $this.ModifyClusterResource()
+        $this.ModifyClusterResourceDeploy()
 
         $this.CreateParameterFile($templateParameterFile, $parameterExclusions)
         $this.VerifyConfig($templateParameterFile)
@@ -1694,7 +1694,7 @@ class SFTemplate {
         return $vmssByNodeType.ToArray()
     }
 
-    [void] ModifyClusterResource() {
+    [void] ModifyClusterResourceDeploy() {
         <#
         .SYNOPSIS
             modifies cluster resource for current and deploy template
@@ -1702,7 +1702,7 @@ class SFTemplate {
         .OUTPUTS
             [null]
         #>
-        $this.WriteLog("enter:ModifyClusterResource")
+        $this.WriteLog("enter:ModifyClusterResourceDeploy")
         # clean previous entries
     
         # reparameterize all
@@ -1710,7 +1710,7 @@ class SFTemplate {
     
         # remove unparameterized nodetypes
         #$null = RemoveUnparameterizedNodeTypes
-        $this.WriteLog("exit:ModifyClusterResource")
+        $this.WriteLog("exit:ModifyClusterResourceDeploy")
     }
 
 
@@ -2656,7 +2656,7 @@ class SFTemplate {
                     $this.functionDepth = 0
                 }
             }
-            
+
             #write-verbose "$($this.functionDepth) $data"
             $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$([string]::empty.PadLeft($this.functionDepth,'|'))$verboseTag$($data | format-list * | out-string)").trim()
         }
