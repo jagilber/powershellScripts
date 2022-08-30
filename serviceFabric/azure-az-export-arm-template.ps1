@@ -640,13 +640,22 @@ class SFTemplate {
         $this.RemoveUnusedParameters()
         $this.ModifyLbResources()
         $this.ModifyVmssResources()
-    #    $this.ModifyClusterResourceDeploy()
+
+        # temporarily save working config
+        $tempConfig = $this.CreateJson($this.currentConfig)
+        
+        # run modifyclusterresource for current config only else addprimarynodetype and addsecondarynodetype configs
+        # that are called later will not generate due to parameterization
+        $this.ModifyClusterResourceDeploy()
     
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
 
         # save base / current json
         $this.CreateJson($this.currentConfig) | out-file $templateFile
+
+        # restore working config
+        $this.currentConfig = $tempConfig | convertfrom-json
 
         # save current readme
         $readme = $global:currentReadme
