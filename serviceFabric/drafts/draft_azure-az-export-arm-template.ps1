@@ -1338,7 +1338,7 @@ class SFTemplate {
                 $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
                 [void]$vmssResources.Add($resource)
                 $vmssTreeResource = [vmss]::new($resource)
-                if ($this.clusterModel.vmss.count -lt 1 -or !$this.clusterModel.vmss.resource.name -ieq $resource.Name) {
+                if ($this.clusterModel.vmss.count -lt 1 -or !($this.clusterModel.vmss.resource.name -ieq $resource.Name)) {
                     [void]$this.clusterModel.vmss.Add($vmssTreeResource)
                 }
             }
