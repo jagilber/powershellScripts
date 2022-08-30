@@ -51,7 +51,6 @@ param (
     [string]$adminPassword = '', #'GEN_PASSWORD',
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
-    [switch]$detail,
     [string]$logFile = "$templatePath/azure-az-sf-export-arm-template.log",
     [switch]$compress,
     [switch]$updateScript
@@ -62,6 +61,8 @@ $PSModuleAutoLoadingPreference = 2
 $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
+$ErrorActionPreference = 'continue'
+$VerbosePreference = 'continue'
 
 class ClusterModel {
     [SFTemplate]$sfTemplate = $null
@@ -134,7 +135,6 @@ class SFTemplate {
     [string]$adminPassword = $adminPassword
     [string[]]$resourceNames = $resourceNames
     [string[]]$excludeResourceNames = $excludeResourceNames
-    [switch]$detail = $detail
     [string]$logFile = $logFile
     [switch]$compress = $compress
     [switch]$updateScript = $updateScript
@@ -179,11 +179,6 @@ class SFTemplate {
         if (!$this.resourceGroupName) {
             $this.WriteError("resource group name is required.")
             return
-        }
-
-        if ($this.detail) {
-            $ErrorActionPreference = 'continue'
-            $VerbosePreference = 'continue'
         }
 
         if (!($this.CheckModule())) {
@@ -1240,7 +1235,6 @@ class SFTemplate {
                     [void]$vmssTreeResource.nsgIds.Add($id)
                 }
             }
-
         }
 
         $this.WriteVerbose("nsg resources $resources")
