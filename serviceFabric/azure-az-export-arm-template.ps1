@@ -80,8 +80,7 @@ class ClusterModel {
         
         $vmssObject = @($this.vmss.Where( { $expression }))[0]
         
-        if (!$vmssObject)
-        {
+        if (!$vmssObject) {
             $this.WriteError("unable to find vmss in ClusterModel:expression:$expression")
         }
         
@@ -93,21 +92,19 @@ class ClusterModel {
         
         $vmssObject = @($this.vmss.Where( { $_.resource -eq $vmssResource }))[0]
         
-        if (!$vmssObject)
-        {
+        if (!$vmssObject) {
             $this.WriteError("unable to find vmss in ClusterModel:resource:$vmssResource")
         }
         
         return $vmssObject
     }
 
-    [void] WriteError($data){
-        if ($this.sfTemplate)
-        {
+    [void] WriteError($data) {
+        if ($this.sfTemplate) {
             #& $this.sfTemplate($data)
             $this.sfTemplate.WriteError($data)
         }
-        else{
+        else {
             write-error $data
         }
     }
@@ -585,7 +582,7 @@ class SFTemplate {
         # save current readme
         $readme = $global:addPrimaryNodeTypeReadme
         $readme | out-file $this.templateJsonFile.Replace(".json", ".addprimarynodetype.readme.txt")
-        $this.WriteLog("exit:create-addNodePrimaryTypeTemplate")
+        $this.WriteLog("exit:CreateAddPrimaryNodeTypeTemplate")
     }
 
     [void] CreateAddSecondaryNodeTypeTemplate() {
@@ -643,6 +640,7 @@ class SFTemplate {
         $this.RemoveUnusedParameters()
         $this.ModifyLbResources()
         $this.ModifyVmssResources()
+        $this.ModifyClusterResource()
     
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
@@ -738,7 +736,7 @@ class SFTemplate {
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
         $parameterExclusions = $this.ModifyStorageResourcesDeploy()
         $this.ModifyVmssResourcesDeploy()
-        $this.ModifyClusterResourceDeploy()
+        $this.ModifyClusterResource()
 
         $this.CreateParameterFile($templateParameterFile, $parameterExclusions)
         $this.VerifyConfig($templateParameterFile)
@@ -992,7 +990,7 @@ class SFTemplate {
         $this.WriteLog("EnumAllResources:getting resource group cluster $($this.resourceGroupName)")
         $clusterResource = $this.EnumClusterResource()
         if (!$clusterResource) {
-            $this.WriteError("EnumAllResources:unable to enumerate cluster. exiting")
+            $this.WriteError("exit:EnumAllResources:unable to enumerate cluster. exiting")
             return $null
         }
         [void]$resources.Add($clusterResource.Id)
@@ -1000,7 +998,7 @@ class SFTemplate {
         $this.WriteLog("EnumAllResources:getting scalesets $($this.resourceGroupName)")
         $vmssResources = @($this.EnumVmssResources($clusterResource))
         if ($vmssResources.Count -lt 1) {
-            $this.WriteError("EnumAllResources:unable to enumerate vmss. exiting")
+            $this.WriteError("exit:EnumAllResources:unable to enumerate vmss. exiting")
             return $null
         }
         else {
@@ -1010,7 +1008,7 @@ class SFTemplate {
         $this.WriteLog("EnumAllResources:getting storage $($this.resourceGroupName)")
         $storageResources = @($this.EnumStorageResources($clusterResource))
         if ($storageResources.count -lt 1) {
-            $this.WriteError("EnumAllResources:unable to enumerate storage. exiting")
+            $this.WriteError("exit:EnumAllResources:unable to enumerate storage. exiting")
             return $null
         }
         else {
@@ -1020,7 +1018,7 @@ class SFTemplate {
         $this.WriteLog("EnumAllResources:getting virtualnetworks $($this.resourceGroupName)")
         $vnetResources = @($this.EnumVnetResourceIds($vmssResources))
         if ($vnetResources.count -lt 1) {
-            $this.WriteError("EnumAllResources:unable to enumerate vnets. exiting")
+            $this.WriteError("exit:EnumAllResources:unable to enumerate vnets. exiting")
             return $null
         }
         else {
@@ -1030,7 +1028,7 @@ class SFTemplate {
         $this.WriteLog("EnumAllResources:getting loadbalancers $($this.resourceGroupName)")
         $lbResources = @($this.EnumLbResourceIds($vmssResources))
         if ($lbResources.count -lt 1) {
-            $this.WriteError("EnumAllResources:unable to enumerate loadbalancers. exiting")
+            $this.WriteError("exit:EnumAllResources:unable to enumerate loadbalancers. exiting")
             return $null
         }
         else {
@@ -1102,11 +1100,12 @@ class SFTemplate {
                 $this.WriteLog($clusterResource)
             }
             else {
+                $this.WriteLog("exit:EnumClusterResource:null")
                 return $null
             }
         }
         elseif ($clusters.count -lt 1) {
-            $this.WriteError("error:EnumClusterResource: no cluster found")
+            $this.WriteError("exit:error:EnumClusterResource: no cluster found")
             return $null
         }
         else {
@@ -1695,15 +1694,15 @@ class SFTemplate {
         return $vmssByNodeType.ToArray()
     }
 
-    [void] ModifyClusterResourceDeploy() {
+    [void] ModifyClusterResource() {
         <#
         .SYNOPSIS
-            modifies cluster resource for deploy template from addnodetype
+            modifies cluster resource for current and deploy template
             outputs: null
         .OUTPUTS
             [null]
         #>
-        $this.WriteLog("enter:ModifyClusterResourceDeploy")
+        $this.WriteLog("enter:ModifyClusterResource")
         # clean previous entries
     
         # reparameterize all
@@ -1711,7 +1710,7 @@ class SFTemplate {
     
         # remove unparameterized nodetypes
         #$null = RemoveUnparameterizedNodeTypes
-        $this.WriteLog("exit:ModifyClusterResourceDeploy")
+        $this.WriteLog("exit:ModifyClusterResource")
     }
 
 
@@ -1737,7 +1736,7 @@ class SFTemplate {
     
         $reference = "[reference($($this.CreateParameterizedName('name',$clusterResource)))]"
         $this.AddOutputs('clusterProperties', $reference, 'object')
-        $this.WriteLog("exit:ModifyClusterResourceDeploy")
+        $this.WriteLog("exit:ModifyClusterResourceRedeploy")
     }
 
     [void] ModifyIpAddressesRedeploy() {
@@ -2061,7 +2060,7 @@ class SFTemplate {
             }
 
             $metadataDescription = $null
-            if($parameterName -ieq 'name') {
+            if ($parameterName -ieq 'name') {
                 # set nodetype name metadatadescription
                 $metadataDescription = 'this name must be unique in cluster deployment.'
             }
@@ -2160,7 +2159,7 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-        $this.WriteLog("enter:ParameterizeNodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue)")
+        $this.WriteLog("enter:ParameterizeNodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue, [switch]$all)")
         # todo. should validation be here? how many nodetypes
         $null = $this.RemoveParameterizedNodeTypes()
 
@@ -2189,7 +2188,7 @@ class SFTemplate {
         }
         
         if ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
-            $this.WriteError("ParameterizeNodetypes:more than one primary node type detected!")
+            $this.WriteWarning("ParameterizeNodetypes:more than one primary node type detected!")
         }
 
         if (!$all) {
@@ -2312,7 +2311,7 @@ class SFTemplate {
             $null = $this.RemoveUnusedParameters()
         }
         else {
-            $this.WriteError("exit:RemoveParameterizedNodeTypes:no clean nodetypes")
+            $this.WriteError("RemoveParameterizedNodeTypes:no clean nodetypes")
         }
 
         $this.WriteLog("exit:RemoveParameterizedNodeTypes:$retval")
@@ -2572,8 +2571,7 @@ class SFTemplate {
     }
     
     static [void]WriteErrorStatic([object]$data) {
-        if ([SFTemplate]::instance)
-        {
+        if ([SFTemplate]::instance) {
             [SFTemplate]::instance.WriteError($data)
         }
     }
@@ -2652,8 +2650,14 @@ class SFTemplate {
             }
             elseif ($data.startswith('exit:')) {
                 $this.functionDepth--
+                
+                if ($this.functionDepth -lt 0) {
+                    $this.WriteWarning("function depth enter / exit traces not equal: $data")
+                    $this.functionDepth = 0
+                }
             }
-
+            
+            #write-verbose "$($this.functionDepth) $data"
             $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$([string]::empty.PadLeft($this.functionDepth,'|'))$verboseTag$($data | format-list * | out-string)").trim()
         }
 
