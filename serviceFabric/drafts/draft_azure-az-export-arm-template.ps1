@@ -2711,9 +2711,11 @@ typical use case scenarios are if OS is being upgraded or hardware sku is modifi
 required: steps to add new node type:
 1. open template.addprimarynodetype.parameters.json for modification
 2. set new domainNameLabel value 'publicIPAddresses_x_domainNameLabel'
-3. set new fqdn value 'publicIPAddresses_x_fqdn'
-4. set node admin password value 'virtualMachineScaleSets_x_adminPassword'
-5. set new nodetype name value 'virtualMachineScaleSets_x_name'
+3. set new public ip address name value 'publicIPAddresses_x_name'
+4. set new fqdn value 'publicIPAddresses_x_fqdn'
+5. set node admin password value 'virtualMachineScaleSets_x_adminPassword'
+6. set new nodetype name value 'virtualMachineScaleSets_x_name'
+7. set new loadbalancer name value 'loadBalancers_x_x_name'
 
 optional: steps:
 1. open template.addprimarynodetype.parameters.json for modification
