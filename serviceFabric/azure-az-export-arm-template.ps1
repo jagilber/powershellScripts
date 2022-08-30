@@ -1971,13 +1971,6 @@ class SFTemplate {
                 'int' # type
             )
 
-            $this.AddParameter(
-                $vmssResource, # resource
-                'capacity', # name 
-                $vmssResource.sku, # resourceObject
-                'int' # type
-            )
-
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing os sku")
             $this.AddParameter(
                 $vmssResource, # resource
