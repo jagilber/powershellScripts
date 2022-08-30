@@ -6,7 +6,7 @@
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/draft_azure-az-export-arm-template.ps1" -outFile "$pwd/azure-az-export-arm-template.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-export-arm-template.ps1" -outFile "$pwd/azure-az-export-arm-template.ps1";
     ./azure-az-export-arm-template.ps1 -resourceGroupName <resource group name>
 
 .DESCRIPTION  
@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 220822
+    Version    : 220830
     todo       : update download link
                  merge capacity and instance count
                  rename and hide unused parameters for addnodetype
@@ -651,12 +651,7 @@ class SFTemplate {
         $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save current readme
-        $readme = "current modifications:
-            - additional parameters have been added
-            - extra / duplicate child resources removed from root
-            - dependsOn modified to remove conflicting / unneeded resources
-            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            "
+        $readme = $global:currentReadme
         $readme | out-file $this.templateJsonFile.Replace(".json", ".current.readme.txt")
         $this.WriteLog("exit:CreateCurrentTemplate")
     }
@@ -689,12 +684,7 @@ class SFTemplate {
         $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save current readme
-        $readme = "export:
-            - this is raw export from ps cmdlet export-azresourcegroup -includecomments -includeparameterdefaults
-            - $templateFile will not be usable to recreate / create new cluster in this state
-            - use 'current' to modify existing cluster
-            - use 'redeploy' or 'new' to recreate / create cluster
-            "
+        $readme = $global:exportReadme
         $readme | out-file $this.templateJsonFile.Replace(".json", ".export.readme.txt")
         $this.WriteLog("exit:CreateExportTemplate")
     }
@@ -757,17 +747,7 @@ class SFTemplate {
         $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save add readme
-        $readme = "new / add modifications:
-            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
-            - adminPassword required parameter added (needs to be set)
-            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
-            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            - dnsSettings for public Ip Address needs to be unique
-            - storageAccountNames required parameters (needs to be unique or will be generated)
-            - if adding new vmss, each vmss resource needs a cluster nodetype resource added
-            - if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
-            - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
-            "
+        $readme = $global:newReadme
         $readme | out-file $this.templateJsonFile.Replace(".json", ".new.readme.txt")
         $this.WriteLog("exit:CreateNewTemplate")
     }
@@ -943,13 +923,7 @@ class SFTemplate {
         $this.CreateJson($this.currentConfig) | out-file $templateFile
 
         # save redeploy readme
-        $readme = "redeploy modifications:
-            - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
-            - adminPassword required parameter added (needs to be set)
-            - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
-            - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-            - clusterendpoint is parameterized
-            "
+        $readme = $global:redeployReadme
         $readme | out-file $this.templateJsonFile.Replace(".json", ".redeploy.readme.txt")
         $this.WriteLog("exit:CreateRedeployTemplate")
     }
@@ -2728,22 +2702,24 @@ required: to update deployment with new primary node type:
 
 required: after successful template update, change *old* primary nodetype 'isPrimary' to 'false':
 1. export cluster again: .\azure-az-export-arm-template.ps1 -resourceGroupName <resource group name> -templatePath c:\temp
-2. open template.addprimarynodetype.parameters.json for modification
+2. open template.current.parameters.json for modification
 3. set *old* isPrimary value 'virtualMachineScaleSets_nt0_isPrimary' to 'false'
-4. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
-5. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
+4. set node admin password value 'virtualMachineScaleSets_x_adminPassword'
+5. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.current.json -TemplateParameterFile .\template.current.parameters.json
+6. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.current.json -TemplateParameterFile .\template.current.parameters.json
 
 optional: after successful update *and* migration of system and app services to new nodetype, perform the following:
 1. set new nodetype domainNameLabel value 'publicIPAddresses_x_domainNameLabel' to old primary nodetype domainNameLabel
 2. set new nodetype fqdn value 'publicIPAddresses_x_fqdn' to old primary nodetype fqdn
-3. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
-4. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
+3. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.current.json -TemplateParameterFile .\template.current.parameters.json
+4. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.current.json -TemplateParameterFile .\template.current.parameters.json
 
-optional: after successful update, remove *old* primary nodetype in template.json if no longer being used by removing nodetype 
-1. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
-2. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
+optional: after successful update, remove *old* primary nodetype in template.json if no longer being used by removing nodetypes[nodetype] from Microsoft.ServiceFabric/clusters resource
+1. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.current.json -TemplateParameterFile .\template.current.parameters.json
+2. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.current.json -TemplateParameterFile .\template.current.parameters.json
+3. after nodetype has been removed from cluster resource. the vmss, ip, and loadbalancer resources that are no longer used can be removed from portal or with powershell cmdlet 'remove-azresource'.
 
-notes: addnodetype modifications:
+addnodetype modifications:
     - additional parameters have been added
     - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
     - adminPassword required parameter added (needs to be set)
@@ -2760,6 +2736,27 @@ notes: addnodetype modifications:
 "@
 
 $global:addSecondaryNodeTypeReadme = @"
+steps in this readme are to add a new secondary nodetype to existing cluster.
+typical use case scenarios are if OS is being upgraded or hardware sku is modified or additional capacity is needed.
+
+required: steps to add new node type:
+1. open template.addsecondarynodetype.parameters.json for modification
+2. set new domainNameLabel value 'publicIPAddresses_x_domainNameLabel'
+3. set new public ip address name value 'publicIPAddresses_x_name'
+4. set new fqdn value 'publicIPAddresses_x_fqdn'
+5. set node admin password value 'virtualMachineScaleSets_x_adminPassword'
+6. set new nodetype name value 'virtualMachineScaleSets_x_name'
+7. set new loadbalancer name value 'loadBalancers_x_x_name'
+
+optional: steps:
+1. open template.addsecondarynodetype.parameters.json for modification
+2. optionally set new nodetype sku value 'virtualMachineScaleSets_x_hardwareSku'
+3. optionally set new nodetype OS value 'virtualMachineScaleSets_x_osSku'
+
+required: to update deployment with new secondary node type:
+1. test: Test-AzResourceGroupDeployment -Verbose -ResourceGroupName <resource group name> -Mode Incremental -TemplateFile .\template.addsecondarynodetype.json -TemplateParameterFile .\template.addsecondarynodetype.parameters.json
+2. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.addsecondarynodetype.json -TemplateParameterFile .\template.addsecondarynodetype.parameters.json
+
 addnodetype modifications:
     - additional parameters have been added
     - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
@@ -2775,6 +2772,45 @@ addnodetype modifications:
     - isPrimary is a parameter
     - additional nodetype resource has been added to cluster resource
 "@
+
+$readme = $global:currentReadme = @"
+current modifications:
+- additional parameters have been added
+- extra / duplicate child resources removed from root
+- dependsOn modified to remove conflicting / unneeded resources
+- protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+"@
+
+$readme = $global:exportReadme = @"
+export modifications: none
+- this is raw export from ps cmdlet export-azresourcegroup -includecomments -includeparameterdefaults
+- this template File will *not* be usable to recreate / create new cluster in this state
+- use 'current' to modify existing cluster
+- use 'redeploy' or 'new' to recreate / create cluster
+"@
+
+$readme = $global:newReadme = @"
+new / add modifications:
+- microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+- adminPassword required parameter added (needs to be set)
+- if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
+- protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+- dnsSettings for public Ip Address needs to be unique
+- storageAccountNames required parameters (needs to be unique or will be generated)
+- if adding new vmss, each vmss resource needs a cluster nodetype resource added
+- if adding new vmss, only one nodetype should be isprimary unless upgrading primary nodetype
+- if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
+"@
+
+$readme = $global:redeployReadme = @"
+redeploy modifications:
+- microsoft monitoring agent extension has been removed (provisions automatically on deployment)
+- adminPassword required parameter added (needs to be set)
+- if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
+- protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
+- clusterendpoint is parameterized
+"@
+
 
 [SFTemplate]$global:sftemplate = [SFTemplate]::new()
 $global:sftemplate.Export();
