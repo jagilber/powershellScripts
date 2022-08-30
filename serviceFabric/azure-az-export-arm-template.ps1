@@ -1231,7 +1231,7 @@ class SFTemplate {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
             foreach ($subnet in $vnetResource.Properties.subnets) {
-                if ($subnet.properties.networkSecurityGroup.id) {
+                if ($subnet.properties.psobject.properties.match('networksecuritygroup') -and $subnet.properties.networkSecurityGroup.id) {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
@@ -2787,10 +2787,14 @@ addnodetype modifications:
 "@
 
 $readme = $global:currentReadme = @"
+steps in this readme are to modify settings of current cluster.
+typical use case scenarios are changing isprimary for primary nodetype migrations
+
 current modifications:
 - additional parameters have been added
 - extra / duplicate child resources removed from root
 - dependsOn modified to remove conflicting / unneeded resources
+- isPrimary is a parameter
 - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
 "@
 
