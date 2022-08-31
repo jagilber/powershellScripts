@@ -635,11 +635,12 @@ class SFTemplate {
         $this.RemoveUnusedParameters()
         $this.ModifyLbResources()
         $this.ModifyVmssResources()
+        #$this.ModifyClusterResource()
 
         # temporarily save working config
         $tempConfig = $this.CreateJson($this.currentConfig)
         
-        # run modifyclusterresource for current config only else addprimarynodetype and addsecondarynodetype configs
+        # run modifyclusterresourcedeploy for current config only else addprimarynodetype and addsecondarynodetype configs
         # that are called later will not generate due to parameterization
         $this.ModifyClusterResourceDeploy()
     
@@ -1226,7 +1227,7 @@ class SFTemplate {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
             foreach ($subnet in $vnetResource.Properties.subnets) {
-                if ($subnet.properties.psobject.properties.match('networksecuritygroup') -and $subnet.properties.networkSecurityGroup.id) {
+                if ($subnet.properties.psobject.properties.match('networkSecurityGroup') -and $subnet.properties.networkSecurityGroup.id) {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
@@ -1697,6 +1698,35 @@ class SFTemplate {
         return $vmssByNodeType.ToArray()
     }
 
+    [void] ModifyClusterResource() {
+        <#
+        .SYNOPSIS
+            modifies cluster resource for current and deploy template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyClusterResource")
+
+        $this.ModifyClusterResourceCerts('thumbprint')
+        $this.ModifyClusterResourceCerts('thumbprintSecondary')
+
+        $this.WriteLog("exit:ModifyClusterResource")
+    }
+
+    [void] ModifyClusterResourceCerts([string]$certificatePropertyName) {
+        $clusterResource = $this.GetClusterResource()
+        #parameterize certificate information
+        $thumbprint = $this.GetResourceParameterValue($clusterResource.properties.certificate, $certificatePropertyName)
+
+        if ($thumbprint) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName('thumbprint', $clusterResource)
+            $this.WriteLog("setting $certificatePropertyName to $thumbprint")
+            $null = $this.SetResourceParameterValue($clusterResource.properties.certificate, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($clusterResource, $certificatePropertyName, $certificatePropertyName, $clusterResource.properties.certificate, $thumbprint)
+        }
+    }
+
     [void] ModifyClusterResourceDeploy() {
         <#
         .SYNOPSIS
@@ -1875,6 +1905,29 @@ class SFTemplate {
             }
             $vmssResource.dependsOn = $dependsOn.ToArray()
             $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
+            
+            #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprint')
+            #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprintSecondary')
+
+            # secreturl
+            #$this.ModifyVmssResourceCertificateUrl($vmssResource)
+
+            $adminPasswordName = 'adminPassword'
+
+            if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq $adminPasswordName)) {
+                $this.WriteLog("ModifyVmssResources:adding admin password")
+                $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name $adminPasswordName -Value $this.adminPassword
+            
+                $this.AddParameter(
+                    $vmssResource, # resource
+                    $adminPasswordName, # name
+                    $adminPasswordName, # aliasName
+                    $vmssResource.properties.virtualMachineProfile.osProfile, # resourceObject
+                    $null, # value
+                    'string', # type
+                    'password must be set before deploying template.' # metadataDescription
+                )
+            }
         }
         $this.WriteLog("exit:ModifyVmssResources")
     }
@@ -1891,8 +1944,8 @@ class SFTemplate {
         $vmssResources = $this.GetVmssResources()
         foreach ($vmssResource in $vmssResources) {
             $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
-            $clusterResource = $this.GetClusterResource()
 
+            $clusterResource = $this.GetClusterResource()
             $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
             $newName = "[reference($parameterizedName).clusterEndpoint]"
 
@@ -1902,6 +1955,34 @@ class SFTemplate {
             $this.RemoveUnusedParameters()
         }
         $this.WriteLog("exit:ModifyVmssResourcesDeploy")
+    }
+
+    [void] ModifyVmssResourceCertificateUrl([object]$vmssResource) {
+        $this.WriteLog("enter:ModifyVmssResourceCertificateUrl")
+        $certificatePropertyName = 'certificateUrl'
+        $secretUrl = $this.GetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName)
+        if ($secretUrl) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
+            $this.WriteLog("setting $certificatePropertyName to $secretUrl")
+            $null = $this.SetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $vmssResource.properties.virtualMachineProfile.osProfile.secrets, $secretUrl)
+        }
+        $this.WriteLog("exit:ModifyVmssResourceCertificateUrl")
+    }
+
+    [void] ModifyVmssResourceExtensionCerts([object] $vmssResource, [string] $certificatePropertyName = 'thumbprint') {
+        $this.WriteLog("enter:ModifyVmssResourcesExtensionCerts")
+        $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
+        #parameterize certificate information
+        $thumbprint = $this.GetResourceParameterValue($extension, $certificatePropertyName)
+        if ($thumbprint) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
+            $this.WriteLog("setting $certificatePropertyName to $thumbprint")
+            $null = $this.SetResourceParameterValue($extension.properties.settings.certificate, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $extension.properties.settings.certificate, $thumbprint)
+        }
+
+        $this.WriteLog("exit:ModifyVmssResourcesExtensionCerts")
     }
 
     [void] ModifyVmssResourcesRedeploy() {
@@ -1978,23 +2059,6 @@ class SFTemplate {
                 'osSku', # aliasName
                 $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference # resourceObject
             )
-
-            $adminPasswordName = 'adminPassword'
-
-            if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq $adminPasswordName)) {
-                $this.WriteLog("ModifyVmssResourcesReDeploy:adding admin password")
-                $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name $adminPasswordName -Value $this.adminPassword
-            
-                $this.AddParameter(
-                    $vmssResource, # resource
-                    $adminPasswordName, # name
-                    $adminPasswordName, # aliasName
-                    $vmssResource.properties.virtualMachineProfile.osProfile, # resourceObject
-                    $null, # value
-                    'string', # type
-                    'password must be set before deploying template.' # metadataDescription
-                )
-            }
         }
         $this.WriteLog("exit:ModifyVmssResourcesReDeploy")
     }
