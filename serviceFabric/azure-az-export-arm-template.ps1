@@ -1227,7 +1227,7 @@ class SFTemplate {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
             foreach ($subnet in $vnetResource.Properties.subnets) {
-                if ($subnet.properties.psobject.properties.match('networkSecurityGroup') -and $subnet.properties.networkSecurityGroup.id) {
+                if ($subnet.properties.psobject.properties.match('networkSecurityGroup').Count -gt 0 -and $subnet.properties.networkSecurityGroup.id) {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
