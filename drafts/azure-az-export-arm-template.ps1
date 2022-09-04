@@ -62,7 +62,7 @@ $currentErrorActionPreference = $ErrorActionPreference
 $currentVerbosePreference = $VerbosePreference
 $env:SuppressAzurePowerShellBreakingChangeWarnings = $true
 $ErrorActionPreference = 'continue'
-#$VerbosePreference = 'continue'
+$VerbosePreference = 'continue'
 
 class ClusterModel {
     [SFTemplate]$sfTemplate = $null
@@ -790,7 +790,7 @@ class SFTemplate {
                 continue
             }
 
-            $this.WriteVerbose("CreateParameterFile:value properties:$($psObjectProperty.Value.psobject.Properties)")
+            $this.WriteVerbose("CreateParameterFile:value properties:$($psObjectProperty.Value.psobject.Properties.Name)")
             $parameterItem = @{
                 value = $psObjectProperty.Value.defaultValue
             }
