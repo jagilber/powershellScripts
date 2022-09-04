@@ -1,6 +1,6 @@
 <#
 testing with azure-sf-export-arm-template.ps1 for function enum
-
+https://powershell.github.io/PowerShellEditorServices/guide/extensions.html
 https://devblogs.microsoft.com/powershell/using-abstract-syntax-trees-asts-with-ise-to-make-scripting-more-productive/
 
 
@@ -27,22 +27,25 @@ $tokens |
     Format-Table -AutoSize
 
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/draft-ast.ps1" -outFile "$pwd/draft-ast.ps1";./draft-ast.ps1
+https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/draft_azure-az-export-arm-template.old.ps1
 #>
 param(
-    $file = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-export-arm-template.ps1"
+    $file = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-export-arm-template.ps1"
 )
 
-# $localFile = "$pwd/$([io.path]::GetFileName($file))"
-# if (!$psEditor) {
-#     write-error "start ps debugger in vscode"
-#     return
-# }
+$ErrorActionPreference = 'Continue'
+$localFile = "$pwd/$([io.path]::GetFileName($file))"
+ 
+if (!$psEditor) {
+    write-error "start ps debugger in vscode"
+    return
+}
 
-# if (!(test-path $localFile)) {
-#     Invoke-WebRequest $file -OutFile $localFile
-# }
+if (!(test-path $localFile)) {
+    Invoke-WebRequest $file -OutFile $localFile
+}
 
-#$psEditor.Workspace.OpenFile($file)
+$psEditor.Workspace.OpenFile($localFile)
 
 function find-allAst([string]$filter) {
     $global:astList = [collections.arraylist]::new()
@@ -142,12 +145,12 @@ function find-allReferences([object]$context) {
     #     $x -imatch $tokenWord
     # })
     # foreach($token in $tokens){
-    foreach($token in $psEditor.GetEditorContext().CurrentFile.Tokens){
+    foreach ($token in $psEditor.GetEditorContext().CurrentFile.Tokens) {
         #write-verbose "checking token:$($token | Format-List * | out-string)"
-         #write-host "found function reference:$tokenWord func:$($func | Format-List * | out-string)"
-         if($token.Text -ieq $tokenWord){
+        #write-host "found function reference:$tokenWord func:$($func | Format-List * | out-string)"
+        if ($token.Text -ieq $tokenWord) {
             write-host "found token:$($token | Format-List * | out-string)" -ForegroundColor Green
-         }
+        }
     }
 
 }
@@ -185,10 +188,10 @@ Register-EditorCommand `
     -Function goto-functionDefinition
 
 Unregister-EditorCommand -Name "PsClassModule._FindAllReferences"
-    Register-EditorCommand `
-        -Name "PsClassModule._FindAllReferences" `
-        -DisplayName "Find all references in powershell class" `
-        -Function find-allReferences
+Register-EditorCommand `
+    -Name "PsClassModule._FindAllReferences" `
+    -DisplayName "Find all references in powershell class" `
+    -Function find-allReferences
 
 Unregister-EditorCommand -Name "PsClassModule.FindAllFunctions"
 Register-EditorCommand `
