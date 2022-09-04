@@ -2337,7 +2337,7 @@ function write-log([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor
         out-file -Append -inputobject $stringData.ToString() -filepath $logFile
     }
 }
-
+$global:invocation = $MyInvocation.MyCommand #.ScriptBlock| convertto-json -depth 8 | out-file c:\temp\test.json
 main
 $ErrorActionPreference = $currentErrorActionPreference
 $VerbosePreference = $currentVerbosePreference
