@@ -1310,8 +1310,12 @@ class SFTemplate {
         $this.WriteVerbose("EnumVmssResources:vmss resources $resources")
 
         foreach ($resource in $resources) {
-            $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
-            if ($vmsscep -ieq $clusterEndpoint) {
+            $vmsscep = $null
+            if (($this.GetPSPropertyValue($resource, 'properties.virtualMachineProfile.extensionprofile.extensions.properties.settings'))) {
+                $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
+            }
+
+            if ($vmsscep -and $vmsscep -ieq $clusterEndpoint) {
                 $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
                 [void]$vmssResources.Add($resource)
                 $vmssTreeResource = [vmss]::new($resource)
@@ -1442,6 +1446,33 @@ class SFTemplate {
         }
 
         $this.WriteLog("exit:GetParameterizedNameFromValue:returning $retval")
+        return $retval
+    }
+
+    [object] GetPSPropertyValue([object]$baseObject,[string]$property){
+        $this.WriteLog("[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
+        $retval = $null
+        $properties = @($property.Split('.'))
+
+        if($properties.Count -lt 1){
+            $this.WriteWarning("property string empty:$property")
+        }
+        elseif($baseObject) {
+            $propertyObject = $baseObject
+
+            foreach($subItem in $properties){
+                $this.WriteVerbose("checking property:$($subItem)")
+                
+                if($propertyObject.psobject.Properties.match($subItem).count -gt 0){
+                    $this.WriteVerbose("found property:$($subItem)")
+                    $propertyObject = $propertyObject.$subItem
+                    $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
+                    $retval = $propertyObject
+                }
+            }
+        }
+
+        $this.WriteLog("GetPSPropertyExists returning:$($retval)")
         return $retval
     }
 
