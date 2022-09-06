@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 220906
+    Version    : 220906.1
     todo       : rename and hide unused parameters for addnodetype
                  update readmes
     History    : add GetPSPropertyValue
@@ -793,7 +793,7 @@ class SFTemplate {
                 value = $psObjectProperty.Value.defaultValue
             }
 
-            if ($psObjectProperty.Value.psobject.Properties.Match('metadata').Count -gt 0) {
+            if (($this.GetPSPropertyValue($psObjectProperty, 'value.metadata.description'))) { 
                 if ($psObjectProperty.value.metadata.description) {
                     $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
                 }
@@ -1225,7 +1225,7 @@ class SFTemplate {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
             foreach ($subnet in $vnetResource.Properties.subnets) {
-                if ($subnet.properties.psobject.properties.match('networkSecurityGroup').Count -gt 0 -and $subnet.properties.networkSecurityGroup.id) {
+                if (($this.GetPSPropertyValue($subnet, 'properties.networkSecurityGroup.id'))) {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
@@ -1308,10 +1308,7 @@ class SFTemplate {
         $this.WriteVerbose("EnumVmssResources:vmss resources $resources")
 
         foreach ($resource in $resources) {
-            $vmsscep = $null
-            if (($this.GetPSPropertyValue($resource, 'properties.virtualMachineProfile.extensionprofile.extensions.properties.settings'))) {
-                $vmsscep = ($resource.Properties.virtualMachineProfile.extensionprofile.extensions.properties.settings | Select-Object clusterEndpoint).clusterEndpoint
-            }
+            $vmsscep = $this.GetPSPropertyValue($resource, 'properties.virtualMachineProfile.extensionprofile.extensions.properties.settings.clusterendpoint')
 
             if ($vmsscep -and $vmsscep -ieq $clusterEndpoint) {
                 $this.WriteLog("EnumVmssResources:adding vmss resource $($this.CreateJson($resource))", [consolecolor]::Cyan)
@@ -1412,11 +1409,10 @@ class SFTemplate {
         $this.WriteLog("enter:GetFromParametersSection parameterName=$parameterName")
         $results = @()
 
-        if (($this.currentConfig.parameters.psobject.Properties.Match($parameterName).count -gt 0) -and 
-            ($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.psobject.Properties.Match('defaultValue'))) {
-            $results = @($this.currentConfig.parameters.psobject.Properties.Match($parameterName).Value.defaultValue)
+        if (($this.GetPSPropertyValue($this.currentConfig, "parameters.$parameterName.defaultValue")) -ne $null) {
+            $results = @($this.currentConfig.parameters.$parameterName.defaultValue)
         }
-    
+
         if (@($results).Count -lt 1) {
             $this.WriteLog("GetFromParametersSection:no matching values found in parameters section for $parameterName")
         }
@@ -1447,25 +1443,53 @@ class SFTemplate {
         return $retval
     }
 
-    [object] GetPSPropertyValue([object]$baseObject,[string]$property){
+    [object] GetPSPropertyValue([object]$baseObject, [string]$property) {
         $this.WriteLog("[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
         $retval = $null
         $properties = @($property.Split('.'))
 
-        if($properties.Count -lt 1){
+        if ($properties.Count -lt 1) {
             $this.WriteWarning("property string empty:$property")
         }
-        elseif($baseObject) {
+        elseif ($baseObject -ne $null) {
             $propertyObject = $baseObject
-
-            foreach($subItem in $properties){
-                $this.WriteVerbose("checking property:$($subItem)")
-                
-                if($propertyObject.psobject.Properties.match($subItem).count -gt 0){
-                    $this.WriteVerbose("found property:$($subItem)")
-                    $propertyObject = $propertyObject.$subItem
-                    $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
-                    $retval = $propertyObject
+            if ($propertyObject.GetType().isarray) {
+                foreach($propertyItem in $propertyObject){
+                    $retval = $this.GetPSPropertyValue($propertyItem, $property)
+                    if($retval -ne $null){
+                        $propertyObject = $retval
+                        break
+                    }
+                }
+            }
+            else {
+                foreach ($subItem in $properties) {
+                    $this.WriteVerbose("checking property:$($subItem)")
+                    
+                    if ($propertyObject.GetType().isarray) {
+                        
+                        foreach($propertyItem in $propertyObject){
+                            $retval = $this.GetPSPropertyValue($propertyItem, $subItem)
+                            
+                            if($retval -ne $null){
+                                $propertyObject = $retval
+                                break
+                            }
+                        }
+                    }
+                    # foreach($propertyObjectItem in $propertyObject){
+                    elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
+                        $this.WriteLog("found property:$($subItem)")
+                        $propertyObject = $propertyObject.$subItem
+                        $this.WriteVerbose("property value:$($propertyObject | convertto-json)")            
+                        $retval = $propertyObject
+                    }
+                    else {
+                        $this.WriteVerbose("property not found:$($subItem)")
+                        $retval = $null
+                        break
+                    }
+                    # }
                 }
             }
         }
