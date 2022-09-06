@@ -26,12 +26,10 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 220830
-    todo       : update download link
-                 merge capacity and instance count
-                 rename and hide unused parameters for addnodetype
+    Version    : 220906
+    todo       : rename and hide unused parameters for addnodetype
                  update readmes
-    History    : 
+    History    : add GetPSPropertyValue
 
 .EXAMPLE 
     .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
