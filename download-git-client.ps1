@@ -121,7 +121,7 @@ function main() {
 
         write-host "downloading $downloadUrl to $clientFile"
         #invoke-webRequest $downloadUrl -outFile  $clientFile
-        [net.webclient]::downloadfile($downloadUrl, $clientFile)
+        [net.webclient]::new().DownloadFile($downloadUrl, $clientFile)
     }
 
     if ($clientFile -imatch ".zip") {
