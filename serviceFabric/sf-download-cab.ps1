@@ -45,7 +45,7 @@ foreach ($package in $packages) {
     }
 
     mkdir "$outputFolder\$($package.Version)"
-    invoke-webrequest -uri ($package.TargetPackageLocation) -outfile "$outputFolder\$($package.Version).cab"
+    [net.webclient]::new().DownloadFile($package.TargetPackageLocation,"$outputFolder\$($package.Version).cab")
 
     if($extract -or $install) {
         expand "$outputFolder\$($package.Version).cab" -F:* "$outputFolder\$($package.Version)"

@@ -5,7 +5,7 @@
     iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/git-vscode-setup.ps1 -outfile $pwd\git-vscode-setup.ps1;. $pwd\git-vscode-setup.ps1
 
     or to just install vscode:
-    iwr https://vscode-update.azurewebsites.net/latest/win32-x64-user/stable -outFile .\VSCodeUserSetup-x64.exe
+    [net.webclient]::new().DownloadFile('https://vscode-update.azurewebsites.net/latest/win32-x64-user/stable', $pwd\VSCodeUserSetup-x64.exe)
 #>
 
 param(

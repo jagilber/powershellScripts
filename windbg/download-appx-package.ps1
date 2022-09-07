@@ -51,8 +51,8 @@ for ($i = 0; $i -lt $downloadLinks.Count; $i++) {
     remove-item $zipFile -Force
   }
 
-  write-host "Invoke-WebRequest -Uri $downloadLinks[$i] -OutFile $outFile" -ForegroundColor Cyan
-  Invoke-WebRequest -Uri $downloadLinks[$i] -OutFile $outFile
+  write-host "[net.webclient]::new().DownloadFile($downloadLinks[$i], $outFile)" -ForegroundColor Cyan
+  [net.webclient]::new().DownloadFile($downloadLinks[$i], $outFile)
   
   Rename-Item $outFile $zipFile
   expand-archive $zipFile
