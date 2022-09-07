@@ -55,6 +55,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$templateFile,
     [string]$templateParameterFile,
+    [ValidateSet('incremental','complete')]
+    [string]$mode = 'incremental',
     [hashtable]$additionalParameters = @{},
     [switch]$clean,
     [switch]$force
@@ -283,6 +285,7 @@ function main() {
             -DeploymentDebugLogLevel All ``
             -TemplateFile $templateFile ``
             -TemplateParameterObject $templateParameters ``
+            -Mode $mode ``
             -Verbose ``
             @additionalParameters
     " -ForegroundColor Cyan
@@ -296,6 +299,7 @@ function main() {
             -DeploymentDebugLogLevel All `
             -TemplateFile $templateFile `
             -TemplateParameterObject $templateParameters `
+            -Mode $mode `
             -Verbose `
             @additionalParameters
     }
