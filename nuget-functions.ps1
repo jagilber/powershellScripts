@@ -44,7 +44,7 @@ class NugetObj {
 
             if (!(test-path $this.nuget)) {
                 write-host "downloading nuget"
-                invoke-webRequest $nugetDownloadUrl -outFile  $this.nuget
+                [net.webclient]::new().DownloadFile($nugetDownloadUrl, $this.nuget)
             }
         }
         else {

@@ -1464,7 +1464,7 @@ class SFTemplate {
     }
 
     [object] GetPSPropertyValue([object]$baseObject, [string]$property) {
-        $this.WriteLog("[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
+        $this.WriteLog("enter:[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
         $retval = $null
         $properties = @($property.Split('.'))
 
@@ -1514,7 +1514,7 @@ class SFTemplate {
             }
         }
 
-        $this.WriteLog("GetPSPropertyExists returning:$($retval)")
+        $this.WriteLog("exit:GetPSPropertyExists returning:$($retval)")
         return $retval
     }
 

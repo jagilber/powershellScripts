@@ -187,7 +187,7 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
             if (!(test-path $nuget)) {
                 $nuget = "$env:temp/nuget.exe"
                 if (!(test-path $nuget)) {
-                    invoke-webRequest $nugetDownloadUrl -outFile  $nuget
+                    [net.webclient]::new().DownloadFile($nugetDownloadUrl, $nuget)
                 }
             }
             [string]$localPackages = . $nuget list -Source $nugetPackageDirectory
