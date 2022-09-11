@@ -1,10 +1,13 @@
 <#
 search git repo for images in .md and their location
+optionally update broken links with -repair
 #>
 [cmdletbinding()]
 param(
-    $mediaFolder,
-    $markdownFolder
+    $markdownFolder = $pwd,
+    $mediaFolder = $markdownFolder,
+    [switch]$repair, # = $true,
+    [switch]$whatIf #= $true
 )
 
 $images = $null
@@ -28,11 +31,9 @@ function main() {
         return
     }
 
-    #$images = [io.directory]::GetFiles($mediaFolder,'*.png',[IO.SearchOption]::AllDirectories)
     $images = Get-ChildItem -Recurse -File -Filter '*.png' -Path $mediaFolder
     write-host "images:`r`n$($images | out-string)"
 
-    #$articles = [io.directory]::GetFiles($markdownFolder,'*.md',[IO.SearchOption]::AllDirectories)
     $articles = Get-ChildItem -Recurse -File -Filter '*.md' -Path $markdownFolder
     write-host "articles:`r`n$($articles | out-string)"
 
@@ -54,7 +55,7 @@ function main() {
         }
     }
     
-    $global:articlesImagesPathTable = get-imagePathsFromArticle($articles)
+    $global:articlesImagesPathTable = get-imagePathsFromArticle -articles $articles -images $images
 
     write-host "`$global:articlesWithImagesTable:`r`n$($global:articlesWithImagesTable | out-string)"
     write-host "`$global:imagesWithArticlesTable:`r`n$($global:imagesWithArticlesTable | out-string)"
@@ -133,13 +134,13 @@ function find-imagesForArticle($images, $articles) {
     return $table
 }
 
-function get-imagePathsFromArticle($articles) {
+function get-imagePathsFromArticle($articles, $images) {
     $table = @{}
 
     foreach ($article in $articles) {
         Write-verbose "checking article for images:`r`n`t$($article.FullName)"
         $articleContent = Get-Content -Raw -Path $article.FullName
-        $imageLinkPattern = '!\[.+?\]\((.+?)\)'
+        $imageLinkPattern = '!\[.*?\]\((.+?)\)'
 
         if ([regex]::IsMatch($articleContent, $imageLinkPattern)) {
             $matches = [regex]::Matches($articleContent, $imageLinkPattern)
@@ -158,12 +159,15 @@ function get-imagePathsFromArticle($articles) {
                     Write-Warning "bad path: $imageFullPath"
                     Write-Warning "adding bad image path:`r`n`t$($imageFullPath)`r`n`tfor article:`r`n`t$($article.FullName)"
                     $imageFound = $false
+                    if ($repair) {
+                        $articleContent = repair-articleImagePath -article $article -imagePath $imagePath -images $images
+                    }
                 }
 
                 [void]$table[$article.FullName].Add(@{
-                        path = $imagePath
-                        fullPath  = $imageFullPath
-                        found = $imageFound
+                        path     = $imagePath
+                        fullPath = $imageFullPath
+                        found    = $imageFound
                     }
                 )
             }
@@ -171,6 +175,30 @@ function get-imagePathsFromArticle($articles) {
     }
 
     return $table
+}
+
+function repair-articleImagePath($article, $imagePath, $images) {
+    $articlePath = [io.path]::GetDirectoryName($article.FullName)
+    $newContent = Get-Content -Raw -Path $article.FullName
+    $imagePathFileName = [io.path]::GetFileName($imagePath)
+    write-host "checking images list for file name:$imagePathFileName"
+    
+    if ($images.Name -contains $imagePathFileName) {
+        $imageFile = $images | Where-Object Name -ieq $imagePathFileName
+        $relativePath = [io.path]::GetRelativePath($articlePath, $imageFile.FullName).replace('\','/')
+    }
+    else {
+        write-warning "unable to fix $imagePath"
+    }
+
+    write-host "updating article $($article.Name) with new image path $($relativePath)" -ForegroundColor Magenta
+    if (!$whatIf) {
+        $newContent = $newContent.Replace($imagePath, $relativePath)
+        write-verbose "new content:`r`n$newContent"
+        out-file -InputObject $newContent -FilePath $article.FullName -NoNewline
+    }
+    
+    return $newContent
 }
 
 main
