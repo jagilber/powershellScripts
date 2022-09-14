@@ -54,10 +54,15 @@ function get-imagePathsFromArticle($articles, $images) {
     foreach ($article in $articles) {
         Write-host "checking article for images:$($article.FullName)" -foregroundcolor green
         $articleContent = Get-Content -Raw -Path $article.FullName
-        $imageLinkPattern = '!\[.*?\]\((.+?)\)'
+        #$imageLinkPattern = '!\[.*?\]\((.+?)\)'
+        #[sfx-select-certificate-dialog]: ./media/service-fabric-cluster-creation-setup-aad/sfx-select-certificate-dialog.png
+        #$imageLinkPattern = '(?:!\[.*?\]\((.+?.png)\))|(?:\[.*?\].*?\((.+?.png)\))'
+        # .gif, .jpg, .png ^(.+)\/([^\/]+)$
+        #$imageLinkPattern = "\((.+?\.png)\)|\[.*?\]:\s*?(.+?\.png)|\`"(\w*?.png)\`""
+        $imageLinkPattern = "([^\[\]!\(\)\`" :=']+\.png|.jpg|.gif)"
 
-        if ([regex]::IsMatch($articleContent, $imageLinkPattern)) {
-            $matches = [regex]::Matches($articleContent, $imageLinkPattern)
+        if ([regex]::IsMatch($articleContent, $imageLinkPattern,[text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)) {
+            $matches = [regex]::Matches($articleContent, $imageLinkPattern,[text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)
             
             foreach ($match in $matches) {
                 $imagePath = $match.Groups[1].Value.trim()
