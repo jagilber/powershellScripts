@@ -102,7 +102,9 @@ class NugetObj {
                 mkdir $packageDirectory
             }
 
-            $this.locals.Add($packageDirectoryName, $packageDirectory)
+            if(!($this.locals.Contains($packageDirectoryName))) {
+                $this.locals.Add($packageDirectoryName, $packageDirectory)
+            }
         }
 
         if ((test-path $this.nugetFallbackFolder)) {
