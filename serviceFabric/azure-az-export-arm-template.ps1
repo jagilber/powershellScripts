@@ -26,10 +26,12 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 220906.1
+    Version    : 220918
     todo       : rename and hide unused parameters for addnodetype
                  update readmes
-    History    : add GetPSPropertyValue
+    History    : fix issue in current where vminstancecount value is string instead of int
+                 fix vminstancecount and capacity parameterization mismatch in redeploy. redeploy vminstancecount and capacity are now not parameterized
+                 add GetPSPropertyValue
 
 .EXAMPLE 
     .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
@@ -561,6 +563,7 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".addprimarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
+        $this.ModifyVmssResourcesAddPrimary()
         if (!($this.ParameterizeNodetypes($true, $true))) {
             $this.WriteError("exit:CreateAddPrimaryNodeTypeTemplate:no nodetype found")
             return
@@ -1432,7 +1435,7 @@ class SFTemplate {
         if (($this.GetPSPropertyValue($this.currentConfig, "parameters.$parameterName.defaultValue")) -ne $null) {
             $results = @($this.currentConfig.parameters.$parameterName.defaultValue)
         }
-
+    
         if (@($results).Count -lt 1) {
             $this.WriteLog("GetFromParametersSection:no matching values found in parameters section for $parameterName")
         }
@@ -1485,7 +1488,7 @@ class SFTemplate {
             else {
                 foreach ($subItem in $properties) {
                     $this.WriteVerbose("checking property:$($subItem)")
-                    
+
                     if ($propertyObject.GetType().isarray) {
                         
                         foreach ($propertyItem in $propertyObject) {
@@ -1501,7 +1504,7 @@ class SFTemplate {
                     elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
                         $this.WriteLog("found property:$($subItem)")
                         $propertyObject = $propertyObject.$subItem
-                        $this.WriteVerbose("property value:$($propertyObject | convertto-json)")            
+                        $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
                         $retval = $propertyObject
                     }
                     else {
@@ -1645,7 +1648,7 @@ class SFTemplate {
         return $retval
     }
 
-    [object] GetSubnetIds([object]$vmssResource){
+    [object] GetSubnetIds([object]$vmssResource) {
         if (($this.GetPSPropertyValue($vmssResource, 'properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id') -eq $null)) {
             $this.WriteError("unable to enumerate subnet id $($this.CreateJson($vmssResource))")
             return $null
@@ -1818,16 +1821,11 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyClusterResourceDeploy")
-        # clean previous entries
     
         # reparameterize all
         $null = $this.ParameterizeNodetypes($false, $false, $true)
-    
-        # remove unparameterized nodetypes
-        #$null = RemoveUnparameterizedNodeTypes
         $this.WriteLog("exit:ModifyClusterResourceDeploy")
     }
-
 
     [void] ModifyClusterResourceRedeploy() {
         <#
@@ -1989,7 +1987,7 @@ class SFTemplate {
                 $vmssResource.dependsOn = $dependsOn.ToArray()
                 $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
             }
-            else{
+            else {
                 $this.WriteWarning("no dependson for $($this.CreateJson($vmssResource))")
             }
             #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprint')
@@ -2016,6 +2014,29 @@ class SFTemplate {
             }
         }
         $this.WriteLog("exit:ModifyVmssResources")
+    }
+
+    [void] ModifyVmssResourcesAddPrimary() {
+        <#
+        .SYNOPSIS
+            modifies vmss resources for AddPrimary and AddSecondary template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVmssResourcesAddPrimary")
+        $vmssResources = $this.GetVmssResources()
+   
+        foreach ($vmssResource in $vmssResources) {
+            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
+            $this.AddParameter(
+                $vmssResource, # resource
+                'capacity', # name
+                $vmssResource.sku, # resourceObject
+                'int' # type
+            )
+        }
+        $this.WriteLog("exit:ModifyVmssResourcesAddPrimary")
     }
 
     [void] ModifyVmssResourcesDeploy() {
@@ -2128,14 +2149,6 @@ class SFTemplate {
                 'name', # name
                 'hardwareSku', # aliasName
                 $vmssResource.sku # resourceObject
-            )
-
-            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
-            $this.AddParameter(
-                $vmssResource, # resource
-                'capacity', # name
-                $vmssResource.sku, # resourceObject
-                'int' # type
             )
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing os sku")
@@ -2329,7 +2342,7 @@ class SFTemplate {
         }
 
         if ($filterednodetypes.count -eq 0) {
-            $this.WriteError("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
+            $this.WriteWarning("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
             return $false
         }
         
@@ -2641,7 +2654,7 @@ class SFTemplate {
         return $true
     }
 
-    [bool] SetResourceParameterValue([object]$resource, [string]$name, [string]$newValue) {
+    [bool] SetResourceParameterValue([object]$resource, [string]$name, [object]$newValue) {
         <#
         .SYNOPSIS
             sets resource parameter value in resources section
