@@ -26,10 +26,12 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 220906
+    Version    : 220918
     todo       : rename and hide unused parameters for addnodetype
                  update readmes
-    History    : add GetPSPropertyValue
+    History    : fix issue in current where vminstancecount value is string instead of int
+                 fix vminstancecount and capacity parameterization mismatch in redeploy. redeploy vminstancecount and capacity are now not parameterized
+                 add GetPSPropertyValue
 
 .EXAMPLE 
     .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
@@ -561,6 +563,7 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".addprimarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
+        $this.ModifyVmssResourcesAddPrimary()
         if (!($this.ParameterizeNodetypes($true, $true))) {
             $this.WriteError("exit:CreateAddPrimaryNodeTypeTemplate:no nodetype found")
             return
@@ -633,7 +636,7 @@ class SFTemplate {
         $this.RemoveUnusedParameters()
         $this.ModifyLbResources()
         $this.ModifyVmssResources()
-        $this.ModifyClusterResource()
+        #$this.ModifyClusterResource()
 
         # temporarily save working config
         $tempConfig = $this.CreateJson($this.currentConfig)
@@ -1193,6 +1196,12 @@ class SFTemplate {
         foreach ($vmssResource in $vmssResources) {
             # get nic for vnet/subnet and lb
             $this.WriteLog("EnumLbResourceIds:checking vmssResource for network config $($vmssResource.Name)")
+
+            if (($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations')) -eq $null) {
+                $this.WriteError("unable to enumerate nic configuration from $($this.CreateJson($vmssResource))")
+                continue
+            }
+
             foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
                 foreach ($ipconfig in $nic.properties.ipConfigurations) {
                     $id = [regex]::replace($ipconfig.properties.loadBalancerBackendAddressPools.id, '/backendAddressPools/.+$', '')
@@ -1224,6 +1233,12 @@ class SFTemplate {
         foreach ($vnetId in $vnetResources) {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
+
+            if (($this.GetPSPropertyValue($vnetResource, 'Properties.subnets')) -eq $null) {
+                $this.WriteError("unable to enumerate subnet configuration from $($this.CreateJson($vnetResource))")
+                continue
+            }
+
             foreach ($subnet in $vnetResource.Properties.subnets) {
                 if (($this.GetPSPropertyValue($subnet, 'properties.networkSecurityGroup.id'))) {
                     $id = $subnet.properties.networkSecurityGroup.id
@@ -1252,11 +1267,13 @@ class SFTemplate {
         $this.WriteLog("enter:EnumStorageResources")
         $resources = [collections.arraylist]::new()
     
-        $this.sflogs = $clusterResource.Properties.diagnosticsStorageAccountConfig.storageAccountName
+        $this.sflogs = $this.GetPSPropertyValue($clusterResource, 'Properties.diagnosticsStorageAccountConfig.storageAccountName')
         $this.WriteLog("EnumStorageResources:cluster sflogs storage account $($this.sflogs)")
 
         $scalesets = $this.EnumVmssResources($clusterResource)
-        $this.sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
+        if ($this.GetPSPropertyValue($scalesets, 'Properties.virtualMachineProfile.extensionProfile.extensions.properties')) {
+            $this.sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
+        }
         $this.WriteLog("EnumStorageResources:cluster sfdiags storage account $($this.sfdiags)")
   
         $storageResources = @(get-azresource -ResourceGroupName $this.resourceGroupName `
@@ -1341,6 +1358,12 @@ class SFTemplate {
         foreach ($vmssResource in $vmssResources) {
             # get nic for vnet/subnet and lb
             $this.WriteLog("EnumVnetResourceIds:checking vmssResource for network config $($vmssResource.Name)")
+
+            if (($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations')) -eq $null) {
+                $this.WriteError("unable to enumerate network interface configuration $($this.CreateJson($vmssResource))")
+                continue
+            }
+
             foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
                 foreach ($ipconfig in $nic.properties.ipConfigurations) {
                     $id = [regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
@@ -1444,7 +1467,7 @@ class SFTemplate {
     }
 
     [object] GetPSPropertyValue([object]$baseObject, [string]$property) {
-        $this.WriteLog("[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
+        $this.WriteLog("enter:[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
         $retval = $null
         $properties = @($property.Split('.'))
 
@@ -1454,24 +1477,24 @@ class SFTemplate {
         elseif ($baseObject -ne $null) {
             $propertyObject = $baseObject
             if ($propertyObject.GetType().isarray) {
-                foreach($propertyItem in $propertyObject){
+                foreach ($propertyItem in $propertyObject) {
                     $retval = $this.GetPSPropertyValue($propertyItem, $property)
-                    if($retval -ne $null){
+                    if ($retval -ne $null) {
                         $propertyObject = $retval
                         break
                     }
                 }
             }
             else {
-            foreach ($subItem in $properties) {
-                $this.WriteVerbose("checking property:$($subItem)")
+                foreach ($subItem in $properties) {
+                    $this.WriteVerbose("checking property:$($subItem)")
 
                     if ($propertyObject.GetType().isarray) {
                         
-                        foreach($propertyItem in $propertyObject){
+                        foreach ($propertyItem in $propertyObject) {
                             $retval = $this.GetPSPropertyValue($propertyItem, $subItem)
                             
-                            if($retval -ne $null){
+                            if ($retval -ne $null) {
                                 $propertyObject = $retval
                                 break
                             }
@@ -1480,10 +1503,10 @@ class SFTemplate {
                     # foreach($propertyObjectItem in $propertyObject){
                     elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
                         $this.WriteLog("found property:$($subItem)")
-                    $propertyObject = $propertyObject.$subItem
-                    $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
-                    $retval = $propertyObject
-                }
+                        $propertyObject = $propertyObject.$subItem
+                        $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
+                        $retval = $propertyObject
+                    }
                     else {
                         $this.WriteVerbose("property not found:$($subItem)")
                         $retval = $null
@@ -1494,7 +1517,7 @@ class SFTemplate {
             }
         }
 
-        $this.WriteLog("GetPSPropertyExists returning:$($retval)")
+        $this.WriteLog("exit:GetPSPropertyExists returning:$($retval)")
         return $retval
     }
 
@@ -1623,6 +1646,15 @@ class SFTemplate {
 
         $this.WriteLog("exit:GetResourceParameterValueObject: returning $retval")
         return $retval
+    }
+
+    [object] GetSubnetIds([object]$vmssResource) {
+        if (($this.GetPSPropertyValue($vmssResource, 'properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id') -eq $null)) {
+            $this.WriteError("unable to enumerate subnet id $($this.CreateJson($vmssResource))")
+            return $null
+        }
+        $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
+        return $subnetIds
     }
 
     [bool] GetUpdate($updateUrl) {
@@ -1789,16 +1821,11 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ModifyClusterResourceDeploy")
-        # clean previous entries
     
         # reparameterize all
         $null = $this.ParameterizeNodetypes($false, $false, $true)
-    
-        # remove unparameterized nodetypes
-        #$null = RemoveUnparameterizedNodeTypes
         $this.WriteLog("exit:ModifyClusterResourceDeploy")
     }
-
 
     [void] ModifyClusterResourceRedeploy() {
         <#
@@ -1940,34 +1967,38 @@ class SFTemplate {
 
             $this.WriteLog("modifying dependson")
             $dependsOn = [collections.arraylist]::new()
-            $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
+            $subnetIds = @($this.GetSubnetIds($vmssResource))
 
-            foreach ($depends in $vmssResource.dependsOn) {
-                if ($depends -imatch 'backendAddressPools') { continue }
+            if ($this.GetPSPropertyValue($vmssResource, 'dependsOn')) {
+                foreach ($depends in $vmssResource.dependsOn) {
+                    if ($depends -imatch 'backendAddressPools') { continue }
 
-                if ($depends -imatch 'Microsoft.Network/loadBalancers') {
-                    [void]$dependsOn.Add($depends)
+                    if ($depends -imatch 'Microsoft.Network/loadBalancers') {
+                        [void]$dependsOn.Add($depends)
+                    }
+                    # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
+                    if ($subnetIds.contains($depends)) {
+                        $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
+                        $depends = $depends.replace("/subnets'", "/'")
+                        $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                        [void]$dependsOn.Add($depends)
+                    }
                 }
-                # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
-                if ($subnetIds.contains($depends)) {
-                    $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
-                    $depends = $depends.replace("/subnets'", "/'")
-                    $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
-                    [void]$dependsOn.Add($depends)
-                }
+                $vmssResource.dependsOn = $dependsOn.ToArray()
+                $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
             }
-            $vmssResource.dependsOn = $dependsOn.ToArray()
-            $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
-            
-            $this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprint')
-            $this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprintSecondary')
+            else {
+                $this.WriteWarning("no dependson for $($this.CreateJson($vmssResource))")
+            }
+            #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprint')
+            #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprintSecondary')
 
             # secreturl
-            $this.ModifyVmssResourceCertificateUrl($vmssResource)
+            #$this.ModifyVmssResourceCertificateUrl($vmssResource)
 
             $adminPasswordName = 'adminPassword'
 
-            if (!($vmssResource.properties.virtualMachineProfile.osProfile.psobject.Properties | where-object name -ieq $adminPasswordName)) {
+            if (!($this.GetPSPropertyValue($vmssResource, "properties.virtualMachineProfile.osProfile.$adminPasswordName"))) {
                 $this.WriteLog("ModifyVmssResources:adding admin password")
                 $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name $adminPasswordName -Value $this.adminPassword
             
@@ -1983,6 +2014,29 @@ class SFTemplate {
             }
         }
         $this.WriteLog("exit:ModifyVmssResources")
+    }
+
+    [void] ModifyVmssResourcesAddPrimary() {
+        <#
+        .SYNOPSIS
+            modifies vmss resources for AddPrimary and AddSecondary template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVmssResourcesAddPrimary")
+        $vmssResources = $this.GetVmssResources()
+   
+        foreach ($vmssResource in $vmssResources) {
+            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
+            $this.AddParameter(
+                $vmssResource, # resource
+                'capacity', # name
+                $vmssResource.sku, # resourceObject
+                'int' # type
+            )
+        }
+        $this.WriteLog("exit:ModifyVmssResourcesAddPrimary")
     }
 
     [void] ModifyVmssResourcesDeploy() {
@@ -2069,7 +2123,7 @@ class SFTemplate {
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:modifying dependson")
             $dependsOn = [collections.arraylist]::new()
-            $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
+            $subnetIds = @($this.GetSubnetIds($vmssResource))
 
             foreach ($depends in $vmssResource.dependsOn) {
                 if ($depends -imatch 'backendAddressPools') { continue }
@@ -2095,14 +2149,6 @@ class SFTemplate {
                 'name', # name
                 'hardwareSku', # aliasName
                 $vmssResource.sku # resourceObject
-            )
-
-            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
-            $this.AddParameter(
-                $vmssResource, # resource
-                'capacity', # name
-                $vmssResource.sku, # resourceObject
-                'int' # type
             )
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing os sku")
@@ -2296,7 +2342,7 @@ class SFTemplate {
         }
 
         if ($filterednodetypes.count -eq 0) {
-            $this.WriteError("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
+            $this.WriteWarning("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
             return $false
         }
         
@@ -2608,7 +2654,7 @@ class SFTemplate {
         return $true
     }
 
-    [bool] SetResourceParameterValue([object]$resource, [string]$name, [string]$newValue) {
+    [bool] SetResourceParameterValue([object]$resource, [string]$name, [object]$newValue) {
         <#
         .SYNOPSIS
             sets resource parameter value in resources section
