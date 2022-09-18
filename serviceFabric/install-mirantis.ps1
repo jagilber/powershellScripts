@@ -42,7 +42,7 @@ parameters.json :
       //"value": "install-mirantis.ps1 -dockerVersion 18.09.12 -allowUpgrade"
     },
     "customScriptExtensionFileUri": {
-      "value": "https://aka.ms/install-mirantis.ps1"
+      "value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/install-mirantis.ps1"
     },
 
 template json :
