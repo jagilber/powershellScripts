@@ -156,13 +156,13 @@ function repair-articleImagePath($article, $imagePath, $images) {
     $imagePathFileName = [io.path]::GetFileName($imagePath)
     write-host "checking images list for file name:$imagePathFileName"
     $relativePath = ''
+    $imageFiles = @($images | Where-Object Name -ieq $imagePathFileName)
 
-    if ($images.Name -contains $imagePathFileName) {
-        $imageFile = $images | Where-Object Name -ieq $imagePathFileName
-        $relativePath = [io.path]::GetRelativePath($articlePath, $imageFile.FullName).replace('\', '/')
+    if ($imageFiles.Count -eq 1) {
+        $relativePath = [io.path]::GetRelativePath($articlePath, $imageFiles[0].FullName).replace('\', '/')
     }
     else {
-        write-error "unable to fix $imagePath"
+        write-error "unable to fix $imagePath`r`nmatching images:$imageFiles"
         return $relativePath
     }
 
