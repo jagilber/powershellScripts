@@ -54,27 +54,29 @@ function get-imagePathsFromArticle($articles, $images) {
     foreach ($article in $articles) {
         Write-host "checking article for images:$($article.FullName)" -foregroundcolor green
         $articleContent = Get-Content -Raw -Path $article.FullName
-        #$imageLinkPattern = '!\[.*?\]\((.+?)\)'
-        #[sfx-select-certificate-dialog]: ./media/service-fabric-cluster-creation-setup-aad/sfx-select-certificate-dialog.png
-        #$imageLinkPattern = '(?:!\[.*?\]\((.+?.png)\))|(?:\[.*?\].*?\((.+?.png)\))'
-        # .gif, .jpg, .png ^(.+)\/([^\/]+)$
-        #$imageLinkPattern = "\((.+?\.png)\)|\[.*?\]:\s*?(.+?\.png)|\`"(\w*?.png)\`""
-        $imageLinkPattern = "([^\[\]!\(\)\`" :=']+\.png|.jpg|.gif)"
+        #$imageLinkPattern = "([^\[\]!\(\)\`" :=']+\.png|.jpg|.gif)"
+        #$imageLinkPattern = "([^\[\]!\(\)\`" :=']+(?:\.png|\.jpg|\.gif))"
+        $imageLinkPattern = "\[.*?\].+?([^!\(\)\`" :=']+(?:\.png|\.jpg|\.gif))"
 
         if ([regex]::IsMatch($articleContent, $imageLinkPattern,[text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)) {
             $matches = [regex]::Matches($articleContent, $imageLinkPattern,[text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)
             
             foreach ($match in $matches) {
+                $error.clear()
                 $imagePath = $match.Groups[1].Value.trim()
-                $imageFullPath = resolve-path ("$([io.path]::GetDirectoryName($article.FullName))\$imagePath".replace('\', '/'))
+                write-verbose "resolve-path (`"`$([io.path]::GetDirectoryName($($article.FullName)))\$imagePath`".replace('\', '/'))"
+                $imageFullPath = resolve-path ("$([io.path]::GetDirectoryName($article.FullName))\$imagePath".replace('\', '/')) #-ErrorAction SilentlyContinue
                 write-host "`tchecking path:$imageFullPath" -ForegroundColor darkgreen
                 $imageFound = $true
-                
+                if($error){
+                    
+                    $error.Clear()
+                }
                 if (!$table.Count -or !($table.containsKey($article.FullName))) {
                     [void]$table.Add($article.FullName, [collections.ArrayList]::new())
                 }
 
-                if (!(test-path $imageFullPath)) {
+                if (!$imageFullPath -or !(test-path $imageFullPath)) {
                     Write-Warning "bad path: $imageFullPath"
                     Write-Warning "adding bad image path:`r`n`t$($imageFullPath)`r`n`tfor article:`r`n`t$($article.FullName)"
 
