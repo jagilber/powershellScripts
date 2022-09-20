@@ -1,6 +1,15 @@
 <#
-search git repo for images in .md and their location
+.SYNOPSIS
+script to search git repo and validate image paths in .md
+
+.DESCRIPTION
+script to search git repo for images in .md and their location
 optionally update broken links with -repair
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/resolve-markdown-images.ps1 -outFile $pwd\resolve-markdown-images.ps1
+
 #>
 [cmdletbinding()]
 param(
@@ -28,7 +37,7 @@ function main() {
         return
     }
 
-    $global:images = Get-ChildItem -Recurse -File -Filter '*.png' -Path $mediaFolder
+    $global:images = Get-ChildItem -Recurse -File -Path $mediaFolder | Where-Object Name -imatch "\.gif|\.jpg|\.png"
     write-host "images:`r`n$($global:images | out-string)"
 
     $global:articles = Get-ChildItem -Recurse -File -Filter '*.md' -Path $markdownFolder
@@ -58,8 +67,8 @@ function get-imagePathsFromArticle($articles, $images) {
         #$imageLinkPattern = "([^\[\]!\(\)\`" :=']+(?:\.png|\.jpg|\.gif))"
         $imageLinkPattern = "\[.*?\].+?([^!\(\)\`" :=']+(?:\.png|\.jpg|\.gif))"
 
-        if ([regex]::IsMatch($articleContent, $imageLinkPattern,[text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)) {
-            $matches = [regex]::Matches($articleContent, $imageLinkPattern,[text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)
+        if ([regex]::IsMatch($articleContent, $imageLinkPattern, [text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)) {
+            $matches = [regex]::Matches($articleContent, $imageLinkPattern, [text.regularexpressions.regexoptions]::ignorecase -bor [text.regularexpressions.regexoptions]::multiline)
             
             foreach ($match in $matches) {
                 $error.clear()
@@ -68,7 +77,7 @@ function get-imagePathsFromArticle($articles, $images) {
                 $imageFullPath = resolve-path ("$([io.path]::GetDirectoryName($article.FullName))\$imagePath".replace('\', '/')) #-ErrorAction SilentlyContinue
                 write-host "`tchecking path:$imageFullPath" -ForegroundColor darkgreen
                 $imageFound = $true
-                if($error){
+                if ($error) {
                     
                     $error.Clear()
                 }
@@ -82,7 +91,7 @@ function get-imagePathsFromArticle($articles, $images) {
 
                     $imageFound = $false
                     if ($repair) {
-                        $articleContent = repair-articleImagePath -article $article -imagePath $imagePath -images $images
+                        $newPath = repair-articleImagePath -article $article -imagePath $imagePath -images $images
                     }
                 }
 
@@ -90,6 +99,7 @@ function get-imagePathsFromArticle($articles, $images) {
                         path     = $imagePath
                         fullPath = $imageFullPath
                         found    = $imageFound
+                        newPath  = $newPath
                     }
                 )
             }
@@ -110,7 +120,12 @@ function get-articleBadImages($imagePathTable) {
                 if (!$table.Count -or !($table.containsKey($article.Name))) {
                     [void]$table.Add($article.Name, [collections.ArrayList]::new())
                 }
-                [void]$table[$article.Name].Add($image.path)
+                
+                [void]$table[$article.Name].Add(@{
+                        path = $image.path
+                        newPath = $image.newPath
+                    }
+                )
             }
         }
     }
@@ -140,23 +155,26 @@ function repair-articleImagePath($article, $imagePath, $images) {
     $newContent = Get-Content -Raw -Path $article.FullName
     $imagePathFileName = [io.path]::GetFileName($imagePath)
     write-host "checking images list for file name:$imagePathFileName"
-    
+    $relativePath = ''
+
     if ($images.Name -contains $imagePathFileName) {
         $imageFile = $images | Where-Object Name -ieq $imagePathFileName
         $relativePath = [io.path]::GetRelativePath($articlePath, $imageFile.FullName).replace('\', '/')
     }
     else {
-        write-warning "unable to fix $imagePath"
+        write-error "unable to fix $imagePath"
+        return $relativePath
     }
 
     write-host "updating article $($article.Name) with new image path $($relativePath)" -ForegroundColor Magenta
+
     if (!$whatIf) {
         $newContent = $newContent.Replace($imagePath, $relativePath)
         write-verbose "new content:`r`n$newContent"
         out-file -InputObject $newContent -FilePath $article.FullName -NoNewline
     }
     
-    return $newContent
+    return $relativePath
 }
 
 main
