@@ -21,7 +21,7 @@ write-verbose $html
 
 if([regex]::isMatch($html,'SourceURL:')){
     $sourceUrl = [regex]::match($html,'(SourceURL:.+)').Groups[1].value
-    $sourceUrl
+    write-verbose $sourceUrl
 }
 
 if($sourceUrl -and !([regex]::isMatch($text,'SourceURL:'))){
