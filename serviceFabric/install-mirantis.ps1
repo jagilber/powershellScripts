@@ -327,6 +327,7 @@ function register-event() {
     try {
         if ($registerEvent) {
             if (!(get-eventlog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue)) {
+                $error.clear()
                 New-EventLog -LogName $eventLogName -Source $registerEventSource
             }
         }
