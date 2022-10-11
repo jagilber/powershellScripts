@@ -4,44 +4,33 @@
     based on https://learn.microsoft.com/en-us/azure/cloud-services/applications-dont-support-tls-1-2
     modified to only enable tls 1.2
 
-.LINK
-    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/vmss-cse-tls.ps1" -outFile "$pwd/vmss-cse-tls.ps1";
-    ./vmss-cse-tls.ps1
-#>
-
-
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319" /v SchUseStrongCrypto /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319" /v SchUseStrongCrypto /t REG_DWORD /d 1 /f
-
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client" /v DisabledByDefault /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client" /v Enabled /t REG_DWORD /d 0 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server" /v DisabledByDefault /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server" /v Enabled /t REG_DWORD /d 0 /f
-
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client" /v DisabledByDefault /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client" /v Enabled /t REG_DWORD /d 0 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server" /v DisabledByDefault /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server" /v Enabled /t REG_DWORD /d 0 /f
-
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client" /v Enabled /t REG_DWORD /d 1 /f
-reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server" /v Enabled /t REG_DWORD /d 1 /f
-
 # You can use the -SetCipherOrder (or -sco) option to also set the TLS cipher 
 # suite order. Change the cipherorder variable below to the order you want to set on the 
 # server. Setting this requires a reboot to take effect.
 
-Param(
- [parameter(Mandatory=$false)]
- [alias("sco")]
- [switch]$SetCipherOrder)
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/vmss-cse-tls.ps1" -outFile "$pwd/vmss-cse-tls.ps1";
+    ./vmss-cse-tls.ps1
 
- Function DisableRC4 {
-   param ( $restart)
+#>
+
+Param(
+  [parameter(Mandatory = $false)]
+  [alias("sco")]
+  [switch]$SetCipherOrder,
+  [bool]$registerEvent = $true,
+  [string]$registerEventSource = 'CustomScriptExtension'
+)
+
+$eventLogName = 'Application'
+
+Function DisableRC4 {
+  param ( $restart)
   $subkeys = Get-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL"
   $ciphers = $subkeys.OpenSubKey("Ciphers", $true)
 
-  if($ciphers.SubKeyCount -eq 0) {
+  if ($ciphers.SubKeyCount -eq 0) {
     $k1 = $ciphers.CreateSubKey("RC4 128/128")
     $k1.SetValue("Enabled", 0, [Microsoft.Win32.RegistryValueKind]::DWord)
     $restart = $true
@@ -55,6 +44,20 @@ Param(
 
   $restart
 
+}
+
+function Register-Event() {
+  try {
+    if ($registerEvent) {
+      if (!(get-eventlog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue)) {
+        New-EventLog -LogName $eventLogName -Source $registerEventSource
+      }
+    }
+  }
+  catch {
+    write-host "exception:$($error | out-string)"
+    $error.clear()
+  }
 }
 
 Function Set-CryptoSetting {
@@ -80,7 +83,8 @@ Function Set-CryptoSetting {
     $restart = $True
     Write-Host "Configuring $regkeys[$keyindex]...."
 
-  } Else {
+  }
+  Else {
 
     # Value does exist - if not equal to desired value, change it
     If ($val -ne $valuedata) {
@@ -95,57 +99,82 @@ Function Set-CryptoSetting {
 }
 
 $regkeys = @(
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server", #2
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Client", #4
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Server",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2",        #6
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server", #8
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client", #10
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0",        #12
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client",
-"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server", #14
-"HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002"
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server", #2
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Client", #4
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Server",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2", #6
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server", #8
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client", #10
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0", #12
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client",
+  "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server", #14
+  "HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002"
 )
 
 Function Set-Windows10PlusCurveOrder {
-    param ( $reboot)
-    $desiredOrder = "NistP384;NistP256".Split(";")
-    If ([Environment]::OSVersion.Version.Major -ge 10) {
-        If (!(Test-Path -Path $regkeys[15])) {
-            New-Item $regkeys[15] | Out-Null
-            $reboot = $True
-        }
-
-        $val = (Get-Item -Path $regkeys[15] -ErrorAction SilentlyContinue).GetValue("EccCurves", $null)
-
-        if( $null -eq $val) {
-            New-ItemProperty -Path $regkeys[15] -Name EccCurves -Value $desiredOrder -PropertyType MultiString | Out-Null
-            $reboot = $True
-
-        } else {
-
-            if ([System.String]::Join(';', $val) -ne [System.String]::Join(';', $desiredOrder)) {
-                Write-Host "The original curve order ", `n, $val, `n, "needs to be updated to ", $desiredOrder
-                Set-ItemProperty -Path $regkeys[15] -Name EccCurves -Value $desiredOrder
-                $reboot = $True
-            }
-        }
+  param ( $reboot)
+  $desiredOrder = "NistP384;NistP256".Split(";")
+  If ([Environment]::OSVersion.Version.Major -ge 10) {
+    If (!(Test-Path -Path $regkeys[15])) {
+      New-Item $regkeys[15] | Out-Null
+      $reboot = $True
     }
 
-    $reboot
+    $val = (Get-Item -Path $regkeys[15] -ErrorAction SilentlyContinue).GetValue("EccCurves", $null)
+
+    if ( $null -eq $val) {
+      New-ItemProperty -Path $regkeys[15] -Name EccCurves -Value $desiredOrder -PropertyType MultiString | Out-Null
+      $reboot = $True
+
+    }
+    else {
+
+      if ([System.String]::Join(';', $val) -ne [System.String]::Join(';', $desiredOrder)) {
+        Write-Host "The original curve order ", `n, $val, `n, "needs to be updated to ", $desiredOrder
+        Set-ItemProperty -Path $regkeys[15] -Name EccCurves -Value $desiredOrder
+        $reboot = $True
+      }
+    }
+  }
+
+  $reboot
 
 }
+
+function Write-Event($data) {
+  write-host $data
+  try {
+    if ($registerEvent) {
+      $level = 'Information'
+
+      if ($error -or ($data -imatch "fail|exception|error")) {
+        $level = 'Error'
+        $data = "$data`r`nerrors:`r`n$($error | out-string)"
+      }
+      elseif ($error -or ($data -imatch "warn")) {
+        $level = 'Warning'
+      }
+
+      Write-EventLog -LogName $eventLogName -Source $registerEventSource -Message $data -EventId 1000 -EntryType $level
+    }
+  }
+  catch {
+    $error.Clear()
+  }
+}
+
+Register-Event
 
 If ([Environment]::OSVersion.Version.Major -lt 10) {
   # This is for Windows before 10 
   Write-Host "Configuring Windows before 10..."
-  $cipherorder =  "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384_P384,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256_P256,"
+  $cipherorder = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384_P384,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256_P256,"
   $cipherorder += "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384_P384,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256_P256,"
   $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384_P256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256_P256,"
   $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA_P256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA_P256,"
@@ -153,19 +182,20 @@ If ([Environment]::OSVersion.Version.Major -lt 10) {
   $cipherorder += "TLS_RSA_WITH_AES_256_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,"
   $cipherorder += "TLS_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_AES_128_CBC_SHA"
 
-} Else {
+}
+Else {
 
- # this is for windows 10 or above
- Write-Host "Configuring Windows 10+..."
- $cipherorder = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,"
- $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,"
- $cipherorder += "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,"
- $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,"
- $cipherorder += "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,"
- $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,"
- $cipherorder += "TLS_RSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_128_GCM_SHA256,"
- $cipherorder += "TLS_RSA_WITH_AES_256_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,"
- $cipherorder += "TLS_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_AES_128_CBC_SHA"
+  # this is for windows 10 or above
+  Write-Host "Configuring Windows 10+..."
+  $cipherorder = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,"
+  $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,"
+  $cipherorder += "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,"
+  $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,"
+  $cipherorder += "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,"
+  $cipherorder += "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,"
+  $cipherorder += "TLS_RSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_128_GCM_SHA256,"
+  $cipherorder += "TLS_RSA_WITH_AES_256_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,"
+  $cipherorder += "TLS_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_AES_128_CBC_SHA"
 }
 
 # If any settings are changed, this will change to $True and the server will reboot
@@ -211,20 +241,19 @@ $reboot = Set-CryptoSetting 8 Enabled 1 DWord $reboot
 $reboot = DisableRC4($reboot)
 
 If ($SetCipherOrder) {
-      If (!(Test-Path -Path $regkeys[15])) {
-        New-Item $regkeys[15] | Out-Null
-        $reboot = $True
-      }
-
-      $val = (Get-Item -Path $regkeys[15] -ErrorAction SilentlyContinue).GetValue("Functions", $null)
-
-      if ($val -ne $cipherorder)
-      {
-        Write-Host "The original cipher suite order needs to be updated", `n, $val
-        Set-ItemProperty -Path $regkeys[15] -Name Functions -Value $cipherorder
-        $reboot = $True
-      }
+  If (!(Test-Path -Path $regkeys[15])) {
+    New-Item $regkeys[15] | Out-Null
+    $reboot = $True
   }
+
+  $val = (Get-Item -Path $regkeys[15] -ErrorAction SilentlyContinue).GetValue("Functions", $null)
+
+  if ($val -ne $cipherorder) {
+    Write-Host "The original cipher suite order needs to be updated", `n, $val
+    Set-ItemProperty -Path $regkeys[15] -Name Functions -Value $cipherorder
+    $reboot = $True
+  }
+}
 
 $reboot = Set-Windows10PlusCurveOrder $reboot
 
@@ -233,11 +262,15 @@ If ($reboot) {
   $tick = [System.Int32]([System.DateTime]::Now.Ticks % [System.Int32]::MaxValue)
   $rand = [System.Random]::new($tick)
   $sec = $rand.Next(30, 600)
-  Write-Host "Rebooting after", $sec, " second(s)..."
-  Write-Host  "shutdown.exe /r /t $sec /c ""Crypto settings changed"" /f /d p:2:4"
+  
+  Write-Event -data "
+  Successfully updated crypto settings
+  Warning:Rebooting after $sec second(s)...
+  shutdown.exe /r /t $sec /c ""Crypto settings changed"" /f /d p:2:4
+  "
+
   shutdown.exe /r /t $sec /c "Crypto settings changed" /f /d p:2:4
-
-} Else {
-
-  Write-Host "Nothing get updated."
+}
+Else {
+  Write-Event -data "Crypto settings already set. not restarting."
 }
