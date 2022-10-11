@@ -14,8 +14,8 @@
     ./vmss-cse-tls.ps1
 
 #>
-
-Param(
+[cmdletbinding()]
+param (
   [parameter(Mandatory = $false)]
   [alias("sco")]
   [switch]$SetCipherOrder,
@@ -50,6 +50,7 @@ function Register-Event() {
   try {
     if ($registerEvent) {
       if (!(get-eventlog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue)) {
+        $error.clear()
         New-EventLog -LogName $eventLogName -Source $registerEventSource
       }
     }
