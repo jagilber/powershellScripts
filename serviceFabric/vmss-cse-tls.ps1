@@ -1,6 +1,13 @@
 <#
+.SYNOPSIS
     powershell script for for enabling TLS 1.2 only
     based on https://learn.microsoft.com/en-us/azure/cloud-services/applications-dont-support-tls-1-2
+    modified to only enable tls 1.2
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/vmss-cse-tls.ps1" -outFile "$pwd/vmss-cse-tls.ps1";
+    ./vmss-cse-tls.ps1
 #>
 
 
