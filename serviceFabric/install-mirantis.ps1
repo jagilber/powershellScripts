@@ -324,17 +324,15 @@ function get-latestVersion([string[]] $versions) {
 }
 
 function register-event() {
-    try {
-        if ($registerEvent) {
-            if (!(get-eventlog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue)) {
-                $error.clear()
-                New-EventLog -LogName $eventLogName -Source $registerEventSource
-            }
-        }
-    }
-    catch {
-        write-host "exception:$($error | out-string)"
+    if ($registerEvent) {
         $error.clear()
+        New-EventLog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue
+        if($error -and ($error -inotmatch 'source is already registered')) {
+            $registerEvent = $false
+        }
+        else {
+            $error.clear()
+        }
     }
 }
 

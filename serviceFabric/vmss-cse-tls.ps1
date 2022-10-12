@@ -47,17 +47,15 @@ Function DisableRC4 {
 }
 
 function Register-Event() {
-  try {
-    if ($registerEvent) {
-      if (!(get-eventlog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue)) {
-        $error.clear()
-        New-EventLog -LogName $eventLogName -Source $registerEventSource
+  if ($registerEvent) {
+      $error.clear()
+      New-EventLog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue
+      if($error -and ($error -inotmatch 'source is already registered')) {
+          $registerEvent = $false
       }
-    }
-  }
-  catch {
-    write-host "exception:$($error | out-string)"
-    $error.clear()
+      else {
+          $error.clear()
+      }
   }
 }
 
