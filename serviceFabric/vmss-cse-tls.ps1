@@ -48,14 +48,14 @@ Function DisableRC4 {
 
 function Register-Event() {
   if ($registerEvent) {
+    $error.clear()
+    New-EventLog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue
+    if ($error -and ($error -inotmatch 'source is already registered')) {
+      $registerEvent = $false
+    }
+    else {
       $error.clear()
-      New-EventLog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue
-      if($error -and ($error -inotmatch 'source is already registered')) {
-          $registerEvent = $false
-      }
-      else {
-          $error.clear()
-      }
+    }
   }
 }
 
@@ -75,6 +75,10 @@ Function Set-CryptoSetting {
 
   # Get data of registry value, or null if it does not exist
   $val = (Get-ItemProperty -Path $regkeys[$keyindex] -Name $value -ErrorAction SilentlyContinue).$value
+
+  if ($error -and ($error -imatch 'does not exist at path')) {
+    $error.clear()
+  }
 
   If ($null -eq $val) {
     # Value does not exist - create and set to desired value
@@ -255,6 +259,7 @@ If ($SetCipherOrder) {
 }
 
 $reboot = Set-Windows10PlusCurveOrder $reboot
+$currentReg = reg query 'HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols' -s
 
 If ($reboot) {
   # Randomize the reboot timing since it could be run in a large cluster.
@@ -263,6 +268,7 @@ If ($reboot) {
   $sec = $rand.Next(30, 600)
   
   Write-Event -data "
+  $currentReg
   Successfully updated crypto settings
   Warning:Rebooting after $sec second(s)...
   shutdown.exe /r /t $sec /c ""Crypto settings changed"" /f /d p:2:4
@@ -271,5 +277,8 @@ If ($reboot) {
   shutdown.exe /r /t $sec /c "Crypto settings changed" /f /d p:2:4
 }
 Else {
-  Write-Event -data "Crypto settings already set. not restarting."
+  Write-Event -data "
+  $currentReg
+  Crypto settings already set. not restarting.
+  "
 }
