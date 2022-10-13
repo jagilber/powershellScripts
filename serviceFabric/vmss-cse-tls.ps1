@@ -1,13 +1,15 @@
 <#
 .SYNOPSIS
-                powershell script for for enabling TLS 1.2 only
-                based on https://learn.microsoft.com/en-us/azure/cloud-services/applications-dont-support-tls-1-2
-                modified to only enable tls 1.2
+    powershell script for for enabling TLS 1.2 only
+    based on https://learn.microsoft.com/en-us/azure/cloud-services/applications-dont-support-tls-1-2
+    modified to only enable tls 1.2
 
-      # You can use the -SetCipherOrder (or -sco) option to also set the TLS cipher
-      # suite order. Change the cipherorder variable below to the order you want to set on the
-      # server. Setting this requires a reboot to take effect.
-
+.NOTES
+    You can use the -SetCipherOrder (or -sco) option to also set the TLS cipher
+    suite order. Change the cipherorder variable below to the order you want to set on the
+    server. Setting this requires a reboot to take effect.
+    v 1.0
+    
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/vmss-cse-tls.ps1" -outFile "$pwd/vmss-cse-tls.ps1";
