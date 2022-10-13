@@ -26,6 +26,7 @@ if([regex]::isMatch($html,'SourceURL:')){
 
 if($sourceUrl -and !([regex]::isMatch($text,'SourceURL:'))){
     $text = $text + [environment]::newLine + [environment]::newLine + $sourceUrl + [environment]::newLine
+    #$text = $html # + [environment]::newLine + [environment]::newLine + $sourceUrl + [environment]::newLine
     write-verbose $text
     [System.Windows.Forms.Clipboard]::SetText($text)
 }
