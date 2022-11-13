@@ -124,6 +124,7 @@ class Vmss {
     [collections.generic.list[string]]$ipAddressIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$nsgIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$keyVaultIds = [collections.generic.list[string]]::new()
+    [collections.generic.list[string]]$subnetIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$vnetIds = [collections.generic.list[string]]::new()
     
 }
@@ -1031,6 +1032,16 @@ class SFTemplate {
             [void]$resources.AddRange($vnetResources)
         }
 
+        $this.WriteLog("EnumAllResources:getting subnets $($this.resourceGroupName)")
+        $subnetResources = @($this.EnumSubnetResourceIds($vmssResources))
+        if ($subnetResources.count -lt 1) {
+            $this.WriteError("exit:EnumAllResources:unable to enumerate subnets. exiting")
+            return $null
+        }
+        else {
+            [void]$resources.AddRange($subnetResources)
+        }
+
         $this.WriteLog("EnumAllResources:getting loadbalancers $($this.resourceGroupName)")
         $lbResources = @($this.EnumLbResourceIds($vmssResources))
         if ($lbResources.count -lt 1) {
@@ -1295,6 +1306,43 @@ class SFTemplate {
         $this.WriteVerbose("storage resources $resources")
         $this.WriteLog("exit:EnumStorageResources")
         return $resources.ToArray() | sort-object name -Unique
+    }
+
+    [string[]] EnumSubnetResourceIds([object[]]$vmssResources) {
+        <#
+        .SYNOPSIS
+            enumerate virtual network subnet resource Ids from vmss resources
+            outputs: string[]
+        .OUTPUTS
+            [string[]]
+        #>
+        $this.WriteLog("enter:EnumSubnetResourceIds")
+        $resources = [collections.arraylist]::new()
+
+        foreach ($vmssResource in $vmssResources) {
+            # get nic for vnet/subnet and lb
+            $this.WriteLog("EnumSubnetResourceIds:checking vmssResource for network config $($vmssResource.Name)")
+
+            if (($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations')) -eq $null) {
+                $this.WriteError("unable to enumerate network interface configuration $($this.CreateJson($vmssResource))")
+                continue
+            }
+
+            foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
+                foreach ($ipconfig in $nic.properties.ipConfigurations) {
+                    $id = $ipconfig.properties.subnet.id #[regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
+                    $this.WriteLog("EnumVnetResourceIds:adding subnet id: $id", [consolecolor]::green)
+                    [void]$resources.Add($id)
+                    
+                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByResource($vmssResource)
+                    [void]$vmssTreeResource.subnetIds.Add($id)
+                }
+            }
+        }
+
+        $this.WriteVerbose("subnet resources $resources")
+        $this.WriteLog("exit:EnumSubnetResourceIds")
+        return $resources.ToArray() | sort-object -Unique
     }
 
     [object[]] EnumVmssResources([object]$clusterResource) {
@@ -1648,15 +1696,6 @@ class SFTemplate {
         return $retval
     }
 
-    [object] GetSubnetIds([object]$vmssResource) {
-        if (($this.GetPSPropertyValue($vmssResource, 'properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id') -eq $null)) {
-            $this.WriteError("unable to enumerate subnet id $($this.CreateJson($vmssResource))")
-            return $null
-        }
-        $subnetIds = @($vmssResource.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipconfigurations.properties.subnet.id)
-        return $subnetIds
-    }
-
     [bool] GetUpdate($updateUrl) {
         <#
         .SYNOPSIS
@@ -1967,20 +2006,12 @@ class SFTemplate {
 
             $this.WriteLog("modifying dependson")
             $dependsOn = [collections.arraylist]::new()
-            $subnetIds = @($this.GetSubnetIds($vmssResource))
 
             if ($this.GetPSPropertyValue($vmssResource, 'dependsOn')) {
                 foreach ($depends in $vmssResource.dependsOn) {
                     if ($depends -imatch 'backendAddressPools') { continue }
 
                     if ($depends -imatch 'Microsoft.Network/loadBalancers') {
-                        [void]$dependsOn.Add($depends)
-                    }
-                    # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
-                    if ($subnetIds.contains($depends)) {
-                        $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
-                        $depends = $depends.replace("/subnets'", "/'")
-                        $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
                         [void]$dependsOn.Add($depends)
                     }
                 }
@@ -2123,19 +2154,11 @@ class SFTemplate {
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:modifying dependson")
             $dependsOn = [collections.arraylist]::new()
-            $subnetIds = @($this.GetSubnetIds($vmssResource))
 
             foreach ($depends in $vmssResource.dependsOn) {
                 if ($depends -imatch 'backendAddressPools') { continue }
 
                 if ($depends -imatch 'Microsoft.Network/loadBalancers') {
-                    [void]$dependsOn.Add($depends)
-                }
-                # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
-                if ($subnetIds.contains($depends)) {
-                    $this.WriteLog('ModifyVmssResourcesReDeploy:cleaning subnet dependson', [consolecolor]::Yellow)
-                    $depends = $depends.replace("/subnets'", "/'")
-                    $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
                     [void]$dependsOn.Add($depends)
                 }
             }
