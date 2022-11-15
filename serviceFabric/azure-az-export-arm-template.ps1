@@ -123,6 +123,7 @@ class Vmss {
     [collections.generic.list[string]]$loadbalancerIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$ipAddressIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$nsgIds = [collections.generic.list[string]]::new()
+    [collections.generic.list[string]]$nsgRuleIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$keyVaultIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$subnetIds = [collections.generic.list[string]]::new()
     [collections.generic.list[string]]$vnetIds = [collections.generic.list[string]]::new()
@@ -1079,6 +1080,15 @@ class SFTemplate {
             [void]$resources.AddRange($nsgResources)
         }
 
+        $this.WriteLog("EnumAllResources:getting nsg rules $($this.resourceGroupName)")
+        $nsgRuleResources = @($this.EnumNsgRuleResourceIds($nsgResources))
+        if ($nsgRuleResources.count -lt 1) {
+            $this.WriteWarning("EnumAllResources:unable to enumerate nsg rules.")
+        }
+        else {
+            [void]$resources.AddRange($nsgRuleResources)
+        }
+
         if ($this.excludeResourceNames) {
             $resources = $resources | where-object Name -NotMatch "$($this.excludeResourceNames -join "|")"
         }
@@ -1264,6 +1274,45 @@ class SFTemplate {
 
         $this.WriteVerbose("nsg resources $resources")
         $this.WriteLog("exit:EnumNsgResourceIds")
+        return $resources.ToArray() | sort-object -Unique
+    }
+
+    [string[]] EnumNsgRuleResourceIds([object[]]$nsgResourceIds) {
+        <#
+        .SYNOPSIS
+            enumerate network security group resource id's from vnet resources
+            outputs: string[]
+        .OUTPUTS
+            [string[]]
+        #>
+        $this.WriteLog("enter:EnumNsgRuleResourceIds")
+        $resources = [collections.arraylist]::new()
+
+        foreach ($nsgResourceId in $nsgResourceIds) {
+            if (!$nsgResourceId) { continue }
+            $nsgResource = @(get-azresource -ResourceId $nsgResourceId -ExpandProperties)
+            $this.WriteLog("EnumNsgRuleResourceIds:checking rules for resource for nsg config $($nsgResource.Name)")
+
+            if (($this.GetPSPropertyValue($nsgResource, 'Properties.subnets')) -eq $null) {
+                $this.WriteError("unable to enumerate subnet configuration from $($this.CreateJson($nsgResource))")
+                continue
+            }
+            ##############
+
+            foreach ($subnet in $nsgResource.Properties.subnets) {
+                if (($this.GetPSPropertyValue($subnet, 'properties.networkSecurityGroup.id'))) {
+                    $id = $subnet.properties.networkSecurityGroup.id
+                    $this.WriteLog("EnumNsgRuleResourceIds:adding nsg id: $id", [consolecolor]::green)
+                    [void]$resources.Add($id)
+                    
+                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
+                    [void]$vmssTreeResource.nsgRuleIds.Add($id)
+                }
+            }
+        }
+
+        $this.WriteVerbose("nsg resources $resources")
+        $this.WriteLog("exit:EnumNsgRuleResourceIds")
         return $resources.ToArray() | sort-object -Unique
     }
 
@@ -2006,6 +2055,7 @@ class SFTemplate {
 
             $this.WriteLog("modifying dependson")
             $dependsOn = [collections.arraylist]::new()
+            #$subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
 
             if ($this.GetPSPropertyValue($vmssResource, 'dependsOn')) {
                 foreach ($depends in $vmssResource.dependsOn) {
@@ -2014,6 +2064,13 @@ class SFTemplate {
                     if ($depends -imatch 'Microsoft.Network/loadBalancers') {
                         [void]$dependsOn.Add($depends)
                     }
+                    # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
+                    # if ($subnetIds.contains($depends)) {
+                    #     $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
+                    #     $depends = $depends.replace("/subnets'", "/'")
+                    #     $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                    #     [void]$dependsOn.Add($depends)
+                    # }
                 }
                 $vmssResource.dependsOn = $dependsOn.ToArray()
                 $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
@@ -2154,6 +2211,7 @@ class SFTemplate {
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:modifying dependson")
             $dependsOn = [collections.arraylist]::new()
+            #$subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
 
             foreach ($depends in $vmssResource.dependsOn) {
                 if ($depends -imatch 'backendAddressPools') { continue }
@@ -2161,6 +2219,13 @@ class SFTemplate {
                 if ($depends -imatch 'Microsoft.Network/loadBalancers') {
                     [void]$dependsOn.Add($depends)
                 }
+                # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
+                # if ($subnetIds.contains($depends)) {
+                #     $this.WriteLog('ModifyVmssResourcesReDeploy:cleaning subnet dependson', [consolecolor]::Yellow)
+                #     $depends = $depends.replace("/subnets'", "/'")
+                #     $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                #     [void]$dependsOn.Add($depends)
+                # }
             }
 
             $vmssResource.dependsOn = $dependsOn.ToArray()
