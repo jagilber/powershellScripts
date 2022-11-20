@@ -104,17 +104,24 @@ function main () {
     if ($resourceNames) {
         foreach ($resourceName in $resourceNames) {
             write-host "getting resource $resourceName"
-            $global:configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName)))
+            $resource = @((get-azresource -ResourceGroupName $resourceGroupName -resourceName $resourceName))
+            if ($resource) {
+                $global:configuredRGResources.AddRange($resource)
+            }
+            else {
+                write-error "resource not found: $resourceName"
+            }
         }
     }
     else {
         write-host "getting resource group resource ids $resourceGroupName"
         $resources = @((get-azresource -ResourceGroupName $resourceGroupName))
-        if ($excludeResourceNames) {
-            $resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
-        }
-
         $global:configuredRGResources.AddRange($resources)
+    }
+
+    if ($excludeResourceNames) {
+        #$resources = $resources | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
+        $global:configuredRGResources = $global:configuredRGResources.clone() | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
     }
 
     display-settings -resources $global:configuredRGResources
@@ -128,7 +135,7 @@ function main () {
 
     if ($patch) {
         remove-jobs
-        if (!(deploy-template -configuredResources $global:configuredRGResources)) { return }
+        if (!(deploy-template)) { return }
         wait-jobs
     }
     else {
@@ -218,7 +225,7 @@ function create-jsonTemplate([collections.arraylist]$resources,
     }
 }
 
-function deploy-template($configuredResources) {
+function deploy-template() {
     $templateParameters = @{}
     $parameters = @{}
     $variables = @{}
@@ -241,7 +248,7 @@ function deploy-template($configuredResources) {
 
     $templateJsonFile = Resolve-Path $templateJsonFile
     $tempJsonFile = "$([io.path]::GetDirectoryName($templateJsonFile))\$([io.path]::GetFileNameWithoutExtension($templateJsonFile)).temp.json"
-    $resources = @($json.resources | where-object Id -imatch ($configuredResources.ResourceId -join '|'))
+    $resources = @($json.resources)
 
     foreach ($jsonParameter in $json.parameters.psobject.properties) {
         $parameters.Add($jsonParameter.name, $jsonParameter.value)
