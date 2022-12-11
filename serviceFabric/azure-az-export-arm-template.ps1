@@ -1994,6 +1994,7 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:ModifyLbResources")
         $lbResources = $this.GetLbResources()
+
         foreach ($lbResource in $lbResources) {
             # fix backend pool
             $this.WriteLog("ModifyLbResources:fixing exported lb resource $($this.CreateJson($lbresource))")
@@ -2010,11 +2011,16 @@ class SFTemplate {
 
             $lb = get-azresource -ResourceGroupName $this.resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
             $dependsOn = [collections.arraylist]::new()
-
             $this.WriteLog("ModifyLbResources:removing backendpool from lb dependson")
+
             foreach ($depends in $lbresource.dependsOn) {
-                if ($depends -inotmatch $lb.Properties.backendAddressPools.Name) {
+                $this.WriteLog("ModifyLbResources:checking depends:$depends")
+                if ($depends -inotmatch $lb.Properties.backendAddressPools.Name -and $depends -inotmatch $lb.Properties.inboundNatPools.Name) {
+                    $this.WriteLog("ModifyLbResources:adding depends:$depends")
                     [void]$dependsOn.Add($depends)
+                }
+                else {
+                    $this.WriteLog("ModifyLbResources:skipping depends:$depends")
                 }
             }
             $lbResource.dependsOn = $dependsOn.ToArray()
