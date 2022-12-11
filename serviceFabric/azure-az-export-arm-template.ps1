@@ -26,12 +26,10 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 220918
-    todo       : rename and hide unused parameters for addnodetype
-                 update readmes
-    History    : fix issue in current where vminstancecount value is string instead of int
-                 fix vminstancecount and capacity parameterization mismatch in redeploy. redeploy vminstancecount and capacity are now not parameterized
-                 add GetPSPropertyValue
+    Version    : 2201211
+    todo       : 
+    
+    History    : fix circular dependencies for nsg, lb, vnet by removing dependson
 
 .EXAMPLE 
     .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
@@ -81,7 +79,7 @@ class ClusterModel {
         [Vmss]$vmssObject = $null
         $vmssObjects = @($this.vmss.Where( { $expression }))
         
-        if($vmssObjects.Count -gt 1) {
+        if ($vmssObjects.Count -gt 1) {
             $this.WriteError("FindVmssByExpression multiple objects found $(($vmssObjects.Count)). returning first object:$vmssObjects")
             $vmssObject = $vmssObjects[0]
         }
@@ -101,11 +99,11 @@ class ClusterModel {
         $this.WriteVerbose("enter:FindVmssByResource searching for resource:$vmssResource")
         [Vmss]$vmssObject = $null
         $vmssObjects = @($this.vmss.Where( { 
-            # search by resource if resource object provided or by id if arm resource provided
-            $psitem.resource -eq $vmssResource -or $vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'."
-        }))
+                    # search by resource if resource object provided or by id if arm resource provided
+                    $psitem.resource -eq $vmssResource -or $vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'."
+                }))
 
-        if($vmssObjects.Count -gt 1) {
+        if ($vmssObjects.Count -gt 1) {
             $this.WriteError("FindVmssByResource multiple objects found $(($vmssObjects.Count)). returning first object:$vmssObjects")
             $vmssObject = $vmssObjects[0]
         }
@@ -665,6 +663,8 @@ class SFTemplate {
         $this.RemoveDuplicateResources()
         $this.RemoveUnusedParameters()
         $this.ModifyLbResources()
+        $this.ModifyNsgResources()
+        $this.ModifyVnetResources()
         $this.ModifyVmssResources()
         #$this.ModifyClusterResource()
 
@@ -1121,7 +1121,7 @@ class SFTemplate {
             $resources = $resources | where-object Name -NotMatch "$($this.excludeResourceNames -join "|")"
         }
 
-        $this.WriteLog("exit:EnumAllResources")
+        $this.WriteLog("exit:EnumAllResources:`r`n$($this.CreateJson($resources))")
         return $resources | sort-object -Unique
     }
 
@@ -1300,7 +1300,7 @@ class SFTemplate {
             }
         }
 
-        $this.WriteVerbose("nsg resources $resources")
+        $this.WriteVerbose("nsg resources:$resources")
         $this.WriteLog("exit:EnumNsgResourceIds")
         return $resources.ToArray() | sort-object -Unique
     }
@@ -1318,28 +1318,24 @@ class SFTemplate {
 
         foreach ($nsgResourceId in $nsgResourceIds) {
             if (!$nsgResourceId) { continue }
-            $nsgResource = @(get-azresource -ResourceId $nsgResourceId -ExpandProperties)
+            $nsgResource = get-azresource -ResourceId $nsgResourceId -ExpandProperties
             $this.WriteLog("EnumNsgRuleResourceIds:checking rules for resource for nsg config $($nsgResource.Name)")
 
             if (($this.GetPSPropertyValue($nsgResource, 'Properties.subnets')) -eq $null) {
                 $this.WriteError("unable to enumerate subnet configuration from $($this.CreateJson($nsgResource))")
                 continue
             }
-            ##############
 
-            foreach ($subnet in $nsgResource.Properties.subnets) {
-                if (($this.GetPSPropertyValue($subnet, 'properties.networkSecurityGroup.id'))) {
-                    $id = $subnet.properties.networkSecurityGroup.id
-                    $this.WriteLog("EnumNsgRuleResourceIds:adding nsg id: $id", [consolecolor]::green)
-                    [void]$resources.Add($id)
+            foreach ($rule in $nsgResource.Properties.securityRules) {
+                $this.WriteLog("EnumNsgRuleResourceIds:adding nsg rule: $($rule.name)", [consolecolor]::green)
+                [void]$resources.Add($rule.id)
                     
-                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
-                    [void]$vmssTreeResource.nsgRuleIds.Add($id)
-                }
+                [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
+                [void]$vmssTreeResource.nsgRuleIds.Add($rule.id)
             }
         }
 
-        $this.WriteVerbose("nsg resources $resources")
+        $this.WriteVerbose("nsg rule resources:$resources")
         $this.WriteLog("exit:EnumNsgRuleResourceIds")
         return $resources.ToArray() | sort-object -Unique
     }
@@ -1526,26 +1522,6 @@ class SFTemplate {
         return $resources[0]
     }
 
-    [object[]] GetLbResources() {
-        <#
-        .SYNOPSIS
-            enumerate loadbalancer resources from $this.currentConfig
-            outputs: object[]
-        .OUTPUTS
-            [object[]]
-        #>
-        $this.WriteLog("enter:GetLbResources")
-        $resources = @($this.currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers')
-    
-        if ($resources.count -eq 0) {
-            $this.WriteError("unable to find lb resource")
-        }
-
-        $this.WriteVerbose("returning lb resource $resources")
-        $this.WriteLog("exit:GetLbResources:$($resources.count)")
-        return $resources
-    }
-
     [object[]] GetFromParametersSection( [string]$parameterName) {
         <#
         .SYNOPSIS
@@ -1570,6 +1546,46 @@ class SFTemplate {
 
         $this.WriteLog("exit:GetFromParametersSection: returning: $($this.CreateJson($results))", [consolecolor]::Magenta)
         return $results
+    }
+
+    [object[]] GetLbResources() {
+        <#
+        .SYNOPSIS
+            enumerate loadbalancer resources from $this.currentConfig
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:GetLbResources")
+        $resources = @($this.currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/loadBalancers')
+    
+        if ($resources.count -eq 0) {
+            $this.WriteError("unable to find lb resource")
+        }
+
+        $this.WriteVerbose("returning lb resource $resources")
+        $this.WriteLog("exit:GetLbResources:$($resources.count)")
+        return $resources
+    }
+
+    [object[]] GetNsgResources() {
+        <#
+        .SYNOPSIS
+            enumerate nsg resources from $this.currentConfig
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:GetNsgResources")
+        $resources = @($this.currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/networkSecurityGroups')
+    
+        if ($resources.count -eq 0) {
+            $this.WriteError("unable to find nsg resource")
+        }
+
+        $this.WriteVerbose("returning nsg resources $resources")
+        $this.WriteLog("exit:GetNsgResources:$($resources.count)")
+        return $resources
     }
 
     [string] GetParameterizedNameFromValue([object]$resourceObject) {
@@ -1899,6 +1915,26 @@ class SFTemplate {
         return $vmssByNodeType.ToArray()
     }
 
+    [object[]] GetVnetResources() {
+        <#
+        .SYNOPSIS
+            enumerate vnet resources from $this.currentConfig
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:GetVnetResources")
+        $resources = @($this.currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/virtualNetworks')
+    
+        if ($resources.count -eq 0) {
+            $this.WriteError("unable to find vnet resource")
+        }
+
+        $this.WriteVerbose("returning vnet resources $resources")
+        $this.WriteLog("exit:GetVnetResources:$($resources.count)")
+        return $resources
+    }
+
     [void] ModifyClusterResource() {
         <#
         .SYNOPSIS
@@ -1998,25 +2034,13 @@ class SFTemplate {
         foreach ($lbResource in $lbResources) {
             # fix backend pool
             $this.WriteLog("ModifyLbResources:fixing exported lb resource $($this.CreateJson($lbresource))")
-            $parameterName = $this.GetParameterizedNameFromValue($lbresource.name)
-            $name = $null
-
-            if ($parameterName) {
-                $name = $this.currentConfig.parameters.$parametername.defaultValue
-            }
-
-            if (!$name) {
-                $name = $lbResource.name
-            }
-
-            $lb = get-azresource -ResourceGroupName $this.resourceGroupName -Name $name -ExpandProperties -ResourceType 'Microsoft.Network/loadBalancers'
             $dependsOn = [collections.arraylist]::new()
             $this.WriteLog("ModifyLbResources:removing backendpool from lb dependson")
 
             foreach ($depends in $lbresource.dependsOn) {
                 $this.WriteLog("ModifyLbResources:checking depends:$depends")
-                
-                if ($depends -inotmatch "$($lb.Properties.backendAddressPools.Name -join '|')" -and $depends -inotmatch "$($lb.Properties.inboundNatPools.Name -join '|')") {
+
+                if ($depends -inotmatch "$($lbresource.Properties.backendAddressPools.Name -join '|')" -and $depends -inotmatch "$($lbresource.Properties.inboundNatPools.Name -join '|')") {
                     $this.WriteLog("ModifyLbResources:adding depends:$depends")
                     [void]$dependsOn.Add($depends)
                 }
@@ -2040,6 +2064,7 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:ModifyLbResourcesRedeploy")
         $lbResources = $this.GetLbResources()
+
         foreach ($lbResource in $lbResources) {
             # fix dupe pools and rules
             if ($lbResource.properties.inboundNatPools) {
@@ -2048,6 +2073,40 @@ class SFTemplate {
             }
         }
         $this.WriteLog("exit:ModifyLbResourcesRedeploy")
+    }
+
+    [void] ModifyNsgResources() {
+        <#
+        .SYNOPSIS
+            modifies nsg dependson resources for current
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyNsgResources")
+        $nsgResources = $this.GetNsgResources()
+
+        foreach ($nsgResource in $nsgResources) {
+            # fix security rules
+            $this.WriteLog("ModifyNsgResources:fixing exported nsg resource $($this.CreateJson($nsgResource))")
+            $dependsOn = [collections.arraylist]::new()
+            $this.WriteLog("ModifyNsgResources:removing securityrules from nsg dependson")
+
+            foreach ($depends in $nsgResource.dependsOn) {
+                $this.WriteLog("ModifyNsgResources:checking depends:$depends")
+
+                if ($depends -inotmatch "$($nsgResource.Properties.securityRules.Name -join '|')") {
+                    $this.WriteLog("ModifyNsgResources:adding depends:$depends")
+                    [void]$dependsOn.Add($depends)
+                }
+                else {
+                    $this.WriteLog("ModifyNsgResources:skipping depends:$depends")
+                }
+            }
+            $nsgResource.dependsOn = $dependsOn.ToArray()
+            $this.WriteLog("ModifyNsgResources:nsg resource modified dependson: $($this.CreateJson($nsgResource.dependson))", [consolecolor]::Yellow)
+        }
+        $this.WriteLog("exit:ModifyNsgResources")
     }
 
     [string[]] ModifyStorageResourcesDeploy() {
@@ -2078,7 +2137,7 @@ class SFTemplate {
     [void] ModifyVmssResources() {
         <#
         .SYNOPSIS
-            modifies vmss resources for current template
+            modifies vmss resources dependson for current template
             outputs: null
         .OUTPUTS
             [null]
@@ -2283,6 +2342,40 @@ class SFTemplate {
             )
         }
         $this.WriteLog("exit:ModifyVmssResourcesReDeploy")
+    }
+
+    [void] ModifyVnetResources() {
+        <#
+        .SYNOPSIS
+            modifies vnet dependson resources for current
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVnetResources")
+        $vnetResources = $this.GetVnetResources()
+
+        foreach ($vnetResource in $vnetResources) {
+            # fix security rules
+            $this.WriteLog("ModifyVnetResources:fixing exported vnet resource $($this.CreateJson($vnetResource))")
+            $dependsOn = [collections.arraylist]::new()
+            $this.WriteLog("ModifyVnetResources:removing subnets from nsg dependson")
+
+            foreach ($depends in $vnetResource.dependsOn) {
+                $this.WriteLog("ModifyVnetResources:checking depends:$depends")
+
+                if ($depends -inotmatch "$($vnetResource.Properties.subnets.Name -join '|')") {
+                    $this.WriteLog("ModifyVnetResources:adding depends:$depends")
+                    [void]$dependsOn.Add($depends)
+                }
+                else {
+                    $this.WriteLog("ModifyVnetResources:skipping depends:$depends")
+                }
+            }
+            $vnetResource.dependsOn = $dependsOn.ToArray()
+            $this.WriteLog("ModifyVnetResources:nsg resource modified dependson: $($this.CreateJson($vnetResource.dependson))", [consolecolor]::Yellow)
+        }
+        $this.WriteLog("exit:ModifyVnetResources")
     }
 
     [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName) {
