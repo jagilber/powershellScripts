@@ -77,36 +77,64 @@ class ClusterModel {
     
     
     [Vmss] FindVmssByExpression([string]$expression) {
+        $this.WriteVerbose("enter:FindVmssByExpression searching for resource:$expression")
         [Vmss]$vmssObject = $null
+        $vmssObjects = @($this.vmss.Where( { $expression }))
         
-        $vmssObject = @($this.vmss.Where( { $expression }))[0]
-        
-        if (!$vmssObject) {
-            $this.WriteError("unable to find vmss in ClusterModel:expression:$expression")
+        if($vmssObjects.Count -gt 1) {
+            $this.WriteError("FindVmssByExpression multiple objects found $(($vmssObjects.Count)). returning first object:$vmssObjects")
+            $vmssObject = $vmssObjects[0]
         }
-        
+        elseif ($vmssObjects.Count -lt 1) {
+            $this.WriteError("FindVmssByExpression unable to find vmss in ClusterModel:resource:$expression")
+        }
+        else {
+            $vmssObject = $vmssObjects[0]
+        }
+
+        $this.WriteVerbose("exit:FindVmssByExpression returning vmss resource object:$vmssObject")
         return $vmssObject
+
     }
     
     [Vmss] FindVmssByResource([object]$vmssResource) {
+        $this.WriteVerbose("enter:FindVmssByResource searching for resource:$vmssResource")
         [Vmss]$vmssObject = $null
-        
-        $vmssObject = @($this.vmss.Where( { $_.resource -eq $vmssResource }))[0]
-        
-        if (!$vmssObject) {
-            $this.WriteError("unable to find vmss in ClusterModel:resource:$vmssResource")
+        $vmssObjects = @($this.vmss.Where( { 
+            # search by resource if resource object provided or by id if arm resource provided
+            $psitem.resource -eq $vmssResource -or $vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'."
+        }))
+
+        if($vmssObjects.Count -gt 1) {
+            $this.WriteError("FindVmssByResource multiple objects found $(($vmssObjects.Count)). returning first object:$vmssObjects")
+            $vmssObject = $vmssObjects[0]
         }
-        
+        elseif ($vmssObjects.Count -lt 1) {
+            $this.WriteError("FindVmssByResource unable to find vmss in ClusterModel:resource:$vmssResource")
+        }
+        else {
+            $vmssObject = $vmssObjects[0]
+        }
+
+        $this.WriteVerbose("exit:FindVmssByResource returning vmss resource object:$vmssObject")
         return $vmssObject
     }
 
     [void] WriteError($data) {
         if ($this.sfTemplate) {
-            #& $this.sfTemplate($data)
             $this.sfTemplate.WriteError($data)
         }
         else {
             write-error $data
+        }
+    }
+
+    [void] WriteVerbose($data) {
+        if ($this.sfTemplate) {
+            $this.sfTemplate.WriteVerbose($data)
+        }
+        else {
+            write-verbose $data
         }
     }
 }
@@ -2050,12 +2078,12 @@ class SFTemplate {
         #>
         $this.WriteLog("enter:ModifyVmssResources")
         $vmssResources = $this.GetVmssResources()
-   
+
         foreach ($vmssResource in $vmssResources) {
 
             $this.WriteLog("modifying dependson")
             $dependsOn = [collections.arraylist]::new()
-            #$subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
+            $subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
 
             if ($this.GetPSPropertyValue($vmssResource, 'dependsOn')) {
                 foreach ($depends in $vmssResource.dependsOn) {
@@ -2065,12 +2093,12 @@ class SFTemplate {
                         [void]$dependsOn.Add($depends)
                     }
                     # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
-                    # if ($subnetIds.contains($depends)) {
-                    #     $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
-                    #     $depends = $depends.replace("/subnets'", "/'")
-                    #     $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
-                    #     [void]$dependsOn.Add($depends)
-                    # }
+                    if ($subnetIds.contains($depends)) {
+                        $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
+                        $depends = $depends.replace("/subnets'", "/'")
+                        $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                        [void]$dependsOn.Add($depends)
+                    }
                 }
                 $vmssResource.dependsOn = $dependsOn.ToArray()
                 $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
@@ -2211,7 +2239,7 @@ class SFTemplate {
 
             $this.WriteLog("ModifyVmssResourcesReDeploy:modifying dependson")
             $dependsOn = [collections.arraylist]::new()
-            #$subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
+            $subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
 
             foreach ($depends in $vmssResource.dependsOn) {
                 if ($depends -imatch 'backendAddressPools') { continue }
@@ -2220,12 +2248,12 @@ class SFTemplate {
                     [void]$dependsOn.Add($depends)
                 }
                 # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
-                # if ($subnetIds.contains($depends)) {
-                #     $this.WriteLog('ModifyVmssResourcesReDeploy:cleaning subnet dependson', [consolecolor]::Yellow)
-                #     $depends = $depends.replace("/subnets'", "/'")
-                #     $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
-                #     [void]$dependsOn.Add($depends)
-                # }
+                if ($subnetIds.contains($depends)) {
+                    $this.WriteLog('ModifyVmssResourcesReDeploy:cleaning subnet dependson', [consolecolor]::Yellow)
+                    $depends = $depends.replace("/subnets'", "/'")
+                    $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                    [void]$dependsOn.Add($depends)
+                }
             }
 
             $vmssResource.dependsOn = $dependsOn.ToArray()
