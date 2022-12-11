@@ -2015,7 +2015,8 @@ class SFTemplate {
 
             foreach ($depends in $lbresource.dependsOn) {
                 $this.WriteLog("ModifyLbResources:checking depends:$depends")
-                if ($depends -inotmatch $lb.Properties.backendAddressPools.Name -and $depends -inotmatch $lb.Properties.inboundNatPools.Name) {
+                
+                if ($depends -inotmatch "$($lb.Properties.backendAddressPools.Name -join '|')" -and $depends -inotmatch "$($lb.Properties.inboundNatPools.Name -join '|')") {
                     $this.WriteLog("ModifyLbResources:adding depends:$depends")
                     [void]$dependsOn.Add($depends)
                 }
