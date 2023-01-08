@@ -37,16 +37,16 @@ function main() {
     write-host "checking $totalFiles files"
 
     foreach ($file in $files) {
+        $fileCount++
+        $sr = $null
+        write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
+
         if ([io.path]::GetExtension($file) -ieq $backupExtension) {
             write-host "skipping backup file $file" -ForegroundColor Yellow
             continue
         }
 
-        $fileCount++
-        $sr = $null
-
         try {
-            write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
             $line = 0
             $error.clear()
             $sr = [io.streamreader]::new($file)
@@ -86,12 +86,13 @@ function main() {
                         write-host "  $($line):$($match | Select-Object index, length, value)"
 
                         if ($replace) {
-                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'" -ForegroundColor Yellow
-                            [void]$replaceContent.AppendLine($regex.Replace($content, $replace))
+                            $newLine = $regex.Replace($content, $replace)
+                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`noldLine:$content`nnewLine:$newLine" -ForegroundColor Yellow
+                            [void]$replaceContent.AppendLine($newLine)
                         }
                     }
                 }
-                else {
+                elseif ($replace) {
                     [void]$replaceContent.AppendLine($content)
                 }
             }
