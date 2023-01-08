@@ -13,7 +13,10 @@ param(
     [string]$path = $pwd,
     [string]$filePattern = '.*',
     [switch]$includeSubDirs,
-    [switch]$matchLine
+    [string]$replace,
+    [switch]$createBackup,
+    [switch]$matchLine,
+    [switch]$whatIf
 )
 
 $global:matchedFiles = @{}
@@ -27,21 +30,22 @@ function main() {
     $startTime = get-date
     $fileCount = 0
     $regex = [regex]::new($pattern, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
-    $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | where Name -match $filePattern).FullName
-    write-verbose "filtered files: $($files | fl * | out-string)"
+    $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | Where-Object Name -match $filePattern).FullName
+    write-verbose "filtered files: $($files | Format-List * | out-string)"
     $totalFiles = $files.count
     write-host "checking $totalFiles files"
 
     foreach ($file in $files) {
         $fileCount++
-        $fs = $null
+        $sr = $null
 
         try {
             write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
             $line = 0
             $error.clear()
-            $fs = [io.streamreader]::new($file)
-            $content = $fs.readtoend()
+            $sr = [io.streamreader]::new($file)
+            $content = $sr.readtoend()
+
             if ($content.Length -lt 1) { continue }
 
             if ($regex.IsMatch($content)) {
@@ -52,9 +56,10 @@ function main() {
                 continue
             }
 
-            $fs.basestream.position = 0
+            $sr.basestream.position = 0
+            [text.stringbuilder]$replaceContent = [text.stringbuilder]::new()
 
-            while (($content = $fs.ReadLine()) -ne $null) {
+            while (($content = $sr.ReadLine()) -ne $null) {
                 $line++
                 if ($content.Length -lt 1) { continue }
 
@@ -72,16 +77,34 @@ function main() {
                         }
                         
                         [void]$global:matchedFiles.$file.add($matchObj)
-                        write-host "  $($line):$($match | select index, length, value)"
+                        write-host "  $($line):$($match | Select-Object index, length, value)"
+
+                        if ($replace) {
+                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'" -ForegroundColor Yellow
+                            [void]$replaceContent.AppendLine($regex.Replace($content, $replace))
+                        }
                     }
+                }
+                else {
+                    [void]$replaceContent.AppendLine($content)
                 }
             }
         }
         finally {
-            if ($fs -ne $null) {
-                $fs.close()
-                $fs.dispose()
+            if ($sr -ne $null) {
+                $sr.close()
+                $sr.dispose()
             }
+        }
+
+        if($replace -and !$whatIf) {
+            if($createBackup) {
+                write-host "saving backup file $file.bak" -ForegroundColor Green
+                [io.file]::copy($file, "$file.bak", $true)
+            }
+
+            write-host "saving replacements in file $file" -ForegroundColor Green
+            [io.file]::WriteAllText($file, $replaceContent.ToString())
         }
     }
 
