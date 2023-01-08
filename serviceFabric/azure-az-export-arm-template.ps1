@@ -96,11 +96,14 @@ class ClusterModel {
     }
     
     [Vmss] FindVmssByResource([object]$vmssResource) {
-        $this.WriteVerbose("enter:FindVmssByResource searching for resource:$vmssResource")
+        $this.WriteVerbose("enter:FindVmssByResource searching for resource:$($this.sfTemplate.CreateJson($vmssResource, 1))")
         [Vmss]$vmssObject = $null
         $vmssObjects = @($this.vmss.Where( { 
                     # search by resource if resource object provided or by id if arm resource provided
-                    $psitem.resource -eq $vmssResource -or $vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'."
+                    ($this.sftemplate.GetPSPropertyValue($psitem, 'resource') -and $psitem.resource -eq $vmssResource) `
+                        -or (($this.sftemplate.GetPSPropertyValue($psitem, 'resource.resourceid') `
+                                -and $this.sftemplate.GetPSPropertyValue($vmssResource, 'resourceid')) `
+                            -and $psitem.resource.resourceid -eq $vmssResource.resourceid)
                 }))
 
         if ($vmssObjects.Count -gt 1) {
@@ -1406,9 +1409,14 @@ class SFTemplate {
                     $id = $ipconfig.properties.subnet.id #[regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
                     $this.WriteLog("EnumVnetResourceIds:adding subnet id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
-                    
                     [object]$vmssTreeResource = $this.clusterModel.FindVmssByResource($vmssResource)
-                    [void]$vmssTreeResource.subnetIds.Add($id)
+
+                    if ($vmssTreeResource) {
+                        [void]$vmssTreeResource.subnetIds.Add($id)
+                    }
+                    else {
+                        $this.WriteWarning("EnumVnetResourceIds:unable to find vmss for subnet id: $id")
+                    }
                 }
             }
         }
