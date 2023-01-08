@@ -16,7 +16,8 @@ param(
     [string]$replace,
     [switch]$createBackup,
     [switch]$matchLine,
-    [switch]$whatIf
+    [switch]$whatIf,
+    [string]$backupExtension = '.bak'
 )
 
 $global:matchedFiles = @{}
@@ -36,6 +37,11 @@ function main() {
     write-host "checking $totalFiles files"
 
     foreach ($file in $files) {
+        if ([io.path]::GetExtension($file) -ieq $backupExtension) {
+            write-host "skipping backup file $file" -ForegroundColor Yellow
+            continue
+        }
+
         $fileCount++
         $sr = $null
 
@@ -97,14 +103,28 @@ function main() {
             }
         }
 
-        if($replace -and !$whatIf) {
-            if($createBackup) {
-                write-host "saving backup file $file.bak" -ForegroundColor Green
-                [io.file]::copy($file, "$file.bak", $true)
+        if ($replace) {
+            if ($createBackup) {
+                write-host "saving backup file $file$backupExtension" -ForegroundColor Green
+                if (!$whatIf) {
+                    [io.file]::copy($file, "$file$backupExtension", $true)
+                }
+            }
+            
+            # remove readonly if set
+            $att = [io.file]::GetAttributes($file)
+            if ($att -band [io.fileAttributes]::ReadOnly) {
+                write-host "attempting to remove readonly attribute from file $file" -ForegroundColor Yellow
+                $att = $att -band (-bnot [io.fileAttributes]::ReadOnly)
+                if (!$whatIf) {
+                    [io.file]::SetAttributes($file, $att)
+                }
             }
 
             write-host "saving replacements in file $file" -ForegroundColor Green
-            [io.file]::WriteAllText($file, $replaceContent.ToString())
+            if (!$whatIf) {
+                [io.file]::WriteAllText($file, $replaceContent.ToString())
+            }
         }
     }
 
