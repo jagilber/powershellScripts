@@ -1,10 +1,20 @@
 <#
 .SYNOPSIS
-    powershell script to search (grep) files in given path
+    powershell script to search (grep) files in given path for regex pattern and optionally replace with new string.
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/grep.ps1" -outFile "$pwd\grep.ps1";
     .\grep.ps1 [-path] [-pattern]
+
+.EXAMPLE
+    .\grep.ps1 -pattern '<old thumbprint>' `
+        -path d:\svcfab\ `
+        -filePattern clustermanifest.*.xml `
+        -includeSubDirs `
+        -replace '<new thumbprint>' `
+        -createBackup `
+        -whatIf
+
 #>
 
 [cmdletbinding()]
@@ -55,7 +65,7 @@ function main() {
             if ($content.Length -lt 1) { continue }
 
             if ($regex.IsMatch($content)) {
-                write-host $file -ForegroundColor Green
+                write-host $file -ForegroundColor Magenta
                 [void]$global:matchedFiles.Add($file, [collections.arraylist]::new())
             }
             else {
@@ -67,6 +77,7 @@ function main() {
 
             while (($content = $sr.ReadLine()) -ne $null) {
                 $line++
+
                 if ($content.Length -lt 1) { continue }
 
                 if ($regex.IsMatch($content)) {
@@ -87,7 +98,7 @@ function main() {
 
                         if ($replace) {
                             $newLine = $regex.Replace($content, $replace)
-                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`noldLine:$content`nnewLine:$newLine" -ForegroundColor Yellow
+                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:$content`n`tnewLine:$newLine" -ForegroundColor Cyan
                             [void]$replaceContent.AppendLine($newLine)
                         }
                     }
@@ -96,35 +107,40 @@ function main() {
                     [void]$replaceContent.AppendLine($content)
                 }
             }
+
+            if ($replace) {
+                if ($sr -ne $null) {
+                    $sr.close()
+                    $sr.dispose()
+                }
+
+                if ($createBackup) {
+                    write-host "saving backup file $file$backupExtension" -ForegroundColor Green
+                    if (!$whatIf) {
+                        [io.file]::copy($file, "$file$backupExtension", $true)
+                    }
+                }
+                
+                # remove readonly if set
+                $att = [io.file]::GetAttributes($file)
+                if ($att -band [io.fileAttributes]::ReadOnly) {
+                    write-host "attempting to remove readonly attribute from file $file" -ForegroundColor Yellow
+                    $att = $att -band (-bnot [io.fileAttributes]::ReadOnly)
+                    if (!$whatIf) {
+                        [io.file]::SetAttributes($file, $att)
+                    }
+                }
+    
+                write-host "saving replacements in file $file" -ForegroundColor Green
+                if (!$whatIf) {
+                    [io.file]::WriteAllText($file, $replaceContent.ToString())
+                }
+            }    
         }
         finally {
             if ($sr -ne $null) {
                 $sr.close()
                 $sr.dispose()
-            }
-        }
-
-        if ($replace) {
-            if ($createBackup) {
-                write-host "saving backup file $file$backupExtension" -ForegroundColor Green
-                if (!$whatIf) {
-                    [io.file]::copy($file, "$file$backupExtension", $true)
-                }
-            }
-            
-            # remove readonly if set
-            $att = [io.file]::GetAttributes($file)
-            if ($att -band [io.fileAttributes]::ReadOnly) {
-                write-host "attempting to remove readonly attribute from file $file" -ForegroundColor Yellow
-                $att = $att -band (-bnot [io.fileAttributes]::ReadOnly)
-                if (!$whatIf) {
-                    [io.file]::SetAttributes($file, $att)
-                }
-            }
-
-            write-host "saving replacements in file $file" -ForegroundColor Green
-            if (!$whatIf) {
-                [io.file]::WriteAllText($file, $replaceContent.ToString())
             }
         }
     }
