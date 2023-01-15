@@ -103,7 +103,8 @@ class ClusterModel {
                     ($this.sftemplate.GetPSPropertyValue($psitem, 'resource') -and $psitem.resource -eq $vmssResource) `
                         -or (($this.sftemplate.GetPSPropertyValue($psitem, 'resource.resourceid') `
                                 -and $this.sftemplate.GetPSPropertyValue($vmssResource, 'resourceid')) `
-                            -and $psitem.resource.resourceid -eq $vmssResource.resourceid)
+                            -and $psitem.resource.resourceid -eq $vmssResource.resourceid) `
+                        -or ($vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'.")
                 }))
 
         if ($vmssObjects.Count -gt 1) {
