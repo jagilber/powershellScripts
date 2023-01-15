@@ -8,11 +8,11 @@
 
 .EXAMPLE
     example to search clustermanifest.xml files for old thumbprint and replace with new thumbprint
-    .\grep.ps1 -pattern '<old thumbprint>' `
+    .\grep.ps1 -pattern '%old thumbprint%' `
         -path 'd:\svcfab' `
         -filePattern 'clustermanifest.*.xml' `
         -includeSubDirs `
-        -replace '<new thumbprint>' `
+        -replace '%new thumbprint%' `
         -createBackup `
         -whatIf
 #>
