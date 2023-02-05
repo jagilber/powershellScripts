@@ -43,6 +43,16 @@ GET https://api.github.com/repos/microsoft/CollectServiceFabricData/releases/lat
 https://api.github.com
 ###
 
+# github repo views query
+# @name repoViewsQuery
+@gitToken = 
+#https://api.github.com/repos/jagilber/powershellscripts/traffic/views
+https://api.github.com/repos/jagilber/powershellscripts/traffic/popular/paths
+Authorization: Bearer {{gitToken}}
+Accept: application/vnd.github+json
+X-GitHub-Api-Version: 2022-11-28
+###
+
 # github repo query
 # @name repoQuery
 https://api.github.com/repos/jagilber/powershellscripts
@@ -53,6 +63,7 @@ GET {{forks}}
 @downloads = {{repoQuery.response.body.$.downloads_url}}
 GET {{downloads}}
 ###
+
 https://www.w3.org/services/html2txt?url=https://store.rg-adguard.net/api/GetFiles?type=url&url=https://www.microsoft.com/store/apps/9pgjgd53tn86
 ###
 
