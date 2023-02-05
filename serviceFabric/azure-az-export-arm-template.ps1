@@ -355,7 +355,7 @@ class SFTemplate {
             $parameterNameValue = $this.GetResourceParameterValue($resource, $name)
             $null = $this.SetResourceParameterValue($resource, $name, $parameterizedName)
 
-            if ($parameterNameValue -ne $null) {
+            if ($null -ne $parameterNameValue) {
                 [void]$parameterNames.Add($parameterName, $parameterNameValue)
                 $this.WriteLog("AddParameterNameByResourceType:parametername added $parameterName : $parameterNameValue")
             }
@@ -443,7 +443,7 @@ class SFTemplate {
         $this.WriteLog("enter:AddParameter( $resource, $name, $aliasName = $name, $resourceObject = $resource, $value = $null, $type = 'string', $metadataDescription = '')")
         $null = $this.SetResourceParameterValue($resourceObject, $name, $parameterizedName)
 
-        if ($parameterNameValue -ne $null) {
+        if ($null -ne $parameterNameValue) {
             $this.WriteLog("AddParameter:adding parameter name:$parameterName parameter value:$parameterNameValue")
             if ($this.GetFromParametersSection($parameterName).Count -lt 1) {
                 $this.WriteLog("AddParameter:$parameterName not found in parameters sections. adding.")
@@ -990,8 +990,6 @@ class SFTemplate {
             [null]
         #>
         $this.WriteLog("enter:ExportTemplate:exporting template to $jsonFile", [consolecolor]::Yellow)
-        $resources = [collections.arraylist]@()
-        $azResourceGroupLocation = @($configuredResources)[0].Location
         $resourceIds = @($configuredResources.ResourceId)
 
         # todo issue
@@ -1250,7 +1248,7 @@ class SFTemplate {
             # get nic for vnet/subnet and lb
             $this.WriteLog("EnumLbResourceIds:checking vmssResource for network config $($vmssResource.Name)")
 
-            if (($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations')) -eq $null) {
+            if ($null -eq ($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations'))) {
                 $this.WriteError("unable to enumerate nic configuration from $($this.CreateJson($vmssResource))")
                 continue
             }
@@ -1287,7 +1285,7 @@ class SFTemplate {
             $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
             $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
 
-            if (($this.GetPSPropertyValue($vnetResource, 'Properties.subnets')) -eq $null) {
+            if ($null -eq ($this.GetPSPropertyValue($vnetResource, 'Properties.subnets'))) {
                 $this.WriteError("unable to enumerate subnet configuration from $($this.CreateJson($vnetResource))")
                 continue
             }
@@ -1325,7 +1323,7 @@ class SFTemplate {
             $nsgResource = get-azresource -ResourceId $nsgResourceId -ExpandProperties
             $this.WriteLog("EnumNsgRuleResourceIds:checking rules for resource for nsg config $($nsgResource.Name)")
 
-            if (($this.GetPSPropertyValue($nsgResource, 'Properties.subnets')) -eq $null) {
+            if ($null -eq ($this.GetPSPropertyValue($nsgResource, 'Properties.subnets'))) {
                 $this.WriteError("unable to enumerate subnet configuration from $($this.CreateJson($nsgResource))")
                 continue
             }
@@ -1400,7 +1398,7 @@ class SFTemplate {
             # get nic for vnet/subnet and lb
             $this.WriteLog("EnumSubnetResourceIds:checking vmssResource for network config $($vmssResource.Name)")
 
-            if (($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations')) -eq $null) {
+            if ($null -eq ($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations'))) {
                 $this.WriteError("unable to enumerate network interface configuration $($this.CreateJson($vmssResource))")
                 continue
             }
@@ -1489,7 +1487,7 @@ class SFTemplate {
             # get nic for vnet/subnet and lb
             $this.WriteLog("EnumVnetResourceIds:checking vmssResource for network config $($vmssResource.Name)")
 
-            if (($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations')) -eq $null) {
+            if ($null -eq ($this.GetPSPropertyValue($vmssResource, 'Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations'))) {
                 $this.WriteError("unable to enumerate network interface configuration $($this.CreateJson($vmssResource))")
                 continue
             }
@@ -1542,7 +1540,7 @@ class SFTemplate {
         $this.WriteLog("enter:GetFromParametersSection parameterName=$parameterName")
         $results = @()
 
-        if (($this.GetPSPropertyValue($this.currentConfig, "parameters.$parameterName.defaultValue")) -ne $null) {
+        if ($null -ne ($this.GetPSPropertyValue($this.currentConfig, "parameters.$parameterName.defaultValue"))) {
             $results = @($this.currentConfig.parameters.$parameterName.defaultValue)
         }
     
@@ -1624,12 +1622,12 @@ class SFTemplate {
         if ($properties.Count -lt 1) {
             $this.WriteWarning("property string empty:$property")
         }
-        elseif ($baseObject -ne $null) {
+        elseif ($null -ne $baseObject) {
             $propertyObject = $baseObject
             if ($propertyObject.GetType().isarray) {
                 foreach ($propertyItem in $propertyObject) {
                     $retval = $this.GetPSPropertyValue($propertyItem, $property)
-                    if ($retval -ne $null) {
+                    if ($null -ne $retval) {
                         $propertyObject = $retval
                         break
                     }
@@ -1644,7 +1642,7 @@ class SFTemplate {
                         foreach ($propertyItem in $propertyObject) {
                             $retval = $this.GetPSPropertyValue($propertyItem, $subItem)
                             
-                            if ($retval -ne $null) {
+                            if ($null -ne $retval) {
                                 $propertyObject = $retval
                                 break
                             }
@@ -2432,7 +2430,7 @@ class SFTemplate {
         $vmssResources = @($this.GetVmssResourcesByNodeType($nodetype))
         $parameterizedName = $null
 
-        if ($parameterValue -eq $null) {
+        if ($null -eq $parameterValue) {
             $parameterValue = $this.GetResourceParameterValue($nodetype, $parameterName)
         }
         foreach ($vmssResource in $vmssResources) {
