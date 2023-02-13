@@ -23,7 +23,7 @@ param(
     [string]$path = $pwd,
     [string]$filePattern = '.*',
     [switch]$includeSubDirs,
-    [string]$replace = $null,
+    [object]$replace = $null,
     [switch]$createBackup,
     [switch]$matchLine,
     [switch]$whatIf,
@@ -42,6 +42,7 @@ function main() {
     $fileCount = 0
     $regex = [regex]::new($pattern, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
     $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | Where-Object Name -match $filePattern).FullName
+    
     write-verbose "filtered files: $($files | Format-List * | out-string)"
     $totalFiles = $files.count
     write-host "checking $totalFiles files"
@@ -50,7 +51,6 @@ function main() {
         $fileCount++
         $sr = $null
         write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
-
         if ([io.path]::GetExtension($file) -ieq $backupExtension) {
             write-host "skipping backup file $file" -ForegroundColor Yellow
             continue
@@ -74,8 +74,7 @@ function main() {
 
             $sr.basestream.position = 0
             [text.stringbuilder]$replaceContent = [text.stringbuilder]::new()
-
-            while (($content = $sr.ReadLine()) -ne $null) {
+            while ($null -ne ($content = $sr.ReadLine())) {
                 $line++
 
                 if ($content.Length -lt 1) { continue }
@@ -107,7 +106,6 @@ function main() {
                     [void]$replaceContent.AppendLine($content)
                 }
             }
-
             if ($null -ne $replace) {
                 if ($sr -ne $null) {
                     $sr.close()
@@ -123,6 +121,7 @@ function main() {
                 
                 # remove readonly if set
                 $att = [io.file]::GetAttributes($file)
+
                 if ($att -band [io.fileAttributes]::ReadOnly) {
                     write-host "attempting to remove readonly attribute from file $file" -ForegroundColor Yellow
                     $att = $att -band (-bnot [io.fileAttributes]::ReadOnly)
@@ -138,15 +137,15 @@ function main() {
             }    
         }
         finally {
-            if ($sr -ne $null) {
+            if ($null -ne $sr) {
                 $sr.close()
                 $sr.dispose()
             }
         }
     }
-
     if ($global:matchedFiles.Count) {
         write-host "matched files summary:" -ForegroundColor Green
+
         foreach ($m in $global:matchedFiles.getenumerator()) {
             write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
         }
@@ -158,7 +157,6 @@ function main() {
     else {
         write-host "0 matched files" -ForegroundColor Yellow
     }
-
     write-host "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
 }
 
