@@ -98,7 +98,7 @@ function main() {
 
                         if ($null -ne $replace) {
                             $newLine = $regex.Replace($content, $replace)
-                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:$content`n`tnewLine:$newLine" -ForegroundColor Cyan
+                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$newLine'" -ForegroundColor Cyan
                             [void]$replaceContent.AppendLine($newLine)
                         }
                     }
