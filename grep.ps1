@@ -23,7 +23,7 @@ param(
     [string]$path = $pwd,
     [string]$filePattern = '.*',
     [switch]$includeSubDirs,
-    [string]$replace,
+    [string]$replace = $null,
     [switch]$createBackup,
     [switch]$matchLine,
     [switch]$whatIf,
@@ -96,19 +96,19 @@ function main() {
                         [void]$global:matchedFiles.$file.add($matchObj)
                         write-host "  $($line):$($match | Select-Object index, length, value)"
 
-                        if ($replace) {
+                        if ($null -ne $replace) {
                             $newLine = $regex.Replace($content, $replace)
                             write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:$content`n`tnewLine:$newLine" -ForegroundColor Cyan
                             [void]$replaceContent.AppendLine($newLine)
                         }
                     }
                 }
-                elseif ($replace) {
+                elseif ($null -ne $replace) {
                     [void]$replaceContent.AppendLine($content)
                 }
             }
 
-            if ($replace) {
+            if ($null -ne $replace) {
                 if ($sr -ne $null) {
                     $sr.close()
                     $sr.dispose()
@@ -145,14 +145,20 @@ function main() {
         }
     }
 
-    write-host "matched files summary:" -ForegroundColor Green
-    foreach ($m in $global:matchedFiles.getenumerator()) {
-        write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
+    if ($global:matchedFiles.Count) {
+        write-host "matched files summary:" -ForegroundColor Green
+        foreach ($m in $global:matchedFiles.getenumerator()) {
+            write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
+        }
+
+        write-host
+        write-host "$($global:matchedFiles.Count) matched files in global variable: `$global:matchedFiles" -ForegroundColor Magenta
+        write-host "to view: `$global:matchedFiles | convertto-json" -ForegroundColor Magenta
+    }
+    else {
+        write-host "0 matched files" -ForegroundColor Yellow
     }
 
-    write-host
-    write-host "matched files in global variable: `$global:matchedFiles" -ForegroundColor Magenta
-    write-host "to view: `$global:matchedFiles | convertto-json" -ForegroundColor Magenta
     write-host "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
 }
 
