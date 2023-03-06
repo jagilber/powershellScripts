@@ -26,10 +26,10 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 2201211
+    Version    : 230306
     todo       : 
     
-    History    : fix circular dependencies for nsg, lb, vnet by removing dependson
+    History    : add support for private ip address and clusters with no diagnostics extension
 
 .EXAMPLE 
     .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
@@ -49,7 +49,7 @@ param (
     [string]$adminPassword = '', #'GEN_PASSWORD',
     [string[]]$resourceNames = '',
     [string[]]$excludeResourceNames = '',
-    [string]$logFile = "$templatePath/azure-az-sf-export-arm-template.log",
+    [string]$logFile = "$templatePath/azure-az-sf-export-arm-template-$((get-date).tostring('yyyyMMdd-HHmmss')).log",
     [switch]$compress,
     [switch]$updateScript
 )
@@ -67,13 +67,12 @@ class ClusterModel {
     [object]$cluster = $null
     [collections.generic.list[vmss]]$vmss = [collections.generic.list[vmss]]::new()
     [collections.generic.list[string]]$storageAccountIds = [collections.generic.list[string]]::new()
-    
+
     ClusterModel () {}
     ClusterModel($sfTemplate) {
         $this.sfTemplate = $sfTemplate
     }
-    
-    
+
     [Vmss] FindVmssByExpression([string]$expression) {
         $this.WriteVerbose("enter:FindVmssByExpression searching for resource:$expression")
         [Vmss]$vmssObject = $null
@@ -104,7 +103,8 @@ class ClusterModel {
                         -or (($this.sftemplate.GetPSPropertyValue($psitem, 'resource.resourceid') `
                                 -and $this.sftemplate.GetPSPropertyValue($vmssResource, 'resourceid')) `
                             -and $psitem.resource.resourceid -eq $vmssResource.resourceid) `
-                        -or ($vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'.")
+                        -or ($this.sfTemplate.GetPSPropertyValue($vmssResource, 'comments') `
+                            -and $vmssResource.comments -ieq "Generalized from resource: '$($psitem.resource.id)'.")
                 }))
 
         if ($vmssObjects.Count -gt 1) {
@@ -818,6 +818,10 @@ class SFTemplate {
 
         # create pscustomobject
         $parameterTemplate | Add-Member -TypeName System.Management.Automation.PSCustomObject -NotePropertyMembers @{ parameters = @{} }
+        $parameterItem = @{
+            metadata = $null
+            value    = $null
+        }
     
         foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties.GetEnumerator()) {
             if ($ignoreParameters.Contains($psObjectProperty.name)) {
@@ -827,14 +831,13 @@ class SFTemplate {
 
             $this.WriteVerbose("CreateParameterFile:value properties:$($psObjectProperty.Value.psobject.Properties)")
             $parameterItem = @{
-                value = $psObjectProperty.Value.defaultValue
+                value = $this.GetPSPropertyValue($psObjectProperty, 'value.defaultValue')
             }
 
             if (($this.GetPSPropertyValue($psObjectProperty, 'value.metadata.description'))) { 
-                if ($psObjectProperty.value.metadata.description) {
-                    $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
-                }
+                $parameterItem.metadata = @{description = $psObjectProperty.value.metadata.description }
             }
+            
             [void]$parameterTemplate.parameters.Add($psObjectProperty.name, $parameterItem)
         }
 
@@ -1002,8 +1005,8 @@ class SFTemplate {
             -Force `
             -IncludeComments `
             -IncludeParameterDefaultValue `
-            -Resource $resourceIds
-    " , [consolecolor]::Blue)
+            -Resource $resourceIds", [consolecolor]::Blue)
+
         Export-AzResourceGroup -ResourceGroupName $this.resourceGroupName `
             -Path $jsonFile `
             -Force `
@@ -1190,7 +1193,7 @@ class SFTemplate {
             $this.WriteLog("checking lbResource for ip config $lbResource")
             $lb = get-azresource -ResourceId $lbResource -ExpandProperties
             foreach ($fec in $lb.Properties.frontendIPConfigurations) {
-                if ($fec.properties.publicIpAddress) {
+                if ($this.GetPSPropertyValue($fec, 'publicIpAddress')) {
                     $id = $fec.properties.publicIpAddress.id
                     $this.WriteLog("adding public ip: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
@@ -1201,7 +1204,7 @@ class SFTemplate {
             }
         }
 
-        $this.WriteVerbose("EnumIpResourceIds:ip resources $resources")
+        $this.WriteVerbose("EnumIpResourceIds:ip resources count:$($resources.Count) ip resources:`n$resources")
         $this.WriteLog("exit:EnumIpResourceIds")
         return $resources.ToArray() | sort-object -Unique
     }
@@ -1357,8 +1360,11 @@ class SFTemplate {
         $this.WriteLog("EnumStorageResources:cluster sflogs storage account $($this.sflogs)")
 
         $scalesets = $this.EnumVmssResources($clusterResource)
-        if ($this.GetPSPropertyValue($scalesets, 'Properties.virtualMachineProfile.extensionProfile.extensions.properties')) {
-            $this.sfdiags = @(($scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics').settings.storageAccount) | Sort-Object -Unique
+        if ($this.GetPSPropertyValue($scalesets, 'Properties.virtualMachineProfile.extensionProfile.extensions.properties.settings.storageAccount')) {
+            $diagnosticAccount = $scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics'
+            if ($this.GetPSPropertyValue($diagnosticAccount, 'settings.storageAccount')) {
+                $this.sfdiags = @($diagnosticAccount.settings.storageAccount) | Sort-Object -Unique
+            }
         }
         $this.WriteLog("EnumStorageResources:cluster sfdiags storage account $($this.sfdiags)")
   
@@ -1405,7 +1411,7 @@ class SFTemplate {
 
             foreach ($nic in $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations) {
                 foreach ($ipconfig in $nic.properties.ipConfigurations) {
-                    $id = $ipconfig.properties.subnet.id #[regex]::replace($ipconfig.properties.subnet.id, '/subnets/.+$', '')
+                    $id = $ipconfig.properties.subnet.id
                     $this.WriteLog("EnumVnetResourceIds:adding subnet id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
                     [object]$vmssTreeResource = $this.clusterModel.FindVmssByResource($vmssResource)
@@ -1587,7 +1593,7 @@ class SFTemplate {
         $resources = @($this.currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/networkSecurityGroups')
     
         if ($resources.count -eq 0) {
-            $this.WriteError("unable to find nsg resource")
+            $this.WriteWarning("unable to find nsg resource")
         }
 
         $this.WriteVerbose("returning nsg resources $resources")
@@ -1615,9 +1621,42 @@ class SFTemplate {
     }
 
     [object] GetPSPropertyValue([object]$baseObject, [string]$property) {
-        $this.WriteLog("enter:[object] GetPSPropertyValue([object]$baseObject,[string]$property)")
-        $retval = $null
+        <#
+        .SYNOPSIS
+            enumerate powershell object property value
+            [object]$baseObject powershell object
+            outputs: object
+        .OUTPUTS
+            [object]
+        #>
+        $this.WriteLog("enter:GetPSPropertyValue([object]$baseObject,[string]$property)")
+        $retvals = @($this.GetPSPropertyValues($baseObject, $property))
+        if ($retvals.Count -gt 1) {
+            $this.WriteError("GetPSPropertyValue:error more than one item found")
+        }
+        elseif ($retvals.Count -lt 1) {
+            $this.WriteVerbose("GetPSPropertyValue:no items found")
+            $retvals = @($null)
+        }
+
+        $this.WriteLog("exit:GetPSPropertyValue returning:$($retvals[0])")
+        return $retvals[0]
+    }
+
+    [object[]] GetPSPropertyValues([object]$baseObject, [string]$property) {
+        <#
+        .SYNOPSIS
+            enumerate powershell object property values
+            [object]$baseObject powershell object
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+
+        $this.WriteVerbose("enter:GetPSPropertyValues([object]$baseObject,[string]$property)")
+        $retval = [collections.arraylist]::new()
         $properties = @($property.Split('.'))
+        $childProperties = $property
 
         if ($properties.Count -lt 1) {
             $this.WriteWarning("property string empty:$property")
@@ -1626,47 +1665,41 @@ class SFTemplate {
             $propertyObject = $baseObject
             if ($propertyObject.GetType().isarray) {
                 foreach ($propertyItem in $propertyObject) {
-                    $retval = $this.GetPSPropertyValue($propertyItem, $property)
-                    if ($null -ne $retval) {
-                        $propertyObject = $retval
-                        break
-                    }
+                    [void]$retval.AddRange($this.GetPSPropertyValues($propertyItem, $property))
                 }
             }
             else {
-                foreach ($subItem in $properties) {
-                    $this.WriteVerbose("checking property:$($subItem)")
+                $subItem = $properties[0]
+                $childProperties = $childProperties.trimStart($subItem).trimStart('.')
+                $this.WriteVerbose("checking property:$($subItem) childProperties:$childProperties")
 
-                    if ($propertyObject.GetType().isarray) {
-                        
-                        foreach ($propertyItem in $propertyObject) {
-                            $retval = $this.GetPSPropertyValue($propertyItem, $subItem)
-                            
-                            if ($null -ne $retval) {
-                                $propertyObject = $retval
-                                break
-                            }
+                if ($propertyObject.GetType().isarray) {
+                    foreach ($propertyItem in $propertyObject) {
+                        [void]$retval.AddRange($this.GetPSPropertyValues($propertyItem, $subItem))
+                    }
+                }
+                elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
+                    foreach ($match in $propertyObject.psobject.Properties.match($subItem)) {
+                        $this.WriteLog("found property:$($match.Name)")
+                        $propertyObject = $propertyObject.($match.Name)
+                        $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
+
+                        if ($childProperties) {
+                            [void]$retval.AddRange($this.GetPSPropertyValues($propertyObject, $childProperties))
+                        }
+                        else {
+                            [void]$retval.Add($propertyObject)
                         }
                     }
-                    # foreach($propertyObjectItem in $propertyObject){
-                    elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
-                        $this.WriteLog("found property:$($subItem)")
-                        $propertyObject = $propertyObject.$subItem
-                        $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
-                        $retval = $propertyObject
-                    }
-                    else {
-                        $this.WriteVerbose("property not found:$($subItem)")
-                        $retval = $null
-                        break
-                    }
-                    # }
+                }
+                else {
+                    $this.WriteVerbose("property not found:$($subItem)")
                 }
             }
         }
 
-        $this.WriteLog("exit:GetPSPropertyExists returning:$($retval)")
-        return $retval
+        $this.WriteVerbose("exit:GetPSPropertyValues returning:$($retval)")
+        return $retval.ToArray()
     }
 
     [object] GetResourceParameterValue([object]$resource, [string]$name) {
@@ -2736,7 +2769,7 @@ class SFTemplate {
             #$null = RemoveUnusedParameters
         }
         else {
-            $this.WriteError("exit:RemoveUnparameterizedNodeTypes:no parameterized nodetypes")
+            $this.WriteError("RemoveUnparameterizedNodeTypes:no parameterized nodetypes")
         }
 
         $this.WriteLog("exit:RemoveUnparameterizedNodeTypes:$retval")
@@ -2874,6 +2907,8 @@ class SFTemplate {
             $this.WriteError("exit:RenameParametersByResource:invalid resource. no name/type:$($this.CreateJson($resource))")
             return $false
         }
+
+        $this.WriteLog("exit:RenameParametersByResource:returning true")
         return $true
     }
 
