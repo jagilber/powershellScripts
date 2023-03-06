@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 230306
+    Version    : 230306.1
     todo       : 
     
     History    : add support for private ip address and clusters with no diagnostics extension
@@ -1193,7 +1193,7 @@ class SFTemplate {
             $this.WriteLog("checking lbResource for ip config $lbResource")
             $lb = get-azresource -ResourceId $lbResource -ExpandProperties
             foreach ($fec in $lb.Properties.frontendIPConfigurations) {
-                if ($this.GetPSPropertyValue($fec, 'publicIpAddress')) {
+                if ($this.GetPSPropertyValue($fec, 'properties.publicIpAddress')) {
                     $id = $fec.properties.publicIpAddress.id
                     $this.WriteLog("adding public ip: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
