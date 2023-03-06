@@ -2234,6 +2234,12 @@ class SFTemplate {
                     'password must be set before deploying template.' # metadataDescription
                 )
             }
+
+            # fix The property 'requireGuestProvisionSignal' is not valid because the 'Microsoft.Compute/Agentless' feature is not enabled for this subscription."
+            if ($this.GetPSPropertyValue($vmssResource, 'properties.virtualMachineProfile.osProfile.requireGuestProvisionSignal')) {
+                $this.WriteLog("ModifyVmssResources:setting requireGuestProvisionSignal to false")
+                $vmssResource.properties.virtualMachineProfile.osProfile.requireGuestProvisionSignal = $null
+            }
         }
         $this.WriteLog("exit:ModifyVmssResources")
     }
