@@ -26,10 +26,10 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 230306.1
+    Version    : 230308
     todo       : 
     
-    History    : add support for private ip address and clusters with no diagnostics extension
+    History    : add support for private ip address and clusters with no diagnostics extension v2
 
 .EXAMPLE 
     .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
@@ -522,7 +522,7 @@ class SFTemplate {
                 $this.WriteLog("AddVmssProtectedSettings:added $($extension.properties.type) protectedsettings $($this.CreateJson($extension.properties.protectedSettings))", [consolecolor]::Magenta)
             }
 
-            if ($extension.properties.type -ieq 'IaaSDiagnostics') {
+            if ($extension.properties.type -ieq 'IaaSDiagnostics' -and ($this.GetPSPropertyValue($extension, 'properties.settings.storageAccount'))) {
                 $saname = $extension.properties.settings.storageAccount
                 $sfdiagsParameter = $this.CreateParameterizedName('name', ($this.sfdiags | where-object name -imatch $saname))
                 $extension.properties.settings.storageAccount = "[$sfdiagsParameter]"
