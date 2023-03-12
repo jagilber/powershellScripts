@@ -179,6 +179,12 @@ while($count -le $iterations) {
         -Uri "http://169.254.169.254/metadata/instance?api-version=$apiVersion" `
         -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
 
+    # example scheduledEvents (repair jobs) rest query from within node
+    $global:scheduledEventsResult = (Invoke-WebRequest -Method GET `
+        -UseBasicParsing `
+        -Uri "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01" `
+        -Headers @{'Metadata'='true'}).content | convertfrom-json #| convertto-json
+
     if($error) {
         if($logFile) {
             Out-File -InputObject "$(get-date) $($error | fl * | out-string)`r`n$result" -FilePath $logFile -Append
@@ -190,10 +196,11 @@ while($count -le $iterations) {
     write-host $global:vaultOauthResult
     write-host $global:managementOauthResult
     write-host ($global:instanceResult | convertto-json -Depth 99)
+    write-host $global:scheduledEventsResult
     start-sleep -Milliseconds $sleepMilliseconds
     $count++
 }
 
-write-host "objects stored in `$global:managementOauthResult `$global:vaultOauthResult and `$global:instanceResult"
+write-host "objects stored in `$global:managementOauthResult `$global:vaultOauthResult `$global:scheduledEventsResult and `$global:instanceResult"
 write-host "finished. total errors:$errorCounter logfile:$logFile"
 
