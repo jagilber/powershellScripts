@@ -154,17 +154,17 @@ param(
     $logFile = "$pwd\azure-metadata-rest.log",
     $sleepMilliseconds = 1000,
     $apiVersion = '2021-02-01',
-    $ipaddress =  '10.0.0.4:2377'
+    $ipaddress = '10.0.0.4:2377'
 )
 
-[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true; [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 $error.Clear()
 $ErrorActionPreference = "continue"
 $count = 0
 $errorCounter = 0
 
 function main() {
-    if((whoami -inotmatch 'network service')) {
+    if ((whoami -inotmatch 'network service')) {
         write-error "script has to run under 'network service' context"
         return
     }
@@ -174,15 +174,21 @@ function main() {
     while ($count -le $iterations) {
         # acquire system managed identity oauth token from within node
         $global:managementOauthResult = query-metadata -url "https://$ipAddress/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com" -Cert $cert
-       # $global:managementOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com"
+        # $global:managementOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com"
         
         # key vault
         $global:vaultOauthResult = query-metadata -url "https://$ipAddress/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net" -Cert $cert
-      #  $global:vaultOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net"
+        #  $global:vaultOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net"
 
         # example instance rest query from within node
         $global:instanceResult = query-metadata -url "https://$ipAddress/metadata/instance?api-version=$apiVersion" -Cert $cert
-      #  $global:instanceResultAz = query-metadata -url "http://169.254.169.254/metadata/instance?api-version=$apiVersion"
+        #  $global:instanceResultAz = query-metadata -url "http://169.254.169.254/metadata/instance?api-version=$apiVersion"
+
+        # example scheduledEvents (repair jobs) rest query from within node
+        $global:scheduledEventsResult = (Invoke-WebRequest -Method GET `
+                -UseBasicParsing `
+                -Uri "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01" `
+                -Headers @{'Metadata' = 'true' }).content | convertfrom-json #| convertto-json
 
         if ($error) {
             if ($logFile) {
@@ -195,17 +201,18 @@ function main() {
         write-host $global:vaultOauthResult
         write-host $global:managementOauthResult
         write-host ($global:instanceResult | convertto-json -Depth 99)
+        write-host ($global:scheduledEventsResult | convertto-json -Depth 99)
         start-sleep -Milliseconds $sleepMilliseconds
         $count++
     }
 
-    write-host "objects stored in `$global:managementOauthResult `$global:managementOauthResultAz `$global:vaultOauthResult `$global:vaultOauthResultAz `$global:instanceResult and `$global:instanceResultAz"
+    write-host "objects stored in `$global:managementOauthResult `$global:managementOauthResultAz `$global:vaultOauthResult `$global:vaultOauthResultAz `$global:instanceResult `$global:scheduledeventsresult and `$global:instanceResultAz"
     write-host "finished. total errors:$errorCounter logfile:$logFile"
 }
 
-function query-metadata($url,$cert) {
+function query-metadata($url, $cert) {
     $headers = @{'Metadata' = 'true' }
-    if($cert){
+    if ($cert) {
         write-host "Invoke-RestMethod -Method GET -Uri $url -Headers $headers -certificate $cert" -ForegroundColor Green
         $result = Invoke-RestMethod -Method GET -Uri $url -Headers $headers -Certificate $cert
     }
