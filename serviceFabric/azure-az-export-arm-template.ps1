@@ -775,9 +775,8 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".new.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
         $parameterExclusions = $this.ModifyStorageResourcesDeploy()
-        $this.ModifyVmssResourcesDeploy()
-        $this.ModifyClusterResourceDeploy()
 
+        $this.ModifyClusterResourceDeploy()
         $this.CreateParameterFile($templateParameterFile, $parameterExclusions)
         $this.VerifyConfig($templateParameterFile)
 
@@ -1519,9 +1518,9 @@ class SFTemplate {
             [object]
         #>
 
-        $this.WriteLog("enter:GetAzResourceById([string]$resourceId)")
+        $this.WriteLog("enter:GetAzResourceById([string]$resourceId)", [ConsoleColor]::Cyan)
         $result = get-azResource -resourceId $resourceId -ExpandProperties
-        $this.WriteLog("exit:GetAzResourceById:get-azResource result:$($this.CreateJson($result))")
+        $this.WriteLog("exit:GetAzResourceById:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
         return $result
     }
 
@@ -1534,9 +1533,9 @@ class SFTemplate {
             [object]
         #>
 
-        $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)")
+        $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)", [ConsoleColor]::Cyan)
         $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
-        $this.WriteLog("exit:GetAzResourceByName:get-azResource result:$($this.CreateJson($result))")
+        $this.WriteLog("exit:GetAzResourceByName:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
         return $result
     }
 
@@ -1549,9 +1548,9 @@ class SFTemplate {
             [object]
         #>
 
-        $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)")
+        $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)", [ConsoleColor]::Cyan)
         $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
-        $this.WriteLog("exit:GetAzResourceByType:get-azResource result:$($this.CreateJson($result))")
+        $this.WriteLog("exit:GetAzResourceByType:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
         return $result
     }
 
@@ -2214,6 +2213,34 @@ class SFTemplate {
         return $parameterExclusions.ToArray()
     }
 
+    [void] ModifyVmssResourceCertificateUrl([object]$vmssResource) {
+        $this.WriteLog("enter:ModifyVmssResourceCertificateUrl")
+        $certificatePropertyName = 'certificateUrl'
+        $secretUrl = $this.GetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName)
+        if ($secretUrl) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
+            $this.WriteLog("setting $certificatePropertyName to $secretUrl")
+            $null = $this.SetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $vmssResource.properties.virtualMachineProfile.osProfile.secrets, $secretUrl)
+        }
+        $this.WriteLog("exit:ModifyVmssResourceCertificateUrl")
+    }
+
+    [void] ModifyVmssResourceExtensionCerts([object] $vmssResource, [string] $certificatePropertyName = 'thumbprint') {
+        $this.WriteLog("enter:ModifyVmssResourcesExtensionCerts")
+        $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
+        #parameterize certificate information
+        $thumbprint = $this.GetResourceParameterValue($extension, $certificatePropertyName)
+        if ($thumbprint) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
+            $this.WriteLog("setting $certificatePropertyName to $thumbprint")
+            $null = $this.SetResourceParameterValue($extension.properties.settings.certificate, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $extension.properties.settings.certificate, $thumbprint)
+        }
+
+        $this.WriteLog("exit:ModifyVmssResourcesExtensionCerts")
+    }
+
     [void] ModifyVmssResources() {
         <#
         .SYNOPSIS
@@ -2307,59 +2334,6 @@ class SFTemplate {
         $this.WriteLog("exit:ModifyVmssResourcesAddPrimary")
     }
 
-    [void] ModifyVmssResourcesDeploy() {
-        <#
-        .SYNOPSIS
-            modifies vmss resources for deploy template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-        $this.WriteLog("enter:ModifyVmssResourcesDeploy")
-        $vmssResources = $this.GetVmssResources()
-        foreach ($vmssResource in $vmssResources) {
-            $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
-
-            $clusterResource = $this.GetClusterResource()
-            $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
-            $newName = "[reference($parameterizedName).clusterEndpoint]"
-
-            $this.WriteLog("setting cluster endpoint to $newName")
-            $null = $this.SetResourceParameterValue($extension.properties.settings, 'clusterEndpoint', $newName)
-            # remove clusterendpoint parameter
-            $this.RemoveUnusedParameters()
-        }
-        $this.WriteLog("exit:ModifyVmssResourcesDeploy")
-    }
-
-    [void] ModifyVmssResourceCertificateUrl([object]$vmssResource) {
-        $this.WriteLog("enter:ModifyVmssResourceCertificateUrl")
-        $certificatePropertyName = 'certificateUrl'
-        $secretUrl = $this.GetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName)
-        if ($secretUrl) {
-            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
-            $this.WriteLog("setting $certificatePropertyName to $secretUrl")
-            $null = $this.SetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName, $thumbprintParameterizedName)
-            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $vmssResource.properties.virtualMachineProfile.osProfile.secrets, $secretUrl)
-        }
-        $this.WriteLog("exit:ModifyVmssResourceCertificateUrl")
-    }
-
-    [void] ModifyVmssResourceExtensionCerts([object] $vmssResource, [string] $certificatePropertyName = 'thumbprint') {
-        $this.WriteLog("enter:ModifyVmssResourcesExtensionCerts")
-        $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
-        #parameterize certificate information
-        $thumbprint = $this.GetResourceParameterValue($extension, $certificatePropertyName)
-        if ($thumbprint) {
-            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
-            $this.WriteLog("setting $certificatePropertyName to $thumbprint")
-            $null = $this.SetResourceParameterValue($extension.properties.settings.certificate, $certificatePropertyName, $thumbprintParameterizedName)
-            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $extension.properties.settings.certificate, $thumbprint)
-        }
-
-        $this.WriteLog("exit:ModifyVmssResourcesExtensionCerts")
-    }
-
     [void] ModifyVmssResourcesRedeploy() {
         <#
         .SYNOPSIS
@@ -2383,7 +2357,12 @@ class SFTemplate {
                 }
                 if ($extension.properties.type -ieq 'ServiceFabricNode') {
                     $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing cluster endpoint")
-                    $this.AddParameter($vmssResource, 'clusterEndpoint', $extension.properties.settings)
+                    $clusterResource = $this.GetClusterResource()
+                    $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
+                    $newName = "[reference($parameterizedName).clusterEndpoint]"
+        
+                    $this.WriteLog("ModifyVmssResourcesReDeploy:setting cluster endpoint value to:$newName")
+                    $null = $this.SetResourceParameterValue($extension.properties.settings, 'clusterEndpoint', $newName)
                 }
                 [void]$extensions.Add($extension)
             }    
@@ -2928,36 +2907,6 @@ class SFTemplate {
         return $true
     }
 
-    [bool] RenameParametersByResource( [object]$resource, [string]$oldResourceName, [string]$newResourceName) {
-        <#
-    .SYNOPSIS
-        renames parameter from $oldResourceName to $newResourceName by $resource in all template sections
-        outputs: bool
-    .OUTPUTS
-        [bool]
-    #>
-        $this.WriteLog("enter:RenameParametersByResource [object]$resource, [string]$oldResourceName, [string]$newResourceName")
-        # get resource current name
-        $currentParameterizedName = $this.GetParameterizedNameFromValue($resource.name)
-        if (!$currentParameterizedName) {
-            $currentResourceName = $resource.name
-            $currentParameterizedName = $this.CreateParameterizedName($resource)
-        }
-        else {
-            $currentResourceName = $this.GetFromParametersSection($currentParameterizedName)[0]
-        }
-    
-        $currentResourceType = $resource.type
-
-        if (!$currentResourceName -or !$currentResourceType) {
-            $this.WriteError("exit:RenameParametersByResource:invalid resource. no name/type:$($this.CreateJson($resource))")
-            return $false
-        }
-
-        $this.WriteLog("exit:RenameParametersByResource:returning true")
-        return $true
-    }
-
     [bool] SetResourceParameterValue([object]$resource, [string]$name, [object]$newValue) {
         <#
         .SYNOPSIS
@@ -3279,7 +3228,6 @@ redeploy modifications:
 - adminPassword required parameter added (needs to be set)
 - if upgradeMode for cluster resource is set to 'Automatic', clusterCodeVersion is removed
 - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
-- clusterendpoint is parameterized
 "@
 
 
