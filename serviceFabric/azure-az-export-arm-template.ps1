@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 230308
+    Version    : 230326
     todo       : 
     
     History    : add support for private ip address and clusters with no diagnostics extension v2
@@ -225,13 +225,13 @@ class SFTemplate {
         if ($this.resourceNames) {
             foreach ($resourceName in $this.resourceNames) {
                 $this.WriteLog("getting resource $resourceName")
-                [void]$this.configuredRGResources.AddRange(@((get-azresource -ResourceGroupName $this.resourceGroupName -resourceName $resourceName)))
+                [void]$this.configuredRGResources.AddRange(@($this.GetAzResourceByName($this.resourceGroupName, $resourceName)))
             }
         }
         else {
             $resourceIds = $this.EnumAllResources()
             foreach ($resourceId in $resourceIds) {
-                $resource = get-azresource -resourceId "$resourceId" -ExpandProperties
+                $resource = $this.GetAzResourceById($resourceId)
                 if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
                     $this.WriteLog("adding resource id to configured resources: $($resource.resourceId)", [consolecolor]::Cyan)
                     [void]$this.configuredRGResources.Add($resource)
@@ -756,7 +756,7 @@ class SFTemplate {
         $WarningPreference = 'SilentlyContinue'
     
         # to fix \u0027 single quote issue
-        $result = $inputObject | convertto-json -depth $depth | foreach-object { $_.replace("\u0027", "'"); } #{ [regex]::unescape($_); }
+        $result = $inputObject | convertto-json -depth $depth | foreach-object { $_.replace("\u0027", "'"); }
         $WarningPreference = $currentWarningPreference
 
         return $result
@@ -1140,9 +1140,7 @@ class SFTemplate {
             [object]
         #>
         $this.WriteLog("enter:EnumClusterResource")
-        $clusters = @(get-azresource -ResourceGroupName $this.resourceGroupName `
-                -ResourceType 'Microsoft.ServiceFabric/clusters' `
-                -ExpandProperties)
+        $clusters = @($this.GetAzResourceByType($this.resourceGroupName, 'Microsoft.ServiceFabric/clusters'))
         $clusterResource = $null
         $count = 1
         $number = 0
@@ -1191,7 +1189,7 @@ class SFTemplate {
 
         foreach ($lbResource in $lbResources) {
             $this.WriteLog("checking lbResource for ip config $lbResource")
-            $lb = get-azresource -ResourceId $lbResource -ExpandProperties
+            $lb = $this.GetAzResourceById($lbResource)
             foreach ($fec in $lb.Properties.frontendIPConfigurations) {
                 if ($this.GetPSPropertyValue($fec, 'properties.publicIpAddress')) {
                     $id = $fec.properties.publicIpAddress.id
@@ -1285,13 +1283,15 @@ class SFTemplate {
         $resources = [collections.arraylist]::new()
 
         foreach ($vnetId in $vnetResources) {
-            $vnetresource = @(get-azresource -ResourceId $vnetId -ExpandProperties)
-            $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
+            $this.WriteLog("EnumNsgResourceIds:checking vnetId $($vnetId)")
+            $vnetresource = @($this.GetAzResourceById($vnetId))
 
             if ($null -eq ($this.GetPSPropertyValue($vnetResource, 'Properties.subnets'))) {
                 $this.WriteError("unable to enumerate subnet configuration from $($this.CreateJson($vnetResource))")
                 continue
             }
+
+            $this.WriteLog("EnumNsgResourceIds:checking vnet resource for nsg config $($vnetresource.Name)")
 
             foreach ($subnet in $vnetResource.Properties.subnets) {
                 if (($this.GetPSPropertyValue($subnet, 'properties.networkSecurityGroup.id'))) {
@@ -1323,7 +1323,7 @@ class SFTemplate {
 
         foreach ($nsgResourceId in $nsgResourceIds) {
             if (!$nsgResourceId) { continue }
-            $nsgResource = get-azresource -ResourceId $nsgResourceId -ExpandProperties
+            $nsgResource = $this.GetAzResourceById($nsgResourceId)
             $this.WriteLog("EnumNsgRuleResourceIds:checking rules for resource for nsg config $($nsgResource.Name)")
 
             if ($null -eq ($this.GetPSPropertyValue($nsgResource, 'Properties.subnets'))) {
@@ -1366,11 +1366,9 @@ class SFTemplate {
                 $this.sfdiags = @($diagnosticAccount.settings.storageAccount) | Sort-Object -Unique
             }
         }
+
         $this.WriteLog("EnumStorageResources:cluster sfdiags storage account $($this.sfdiags)")
-  
-        $storageResources = @(get-azresource -ResourceGroupName $this.resourceGroupName `
-                -ResourceType 'Microsoft.Storage/storageAccounts' `
-                -ExpandProperties)
+        $storageResources = @($this.GetAzResourceByType($this.resourceGroupName, 'Microsoft.Storage/storageAccounts'))
 
         $this.sflogs = $storageResources | where-object name -ieq $this.sflogs
         $this.sfdiags = @($storageResources | where-object name -ieq $this.sfdiags)
@@ -1452,10 +1450,7 @@ class SFTemplate {
             return $null
         }
 
-        $resources = @(get-azresource -ResourceGroupName $this.resourceGroupName `
-                -ResourceType 'Microsoft.Compute/virtualMachineScaleSets' `
-                -ExpandProperties)
-
+        $resources = @($this.GetAzResourceByType($this.resourceGroupName, 'Microsoft.Compute/virtualMachineScaleSets'))
         $this.WriteVerbose("EnumVmssResources:vmss resources $resources")
 
         foreach ($resource in $resources) {
@@ -1513,6 +1508,51 @@ class SFTemplate {
         $this.WriteVerbose("vnet resources $resources")
         $this.WriteLog("exit:EnumVnetResourceIds")
         return $resources.ToArray() | sort-object -Unique
+    }
+
+    [object] GetAzResourceById([string]$resourceId) {
+        <#
+        .SYNOPSIS
+            enumerate azure resource by azure resource id using get-azresource with expanded properties
+            outputs: object
+        .OUTPUTS
+            [object]
+        #>
+
+        $this.WriteLog("enter:GetAzResourceById([string]$resourceId)")
+        $result = get-azResource -resourceId $resourceId -ExpandProperties
+        $this.WriteLog("exit:GetAzResourceById:get-azResource result:$($this.CreateJson($result))")
+        return $result
+    }
+
+    [object] GetAzResourceByName([string]$resourceGroupName, [string]$resourceName) {
+        <#
+        .SYNOPSIS
+            enumerate azure resource by azure resource group name and resource name using get-azresource
+            outputs: object
+        .OUTPUTS
+            [object]
+        #>
+
+        $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)")
+        $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
+        $this.WriteLog("exit:GetAzResourceByName:get-azResource result:$($this.CreateJson($result))")
+        return $result
+    }
+
+    [object] GetAzResourceByType([string]$resourceGroupName, [string]$resourceType) {
+        <#
+        .SYNOPSIS
+            enumerate azure resource by azure resource group name and resource type using get-azresource with expanded properties
+            outputs: object
+        .OUTPUTS
+            [object]
+        #>
+
+        $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)")
+        $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
+        $this.WriteLog("exit:GetAzResourceByType:get-azResource result:$($this.CreateJson($result))")
+        return $result
     }
 
     [object] GetClusterResource() {
