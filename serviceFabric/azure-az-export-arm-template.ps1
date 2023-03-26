@@ -2027,7 +2027,7 @@ class SFTemplate {
         $resources = @($this.currentConfig.resources | Where-Object type -ieq 'Microsoft.Network/virtualNetworks')
     
         if ($resources.count -eq 0) {
-            $this.WriteError("unable to find vnet resource")
+            $this.WriteWarning("unable to find vnet resource")
         }
 
         $this.WriteVerbose("returning vnet resources $resources")
