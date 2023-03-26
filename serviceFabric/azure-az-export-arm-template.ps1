@@ -1518,8 +1518,15 @@ class SFTemplate {
             [object]
         #>
 
+        $result = $null
         $this.WriteLog("enter:GetAzResourceById([string]$resourceId)", [ConsoleColor]::Cyan)
-        $result = get-azResource -resourceId $resourceId -ExpandProperties
+        if($resourceId) {
+            $result = get-azResource -resourceId $resourceId -ExpandProperties
+        }
+        else {
+            $this.WriteError("GetAzResourceById:resourceId null/empty")
+        }
+
         $this.WriteLog("exit:GetAzResourceById:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
         return $result
     }
@@ -1533,8 +1540,15 @@ class SFTemplate {
             [object]
         #>
 
+        $result = $null
         $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)", [ConsoleColor]::Cyan)
-        $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
+        if($resourceGroupName -and $resourceName) {
+            $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
+        }
+        else {
+            $this.WriteError("GetAzResourceByName:resourceGroupName and/or resourceName null/empty")
+        }
+
         $this.WriteLog("exit:GetAzResourceByName:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
         return $result
     }
@@ -1548,8 +1562,15 @@ class SFTemplate {
             [object]
         #>
 
+        $result = $null
         $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)", [ConsoleColor]::Cyan)
-        $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
+        if($resourceGroupName -and $resourceType) {
+            $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
+        }
+        else {
+            $this.WriteError("GetAzResourceByType:resourceGroupName and/or resourceType null/empty")
+        }
+
         $this.WriteLog("exit:GetAzResourceByType:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
         return $result
     }
