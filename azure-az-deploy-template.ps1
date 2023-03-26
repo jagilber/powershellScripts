@@ -123,20 +123,6 @@ function main() {
         return 1
     }
 
-    $VerbosePreference = "continue"
-    $DebugPreference = "continue"
-
-    # checking json format
-    $error.clear()
-    write-host "reading template file $($templateFile)"
-    $jsonTemplate = ConvertFrom-Json (get-content -Raw -Path $templateFile)
-    $jsonTemplate | ConvertTo-Json
-    
-    if ($error) {
-        write-error "error json format: $templateFile"
-        return 1
-    }
-
     $templateParameters = @{}
 
     if ($templateParameterFile) {
@@ -307,7 +293,5 @@ function main() {
 
 main
 
-$VerbosePreference = "silentlycontinue"
-$DebugPreference = "silentlycontinue"
 $error | out-string
 write-host "$([DateTime]::Now) finished"
