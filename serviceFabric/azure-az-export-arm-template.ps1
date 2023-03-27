@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 230327
+    Version    : 230327.1
     todo       : 
     
     History    : add support for private ip address and clusters with no diagnostics extension v2
@@ -76,12 +76,13 @@ class ClusterModel {
     [Vmss[]] FindVmssByExpression([string]$expression) {
         $this.WriteLog("enter:FindVmssByExpression searching for resource:$expression")
         $vmssObjects = @($this.vmss.Where( { . ([scriptblock]::Create($expression)) }))
+        
         if (!$vmssObjects -or $vmssObjects.Count -lt 1) {
             $this.WriteWarning("FindVmssByExpression:warning:vmss not found:expression:$expression")
         }
+
         $this.WriteLog("exit:FindVmssByExpression returning vmss resource objects: count:$($vmssObjects.Count) objects:$vmssObjects)")
         return $vmssObjects
-
     }
     
     [Vmss] FindVmssByResource([object]$vmssResource) {
@@ -996,39 +997,6 @@ class SFTemplate {
         $this.WriteLog("current settings: `r`n $settings", [consolecolor]::Green)
     }
 
-    [void] ExportTemplate($configuredResources, $jsonFile) {
-        <#
-        .SYNOPSIS
-            exports raw teamplate from azure using export-azresourcegroup cmdlet
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-        $this.WriteLog("enter:ExportTemplate:exporting template to $jsonFile", [consolecolor]::Yellow)
-        $resourceIds = @($configuredResources.ResourceId)
-
-        # todo issue
-        new-item -ItemType File -path $jsonFile -ErrorAction SilentlyContinue
-        $this.WriteLog("ExportTemplate:file exists:$((test-path $jsonFile))")
-        $this.WriteLog("ExportTemplate:resource ids: $resourceIds", [consolecolor]::green)
-
-        $this.WriteLog("Export-AzResourceGroup -ResourceGroupName $($this.resourceGroupName) `
-            -Path $jsonFile `
-            -Force `
-            -IncludeComments `
-            -IncludeParameterDefaultValue `
-            -Resource $resourceIds", [consolecolor]::Blue)
-
-        Export-AzResourceGroup -ResourceGroupName $this.resourceGroupName `
-            -Path $jsonFile `
-            -Force `
-            -IncludeComments `
-            -IncludeParameterDefaultValue `
-            -Resource $resourceIds
-    
-        $this.WriteLog("exit:ExportTemplate:template exported to $jsonFile", [consolecolor]::Yellow)
-    }
-
     [object[]] EnumAllResources() {
         <#
         .SYNOPSIS
@@ -1390,18 +1358,25 @@ class SFTemplate {
             [object[]]
         #>
         $this.WriteLog("enter:EnumPrimaryNodeType")
-        $resources = @($this.EnumNodeTypeResources()) | Where-Object isPrimary = $true
+        $primaryNodeTypes = [collections.arraylist]::new()
+
+        foreach($nodeType in @($this.EnumNodeTypeResources())) {
+            $isPrimary = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($nodeType.isPrimary))
+            if($isPrimary.defaultValue -eq $true) {
+                $primaryNodeTypes.Add($nodeType)
+            }
+        }
     
-        if ($resources.count -lt 1) {
+        if ($primaryNodeTypes.count -lt 1) {
             $this.WriteError("unable to find primary nodetype resource")
         }
-        elseif ($resources.count -gt 1) {
+        elseif ($primaryNodeTypes.count -gt 1) {
             $this.WriteError("multiple primary nodetypes")
         }
 
-        $this.WriteVerbose("returning primary nodetype resource $resources")
-        $this.WriteLog("exit:EnumPrimaryNodeType:$($resources.count)")
-        return $resources[0]
+        $this.WriteVerbose("returning primary nodetype resource $primaryNodeTypes")
+        $this.WriteLog("exit:EnumPrimaryNodeType:$($primaryNodeTypes.count)")
+        return $primaryNodeTypes
     }
 
     [object[]] EnumPrimaryVmss() {
@@ -1413,9 +1388,13 @@ class SFTemplate {
             [object[]]
         #>
         $this.WriteLog("enter:EnumPrimaryVmss")
-        $primaryNodeType = $this.EnumPrimaryNodeType()
-        $resources = @($this.EnumVmssResources()) | Where-Object Name -imatch $primaryNodeType.Name
-    
+        $resources = [collections.arraylist]::new()
+
+        foreach($nodeType in $this.EnumPrimaryNodeType()) {
+            $primaryName = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($nodeType.name))
+            $resources.AddRange(@(@($this.EnumVmssResources()) | Where-Object Name -imatch $primaryName.defaultValue))
+        }
+
         if ($resources.count -lt 1) {
             $this.WriteError("unable to find primary vmss resource")
         }
@@ -1425,7 +1404,7 @@ class SFTemplate {
 
         $this.WriteVerbose("returning primary vmss resource $resources")
         $this.WriteLog("exit:EnumPrimaryVmss:$($resources.count)")
-        return $resources[0]
+        return $resources
     }
 
     [object[]] EnumStorageResources() {
@@ -1593,6 +1572,39 @@ class SFTemplate {
         return $resources.ToArray() | sort-object -Unique
     }
 
+    [void] ExportTemplate($configuredResources, $jsonFile) {
+        <#
+        .SYNOPSIS
+            exports raw teamplate from azure using export-azresourcegroup cmdlet
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ExportTemplate:exporting template to $jsonFile", [consolecolor]::Yellow)
+        $resourceIds = @($configuredResources.ResourceId)
+
+        # todo issue
+        new-item -ItemType File -path $jsonFile -ErrorAction SilentlyContinue
+        $this.WriteLog("ExportTemplate:file exists:$((test-path $jsonFile))")
+        $this.WriteLog("ExportTemplate:resource ids: $resourceIds", [consolecolor]::green)
+
+        $this.WriteLog("Export-AzResourceGroup -ResourceGroupName $($this.resourceGroupName) `
+            -Path $jsonFile `
+            -Force `
+            -IncludeComments `
+            -IncludeParameterDefaultValue `
+            -Resource $resourceIds", [consolecolor]::Blue)
+
+        Export-AzResourceGroup -ResourceGroupName $this.resourceGroupName `
+            -Path $jsonFile `
+            -Force `
+            -IncludeComments `
+            -IncludeParameterDefaultValue `
+            -Resource $resourceIds
+    
+        $this.WriteLog("exit:ExportTemplate:template exported to $jsonFile", [consolecolor]::Yellow)
+    }
+
     [object] GetAzResourceById([string]$resourceId) {
         <#
         .SYNOPSIS
@@ -1603,7 +1615,7 @@ class SFTemplate {
         #>
 
         $result = $null
-        $this.WriteLog("enter:GetAzResourceById([string]$resourceId)", [ConsoleColor]::Cyan)
+        $this.WriteLog("enter:GetAzResourceById([string]$resourceId)", [ConsoleColor]::Magenta)
         if ($resourceId) {
             $this.WriteLog("get-azResource -resourceId $resourceId -ExpandProperties")
             $error.Clear()
@@ -1621,7 +1633,7 @@ class SFTemplate {
             $this.WriteError("GetAzResourceById:resourceId null/empty")
         }
 
-        $this.WriteLog("exit:GetAzResourceById:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
+        $this.WriteLog("exit:GetAzResourceById:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkMagenta)
         return $result
     }
 
@@ -1635,7 +1647,7 @@ class SFTemplate {
         #>
 
         $result = $null
-        $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)", [ConsoleColor]::Cyan)
+        $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)", [ConsoleColor]::Magenta)
         if ($resourceGroupName -and $resourceName) {
             $this.WriteLog("get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName")
             $error.Clear()
@@ -1653,7 +1665,7 @@ class SFTemplate {
             $this.WriteError("GetAzResourceByName:resourceGroupName and/or resourceName null/empty")
         }
 
-        $this.WriteLog("exit:GetAzResourceByName:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
+        $this.WriteLog("exit:GetAzResourceByName:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkMagenta)
         return $result
     }
 
@@ -1667,7 +1679,7 @@ class SFTemplate {
         #>
 
         $result = $null
-        $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)", [ConsoleColor]::Cyan)
+        $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)", [ConsoleColor]::Magenta)
         if ($resourceGroupName -and $resourceType) {
             $this.WriteLog("GetAzResourceByType:get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties")
             $error.Clear()
@@ -1685,7 +1697,7 @@ class SFTemplate {
             $this.WriteError("GetAzResourceByType:resourceGroupName and/or resourceType null/empty")
         }
 
-        $this.WriteLog("exit:GetAzResourceByType:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkCyan)
+        $this.WriteLog("exit:GetAzResourceByType:get-azResource result:$($this.CreateJson($result))", [ConsoleColor]::DarkMagenta)
         return $result
     }
 
