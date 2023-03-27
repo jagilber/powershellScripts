@@ -250,18 +250,18 @@ function main() {
     write-host "
         Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup ``
             -TemplateFile $templateFile ``
-            -Mode Complete ``
+            -Mode $mode ``
             -TemplateParameterObject $templateParameters ``
             @additionalParameters
     " -ForegroundColor Cyan
     $ret = Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup `
         -TemplateFile $templateFile `
-        -Mode Complete `
+        -Mode $mode `
         -TemplateParameterObject $templateParameters `
         @additionalParameters
 
     if ($ret) {
-        Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)"
+        Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)`n`n$($ret | convertto-json)"
         return 1
     }
 
