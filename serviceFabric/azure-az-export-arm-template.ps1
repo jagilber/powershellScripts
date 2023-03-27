@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 230326.1
+    Version    : 230327
     todo       : 
     
     History    : add support for private ip address and clusters with no diagnostics extension v2
@@ -73,7 +73,7 @@ class ClusterModel {
         $this.sfTemplate = $sfTemplate
     }
 
-    [Vmss] FindVmssByExpression([string]$expression) {
+    [Vmss[]] FindVmssByExpression([string]$expression) {
         $this.WriteLog("enter:FindVmssByExpression searching for resource:$expression")
         $vmssObjects = @($this.vmss.Where( { . ([scriptblock]::Create($expression)) }))
         if (!$vmssObjects -or $vmssObjects.Count -lt 1) {
@@ -1606,7 +1606,16 @@ class SFTemplate {
         $this.WriteLog("enter:GetAzResourceById([string]$resourceId)", [ConsoleColor]::Cyan)
         if ($resourceId) {
             $this.WriteLog("get-azResource -resourceId $resourceId -ExpandProperties")
-            $result = get-azResource -resourceId $resourceId -ExpandProperties
+            $error.Clear()
+            try {
+                $result = get-azResource -resourceId $resourceId -ExpandProperties
+                if ($error) { throw $error }
+            }
+            catch [Exception] {
+                $this.WriteError("GetAzResourceById:exception:`r`n$psitem`r`n$($error | out-string)")
+                $result = $null
+                $error.Clear()
+            }
         }
         else {
             $this.WriteError("GetAzResourceById:resourceId null/empty")
@@ -1629,7 +1638,16 @@ class SFTemplate {
         $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)", [ConsoleColor]::Cyan)
         if ($resourceGroupName -and $resourceName) {
             $this.WriteLog("get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName")
-            $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
+            $error.Clear()
+            try {
+                $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
+                if ($error) { throw $error }
+            }
+            catch [Exception] {
+                $this.WriteError("GetAzResourceByName:exception:`r`n$psitem`r`n$($error | out-string)")
+                $result = $null
+                $error.Clear()
+            }
         }
         else {
             $this.WriteError("GetAzResourceByName:resourceGroupName and/or resourceName null/empty")
@@ -1652,7 +1670,16 @@ class SFTemplate {
         $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)", [ConsoleColor]::Cyan)
         if ($resourceGroupName -and $resourceType) {
             $this.WriteLog("GetAzResourceByType:get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties")
-            $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
+            $error.Clear()
+            try {
+                $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
+                if ($error) { throw $error }
+            }
+            catch [Exception] {
+                $this.WriteError("GetAzResourceByType:exception:`r`n$psitem`r`n$($error | out-string)")
+                $result = $null
+                $error.Clear()
+            }
         }
         else {
             $this.WriteError("GetAzResourceByType:resourceGroupName and/or resourceType null/empty")
@@ -2992,7 +3019,7 @@ class SFTemplate {
         }
 
         foreach ($parameter in $parametersRemoveList) {
-            $this.WriteWarning("RemoveUnusedParameters:removing $($parameter.name)")
+            $this.WriteLog("RemoveUnusedParameters:removing $($parameter.name)")
             [void]$this.currentConfig.parameters.psobject.Properties.Remove($parameter.name)
         }
         $this.WriteLog("exit:RemoveUnusedParameters")
