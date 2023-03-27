@@ -26,7 +26,7 @@
 .NOTES  
     File Name  : azure-az-export-arm-template.ps1
     Author     : jagilber
-    Version    : 230326
+    Version    : 230326.1
     todo       : 
     
     History    : add support for private ip address and clusters with no diagnostics extension v2
@@ -74,23 +74,13 @@ class ClusterModel {
     }
 
     [Vmss] FindVmssByExpression([string]$expression) {
-        $this.WriteVerbose("enter:FindVmssByExpression searching for resource:$expression")
-        [Vmss]$vmssObject = $null
-        $vmssObjects = @($this.vmss.Where( { $expression }))
-        
-        if ($vmssObjects.Count -gt 1) {
-            $this.WriteError("FindVmssByExpression multiple objects found $(($vmssObjects.Count)). returning first object:$vmssObjects")
-            $vmssObject = $vmssObjects[0]
+        $this.WriteLog("enter:FindVmssByExpression searching for resource:$expression")
+        $vmssObjects = @($this.vmss.Where( { . ([scriptblock]::Create($expression)) }))
+        if (!$vmssObjects -or $vmssObjects.Count -lt 1) {
+            $this.WriteWarning("FindVmssByExpression:warning:vmss not found:expression:$expression")
         }
-        elseif ($vmssObjects.Count -lt 1) {
-            $this.WriteError("FindVmssByExpression unable to find vmss in ClusterModel:resource:$expression")
-        }
-        else {
-            $vmssObject = $vmssObjects[0]
-        }
-
-        $this.WriteVerbose("exit:FindVmssByExpression returning vmss resource object:$vmssObject")
-        return $vmssObject
+        $this.WriteLog("exit:FindVmssByExpression returning vmss resource objects: count:$($vmssObjects.Count) objects:$vmssObjects)")
+        return $vmssObjects
 
     }
     
@@ -131,12 +121,30 @@ class ClusterModel {
         }
     }
 
+    [void] WriteLog($data) {
+        if ($this.sfTemplate) {
+            $this.sfTemplate.WriteLog($data)
+        }
+        else {
+            Write-host $data
+        }
+    }
+
     [void] WriteVerbose($data) {
         if ($this.sfTemplate) {
             $this.sfTemplate.WriteVerbose($data)
         }
         else {
             write-verbose $data
+        }
+    }
+
+    [void] WriteWarning($data) {
+        if ($this.sfTemplate) {
+            $this.sfTemplate.WriteWarning($data)
+        }
+        else {
+            write-warning $data
         }
     }
 }
@@ -189,6 +197,9 @@ class SFTemplate {
     [string]$storageKeyApi = '2015-05-01-preview'
     [string]$defaultSflogsValue = "[toLower(concat('sflogs',uniqueString(resourceGroup().id),'2'))]"
     [string]$defaultSfdiagsValue = "[toLower(concat(uniqueString(resourceGroup().id),'3'))]"
+    [string]$descriptionUniqueCluster = 'this name must be unique in cluster deployment.'
+    [string]$descriptionAddPrimary = "$($this.descriptionUniqueCluster) To add a new primary nodetype, update this value."
+    [string]$descriptionAddSecondary = "$($this.descriptionUniqueCluster) To add a new secondary nodetype, update this value."
     [text.regularExpressions.regexOptions]$ignoreCase = [text.regularExpressions.regexOptions]::IgnoreCase
 
     SFTemplate() {}
@@ -595,11 +606,12 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".addprimarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
-        $this.ModifyVmssResourcesAddPrimary()
+        $this.ModifyLbResourcesAddPrimary()
         if (!($this.ParameterizeNodetypes($true, $true))) {
             $this.WriteError("exit:CreateAddPrimaryNodeTypeTemplate:no nodetype found")
             return
         }
+        $this.ModifyVmssResourcesAddPrimary()
 
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
@@ -629,6 +641,7 @@ class SFTemplate {
         $templateFile = $this.templateJsonFile.Replace(".json", ".addsecondarynodetype.json")
         $templateParameterFile = $templateFile.Replace(".json", ".parameters.json")
 
+        $this.ModifyLbResourcesAddSecondary()
         if (!($this.ParameterizeNodetypes())) {
             $this.WriteLog("CreateAddSecondaryNodeTypeTemplate:no secondary nodetype found", [consolecolor]::Yellow)
 
@@ -637,7 +650,7 @@ class SFTemplate {
                 return
             }
         }
-
+        $this.ModifyVmssResourcesAddSecondary()
 
         $this.CreateParameterFile($templateParameterFile)
         $this.VerifyConfig($templateParameterFile)
@@ -1036,7 +1049,7 @@ class SFTemplate {
         [void]$resources.Add($clusterResource.Id)
 
         $this.WriteLog("EnumAllResources:getting scalesets $($this.resourceGroupName)")
-        $vmssResources = @($this.EnumVmssResources($clusterResource))
+        $vmssResources = @($this.EnumVmssResources())
         if ($vmssResources.Count -lt 1) {
             $this.WriteError("exit:EnumAllResources:unable to enumerate vmss. exiting")
             return $null
@@ -1046,7 +1059,7 @@ class SFTemplate {
         }
 
         $this.WriteLog("EnumAllResources:getting storage $($this.resourceGroupName)")
-        $storageResources = @($this.EnumStorageResources($clusterResource))
+        $storageResources = @($this.EnumStorageResources())
         if ($storageResources.count -lt 1) {
             $this.WriteError("exit:EnumAllResources:unable to enumerate storage. exiting")
             return $null
@@ -1195,8 +1208,9 @@ class SFTemplate {
                     $this.WriteLog("adding public ip: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
 
-                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.loadbalancerIds.contains($lbresource)')
-                    [void]$vmssTreeResource.ipAddressIds.Add($id)
+                    foreach ($vmssTreeResource in $this.clusterModel.FindVmssByExpression("`$psitem.loadbalancerIds.contains('$lbresource')")) {
+                        [void]$vmssTreeResource.ipAddressIds.Add($id)
+                    }
                 }
             }
         }
@@ -1270,6 +1284,27 @@ class SFTemplate {
         return $resources.ToArray() | sort-object -Unique
     }
 
+    [object[]] EnumNodeTypeResources() {
+        <#
+        .SYNOPSIS
+            enumerate nodetype resources from $clusterResource
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:GetNodeTypeResources")
+        $clusterResource = $this.GetClusterResource()
+        $resources = @($clusterResource.Properties.nodetypes)
+    
+        if ($resources.count -eq 0) {
+            $this.WriteError("unable to find nodetype resource")
+        }
+
+        $this.WriteVerbose("returning nodetype resource $resources")
+        $this.WriteLog("exit:GetNodeTypeResources:$($resources.count)")
+        return $resources
+    }
+
     [string[]] EnumNsgResourceIds([object[]]$vnetResources) {
         <#
         .SYNOPSIS
@@ -1297,9 +1332,10 @@ class SFTemplate {
                     $id = $subnet.properties.networkSecurityGroup.id
                     $this.WriteLog("EnumNsgResourceIds:adding nsg id: $id", [consolecolor]::green)
                     [void]$resources.Add($id)
-                    
-                    [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
-                    [void]$vmssTreeResource.nsgIds.Add($id)
+
+                    foreach ($vmssTreeResource in $this.clusterModel.FindVmssByExpression("`$psitem.subnetIds.contains('$($subnet.Id)')")) {
+                        [void]$vmssTreeResource.nsgIds.Add($id)
+                    }
                 }
             }
         }
@@ -1333,9 +1369,10 @@ class SFTemplate {
             foreach ($rule in $nsgResource.Properties.securityRules) {
                 $this.WriteLog("EnumNsgRuleResourceIds:adding nsg rule: $($rule.name)", [consolecolor]::green)
                 [void]$resources.Add($rule.id)
-                    
-                [object]$vmssTreeResource = $this.clusterModel.FindVmssByExpression('$_.vnetIds.contains($vnetid)')
-                [void]$vmssTreeResource.nsgRuleIds.Add($rule.id)
+
+                foreach ($vmssTreeResource in $this.clusterModel.FindVmssByExpression("`$psitem.nsgIds.contains('$nsgResourceId')")) {
+                    [void]$vmssTreeResource.nsgRuleIds.Add($rule.id)
+                }
             }
         }
 
@@ -1344,7 +1381,54 @@ class SFTemplate {
         return $resources.ToArray() | sort-object -Unique
     }
 
-    [object[]] EnumStorageResources([object]$clusterResource) {
+    [object[]] EnumPrimaryNodeType() {
+        <#
+        .SYNOPSIS
+            enumerate primary nodetype resource from $clusterResource
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:EnumPrimaryNodeType")
+        $resources = @($this.EnumNodeTypeResources()) | Where-Object isPrimary = $true
+    
+        if ($resources.count -lt 1) {
+            $this.WriteError("unable to find primary nodetype resource")
+        }
+        elseif ($resources.count -gt 1) {
+            $this.WriteError("multiple primary nodetypes")
+        }
+
+        $this.WriteVerbose("returning primary nodetype resource $resources")
+        $this.WriteLog("exit:EnumPrimaryNodeType:$($resources.count)")
+        return $resources[0]
+    }
+
+    [object[]] EnumPrimaryVmss() {
+        <#
+        .SYNOPSIS
+            enumerate primary vmss resource from $clusterResource
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:EnumPrimaryVmss")
+        $primaryNodeType = $this.EnumPrimaryNodeType()
+        $resources = @($this.EnumVmssResources()) | Where-Object Name -imatch $primaryNodeType.Name
+    
+        if ($resources.count -lt 1) {
+            $this.WriteError("unable to find primary vmss resource")
+        }
+        elseif ($resources.count -gt 1) {
+            $this.WriteError("multiple vmss nodetypes")
+        }
+
+        $this.WriteVerbose("returning primary vmss resource $resources")
+        $this.WriteLog("exit:EnumPrimaryVmss:$($resources.count)")
+        return $resources[0]
+    }
+
+    [object[]] EnumStorageResources() {
         <#
         .SYNOPSIS
             enumerate storage resources from cluster resource
@@ -1353,15 +1437,16 @@ class SFTemplate {
             [object[]]
         #>
         $this.WriteLog("enter:EnumStorageResources")
+        $clusterResource = $this.EnumClusterResource()
         $resources = [collections.arraylist]::new()
     
         $this.sflogs = $this.GetPSPropertyValue($clusterResource, 'Properties.diagnosticsStorageAccountConfig.storageAccountName')
         $this.WriteLog("EnumStorageResources:cluster sflogs storage account $($this.sflogs)")
 
-        $scalesets = $this.EnumVmssResources($clusterResource)
-        if ($this.GetPSPropertyValue($scalesets, 'Properties.virtualMachineProfile.extensionProfile.extensions.properties.settings.storageAccount')) {
+        $scalesets = $this.EnumVmssResources()
+        if ($this.GetPSPropertyValues($scalesets, 'Properties.virtualMachineProfile.extensionProfile.extensions.properties.settings.storageAccount')) {
             $diagnosticAccount = $scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics'
-            if ($this.GetPSPropertyValue($diagnosticAccount, 'settings.storageAccount')) {
+            if ($this.GetPSPropertyValues($diagnosticAccount, 'settings.storageAccount')) {
                 $this.sfdiags = @($diagnosticAccount.settings.storageAccount) | Sort-Object -Unique
             }
         }
@@ -1428,7 +1513,7 @@ class SFTemplate {
         return $resources.ToArray() | sort-object -Unique
     }
 
-    [object[]] EnumVmssResources([object]$clusterResource) {
+    [object[]] EnumVmssResources() {
         <#
         .SYNOPSIS
             enumerate virtual machine scaleset resources from cluster resource
@@ -1437,15 +1522,14 @@ class SFTemplate {
             [object[]]
         #>
         $this.WriteLog("enter:EnumVmssResources")
-        $nodeTypes = $clusterResource.Properties.nodeTypes
-        $this.WriteLog("EnumVmssResources:cluster nodetypes $($this.CreateJson($nodeTypes))")
+        $clusterResource = $this.EnumClusterResource()
         $vmssResources = [collections.arraylist]::new()
 
         $clusterEndpoint = $clusterResource.Properties.clusterEndpoint
         $this.WriteLog("EnumVmssResources:cluster id $clusterEndpoint", [consolecolor]::Green)
     
-        if (!$nodeTypes -or !$clusterEndpoint) {
-            $this.WriteError("exit:EnumVmssResources:nodetypes:$nodeTypes clusterEndpoint:$clusterEndpoint")
+        if (!$clusterEndpoint) {
+            $this.WriteError("exit:EnumVmssResources:clusterEndpoint:$clusterEndpoint")
             return $null
         }
 
@@ -1520,7 +1604,8 @@ class SFTemplate {
 
         $result = $null
         $this.WriteLog("enter:GetAzResourceById([string]$resourceId)", [ConsoleColor]::Cyan)
-        if($resourceId) {
+        if ($resourceId) {
+            $this.WriteLog("get-azResource -resourceId $resourceId -ExpandProperties")
             $result = get-azResource -resourceId $resourceId -ExpandProperties
         }
         else {
@@ -1542,7 +1627,8 @@ class SFTemplate {
 
         $result = $null
         $this.WriteLog("enter:GetAzResourceByName([string]$resourceGroupName, [string]$resourceName)", [ConsoleColor]::Cyan)
-        if($resourceGroupName -and $resourceName) {
+        if ($resourceGroupName -and $resourceName) {
+            $this.WriteLog("get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName")
             $result = get-azResource -ResourceGroupName $resourceGroupName -Name $resourceName
         }
         else {
@@ -1564,7 +1650,8 @@ class SFTemplate {
 
         $result = $null
         $this.WriteLog("enter:GetAzResourceByType([string]$resourceGroupName, [string]$resourceType)", [ConsoleColor]::Cyan)
-        if($resourceGroupName -and $resourceType) {
+        if ($resourceGroupName -and $resourceType) {
+            $this.WriteLog("GetAzResourceByType:get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties")
             $result = get-azResource -ResourceGroupName $resourceGroupName -ResourceType $resourceType -ExpandProperties
         }
         else {
@@ -1607,7 +1694,7 @@ class SFTemplate {
         $results = @()
 
         if ($null -ne ($this.GetPSPropertyValue($this.currentConfig, "parameters.$parameterName.defaultValue"))) {
-            $results = @($this.currentConfig.parameters.$parameterName.defaultValue)
+            $results = @($this.currentConfig.parameters.$parameterName)#.defaultValue)
         }
     
         if (@($results).Count -lt 1) {
@@ -1776,17 +1863,17 @@ class SFTemplate {
         [void]$values.AddRange(@($this.GetResourceParameterValues($resource, $name)))
     
         if ($values.Count -eq 1) {
-            $this.WriteLog("GetResourceParameterValue:parameter name found in resource. returning first value", [consolecolor]::Magenta)
+            $this.WriteLog("GetResourceParameterValue:parameter name:$name found in resource. returning:$($this.CreateJson($values[0]))", [consolecolor]::Magenta)
             $retval = @($values)[0]
         }
         elseif ($values.Count -gt 1) {
-            $this.WriteError("GetResourceParameterValue:multiple parameter names found in resource. returning first value")
+            $this.WriteError("GetResourceParameterValue:multiple parameter names found in resource. returning first value:$($this.CreateJson($values))")
             $retval = @($values)[0]
         }
         elseif ($values.Count -lt 1) {
             $this.WriteError("GetResourceParameterValue:no parameter name found in resource. returning $null")
         }
-        $this.WriteLog("exit:GetResourceParameterValue:returning:$retval", [consolecolor]::Magenta)
+        $this.WriteLog("exit:GetResourceParameterValue:returning:$($this.CreateJson($retval))", [consolecolor]::Magenta)
         return $retval
     }
 
@@ -1821,8 +1908,18 @@ class SFTemplate {
                 if ($parameterValues.Count -eq 1) {
                     $parameterValue = $psObjectProperty.Value
                     if (!($parameterValue)) {
-                        $this.WriteLog("GetResourceParameterValues:returning:string::empty", [consolecolor]::green)
-                        [void]$retval.Add([string]::Empty)
+                        if ($parameterValue.GetType().Name -ieq 'boolean') {
+                            $this.WriteLog("GetResourceParameterValues:returning:bool:false", [consolecolor]::green)
+                            [void]$retval.Add($false)
+                        }
+                        elseif ($parameterValue.GetType().Name -ieq 'boolean') {
+                            $this.WriteLog("GetResourceParameterValues:returning:string::empty", [consolecolor]::green)
+                            [void]$retval.Add([string]::Empty)
+                        }
+                        else {
+                            $this.WriteLog("GetResourceParameterValues:returning:null", [consolecolor]::green)
+                            [void]$retval.Add($null)
+                        }
                     }
                     else {
                         $this.WriteLog("GetResourceParameterValues:returning:$parameterValue", [consolecolor]::green)
@@ -1999,7 +2096,7 @@ class SFTemplate {
             $parameterizedName = $this.GetParameterizedNameFromValue($extension.properties.settings.nodetyperef)
 
             if ($parameterizedName) {
-                $nodetypeName = $this.GetFromParametersSection($parameterizedName)[0]
+                $nodetypeName = $this.GetFromParametersSection($parameterizedName)[0].defaultValue
             }
             else {
                 $nodetypeName = $extension.properties.settings.nodetyperef
@@ -2154,6 +2251,38 @@ class SFTemplate {
         $this.WriteLog("exit:ModifyLbResources")
     }
 
+    [void] ModifyLbResourcesAddPrimary() {
+        <#
+        .SYNOPSIS
+            modifies loadbalancer name parameter metadata for addprimary, addsecondary, new
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyLbResourcesAddPrimary")
+
+        foreach ($lbResource in $this.GetLbResources()) {
+            $this.UpdateParametersSectionMetadataDescription($this.GetParameterizedNameFromValue($lbResource.Name), $this.descriptionAddPrimary)
+        }
+        $this.WriteLog("exit:ModifyLbResourcesAddPrimary")
+    }
+
+    [void] ModifyLbResourcesAddSecondary() {
+        <#
+        .SYNOPSIS
+            modifies loadbalancer name parameter metadata for addprimary, addsecondary, new
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyLbResourcesAddSecondary")
+
+        foreach ($lbResource in $this.GetLbResources()) {
+            $this.UpdateParametersSectionMetadataDescription($this.GetParameterizedNameFromValue($lbResource.Name), $this.descriptionAddSecondary)
+        }
+        $this.WriteLog("exit:ModifyLbResourcesAddSecondary")
+    }
+
     [void] ModifyLbResourcesRedeploy() {
         <#
         .SYNOPSIS
@@ -2171,6 +2300,7 @@ class SFTemplate {
                 $this.WriteLog("ModifyLbResourcesRedeploy:removing natrules: $($this.CreateJson($lbResource.properties.inboundNatRules))", [consolecolor]::Yellow)
                 [void]$lbResource.properties.psobject.Properties.Remove('inboundNatRules')
             }
+
         }
         $this.WriteLog("exit:ModifyLbResourcesRedeploy")
     }
@@ -2344,6 +2474,7 @@ class SFTemplate {
         $vmssResources = $this.GetVmssResources()
    
         foreach ($vmssResource in $vmssResources) {
+            $this.UpdateParametersSectionMetadataDescription($this.GetParameterizedNameFromValue($vmssResource.Name), $this.descriptionAddPrimary)
             $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
             $this.AddParameter(
                 $vmssResource, # resource
@@ -2353,6 +2484,23 @@ class SFTemplate {
             )
         }
         $this.WriteLog("exit:ModifyVmssResourcesAddPrimary")
+    }
+
+    [void] ModifyVmssResourcesAddSecondary() {
+        <#
+        .SYNOPSIS
+            modifies vmss resources for AddSecondary template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVmssResourcesAddSecondary")
+        $vmssResources = $this.GetVmssResources()
+   
+        foreach ($vmssResource in $vmssResources) {
+            $this.UpdateParametersSectionMetadataDescription($this.GetParameterizedNameFromValue($vmssResource.Name), $this.descriptionAddSecondary)
+        }
+        $this.WriteLog("exit:ModifyVmssResourcesAddSecondary")
     }
 
     [void] ModifyVmssResourcesRedeploy() {
@@ -2521,11 +2669,6 @@ class SFTemplate {
             }
 
             $metadataDescription = $null
-            if ($parameterName -ieq 'name') {
-                # set nodetype name metadatadescription
-                $metadataDescription = 'this name must be unique in cluster deployment.'
-            }
-
             $null = $this.AddToParametersSection($parametersName, $parameterValue, $type, $metadataDescription)
             $this.WriteLog("ParameterizeNodetype:setting $parametersName to $parameterValue for $($nodetype.name)", [consolecolor]::Magenta)
 
@@ -2623,10 +2766,8 @@ class SFTemplate {
         $this.WriteLog("enter:ParameterizeNodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue, [switch]$all)")
         # todo. should validation be here? how many nodetypes
         $null = $this.RemoveParameterizedNodeTypes()
-
         $clusterResource = $this.GetClusterResource()
-        $nodetypes = [collections.arraylist]::new()
-        [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
+        $nodetypes = [collections.arraylist]::new($this.EnumNodeTypeResources())
         $filterednodetypes = $nodetypes.psobject.copy()
 
         if ($nodetypes.Count -lt 1) {
@@ -2747,9 +2888,8 @@ class SFTemplate {
         $this.WriteLog("enter:RemoveParameterizedNodeTypes")
         $clusterResource = $this.GetClusterResource()
         $cleanNodetypes = [collections.arraylist]::new()
-        $nodetypes = [collections.arraylist]::new()
+        $nodetypes = [collections.arraylist]::new($this.EnumNodeTypeResources())
         $retval = $false
-        [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
 
         if ($nodetypes.Count -lt 1) {
             $this.WriteError("exit:RemoveParameterizedNodeTypes:no nodetypes detected!")
@@ -2790,9 +2930,8 @@ class SFTemplate {
         $this.WriteLog("enter:RemoveUnparameterizedNodeTypes")
         $clusterResource = $this.GetClusterResource()
         $cleanNodetypes = [collections.arraylist]::new()
-        $nodetypes = [collections.arraylist]::new()
+        $nodetypes = [collections.arraylist]::new($this.EnumNodeTypeResources())
         $retval = $false
-        [void]$nodetypes.AddRange(@($clusterResource.properties.nodetypes))
 
         if ($nodetypes.Count -lt 1) {
             $this.WriteError("exit:RemoveUnparameterizedNodeTypes:no nodetypes detected!")
@@ -2964,6 +3103,48 @@ class SFTemplate {
 
         $this.WriteLog("exit:SetResourceParameterValue:returning:$retval")
         return $retval
+    }
+
+    [void] UpdateParametersSectionMetadataDescription( [string]$parameterName, [string]$metadataDescription) {
+        <#
+        .SYNOPSIS
+            updates metadatadescription for existing parameter based on $parameterName
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+
+        $existingParameters = @($this.GetFromParametersSection($parameterName))
+
+        if ($existingParameters.Count -lt 1) {
+            $this.WriteError("UpdateParametersSectionMetadataDescription:$parameterName not found in parameters sections. returning.")
+            return
+            #$this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
+        }
+        elseif ($existingParameters.Count -lt 1) {
+            $this.WriteError("UpdateParametersSectionMetadataDescription: multiple $parameterName found in parameters sections. returning.")
+            return
+            #$this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
+        }
+
+        $existingParameter = $existingParameters[0]
+
+        $this.WriteLog("enter:UpdateParametersSectionMetadataDescription:parameterName:$parameterName, metadataDescription:$metadataDescription")
+        $parameterObject = [pscustomobject]@{
+            type         = $existingParameter.type
+            defaultValue = $existingParameter.defaultValue 
+            metadata     = [pscustomobject]@{description = $metadataDescription }
+        }
+
+        foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
+            if (($psObjectProperty.Name -ieq $parameterName)) {
+                $psObjectProperty.Value = $parameterObject
+                $this.WriteLog("exit:UpdateParametersSectionMetadataDescription:parameterObject value added to existing parameter:$($this.CreateJson($parameterObject))")
+                return
+            }
+        }
+
+        $this.WriteLog("exit:UpdateParametersSectionMetadataDescription:new parameter name:$parameterName added $($this.CreateJson($parameterObject))")
     }
 
     [void] VerifyConfig( [string]$templateParameterFile) {
