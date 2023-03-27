@@ -1349,6 +1349,60 @@ class SFTemplate {
         return $resources.ToArray() | sort-object -Unique
     }
 
+    [object[]] EnumPrimaryIpResourceIds() {
+        <#
+        .SYNOPSIS
+            enumerate primary ip resource from $clusterModel
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:EnumPrimaryIpResourceIds")
+        $resources = [collections.arraylist]::new()
+
+        foreach ($vmss in $this.EnumPrimaryVmss()) {
+            $resources.AddRange(@($vmss.ipAddressIds))
+        }
+
+        if ($resources.count -lt 1) {
+            $this.WriteError("EnumPrimaryIpResourceIds:unable to find primary ip resource")
+        }
+        elseif ($resources.count -gt 1) {
+            $this.WriteError("EnumPrimaryIpResourceIds:multiple ip resource")
+        }
+
+        $this.WriteVerbose("EnumPrimaryIpResourceIds:returning primary ip resource $resources")
+        $this.WriteLog("exit:EnumPrimaryIpResourceIds:$($resources.count)")
+        return $resources
+    }
+
+    [object[]] EnumPrimaryLbResourceIds() {
+        <#
+        .SYNOPSIS
+            enumerate primary lb resource from $clusterModel
+            outputs: object[]
+        .OUTPUTS
+            [object[]]
+        #>
+        $this.WriteLog("enter:EnumPrimaryLbResourceIds")
+        $resources = [collections.arraylist]::new()
+
+        foreach ($vmss in $this.EnumPrimaryVmss()) {
+            $resources.AddRange(@($vmss.loadbalancerIds))
+        }
+
+        if ($resources.count -lt 1) {
+            $this.WriteError("EnumPrimaryLbResourceIds:unable to find primary lb resource")
+        }
+        elseif ($resources.count -gt 1) {
+            $this.WriteError("EnumPrimaryLbResourceIds:multiple lb resource")
+        }
+
+        $this.WriteVerbose("EnumPrimaryLbResourceIds:returning primary lb resource $resources")
+        $this.WriteLog("exit:EnumPrimaryLbResourceIds:$($resources.count)")
+        return $resources
+    }
+
     [object[]] EnumPrimaryNodeType() {
         <#
         .SYNOPSIS
@@ -1360,21 +1414,21 @@ class SFTemplate {
         $this.WriteLog("enter:EnumPrimaryNodeType")
         $primaryNodeTypes = [collections.arraylist]::new()
 
-        foreach($nodeType in @($this.EnumNodeTypeResources())) {
-            $isPrimary = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($nodeType.isPrimary))
-            if($isPrimary.defaultValue -eq $true) {
+        foreach ($nodeType in @($this.EnumNodeTypeResources())) {
+            $isPrimary = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($nodeType.isPrimary)).defaultValue
+            if ($isPrimary -eq $true) {
                 $primaryNodeTypes.Add($nodeType)
             }
         }
     
         if ($primaryNodeTypes.count -lt 1) {
-            $this.WriteError("unable to find primary nodetype resource")
+            $this.WriteError("EnumPrimaryNodeType:unable to find primary nodetype resource")
         }
         elseif ($primaryNodeTypes.count -gt 1) {
-            $this.WriteError("multiple primary nodetypes")
+            $this.WriteError("EnumPrimaryNodeType:multiple primary nodetypes resource")
         }
 
-        $this.WriteVerbose("returning primary nodetype resource $primaryNodeTypes")
+        $this.WriteVerbose("EnumPrimaryNodeType:returning primary nodetype resource $primaryNodeTypes")
         $this.WriteLog("exit:EnumPrimaryNodeType:$($primaryNodeTypes.count)")
         return $primaryNodeTypes
     }
@@ -1382,7 +1436,7 @@ class SFTemplate {
     [object[]] EnumPrimaryVmss() {
         <#
         .SYNOPSIS
-            enumerate primary vmss resource from $clusterResource
+            enumerate primary vmss resource from $clusterModel
             outputs: object[]
         .OUTPUTS
             [object[]]
@@ -1390,19 +1444,19 @@ class SFTemplate {
         $this.WriteLog("enter:EnumPrimaryVmss")
         $resources = [collections.arraylist]::new()
 
-        foreach($nodeType in $this.EnumPrimaryNodeType()) {
-            $primaryName = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($nodeType.name))
-            $resources.AddRange(@(@($this.EnumVmssResources()) | Where-Object Name -imatch $primaryName.defaultValue))
+        foreach ($nodeType in $this.EnumPrimaryNodeType()) {
+            $primaryName = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($nodeType.name)).defaultValue
+            $resources.AddRange(@($this.clusterModel.FindVmssByExpression("`$psitem.resource.name -imatch'$primaryName'")))
         }
 
         if ($resources.count -lt 1) {
-            $this.WriteError("unable to find primary vmss resource")
+            $this.WriteError("EnumPrimaryVmss:unable to find primary vmss resource")
         }
         elseif ($resources.count -gt 1) {
-            $this.WriteError("multiple vmss nodetypes")
+            $this.WriteError("EnumPrimaryVmss:multiple vmss resource")
         }
 
-        $this.WriteVerbose("returning primary vmss resource $resources")
+        $this.WriteVerbose("EnumPrimaryVmss:returning primary vmss resource $resources")
         $this.WriteLog("exit:EnumPrimaryVmss:$($resources.count)")
         return $resources
     }
@@ -1422,7 +1476,8 @@ class SFTemplate {
         $this.sflogs = $this.GetPSPropertyValue($clusterResource, 'Properties.diagnosticsStorageAccountConfig.storageAccountName')
         $this.WriteLog("EnumStorageResources:cluster sflogs storage account $($this.sflogs)")
 
-        $scalesets = $this.EnumVmssResources()
+        #$scalesets = $this.EnumVmssResources()
+        $scalesets = @($this.clusterModel.vmss.resource)
         if ($this.GetPSPropertyValues($scalesets, 'Properties.virtualMachineProfile.extensionProfile.extensions.properties.settings.storageAccount')) {
             $diagnosticAccount = $scalesets.Properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object type -eq 'IaaSDiagnostics'
             if ($this.GetPSPropertyValues($diagnosticAccount, 'settings.storageAccount')) {
@@ -1733,7 +1788,7 @@ class SFTemplate {
         $results = @()
 
         if ($null -ne ($this.GetPSPropertyValue($this.currentConfig, "parameters.$parameterName.defaultValue"))) {
-            $results = @($this.currentConfig.parameters.$parameterName)#.defaultValue)
+            $results = @($this.currentConfig.parameters.$parameterName)
         }
     
         if (@($results).Count -lt 1) {
@@ -1866,7 +1921,7 @@ class SFTemplate {
                 }
                 elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
                     foreach ($match in $propertyObject.psobject.Properties.match($subItem)) {
-                        $this.WriteLog("found property:$($match.Name)")
+                        $this.WriteVerbose("found property:$($match.Name)")
                         $propertyObject = $propertyObject.($match.Name)
                         $this.WriteVerbose("property value:$($propertyObject | convertto-json)")
 
