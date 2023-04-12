@@ -1518,7 +1518,7 @@ class SFTemplate {
             -Force `
             -IncludeComments `
             -IncludeParameterDefaultValue `
-            -Resource $resourceIds", [consolecolor]::Blue)
+            -Resource $($resourceIds | out-string)", [consolecolor]::Blue)
 
         Export-AzResourceGroup -ResourceGroupName $this.resourceGroupName `
             -Path $jsonFile `
