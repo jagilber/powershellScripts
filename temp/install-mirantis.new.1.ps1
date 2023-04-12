@@ -110,6 +110,7 @@ template json :
     https://github.com/Azure/Service-Fabric-Troubleshooting-Guides
 #>
 
+[cmdletbinding()]
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
     [switch]$allowUpgrade,
@@ -310,6 +311,7 @@ function Get-LatestVersion([string[]] $versions) {
 
 function Find-Process($processName) {
     $processList = Get-Process
+    Write-Verbose ($processList | out-string)
     Write-Host "Find-Process:Searching Process List for: $processName"
     $findList = $processList | Where-Object Name -imatch $processName
 
