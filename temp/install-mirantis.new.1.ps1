@@ -164,6 +164,15 @@ function Main() {
 
     $version = Set-DockerVersion -dockerVersion $dockerVersion
     $installedVersion = Get-DockerVersion
+    
+    $outvar = $false
+    $mutex = $null
+    
+    while(!$outvar) {
+        $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar)
+        write-host "mutex acquired:$outvar"
+        start-sleep -seconds 1
+    }
 
     if ($hypervIsolation) {
         $hypervInstalled = (Get-WindowsFeature -name hyper-v).Installed
@@ -195,7 +204,7 @@ function Main() {
         $noRestart = $true
     }
     else {
-        Wait-ForProcesses
+        #Wait-ForProcesses
         $engineOnly = $null
         if (!$installContainerD) {
             $engineOnly = "-EngineOnly "
@@ -209,7 +218,8 @@ function Main() {
         Write-Host "Restarting OS:$(!$noRestart)"
     }
 
-    Wait-ForProcesses
+    #Wait-ForProcesses
+    $mutex.Close()
     Stop-Transcript
     Write-Event (Get-Content -raw $transcriptLog)
 
