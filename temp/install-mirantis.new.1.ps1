@@ -208,9 +208,9 @@ function Main() {
         Write-Host "Restarting OS:$(!$noRestart)"
     }
 
+    Wait-ForProcesses
     Stop-Transcript
     Write-Event (Get-Content -raw $transcriptLog)
-    Wait-ForProcesses
 
     if (!$noRestart) {
         Restart-Computer -Force
