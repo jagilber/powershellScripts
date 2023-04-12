@@ -165,14 +165,14 @@ function Main() {
     $version = Set-DockerVersion -dockerVersion $dockerVersion
     $installedVersion = Get-DockerVersion
     
-    $outvar = $false
-    $mutex = $null
+    # $outvar = $false
+    # $mutex = $null
 
-    while(!$outvar) {
-        $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar)
-        write-host "mutex acquired:$outvar"
-        start-sleep -seconds 1
-    }
+    # while(!$outvar) {
+    #     $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar)
+    #     write-host "mutex acquired:$outvar"
+    #     start-sleep -seconds 1
+    # }
 
     if ($hypervIsolation) {
         $hypervInstalled = (Get-WindowsFeature -name hyper-v).Installed
@@ -225,11 +225,14 @@ function Main() {
 
     if (!$noRestart) {
         Restart-Computer -Force
+        # test do not return to give time for restart-computer to complete
+        # returning early may allow next extension 'service fabric' to start install and fail
+        start-sleep -seconds 20
     }
     else {
-        $mutex.Close()
+        #$mutex.Close()
     }
-    
+
     return $result
 }
 
