@@ -244,7 +244,7 @@ function Main() {
         # test do not return to give time for restart-computer to complete
         # returning immediately may allow next extension 
         # most likely 'service fabric' to start install and fail
-        start-sleep -seconds 20
+        # start-sleep -seconds 20
     }
     else {
         #$mutex.Close()
