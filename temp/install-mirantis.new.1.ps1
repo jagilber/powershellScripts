@@ -174,6 +174,13 @@ function Main() {
     #     start-sleep -seconds 1
     # }
 
+    Start-Process powershell '-c', {
+        $outvar = $null;
+        $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar);
+        write-host $mutex;
+        write-host $outvar;
+        read-host;}
+
     if ($hypervIsolation) {
         $hypervInstalled = (Get-WindowsFeature -name hyper-v).Installed
         Write-Host "Windows feature Hyper-V installed:$hypervInstalled"
@@ -226,7 +233,8 @@ function Main() {
     if (!$noRestart) {
         Restart-Computer -Force
         # test do not return to give time for restart-computer to complete
-        # returning early may allow next extension 'service fabric' to start install and fail
+        # returning immediately may allow next extension 
+        # most likely 'service fabric' to start install and fail
         start-sleep -seconds 20
     }
     else {
