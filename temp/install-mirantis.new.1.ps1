@@ -167,7 +167,7 @@ function Main() {
     
     $outvar = $false
     $mutex = $null
-    
+
     while(!$outvar) {
         $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar)
         write-host "mutex acquired:$outvar"
@@ -219,14 +219,17 @@ function Main() {
     }
 
     #Wait-ForProcesses
-    $mutex.Close()
+    
     Stop-Transcript
     Write-Event (Get-Content -raw $transcriptLog)
 
     if (!$noRestart) {
         Restart-Computer -Force
     }
-
+    else {
+        $mutex.Close()
+    }
+    
     return $result
 }
 
