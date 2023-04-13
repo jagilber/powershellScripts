@@ -174,21 +174,21 @@ function Main() {
     #     start-sleep -seconds 1
     # }
 
-    # Start-Process powershell '-c', {
-    #     $outvar = $null;
-    #     $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar);
-    #     write-host $mutex;
-    #     write-host $outvar;
-    #     read-host;
-    # }
-
-    Start-Job -ScriptBlock {
+    Start-Process powershell '-c', {
         $outvar = $null;
         $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar);
         write-host $mutex;
         write-host $outvar;
         read-host;
     }
+
+    # Start-Job -ScriptBlock {
+    #     $outvar = $null;
+    #     $mutex = [threading.mutex]::new($true,'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690',[ref]$outvar);
+    #     write-host $mutex;
+    #     write-host $outvar;
+    #     read-host;
+    # }
 
     if ($hypervIsolation) {
         $hypervInstalled = (Get-WindowsFeature -name hyper-v).Installed
