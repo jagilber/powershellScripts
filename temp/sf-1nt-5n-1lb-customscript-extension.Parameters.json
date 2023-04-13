@@ -1,0 +1,132 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "customScriptExtensionFile": {
+      //"value": "Install-Mirantis-oem.ps1"// -hypervIsolation"
+      "value": "Install-Mirantis.new.1.ps1" // -Verbose" // -hypervIsolation"
+    },
+    "customScriptExtensionFileUri": {
+      //"value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/install-mirantis.ps1"
+      "value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/install-mirantis.new.1.ps1"
+      //"value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/install-mirantis-oem.ps1"
+      //"value": "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/Install-Mirantis.ps1"
+    },
+    "clusterLocation": {
+      "value": "eastus"
+    },
+    "clusterName": {
+      "value": "mytestcluster"
+    },
+    "nt0applicationStartPort": {
+      "value": 20000
+    },
+    "nt0applicationEndPort": {
+      "value": 30000
+    },
+    "nt0ephemeralStartPort": {
+      "value": 49152
+    },
+    "nt0ephemeralEndPort": {
+      "value": 65534
+    },
+    "nt0fabricTcpGatewayPort": {
+      "value": 19000
+    },
+    "nt0fabricHttpGatewayPort": {
+      "value": 19080
+    },
+    "subnet0Name": {
+      "value": "Subnet-0"
+    },
+    "subnet0Prefix": {
+      "value": "10.0.0.0/24"
+    },
+    "computeLocation": {
+      "value": "eastus"
+    },
+    "publicIPAddressName": {
+      "value": "PublicIP-VM"
+    },
+    "publicIPAddressType": {
+      "value": "Dynamic"
+    },
+    "vmStorageAccountContainerName": {
+      "value": "vhds"
+    },
+    "adminUserName": {
+      "value": "cloudadmin"
+    },
+    "adminPassword": {
+      "value": ""
+    },
+    "virtualNetworkName": {
+      "value": "VNet"
+    },
+    "addressPrefix": {
+      "value": "10.0.0.0/16"
+    },
+    "dnsName": {
+      "value": "mytestcluster"
+    },
+    "nicName": {
+      "value": "NIC"
+    },
+    "lbName": {
+      "value": "LoadBalancer"
+    },
+    "lbIPName": {
+      "value": "PublicIP-LB-FE"
+    },
+    "overProvision": {
+      "value": "false"
+    },
+    "vmImagePublisher": {
+      "value": "MicrosoftWindowsServer"
+    },
+    "vmImageOffer": {
+      "value": "WindowsServer"
+    },
+    "vmImageSku": {
+      "value": "2022-Datacenter"
+    },
+    "vmImageVersion": {
+      "value": "latest"
+    },
+    "clusterProtectionLevel": {
+      "value": "EncryptAndSign"
+    },
+    "certificateStoreValue": {
+      "value": "My"
+    },
+    "certificateThumbprint": {
+      "value": ""
+    },
+    "sourceVaultValue": {
+      "value": ""
+    },
+    "certificateUrlValue": {
+      "value": ""
+    },
+    "storageAccountType": {
+      "value": "Standard_LRS"
+    },
+    "supportLogStorageAccountType": {
+      "value": "Standard_LRS"
+    },
+    "applicationDiagnosticsStorageAccountType": {
+      "value": "Standard_LRS"
+    },
+    "nt0InstanceCount": {
+      "value": 5
+    },
+    "vmNodeType0Name": {
+      "value": "nt0"
+    },
+    "vmNodeType0Size": {
+      "value": "Standard_D1_v2" // fails with oem script and 2022
+      //"value": "Standard_D4_v3" // needed for hypervisolation
+      //"value": "Standard_D1_v2" // cancelled. taking too long
+    }
+  }
+}
