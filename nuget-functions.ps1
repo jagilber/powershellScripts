@@ -29,6 +29,7 @@ class NugetObj {
     [string]$globalPackages = "$($env:USERPROFILE)\.nuget\packages"
     [string]$nugetFallbackFolder = "$($env:userprofile)\.dotnet\NuGetFallbackFolder"
     [bool]$allVersions = $false
+    [ValidateSet('normal','detailed','quiet')]
     [string]$verbose = "normal" #"normal" # detailed, quiet
     [string]$nuget = "nuget.exe"
 
@@ -355,6 +356,10 @@ class NugetObj {
         return @([io.directory]::GetFiles("$sourcePath", $sourcePattern, [io.searchOption]::AllDirectories))
     }
 
+    <#
+        InstallPackage installs a package to a project and installs any dependencies from nuget.org
+        $packageName is name of package
+    #>
     [string[]] InstallPackage([string]$packageName) {
         if (!$this.EnumSources().GetEnumerator().name -contains 'nuget.org') {
             $this.AddSourceNugetOrg()
@@ -362,10 +367,22 @@ class NugetObj {
         return $this.InstallPackage($packageName, 'nuget.org', $this.globalPackages, $null)
     }
 
+    <#
+        InstallPackage installs a package to a project and installs any dependencies
+        $packageName is name of package
+        $packageSource is nuget package source example nuget.org
+    #>
     [string[]] InstallPackage([string]$packageName, [string]$packageSource = $null) {
         return $this.InstallPackage($packageName, $packageSource, $null, $null)
     }
 
+    <#
+        InstallPackage installs a package to a project and installs any dependencies
+        $packageName is name of package
+        $packageSource is nuget package source example nuget.org
+        $packagesDirectory is destination path for package install
+        $prerelease is whether to install prerelease versions of package
+    #>
     [string[]] InstallPackage([string]$packageName, [string]$packageSource, [string]$packagesDirectory = $null, [bool]$prerelease) {
         $pre = $null
         $source = $null
