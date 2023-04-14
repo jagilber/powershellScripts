@@ -7,6 +7,7 @@ checks for nuget.exe and downloads if needed.
 creates $nuget ps object with functions an properties to manage nuget packages
 
 .NOTES
+v1.2
 # -allversions is broken in nuget.exe
 
 .EXAMPLE
@@ -58,6 +59,34 @@ class NugetObj {
         $this.EnumLocals()
     }
 
+    <#
+        AddPackage adds a package to a local store on disk and expands files
+        $packageName is name of package
+        $nugetPackagePath is source path of package (.nupkg) to add
+        $targetDirectory is the destination path or 'locals' name
+    #>
+    [string[]] AddPackage([string]$packageName, [string]$nugetPackagePath, [string]$targetDirectory) {
+        if (!(test-path $targetDirectory)) {
+            write-host "checking: $targetDirectory"
+            $outputDirectory = $this.EnumLocalsPath($targetDirectory)
+            if (!$outputDirectory) {
+                write-host "creating path: $targetDirectory"
+                mkdir $targetDirectory
+            }
+        }
+
+        $outputDirectory = " -source $targetDirectory" 
+
+        write-host "nuget add $nugetPackagePath$outputDirectory -expand -verbosity $($this.verbose)" -ForegroundColor magenta
+        $this.ExecuteNuget("add $nugetPackagePath$outputDirectory -expand -verbosity $($this.verbose)")
+
+        write-host "add finished. checking $targetDirectory for $packageName" -ForegroundColor darkmagenta
+        return $this.GetDirectories("$targetDirectory/$packageName",'*')
+
+        write-host "add finished. checking cache." -ForegroundColor darkmagenta
+        return $this.EnumPackages($packageName, $nugetPackagePath)
+    }
+
     [string[]] AddSourceNugetOrg() {
         [void]$this.EnumSources()
         return $this.AddSource('nuget.org', 'https://www.nuget.org/api/v2/')
@@ -102,7 +131,7 @@ class NugetObj {
                 mkdir $packageDirectory
             }
 
-            if(!($this.locals.Contains($packageDirectoryName))) {
+            if (!($this.locals.Contains($packageDirectoryName))) {
                 $this.locals.Add($packageDirectoryName, $packageDirectory)
             }
         }
@@ -307,7 +336,9 @@ class NugetObj {
             $sourcePath = $this.EnumLocalsPath($sourcePath)
         }
 
-        return @([io.directory]::GetDirectories("$sourcePath", $sourcePattern, [io.searchOption]::TopDirectoryOnly))
+        $results = @([io.directory]::GetDirectories("$sourcePath", $sourcePattern, [io.searchOption]::AllDirectories))
+        write-host "returning directory list: $($results | out-string)"
+        return $results
     }
 
     [string[]] GetFiles([string]$sourcePattern) {
@@ -448,4 +479,3 @@ $global:nuget = [NugetObj]::new()
 #}
 $nuget | Get-Member
 write-host "use `$nuget object to set properties and run methods. example: `$nuget.Sources" -ForegroundColor Green
-
