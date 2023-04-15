@@ -50,7 +50,7 @@
 .NOTES
     File Name  : event-log-manager.ps1
     Author     : jagilber
-    Version    : 230415 cleanup
+    Version    : 230415 fix issue #2
     History    : 
     
 .EXAMPLE
@@ -1769,9 +1769,9 @@ function start-exportJob([string]$machine, [string]$eventLogName, [string]$query
                         }
                     }
 
-                    $outputEntry = (("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
+                    $outputEntry = [string]::format('"{0}"', ("$($event.TimeCreated.ToString("MM/dd/yyyy,hh:mm:ss.ffffff tt")),$($event.Id)," `
                                 + "$($event.LevelDisplayName),$($event.ProviderName),$($event.ProcessId),$($event.ThreadId)," `
-                                + "$($description)"))
+                                + "$($description)" -replace '"', '""') -join """,""")
 
                     if (!$eventTracePattern -or 
                         ($eventTracePattern -and 
