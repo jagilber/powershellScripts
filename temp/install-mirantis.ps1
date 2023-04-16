@@ -218,12 +218,12 @@ function Main() {
             $downloadUrl = "-DownloadUrl $dockerCeRepo "
         }
 
+        # docker script will always emit errors checking for files even when successful
         Write-Host "Installing docker."
         $scriptResult = Invoke-Script -script $installFile `
             -arguments "-DockerVersion $($versionMap.($version.tostring())) $downloadUrl$engineOnly$noServiceStarts-Verbose 6>&1" `
             -checkError $false
         
-        # docker script will always emit errors checking for files even when successful
         $error.Clear()
         $finalVersion = Get-DockerVersion
         if($finalVersion -eq $nullVersion) {
@@ -375,7 +375,7 @@ function Invoke-Script([string]$script, [string] $arguments, [bool]$checkError =
     Write-Host "Invoke-Expression -Command `"$script $arguments`""
     $scriptResult = Invoke-Expression -Command "$script $arguments"
 
-    if ($error) {
+    if ($checkError -and $error) {
         Write-Error "failure executing script:$script $arguments $($error | out-string)"
         $global:result = $false
     }
