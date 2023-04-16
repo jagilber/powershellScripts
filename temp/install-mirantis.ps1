@@ -118,7 +118,7 @@ param(
     [switch]$hypervIsolation,
     [switch]$installContainerD,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
-    #[string]$dockerCeInstallUrl = 'https://get.mirantis.com/install.ps1',
+    [switch]$dockerCe,
     [switch]$uninstall,
     [switch]$noRestart,
     [bool]$registerEvent = $true,
@@ -137,6 +137,9 @@ $transcriptLog = "$psscriptroot\transcript.log"
 $defaultDockerExe = 'C:\Program Files\Docker\dockerd.exe'
 $nullVersion = '0.0.0.0'
 $versionMap = @{}
+$mirantisRepo = 'https://repos.mirantis.com'
+$dockerCeRepo = 'https://download.docker.com'
+
 $global:restart = !$noRestart
 $global:result = $true
 
@@ -207,12 +210,17 @@ function Main() {
         }
 
         $noServiceStarts = $null
-        if($global:restart) {
+        if ($global:restart) {
             $noServiceStarts = '-NoServiceStarts '
         }
-    
+
+        $downloadUrl = $mirantisRepo
+        if ($dockerCe) {
+            $downloadUrl = $dockerCeRepo
+        }
+
         Write-Host "Installing docker."
-        Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly$noServiceStarts-Verbose 6>&1"
+        Invoke-Script -script $installFile -arguments "-DownloadUrl $downloadUrl -DockerVersion $($versionMap.($version.tostring())) $engineOnly$noServiceStarts-Verbose 6>&1"
 
         Write-Host "Install result:$($global:result | Format-List * | Out-String)"
         Write-Host "Installed docker version:$(Get-DockerVersion)"
@@ -221,7 +229,7 @@ function Main() {
 
     Stop-Transcript
     $level = 'Information'
-    if(!$global:result) {
+    if (!$global:result) {
         $level = 'Error'
     }
 
@@ -279,42 +287,6 @@ function Add-UseBasicParsing($scriptFile) {
     }
 }
 
-# Install Windows-Feature if not installed
-function Install-Feature([string]$name) {
-    $feautureResult = $null
-    $isInstalled = (Get-WindowsFeature -name $name).Installed
-    Write-Host "Windows feature '$name' installed:$isInstalled"
-
-    if (!$isInstalled) {
-        Write-Host "Installing windows feature '$name'"
-        $feautureResult = Install-WindowsFeature -Name $name
-        if(!$feautureResult.Success) {
-            Write-Error "error installing feature:$($error | out-string)"
-            $global:result = $false
-        }
-        else {
-            # containers feature returns restart no but dockerd service will not start as it is unable to find vmcompute.dll
-            #$global:restart = $global:restart -and $feautureResult.RestartNeeded -ieq 'no'
-            #Write-Host "`$global:restart set to $global:restart"
-        }
-    }
-
-    return $feautureResult
-}
-
-# Invoke the MCR installer (this will require a reboot)
-function Invoke-Script([string]$script, [string] $arguments) {
-    Write-Host "Invoke-Expression -Command `"$script $arguments`""
-    $scriptResult = Invoke-Expression -Command "$script $arguments"
-
-    if ($error) {
-        Write-Error "failure executing script:$script $arguments $($error | out-string)"
-        $global:result = $false
-    }
-
-    return $scriptResult
-}
-
 # Get the docker version
 function Get-DockerVersion() {
     if (Test-IsDockerRunning) {
@@ -362,6 +334,43 @@ function Get-LatestVersion([string[]] $versions) {
     }
 
     return $latestVersion
+}
+
+# Install Windows-Feature if not installed
+function Install-Feature([string]$name) {
+    $feautureResult = $null
+    $isInstalled = (Get-WindowsFeature -name $name).Installed
+    Write-Host "Windows feature '$name' installed:$isInstalled"
+
+    if (!$isInstalled) {
+        Write-Host "Installing windows feature '$name'"
+        $feautureResult = Install-WindowsFeature -Name $name
+        if (!$feautureResult.Success) {
+            Write-Error "error installing feature:$($error | out-string)"
+            $global:result = $false
+        }
+        else {
+            if (!$noRestart) {
+                $global:restart = $global:restart -or $feautureResult.RestartNeeded -ieq 'yes'
+                Write-Host "`$global:restart set to $global:restart"
+            }
+        }
+    }
+
+    return $feautureResult
+}
+
+# Invoke the MCR installer (this will require a reboot)
+function Invoke-Script([string]$script, [string] $arguments) {
+    Write-Host "Invoke-Expression -Command `"$script $arguments`""
+    $scriptResult = Invoke-Expression -Command "$script $arguments"
+
+    if ($error) {
+        Write-Error "failure executing script:$script $arguments $($error | out-string)"
+        $global:result = $false
+    }
+
+    return $scriptResult
 }
 
 # Validate if docker is installed
