@@ -118,7 +118,7 @@ param(
     [switch]$hypervIsolation,
     [switch]$installContainerD,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
-    [string]$dockerCeInstallUrl = 'https://get.mirantis.com/install.ps1',
+    #[string]$dockerCeInstallUrl = 'https://get.mirantis.com/install.ps1',
     [switch]$uninstall,
     [switch]$noRestart,
     [bool]$registerEvent = $true,
@@ -137,6 +137,7 @@ $transcriptLog = "$psscriptroot\transcript.log"
 $defaultDockerExe = 'C:\Program Files\Docker\dockerd.exe'
 $nullVersion = '0.0.0.0'
 $versionMap = @{}
+$global:restart = !$noRestart
 $global:result = $true
 
 function Main() {
@@ -188,29 +189,34 @@ function Main() {
     }
     elseif ($installedVersion -eq $version) {
         Write-Host "Docker $installedVersion already installed and is equal to $version. Skipping install."
-        $noRestart = $true
+        $global:restart = $false
     }
     elseif ($installedVersion -ge $version) {
         Write-Host "Docker $installedVersion already installed and is newer than $version. Skipping install."
-        $noRestart = $true
+        $global:restart = $false
     }
     elseif ($installedVersion -ne $nullVersion -and ($installedVersion -lt $version -and !$allowUpgrade)) {
         Write-Host "Docker $installedVersion already installed and is older than $version. allowupgrade:$allowUpgrade. skipping install."
-        $noRestart = $true
+        $global:restart = $false
     }
     else {
         $error.Clear()
         $engineOnly = $null
         if (!$installContainerD) {
-            $engineOnly = "-EngineOnly "
+            $engineOnly = '-EngineOnly '
+        }
+
+        $noServiceStarts = $null
+        if($global:restart) {
+            $noServiceStarts = '-NoServiceStarts '
         }
     
         Write-Host "Installing docker."
-        Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-NoServiceStarts:$(!$noRestart) -Verbose 6>&1"
+        Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly$noServiceStarts-Verbose 6>&1"
 
         Write-Host "Install result:$($global:result | Format-List * | Out-String)"
         Write-Host "Installed docker version:$(Get-DockerVersion)"
-        Write-Host "Restarting OS:$(!$noRestart)"
+        Write-Host "Restarting OS:$global:restart"
     }
 
     Stop-Transcript
@@ -222,7 +228,7 @@ function Main() {
     Write-Event -data (Get-Content -raw $transcriptLog) -level $level
 
 
-    if (!$noRestart) {
+    if ($global:restart) {
         # prevent sf extension from trying to install before restart
         Start-Process powershell '-c', {
             $outvar = $null;
@@ -233,7 +239,7 @@ function Main() {
         }
 
         # return immediately after this call
-        $global:result = $global:result -and (Restart-Computer -Force)
+        Restart-Computer -Force
     }
 
     return $global:result
@@ -287,8 +293,9 @@ function Install-Feature([string]$name) {
             $global:result = $false
         }
         else {
-            $noRestart = $noRestart -or $feautureResult.RestartNeeded -ieq 'no'
-            Write-Host "`$noRestart set to $noRestart"
+            # containers feature returns restart no but dockerd service will not start as it is unable to find vmcompute.dll
+            #$global:restart = $global:restart -and $feautureResult.RestartNeeded -ieq 'no'
+            #Write-Host "`$global:restart set to $global:restart"
         }
     }
 
