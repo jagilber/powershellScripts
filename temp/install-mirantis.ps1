@@ -214,7 +214,13 @@ function Main() {
     }
 
     Stop-Transcript
-    Write-Event -data (Get-Content -raw $transcriptLog) -level (if(!$global:result) {'Error'})
+    $level = 'Information'
+    if(!$global:result) {
+        $level = 'Error'
+    }
+
+    Write-Event -data (Get-Content -raw $transcriptLog) -level $level
+
 
     if (!$noRestart) {
         # prevent sf extension from trying to install before restart
@@ -455,6 +461,7 @@ function Write-Event($data, $level = 'Information') {
         }
     }
     catch {
+        Write-Host "exception writing event to event log:$($error | out-string)"
         $error.Clear()
     }
 }
