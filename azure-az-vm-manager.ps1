@@ -99,21 +99,21 @@ param(
 
 $ErrorActionPreference = "Continue"
 #$profileContext = "$($env:TEMP)\ProfileContext.ctx"
-$global:jobs = New-Object Collections.ArrayList
+$global:jobs = [collections.arrayList]::new()
 $action = $action.ToLower()
 $updateUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vm-manager.ps1"
-$global:jobInfos = New-Object Collections.ArrayList
+$global:jobInfos = [collections.arrayList]::new()
 $global:jobsCount = 0
 $global:completedJobsCount = 0
 $global:startTime = get-date
-$global:allVms = New-Object Collections.ArrayList
-$global:allVmss = New-Object Collections.ArrayList
+$global:allVms = [collections.arrayList]::new()
+$global:allVmss = [collections.arrayList]::new()
 
 # ----------------------------------------------------------------------------------------------------------------
 function main()
 {
     $error.Clear()
-    $filteredVms = New-Object Collections.ArrayList
+    $filteredVms = [collections.arrayList]::new()
 
     try
     {
