@@ -26,7 +26,9 @@
     More information about the Mirantis installer, see: https://docs.mirantis.com/mcr/20.10/install/mcr-windows.html
 
 .NOTES
-    v 1.0.3
+    v 1.0.4 adding support for docker ce using https://github.com/microsoft/Windows-Containers/tree/Main/helpful_tools/Install-DockerCE 
+        https://docs.docker.com/desktop/install/windows-install/
+        https://learn.microsoft.com/en-us/azure/virtual-machines/acu
 
 .PARAMETER dockerVersion
 [string] Version of docker to install. Default will be to install latest version.
@@ -116,6 +118,7 @@ param(
     [switch]$hypervIsolation,
     [switch]$installContainerD,
     [string]$mirantisInstallUrl = 'https://get.mirantis.com/install.ps1',
+    [string]$dockerCeInstallUrl = 'https://get.mirantis.com/install.ps1',
     [switch]$uninstall,
     [switch]$noRestart,
     [bool]$registerEvent = $true,
@@ -134,6 +137,7 @@ $transcriptLog = "$psscriptroot\transcript.log"
 $defaultDockerExe = 'C:\Program Files\Docker\dockerd.exe'
 $nullVersion = '0.0.0.0'
 $versionMap = @{}
+$global:result = $true
 
 function Main() {
 
@@ -141,7 +145,7 @@ function Main() {
 
     if (!$isAdmin) {
         Write-Error "Restart script as administrator."
-        return
+        return $false
     }
     
     Register-Event
@@ -154,8 +158,12 @@ function Main() {
     if (!(Test-Path $installFile)) {
         "Downloading [$url]`nSaving at [$installFile]" 
         Write-Host "$result = [System.Net.WebClient]::New().DownloadFile($mirantisInstallUrl, $installFile)"
-        $result = [System.Net.WebClient]::new().DownloadFile($mirantisInstallUrl, $installFile)
+        $global:result = [System.Net.WebClient]::new().DownloadFile($mirantisInstallUrl, $installFile)
         Write-Host "DownloadFile result:$($result | Format-List *)"
+        if ($error) {
+            Write-Error "failure downloading file:$($error | out-string)"
+            $global:result = $false
+        }
     }
 
     # temp fix
@@ -164,22 +172,19 @@ function Main() {
     $version = Set-DockerVersion -dockerVersion $dockerVersion
     $installedVersion = Get-DockerVersion
 
+    # install windows-features
+    Install-Feature -name 'containers'
+
     if ($hypervIsolation) {
-        $hypervInstalled = (Get-WindowsFeature -name hyper-v).Installed
-        Write-Host "Windows feature Hyper-V installed:$hypervInstalled"
-        
-        if (!$uninstall -and !$hypervInstalled) {
-            Write-Host "Installing Hyper-V features"
-            Install-WindowsFeature -Name hyper-v
-            Install-WindowsFeature -Name rsat-hyper-v-tools
-            Install-WindowsFeature -Name hyper-v-tools
-            Install-WindowsFeature -Name hyper-v-powershell
-        }
+        Install-Feature -Name 'hyper-v'
+        Install-Feature -Name 'rsat-hyper-v-tools'
+        Install-Feature -Name 'hyper-v-tools'
+        Install-Feature -Name 'hyper-v-powershell'
     }
 
     if ($uninstall -and (Test-DockerIsInstalled)) {
         Write-Warning "Uninstalling docker. Uninstall:$uninstall"
-        $result = Invoke-Script -Script $installFile -Arguments "-Uninstall -verbose 6>&1"
+        Invoke-Script -Script $installFile -Arguments "-Uninstall -verbose 6>&1"
     }
     elseif ($installedVersion -eq $version) {
         Write-Host "Docker $installedVersion already installed and is equal to $version. Skipping install."
@@ -194,29 +199,38 @@ function Main() {
         $noRestart = $true
     }
     else {
-        Wait-ForProcesses
+        $error.Clear()
         $engineOnly = $null
         if (!$installContainerD) {
             $engineOnly = "-EngineOnly "
         }
     
         Write-Host "Installing docker."
-        $result = Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-Verbose 6>&1"
+        Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-Verbose 6>&1"
 
-        Write-Host "Install result:$($result | Format-List * | Out-String)"
+        Write-Host "Install result:$($global:result | Format-List * | Out-String)"
         Write-Host "Installed docker version:$(Get-DockerVersion)"
         Write-Host "Restarting OS:$(!$noRestart)"
     }
 
     Stop-Transcript
-    Write-Event (Get-Content -raw $transcriptLog)
+    Write-Event -data (Get-Content -raw $transcriptLog) -level (if(!$global:result) {'Error'})
 
     if (!$noRestart) {
-        Wait-ForProcesses
-        Restart-Computer -Force
+        # prevent sf extension from trying to install before restart
+        Start-Process powershell '-c', {
+            $outvar = $null;
+            $mutex = [threading.mutex]::new($true, 'Global\ServiceFabricExtensionHandler.A6C37D68-0BDA-4C46-B038-E76418AFC690', [ref]$outvar);
+            write-host $mutex;
+            write-host $outvar;
+            read-host;
+        }
+
+        # return immediately after this call
+        $global:result = $global:result -and (Restart-Computer -Force)
     }
 
-    return $result
+    return $global:result
 }
 
 # Adding as most Windows Server images have installed PowerShell 5.1 and without this switch Invoke-WebRequest is using Internet Explorer COM API which is causing issues with PowerShell < 6.0.
@@ -253,10 +267,39 @@ function Add-UseBasicParsing($scriptFile) {
     }
 }
 
+# Install Windows-Feature if not installed
+function Install-Feature([string]$name) {
+    $feautureResult = $null
+    $isInstalled = (Get-WindowsFeature -name $name).Installed
+    Write-Host "Windows feature '$name' installed:$isInstalled"
+
+    if (!$isInstalled) {
+        Write-Host "Installing windows feature '$name'"
+        $feautureResult = Install-WindowsFeature -Name $name
+        if(!$feautureResult.Success) {
+            Write-Error "error installing feature:$($error | out-string)"
+            $global:result = $false
+        }
+        else {
+            $noRestart = $noRestart -or $feautureResult.RestartNeeded -ieq 'no'
+            Write-Host "`$noRestart set to $noRestart"
+        }
+    }
+
+    return $feautureResult
+}
+
 # Invoke the MCR installer (this will require a reboot)
 function Invoke-Script([string]$script, [string] $arguments) {
     Write-Host "Invoke-Expression -Command `"$script $arguments`""
-    return Invoke-Expression -Command "$script $arguments"
+    $scriptResult = Invoke-Expression -Command "$script $arguments"
+
+    if ($error) {
+        Write-Error "failure executing script:$script $arguments $($error | out-string)"
+        $global:result = $false
+    }
+
+    return $scriptResult
 }
 
 # Get the docker version
@@ -306,15 +349,6 @@ function Get-LatestVersion([string[]] $versions) {
     }
 
     return $latestVersion
-}
-
-function Find-Process($processName) {
-    $processList = Get-Process
-    Write-Host "Find-Process:Searching Process List for: $processName"
-    $findList = $processList | Where-Object Name -imatch $processName
-
-    Write-Host "Find-Process:returning:$($null -ne $findList)"
-    return $findList
 }
 
 # Validate if docker is installed
@@ -404,23 +438,15 @@ function Set-DockerVersion($dockerVersion) {
     return $version
 }
 
-function Wait-ForProcesses() {
-        # windows 2022 timing issue where servicefabricextensionhandler.exe 
-        # System.IO.IOException: The media is write protected.
-        # at Microsoft.Win32.RegistryKey.Win32Error(Int32 errorCode, String str)
-        while (Find-Process -processName 'servicefabricextensionhandler') {
-            Start-Sleep -Seconds 1
-        }
-}
-
 # Trace event
-function Write-Event($data) {
+function Write-Event($data, $level = 'Information') {
     Write-Host $data
-    $level = 'Information'
 
     if ($error) {
         $level = 'Error'
         $data = "$data`r`nErrors:`r`n$($error | Out-String)"
+        Write-Error $data
+        $error.Clear()
     }
 
     try {
