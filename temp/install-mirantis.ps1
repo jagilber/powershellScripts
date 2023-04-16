@@ -137,7 +137,6 @@ $transcriptLog = "$psscriptroot\transcript.log"
 $defaultDockerExe = 'C:\Program Files\Docker\dockerd.exe'
 $nullVersion = '0.0.0.0'
 $versionMap = @{}
-$mirantisRepo = 'https://repos.mirantis.com'
 $dockerCeRepo = 'https://download.docker.com'
 
 $global:restart = !$noRestart
@@ -206,24 +205,34 @@ function Main() {
         $error.Clear()
         $engineOnly = $null
         if (!$installContainerD) {
-            $engineOnly = '-EngineOnly '
+            $engineOnly = "-EngineOnly "
         }
 
         $noServiceStarts = $null
         if ($global:restart) {
-            $noServiceStarts = '-NoServiceStarts '
+            $noServiceStarts = "-NoServiceStarts "
         }
 
-        $downloadUrl = $mirantisRepo
+        $downloadUrl = $null
         if ($dockerCe) {
-            $downloadUrl = $dockerCeRepo
+            $downloadUrl = "-DownloadUrl $dockerCeRepo "
         }
 
         Write-Host "Installing docker."
-        Invoke-Script -script $installFile -arguments "-DownloadUrl $downloadUrl -DockerVersion $($versionMap.($version.tostring())) $engineOnly$noServiceStarts-Verbose 6>&1"
+        $scriptResult = Invoke-Script -script $installFile `
+            -arguments "-DockerVersion $($versionMap.($version.tostring())) $downloadUrl$engineOnly$noServiceStarts-Verbose 6>&1" `
+            -checkError $false
+        
+        # docker script will always emit errors checking for files even when successful
+        $error.Clear()
+        $finalVersion = Get-DockerVersion
+        if($finalVersion -eq $nullVersion) {
+            $global:result = $false
+        }
 
-        Write-Host "Install result:$($global:result | Format-List * | Out-String)"
-        Write-Host "Installed docker version:$(Get-DockerVersion)"
+        Write-Host "Install result:$($scriptResult | Format-List * | Out-String)"
+        Write-Host "Global result:$global:result"
+        Write-Host "Installed docker version:$finalVersion"
         Write-Host "Restarting OS:$global:restart"
     }
 
@@ -289,6 +298,8 @@ function Add-UseBasicParsing($scriptFile) {
 
 # Get the docker version
 function Get-DockerVersion() {
+    $installedVersion = [System.Version]::new($nullVersion)
+
     if (Test-IsDockerRunning) {
         $path = (Get-Process -Name $dockerProcessName).Path
         Write-Host "Docker installed and running: $path"
@@ -305,7 +316,6 @@ function Get-DockerVersion() {
     }
     else {
         Write-Host "Docker not installed"
-        $installedVersion = [System.Version]::new($nullVersion)
     }
 
     Write-Host "Installed docker defaultPath:$($defaultDockerExe -ieq $path) path:$path version:$installedVersion"
@@ -361,7 +371,7 @@ function Install-Feature([string]$name) {
 }
 
 # Invoke the MCR installer (this will require a reboot)
-function Invoke-Script([string]$script, [string] $arguments) {
+function Invoke-Script([string]$script, [string] $arguments, [bool]$checkError = $true) {
     Write-Host "Invoke-Expression -Command `"$script $arguments`""
     $scriptResult = Invoke-Expression -Command "$script $arguments"
 
@@ -371,46 +381,6 @@ function Invoke-Script([string]$script, [string] $arguments) {
     }
 
     return $scriptResult
-}
-
-# Validate if docker is installed
-function Test-DockerIsInstalled() {
-    $retval = $false
-
-    if ((Get-Service -name $dockerServiceName -ErrorAction SilentlyContinue)) {
-        $retval = $true
-    }
-    
-    $error.Clear()
-    Write-Host "Docker installed:$retval"
-    return $retval
-}
-
-# Check if docker is already running
-function Test-IsDockerRunning() {
-    $retval = $false
-    if (Get-Process -Name $dockerProcessName -ErrorAction SilentlyContinue) {
-        if (Invoke-Expression 'Docker version') {
-            $retval = $true
-        }
-    }
-    
-    Write-Host "Docker running:$retval"
-    return $retval
-}
-
-# Register Windows event source 
-function Register-Event() {
-    if ($registerEvent) {
-        $error.clear()
-        New-EventLog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue
-        if ($error -and ($error -inotmatch 'source is already registered')) {
-            $registerEvent = $false
-        }
-        else {
-            $error.clear()
-        }
-    }
 }
 
 # Set docker version parameter (script internally)
@@ -458,6 +428,46 @@ function Set-DockerVersion($dockerVersion) {
 
     Write-Host "Returning target install version: $version"
     return $version
+}
+
+# Validate if docker is installed
+function Test-DockerIsInstalled() {
+    $retval = $false
+
+    if ((Get-Service -name $dockerServiceName -ErrorAction SilentlyContinue)) {
+        $retval = $true
+    }
+    
+    $error.Clear()
+    Write-Host "Docker installed:$retval"
+    return $retval
+}
+
+# Check if docker is already running
+function Test-IsDockerRunning() {
+    $retval = $false
+    if (Get-Process -Name $dockerProcessName -ErrorAction SilentlyContinue) {
+        if (Invoke-Expression 'Docker version') {
+            $retval = $true
+        }
+    }
+    
+    Write-Host "Docker running:$retval"
+    return $retval
+}
+
+# Register Windows event source 
+function Register-Event() {
+    if ($registerEvent) {
+        $error.clear()
+        New-EventLog -LogName $eventLogName -Source $registerEventSource -ErrorAction silentlycontinue
+        if ($error -and ($error -inotmatch 'source is already registered')) {
+            $registerEvent = $false
+        }
+        else {
+            $error.clear()
+        }
+    }
 }
 
 # Trace event
