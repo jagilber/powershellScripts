@@ -206,7 +206,7 @@ function Main() {
         }
     
         Write-Host "Installing docker."
-        Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-Verbose 6>&1"
+        Invoke-Script -script $installFile -arguments "-DockerVersion $($versionMap.($version.tostring())) $engineOnly-NoServiceStarts:$(!$noRestart) -Verbose 6>&1"
 
         Write-Host "Install result:$($global:result | Format-List * | Out-String)"
         Write-Host "Installed docker version:$(Get-DockerVersion)"
