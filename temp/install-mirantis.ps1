@@ -121,6 +121,7 @@ param(
     [switch]$dockerCe,
     [switch]$uninstall,
     [switch]$noRestart,
+    [switch]$noExceptionOnError,
     [bool]$registerEvent = $true,
     [string]$registerEventSource = 'CustomScriptExtension'
 )
@@ -242,10 +243,11 @@ function Main() {
         $level = 'Error'
     }
 
-    Write-Event -data (Get-Content -raw $transcriptLog) -level $level
+    $transcript = Get-Content -raw $transcriptLog
+    Write-Event -data $transcript -level $level
 
 
-    if ($global:restart) {
+    if ($global:result -and $global:restart) {
         # prevent sf extension from trying to install before restart
         Start-Process powershell '-c', {
             $outvar = $null;
@@ -259,6 +261,9 @@ function Main() {
         Restart-Computer -Force
     }
 
+    if(!$noExceptionOnError -and !$global:result) {
+        throw [Exception]::new("Exception $($MyInvocation.ScriptName)`n$($transcript)")
+    }
     return $global:result
 }
 
