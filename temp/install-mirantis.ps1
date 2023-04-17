@@ -242,12 +242,14 @@ function Main() {
         $error.Clear()
         $finalVersion = Get-InstalledDockerVersion
         if ($finalVersion -eq $nullVersion) {
+            Write-Host "setting `$global:result to false: finalversion:$finalVersion nullversion:$nullversion"
             $global:result = $false
         }
 
         Write-Host "Install result:$($scriptResult | Format-List * | Out-String)"
         Write-Host "Global result:$global:result"
         Write-Host "Installed docker version:$finalVersion"
+        Write-HOst "docker.exe output: $(docker | out-string)"
         Write-Host "Restarting OS:$global:restart"
     }
 
@@ -317,14 +319,13 @@ function Add-UseBasicParsing($scriptFile) {
 
 function Download-File($url, $outputFile) {
     Write-Host "$result = [Net.WebClient]::New().DownloadFile($url, $outputFile)"
-    $global:result = [Net.WebClient]::new().DownloadFile($url, $outputFile)
+    [Net.WebClient]::new().DownloadFile($url, $outputFile)
     Write-Host "DownloadFile result:$($result | Format-List *)"
 
     if ($error -or !(Test-Path $outputFile)) {
         Write-Error "failure downloading file:$($error | out-string)"
         $global:result = $false
     }
-    return $global:result
 }
 
 # Get the docker version
