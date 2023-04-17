@@ -444,7 +444,6 @@ function Invoke-Script([string]$script, [string] $arguments, [bool]$checkError =
 
 # Set version parameter
 function Set-Version($version, $currentVersions) {
-    Get-AvailableVersions
     $setVersion = $version
     Write-Host "Current versions: $($currentVersions | out-string)"
 
@@ -477,16 +476,18 @@ function Set-Version($version, $currentVersions) {
 
 # Set containerd version parameter
 function Set-ContainerDVersion($containerDVersion) {
+    Get-AvailableVersions
     Write-Host "Requesting containerd target install version: $containerDVersion"
-    $version = Set-Version($containerDVersion, $global:currentContainerDVersions)
+    $version = Set-Version -version $containerDVersion -currentVersions $global:currentContainerDVersions
     Write-Host "Returning containerd target install version: $version"
     return $version
 }
 
 # Set docker version parameter
 function Set-DockerVersion($dockerVersion) {
+    Get-AvailableVersions
     Write-Host "Requesting docker target install version: $dockerVersion"
-    $version = Set-Version($dockerVersion, $global:currentDockerVersions)
+    $version = Set-Version -version $dockerVersion -currentVersions $global:currentDockerVersions
     Write-Host "Returning docker target install version: $version"
     return $version
 }
