@@ -114,6 +114,7 @@ template json :
 
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
+    [string]$containerDVersion = '0.0.0.0', # latest
     [switch]$allowUpgrade,
     [switch]$hypervIsolation,
     [switch]$installContainerD,
@@ -123,8 +124,7 @@ param(
     [switch]$noRestart,
     [switch]$noExceptionOnError,
     [bool]$registerEvent = $true,
-    [string]$registerEventSource = 'CustomScriptExtension',
-    [string]$offlineFile = "$psscriptroot/Docker.zip"
+    [string]$registerEventSource = 'CustomScriptExtension'
 )
 
 #$PSModuleAutoLoadingPreference = 2
@@ -142,6 +142,8 @@ $versionMap = @{}
 $mirantisRepo = 'https://repos.mirantis.com'
 $dockerCeRepo = 'https://download.docker.com'
 $dockerPackageAbsolutePath = 'win/static/stable/x86_64'
+$dockerOfflineFile = "$psscriptroot/Docker.zip"
+$containerDOfflineFile = "$psscriptroot/Containerd.zip"
 
 $global:currentDockerVersions = @{}
 $global:currentContainerDVersions = @{}
@@ -203,11 +205,6 @@ function Main() {
     }
     else {
         $error.Clear()
-        $engineOnly = $null
-        if (!$installContainerD) {
-            $engineOnly = "-EngineOnly "
-        }
-
         $noServiceStarts = $null
         if ($global:restart) {
             $noServiceStarts = "-NoServiceStarts "
@@ -218,10 +215,21 @@ function Main() {
             $global:downloadUrl = $dockerCeRepo
         }
 
-        # download docker outside mirantis script
-        $downloadFile = $global:currentDockerVersions.Item($version)
+        $engineOnly = $null
+        if (!$installContainerD) {
+            $engineOnly = "-EngineOnly "
+        }
+        else {
+            # download containerd outside mirantis script
+            $setContainerDVersion = Set-ContainerDVersion -containerDVersion $containerDVersion
+            $containerDDownloadFile = $global:currentContainerDVersions.Item($setContainerDVersion)
+            Download-File -url "$global:downloadUrl/$dockerPackageAbsolutePath/$containerDDownloadFile" -outputFile $containerDOfflineFile
+        }
 
-        Download-File -url "$global:downloadUrl/$dockerPackageAbsolutePath/$downloadFile" -outputFile $offlineFile
+        # download docker outside mirantis script
+        $dockerDownloadFile = $global:currentDockerVersions.Item($version)
+        Download-File -url "$global:downloadUrl/$dockerPackageAbsolutePath/$dockerDownloadFile" -outputFile $dockerOfflineFile
+
 
         # docker script will always emit errors checking for files even when successful
         Write-Host "Installing docker."
@@ -343,6 +351,36 @@ function Get-DockerVersion() {
     return $installedVersion
 }
 
+# Get Available Versions
+function Get-AvailableVersions() {
+    # install.ps1 using Write-Host to output string data. have to capture with 6>&1
+    # for docker ce and mirantis compat, query versions outside install.ps1
+
+    if ($global:currentDockerVersions.Count -lt 1 -or $global:currentContainerDVersions.Count -lt 1) {
+        $result = Invoke-WebRequest -Uri "$global:downloadUrl/$dockerPackageAbsolutePath" -UseBasicParsing
+
+        $filePattern = '(?<file>(?<filetype>docker|containerd)-(?<major>\d+?)\.(?<minor>\d+?)\.(?<build>\d+?)\.zip)'
+        $linkMatches = [regex]::matches($result.Links.href, $filePattern, [text.regularexpressions.regexoptions]::IgnoreCase)
+
+        foreach ($match in $linkMatches) {
+            $major = $match.groups['major'].value
+            $minor = $match.groups['minor'].value
+            $build = $match.groups['build'].value
+            $version = [version]::new($major, $minor, $build)
+
+            $file = $match.groups['file'].value
+            $filetype = $match.groups['filetype'].value
+        
+            if ($filetype -ieq 'docker') {
+                [void]$global:currentDockerVersions.Add($version, $file)
+            }
+            else {
+                [void]$global:currentContainerDVersions.Add($version, $file)
+            }
+        }
+    }
+}
+
 # Get the latest docker version
 function Get-LatestVersion([string[]] $versions) {
     $latestVersion = [version]::new()
@@ -404,62 +442,52 @@ function Invoke-Script([string]$script, [string] $arguments, [bool]$checkError =
     return $scriptResult
 }
 
-# Set docker version parameter (script internally)
-function Set-DockerVersion($dockerVersion) {
-    # install.ps1 using Write-Host to output string data. have to capture with 6>&1
-    # for docker ce and mirantis compat, query versions outside install.ps1
+# Set version parameter
+function Set-Version($version, $currentVersions) {
+    Get-AvailableVersions
+    $setVersion = $version
+    Write-Host "Current versions: $($currentVersions | out-string)"
 
-    $result = Invoke-WebRequest -Uri "$global:downloadUrl/$dockerPackageAbsolutePath" -UseBasicParsing
+    $latestVersion = Get-LatestVersion -versions $currentVersions.Keys
+    Write-Host "Latest version: $latestVersion"
 
-    $filePattern = '(?<file>(?<filetype>docker|containerd)-(?<major>\d+?)\.(?<minor>\d+?)\.(?<build>\d+?)\.zip)'
-    $linkMatches = [regex]::matches($result.Links.href, $filePattern, [text.regularexpressions.regexoptions]::IgnoreCase)
-
-    foreach ($match in $linkMatches) {
-        $major = $match.groups['major'].value
-        $minor = $match.groups['minor'].value
-        $build = $match.groups['build'].value
-        $version = [version]::new($major, $minor, $build)
-
-        $file = $match.groups['file'].value
-        $filetype = $match.groups['filetype'].value
-        
-        if ($filetype -ieq 'docker') {
-            [void]$global:currentDockerVersions.Add($version, $file)
-        }
-        else {
-            [void]$global:currentContainerDVersions.Add($version, $file)
-        }
-    }
-
-    Write-Host "Current docker versions: $($global:currentDockerVersions | out-string)"
-
-    $latestDockerVersion = Get-LatestVersion -versions $global:currentDockerVersions.Keys
-    Write-Host "Latest docker version: $latestdockerVersion"
-
-    #$currentContainerDVersions = @($currentVersions[1].ToString().TrimStart('containerd:').Replace(" ", "").Split(","))
-    Write-Host "Current containerd versions: $($currentContainerDVersions | out-string)"
-
-    if ($dockerVersion -ieq 'latest' -or $allowUpgrade) {
+    if ($version -eq $nullVersion -or $version -ieq 'latest' -or $allowUpgrade) {
         Write-Host "Setting version to latest"
-        $version = $latestDockerVersion
+        $setVersion = $latestVersion
     }
     else {
         try {
-            $version = [version]::new($dockerVersion)
-            Write-Host "Setting version to `$dockerVersion ($dockerVersion)"
+            $setVersion = [version]::new($version)
+            Write-Host "Setting version to $setVersion"
         }
         catch {
-            $version = [version]::new($nullVersion)
-            Write-Warning "Exception setting version to `$dockerVersion ($dockerVersion)`r`n$($error | Out-String)"
+            $setVersion = [version]::new($nullVersion)
+            Write-Warning "Exception setting version to $version`r`n$($error | Out-String)"
         }
     
-        if ($version -ieq [version]::new($nullVersion)) {
-            $version = $latestdockerVersion
-            Write-Host "Setting version to latest docker version $latestdockerVersion"
+        if ($setVersion -ieq [version]::new($nullVersion)) {
+            $setVersion = $latestdockerVersion
+            Write-Host "Setting version to latest version $latestVersion"
         }
     }
 
-    Write-Host "Returning target install version: $version"
+    Write-Host "Returning target install version: $setVersion"
+    return $setVersion
+}
+
+# Set containerd version parameter
+function Set-ContainerDVersion($containerDVersion) {
+    Write-Host "Requesting containerd target install version: $containerDVersion"
+    $version = Set-Version($containerDVersion, $global:currentContainerDVersions)
+    Write-Host "Returning containerd target install version: $version"
+    return $version
+}
+
+# Set docker version parameter
+function Set-DockerVersion($dockerVersion) {
+    Write-Host "Requesting docker target install version: $dockerVersion"
+    $version = Set-Version($dockerVersion, $global:currentDockerVersions)
+    Write-Host "Returning docker target install version: $version"
     return $version
 }
 
@@ -516,7 +544,11 @@ function Write-Event($data, $level = 'Information') {
 
     try {
         if ($registerEvent) {
-            Write-EventLog -LogName $eventLogName -Source $registerEventSource -Message $data -EventId 1000 -EntryType $level
+            Write-EventLog -LogName $eventLogName `
+                -Source $registerEventSource `
+                -Message $data `
+                -EventId 1000 `
+                -EntryType $level
         }
     }
     catch {
