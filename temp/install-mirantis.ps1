@@ -474,7 +474,7 @@ function Register-Event() {
 function Write-Event($data, $level = 'Information') {
     Write-Host $data
 
-    if ($error) {
+    if ($error -or $level -ieq 'Error') {
         $level = 'Error'
         $data = "$data`r`nErrors:`r`n$($error | Out-String)"
         Write-Error $data
