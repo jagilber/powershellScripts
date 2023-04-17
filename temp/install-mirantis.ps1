@@ -112,6 +112,7 @@ template json :
     https://github.com/Azure/Service-Fabric-Troubleshooting-Guides
 #>
 
+[cmdletbinding()]
 param(
     [string]$dockerVersion = '0.0.0.0', # latest
     [string]$containerDVersion = '0.0.0.0', # latest
@@ -144,6 +145,7 @@ $dockerCeRepo = 'https://download.docker.com'
 $dockerPackageAbsolutePath = 'win/static/stable/x86_64'
 $dockerOfflineFile = "$psscriptroot/Docker.zip"
 $containerDOfflineFile = "$psscriptroot/Containerd.zip"
+$maxEventMessageSize = 16384  #32766 - 1000
 
 $global:currentDockerVersions = @{}
 $global:currentContainerDVersions = @{}
@@ -175,7 +177,7 @@ function Main() {
     Add-UseBasicParsing -ScriptFile $installFile
 
     $version = Set-DockerVersion -dockerVersion $dockerVersion
-    $installedVersion = Get-DockerVersion
+    $installedVersion = Get-InstalledDockerVersion
 
     # install windows-features
     Install-Feature -name 'containers'
@@ -238,7 +240,7 @@ function Main() {
             -checkError $false
         
         $error.Clear()
-        $finalVersion = Get-DockerVersion
+        $finalVersion = Get-InstalledDockerVersion
         if ($finalVersion -eq $nullVersion) {
             $global:result = $false
         }
@@ -326,7 +328,7 @@ function Download-File($url, $outputFile) {
 }
 
 # Get the docker version
-function Get-DockerVersion() {
+function Get-InstalledDockerVersion() {
     $installedVersion = [version]::new($nullVersion)
 
     if (Test-IsDockerRunning) {
@@ -340,7 +342,7 @@ function Get-DockerVersion() {
         Write-Host "Docker exe path:$path"
         $path = [Text.RegularExpressions.Regex]::Match($path.PathName, "`"(.+)`"").Groups[1].Value
         Write-Host "Docker exe clean path:$path"
-        $installedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($path)
+        $installedVersion = [version]::new([Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileVersion)
         Write-Warning "Warning: docker installed but not running: $path"
     }
     else {
@@ -545,11 +547,26 @@ function Write-Event($data, $level = 'Information') {
 
     try {
         if ($registerEvent) {
-            Write-EventLog -LogName $eventLogName `
-                -Source $registerEventSource `
-                -Message $data `
-                -EventId 1000 `
-                -EntryType $level
+            $index = 0
+            $counter = 1
+            $totalEvents = [int]($data.Length / $maxEventMessageSize)
+
+            while ($index -lt $data.Length) {
+                $header = "$counter of $totalEvents`n"
+                $counter++
+                $dataSize = [math]::Min($data.Length - $index, $maxEventMessageSize)
+                Write-Verbose "`$data.Substring($index, $dataSize)"
+                $dataChunk = $header
+                $dataChunk += $data.Substring($index, $dataSize)
+                $index += $dataSize
+
+                Write-EventLog -LogName $eventLogName `
+                    -Source $registerEventSource `
+                    -Message $dataChunk `
+                    -EventId 1000 `
+                    -EntryType $level
+
+            }
         }
     }
     catch {
