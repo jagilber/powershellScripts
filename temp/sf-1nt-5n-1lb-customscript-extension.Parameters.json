@@ -3,14 +3,14 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "customScriptExtensionFile": {
-      //"value": "Install-Mirantis-oem.ps1"// -hypervIsolation"
-      "value": "Install-Mirantis.new.1.ps1" // -Verbose" // -hypervIsolation"
+      "value": "Install-Mirantis.ps1"
+      //"value": "Install-Mirantis.ps1 -hypervIsolation"
+      //"value": "Install-Mirantis.ps1 -dockerCe"
+      //"value": "Install-Mirantis.ps1 -hypervIsolation -installContainerD"
     },
     "customScriptExtensionFileUri": {
-      //"value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/install-mirantis.ps1"
-      "value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/install-mirantis.new.1.ps1"
-      //"value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/temp/install-mirantis-oem.ps1"
-      //"value": "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/Install-Mirantis.ps1"
+      //"value": "https://github.com/jagilber/Service-Fabric-Troubleshooting-Guides/blob/dockerce-script/Scripts/Install-Mirantis.ps1" // dockerce test
+      "value": "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/Install-Mirantis.ps1" // public tsg script doesnt support -dockerCe switch
     },
     "clusterLocation": {
       "value": "eastus"
@@ -126,7 +126,7 @@
     "vmNodeType0Size": {
       "value": "Standard_D1_v2" // fails with oem script and 2022
       //"value": "Standard_D4_v3" // needed for hypervisolation
-      //"value": "Standard_D1_v2" // cancelled. taking too long
+      //"value": "Standard_D2_v2"
     }
   }
 }
