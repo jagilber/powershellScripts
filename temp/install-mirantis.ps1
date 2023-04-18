@@ -210,46 +210,41 @@ function Main() {
     else {
         $error.Clear()
         $dockerInstallArgs = @{}
-        $dockerInstallArgs.Add('dockerVersion', $dockerVersion.ToString())
-        $dockerInstallArgs.Add('offline', $null)
-        $dockerInstallArgs.Add('offlinePackagesPath', $psscriptroot)
-        $dockerInstallArgs.Add('verbose', $null)
+        [void]$dockerInstallArgs.Add('dockerVersion', $dockerVersion.ToString())
+        [void]$dockerInstallArgs.Add('offline', $null)
+        [void]$dockerInstallArgs.Add('offlinePackagesPath', $psscriptroot)
+        [void]$dockerInstallArgs.Add('verbose', $null)
 
-        #$noServiceStarts = $null
         if ($global:restart) {
-            #$noServiceStarts = "-NoServiceStarts "
-            $dockerInstallArgs.Add('noServiceStarts', $null)
+            [void]$dockerInstallArgs.Add('noServiceStarts', $null)
         }
 
-        $global:downloadUrl = $mirantisRepo
         if ($dockerCe) {
             $global:downloadUrl = $dockerCeRepo
         }
 
-        #$engineOnly = $null
         if (!$installContainerD) {
-            #$engineOnly = "-EngineOnly "
-            $dockerInstallArgs.Add('engineOnly', $null)
+            [void]$dockerInstallArgs.Add('engineOnly', $null)
         }
         else {
             # download containerd outside mirantis script
             $containerDVersion = Set-ContainerDVersion -containerDVersion $containerDVersion
             $containerDDownloadFile = $global:currentContainerDVersions.Item($containerDVersion)
+            
             # containerd only in mirantis repo
             Download-File -url "$mirantisRepo/$dockerPackageAbsolutePath/$containerDDownloadFile" -outputFile $containerDOfflineFile
-            $dockerInstallArgs.Add('containerDVersion', $containerDVersion.ToString())
+            [void]$dockerInstallArgs.Add('containerDVersion', $containerDVersion.ToString())
         }
 
         # download docker outside mirantis script
         $dockerDownloadFile = $global:currentDockerVersions.Item($dockerVersion)
         Download-File -url "$global:downloadUrl/$dockerPackageAbsolutePath/$dockerDownloadFile" -outputFile $dockerOfflineFile
 
-
         # docker script will always emit errors checking for files even when successful
         Write-Host "Installing docker."
         $scriptResult = Invoke-Script -script $installFile `
-            -arguments @dockerInstallArgs ` #"-DockerVersion $($dockerVersion.tostring()) -OffLine -OffLinePackagesPath $psscriptroot $engineOnly$noServiceStarts-Verbose 6>&1" `
-        -checkError $false
+            -argumentsTable $dockerInstallArgs `
+            -checkError $false
         
         $error.Clear()
         $finalVersion = Get-InstalledDockerVersion
@@ -444,17 +439,22 @@ function Install-Feature([string]$name) {
 }
 
 # Invoke the MCR installer (this will require a reboot)
-function Invoke-Script([string]$script, [string] $arguments, [bool]$checkError = $true) {
-    Write-Host "Invoke-Expression -Command `"$script $arguments`""
+function Invoke-Script([string]$script, [string] $arguments = $null, [hashtable] $argumentsTable = @{}, [bool]$checkError = $true) {
     $scriptResult = $null
+    if($argumentsTable.Count -gt 0) {
+        foreach($arg in $argumentsTable.GetEnumerator()) {
+            $argValue = $null
+            if($arg.Value) {
+                $argValue = " '$($arg.Value)'"
+            }
+            $arguments += " -$($arg.Key)$argValue"
+        }
+    }
+
+    Write-Host "Invoke-Expression -Command `"$script $arguments`""
 
     if (!$whatIf) {
         $scriptResult = Invoke-Expression -Command "$script $arguments"
-
-        if ($checkError -and $error) {
-            Write-Error "failure executing script:$script $arguments $($error | out-string)"
-            $global:result = $false
-        }
     }
 
     return $scriptResult
