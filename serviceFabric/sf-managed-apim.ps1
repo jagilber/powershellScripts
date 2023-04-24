@@ -36,8 +36,8 @@ SOFTWARE
 .LINK
 To download and execute:
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sfmc-apim.ps1" -outFile "$pwd\sfmc-apim.ps1";
-.\sfmc-apim.ps1
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-managed-apim.ps1" -outFile "$pwd\sf-managed-apim.ps1";
+.\sf-managed-apim.ps1
 #>
 
 [cmdletbinding()]
