@@ -3,7 +3,7 @@
 #>
 [cmdletbinding()]
 param(
-    $resourceGroupName = '',
+    $resourceGroupName = 'sfmcapim',
     $clusterName = $resourceGroupName
 )
 
@@ -34,15 +34,12 @@ foreach ($applicationType in $applicationTypes) {
         $applications = Get-AzResource -ResourceId $resourceId 
 
         foreach ($application in $applications) {
-            $versionsArray = @{'versions' = @{$typeVersion.Name = [collections.arraylist]::new()}}
-            #[void]$versionsArray.versions.($typeVersion.Name).Add([collections.arraylist]::new())
-            [void]$appType.Add($application.Name, $versionsArray)
-
-            $resourceId = $application.ResourceId
+            $appType.Add($application.Name, @{$typeVersion.Name = [collections.arraylist]::new()})
+            $resourceId = "$($application.ResourceId)"
             $applicationVersions = Get-AzResource -ResourceId $resourceId | where-object { $psitem.properties.version -ieq $typeVersion.Id }
 
             foreach ($applicationVersion in $applicationVersions) {
-                [void]$appType.($application.Name).versions.($typeVersion.Name).Add($applicationVersion)
+                [void]$appType.($application.Name).($typeVersion.Name).Add($applicationVersion)
                 [void]$global:applicationView.applications.Add(@{$applicationType.Name = $appType})
             }
         }
