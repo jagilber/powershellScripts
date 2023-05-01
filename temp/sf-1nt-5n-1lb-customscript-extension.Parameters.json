@@ -9,7 +9,7 @@
       //"value": "Install-Mirantis.ps1 -hypervIsolation -installContainerD"
     },
     "customScriptExtensionFileUri": {
-      "value": "https://github.com/jagilber/Service-Fabric-Troubleshooting-Guides/blob/dockerce-script/Scripts/Install-Mirantis.ps1" // dockerce test
+      "value": "https://raw.githubusercontent.com/jagilber/Service-Fabric-Troubleshooting-Guides/dockerce-script/Scripts/Install-Mirantis.ps1" // dockerce test
       //"value": "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/Install-Mirantis.ps1" // public tsg script doesnt support -dockerCe switch
     },
     "clusterLocation": {
