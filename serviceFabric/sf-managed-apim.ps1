@@ -7,7 +7,7 @@ this script is not to be used directly for production deployments due to many se
 https://github.com/Azure/Service-Fabric-Troubleshooting-Guides/blob/master/Cluster/How%20to%20configure%20APIM%20for%20Service%20Fabric%20managed%20cluster.md
 
 .NOTES
-v0.1
+v0.2
 
 Microsoft Privacy Statement: https://privacy.microsoft.com/en-US/privacystatement
 
@@ -55,7 +55,7 @@ param(
     $adminPassword = '',
     $clusterName = $resourceGroupName,
     $clusterTemplateFile = "$pwd\sfmc-template.json",
-    $serviceFabricAppUrl = 'fabric:/myapp/myservice',
+    $serviceFabricAppUrl = 'fabric:/sfWeatherApiCore/WeatherApi',
     $clientCertificateThumbprint = '',
     $apimBackendTemplate = "$pwd\apim-backend.json",
     $apimIpDomainNameLabel = 'apimip',
@@ -331,7 +331,7 @@ New-AzApiManagementOperation -Context $apiMgmtContext `
     -OperationId $operationId `
     -Name $operationName `
     -Method 'GET' `
-    -UrlTemplate '/api/values' `
+    -UrlTemplate '' `
     -Description ''
 " -foregroundColor Cyan
 
@@ -340,7 +340,7 @@ New-AzApiManagementOperation -Context $apiMgmtContext `
     -OperationId $operationId `
     -Name $operationName `
     -Method 'GET' `
-    -UrlTemplate '/api/values' `
+    -UrlTemplate '' `
     -Description ''
 
 write-host "creating api policy"
