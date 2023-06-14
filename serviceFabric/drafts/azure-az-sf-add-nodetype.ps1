@@ -221,9 +221,10 @@ function main() {
       $placementConstraints = $service.placementConstraints
       
       if ($placementConstraints -and $placementConstraints -ine 'None') {
-        $pattern = "NodeType\s?==\s?$newNodeTypeName"
+        $pattern = "(?<replacement>NodeType\s?==\s?$newNodeTypeName)(?<termination>\W|$)"
         if ($placementConstraints -imatch $pattern) {
-          $placementConstraints = $placementConstraints -ireplace $pattern, "NodeType != $newNodeTypeName"
+            # ensure that the nodetype name is not part of a larger word when replacing
+            $placementConstraints = [regex]::replace($placementConstraints, $pattern, "NodeType != $newNodeTypeName`${termination}", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
         }
         else {
           $placementConstraints = "($($service.placementConstraints.trim('()'))) && (NodeType != $newNodeTypeName)"
