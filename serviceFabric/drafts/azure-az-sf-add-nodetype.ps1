@@ -98,7 +98,7 @@ function main() {
     Connect-AzAccount
   }
 
-  if (!(Get-ServiceFabricClusterConnection)) {
+  if (!(Get-ServiceFabricClusterConnection) -or (get-ServiceFabricClusterConnection).connectionendpoint -ine $connectionEndpoint) {
     $error.Clear()
     $message = "Connecting to Service Fabric cluster $connectionEndpoint"
     write-console $message
