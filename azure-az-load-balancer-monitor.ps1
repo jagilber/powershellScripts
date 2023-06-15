@@ -24,11 +24,12 @@
     Changelog  : 1.0 - Initial release
 #>
 
-[cmdletbinding()]
+#[cmdletbinding()]
 param(
-    $resourceGroup = '',
-    $loadBalancerName,
-    $sleepSeconds = 5
+    [string]$resourceGroup = '',
+    [string]$loadBalancerName,
+    [int]$sleepSeconds = 5,
+    [switch]$verbose
 )
 
 $PSModuleAutoLoadingPreference = 'all'
@@ -70,7 +71,7 @@ function main() {
     }
 }
 
-function get-dnsMatches($jobResults, $ipAddresses) {
+function get-dnsMatches($job, $jobResults, $ipAddresses) {
     $dnsMatches = [regex]::matches($jobResults, '(?<time>.+?): dns:(?<name>.+?) ip:(?<ip>.+?) resolvedip:(?<resolvedip>.+?)$', $regexOptions)
     $executionTime = ((get-date) - $job.PSBeginTime).TotalSeconds
 
@@ -84,7 +85,7 @@ function get-dnsMatches($jobResults, $ipAddresses) {
             if ($ipAddress.ip -eq $resolvedIp) {
                 $ipAddress.dnsSuccessSamples++
                 $successSamples = $ipAddress.dnsSuccessSamples
-                $totalSamples = $ipAddress.totalSamples
+                $totalSamples = $ipAddress.dnsTotalSamples
                 $percentAvailable = 0
 
                 if ($totalSamples -gt 0) {
@@ -110,7 +111,7 @@ function get-dnsMatches($jobResults, $ipAddresses) {
 
 function get-ipMatches($jobResults, $ipAddresses) {
     $ipMatches = [regex]::matches($jobResults, '(?<time>.+?): ip:(?<ip>.+?)(?::(?<port>\d+?))? result:(?<ipResult>\w+)', $regexOptions)
-                
+
     foreach ($ipMatch in $ipMatches) {
         $ipAddress = $ipAddresses[$ipMatch.Groups['ip'].Value]
 
@@ -178,7 +179,7 @@ function start-ipMonitorJob([hashtable]$publicIps) {
     $tcpJob = $null
     if ($publicIps) {
         $tcpJob = Start-Job -ScriptBlock {
-            param([hashtable]$publicIps, [int]$sleepSeconds = 5)
+            param([hashtable]$publicIps, [int]$sleepSeconds = 5, [switch]$verbose)
             $WarningPreference = $ProgressPreference = 'SilentlyContinue'
 
             while ($true) {
@@ -194,7 +195,10 @@ function start-ipMonitorJob([hashtable]$publicIps) {
                         if ($publicIp.Value.fqdn) {
                             $dnsIp = (Resolve-DnsName -Name $publicIp.Value.fqdn -QuickTimeout).IPAddress
                             $dnsResult = "$((get-date).tostring('o')): dns:$($publicIp.Value.fqdn) ip:$($publicIp.Value.ip) resolvedip:$($dnsIp)"
-                            write-host $dnsResult -ForegroundColor magenta
+                            if ($verbose) {
+                                write-host $dnsResult -ForegroundColor magenta
+                            }
+
                             write-output $dnsResult
 
                             $portTestSucceeded = $portTestSucceeded -and $dnsIp -eq $publicIp.Value.ip
@@ -220,9 +224,11 @@ function start-ipMonitorJob([hashtable]$publicIps) {
                             }
                             
                             $portResult = "$((get-date).tostring('o')): ip:$($publicIp.Key):$($port) result:$portTestSucceeded"
-                            write-host $portResult -ForegroundColor $foregroundColor
-                            write-output $portResult
+                            if ($verbose) {
+                                write-host $portResult -ForegroundColor $foregroundColor
+                            }
 
+                            write-output $portResult
                             $tcpClient.Dispose()
                         }
 
@@ -230,7 +236,10 @@ function start-ipMonitorJob([hashtable]$publicIps) {
                     }
 
                     $ipResult = "$((get-date).tostring('o')): ip:$($publicIp.Key) result:$tcpTestSucceeded"
-                    write-host $ipResult -ForegroundColor magenta
+                    if ($verbose) {
+                        write-host $ipResult -ForegroundColor magenta
+                    }
+                    
                     write-output $ipResult
                 }
                 catch {
@@ -242,7 +251,7 @@ function start-ipMonitorJob([hashtable]$publicIps) {
                     }
                 }
             }
-        } -ArgumentList @($publicIps, $sleepSeconds)
+        } -ArgumentList @($publicIps, $sleepSeconds, $verbose)
     }
     return $tcpJob
 }
@@ -282,37 +291,11 @@ function wait-forJob ([string]$JobId, [hashtable]$ipAddresses) {
         if ($ipAddresses -and (Get-Job -id $tcpJob.Id)) {
             $jobResults = [string]::Join("`n", @(Receive-Job -Id $tcpJob.Id))
 
-            get-ipMatches -job $job -jobResults $jobResults -ipAddresses $ipAddresses
+            get-ipMatches -jobResults $jobResults -ipAddresses $ipAddresses
             get-dnsMatches -job $job -jobResults $jobResults -ipAddresses $ipAddresses
         }
 
-        $successSamples = ($ipAddresses.Values.successSamples | Measure-Object -sum).Sum
-        $totalSamples = ($ipAddresses.Values.totalSamples | measure-object -sum).Sum 
-        $percentAvailable = 0
-
-        if ($totalSamples -gt 0) {
-            $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
-        }
-        
-        $publicIpInfo = "IP Avail:$tcpTestSucceeded ($percentAvailable% Total Avail)"
-        $uptime = [decimal]($executionTime * ($percentAvailable / 100))
-        $global:status = "$publicIpInfo Minutes Executing:$([Math]::Round($executionTime / 60, 2)) Minutes Available:$([Math]::Round($uptime / 60,2)) State:$($job.State)"
-        Write-Progress -Activity $Message -id 0 -Status $global:status -PercentComplete $percentAvailable
-
-        foreach ($ipAddress in $ipAddresses.Values) {
-            foreach ($probe in $ipAddress.probes.Values) {
-                $successSamples = $probe.successSamples
-                $totalSamples = $probe.totalSamples
-                $percentAvailable = 0
-                if ($totalSamples -gt 0) {
-                    $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
-                }
-
-                $downtime = [decimal]($executionTime - ($executionTime * ($percentAvailable / 100)))
-                $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60,2))"
-                write-progress -Activity "$($ipAddress.ip):$($probe.port)" -id "$($ipAddress.id)$($probe.port)" -Status $probeStatus -PercentComplete $percentAvailable 
-            }
-        }
+        write-ipAddresses -job $job -ipAddresses $ipAddresses
 
         if ($job.State -ine "Running") {
             write-host "[wait-forJob] Job Not Running: $($job)"
@@ -333,6 +316,37 @@ function wait-forJob ([string]$JobId, [hashtable]$ipAddresses) {
 
     if ($tcpJob) {
         remove-jobId -JobId $tcpJob.Id
+    }
+}
+
+function write-ipAddresses($job, $ipAddresses) {
+    $successSamples = ($ipAddresses.Values.successSamples | Measure-Object -sum).Sum
+    $totalSamples = ($ipAddresses.Values.totalSamples | measure-object -sum).Sum 
+    $percentAvailable = 0
+
+    if ($totalSamples -gt 0) {
+        $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
+    }
+
+    $publicIpInfo = "IP Avail:$tcpTestSucceeded ($percentAvailable% Total Avail)"
+    $executionTime = ((get-date) - $job.PSBeginTime).TotalSeconds
+    $uptime = [decimal]($executionTime * ($percentAvailable / 100))
+    $global:status = "$publicIpInfo Minutes Executing:$([Math]::Round($executionTime / 60, 2)) Minutes Available:$([Math]::Round($uptime / 60,2)) State:$($job.State)"
+    Write-Progress -Activity $Message -id 0 -Status $global:status -PercentComplete $percentAvailable
+
+    foreach ($ipAddress in $ipAddresses.Values) {
+        foreach ($probe in $ipAddress.probes.Values) {
+            $successSamples = $probe.successSamples
+            $totalSamples = $probe.totalSamples
+            $percentAvailable = 0
+            if ($totalSamples -gt 0) {
+                $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
+            }
+
+            $downtime = [decimal]($executionTime - ($executionTime * ($percentAvailable / 100)))
+            $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60,2))"
+            write-progress -Activity "$($ipAddress.ip):$($probe.port)" -id "$($ipAddress.id)$($probe.port)" -Status $probeStatus -PercentComplete $percentAvailable 
+        }
     }
 }
 
