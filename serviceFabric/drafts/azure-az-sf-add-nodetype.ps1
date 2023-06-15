@@ -125,8 +125,9 @@ function main() {
       return $error
     }
     write-console "using reference node type $referenceNodeTypeName"
+    #$sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
+    #$durabilityLevel = $sfExtension.Settings.durabilityLevel.Value
     #$isPrimaryNodeType = $referenceNodeType.IsPrimary,
-    $durabilityLevel = $referenceVmss.Sku.Tier
     $vmImageSku = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
     $vmSku = $referenceVmss.Sku.Name
     $adminUserName = $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
@@ -241,20 +242,19 @@ function main() {
 
   write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, execute the following after all services have placement constraints configured:" -ForegroundColor Yellow
   write-console "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
-    -Name $clusterName ``
+    -Name '$clusterName' ``
     -Capacity $vmInstanceCount ``
-    -VmUserName $adminUserName ``
+    -VmUserName '$adminUserName' ``
     -VmPassword (ConvertTo-SecureString -String '$adminPassword' -Force -AsPlainText) ``
-    -VmSku $vmSku ``
-    -DurabilityLevel $durabilityLevel ``
-    -IsPrimaryNodeType $isPrimaryNodeType ``
-    -VMImagePublisher $vmImagePublisher ``
-    -VMImageOffer $vmImageOffer ``
-    -VMImageSku $vmImageSku ``
-    -VMImageVersion $vmImageVersion ``
-    -NodeType $newNodeTypeName ``
-    -Verbose ``
-    -WhatIf
+    -VmSku '$vmSku' ``
+    -DurabilityLevel '$durabilityLevel' ``
+    -IsPrimaryNodeType `$$isPrimaryNodeType ``
+    -VMImagePublisher '$vmImagePublisher' ``
+    -VMImageOffer '$vmImageOffer' ``
+    -VMImageSku '$vmImageSku' ``
+    -VMImageVersion '$vmImageVersion' ``
+    -NodeType '$newNodeTypeName' ``
+    -Verbose
   " -ForegroundColor Magenta
 
   write-console "current node type placement properties: $($global:nodeTypePlbNames | ConvertTo-Json -depth 5)" -ForegroundColor Green
@@ -269,6 +269,7 @@ function main() {
 }
 
 function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
+  if(!$message) {return}
   if ($verbose) {
     write-verbose($message)
   }
