@@ -52,52 +52,48 @@ function main() {
         else {
             $loadBalancerNames = @($loadBalancerName)
         }
+
+        if (!$loadBalancerNames) {
+            write-error "[main] No load balancers found in resource group: $($resourceGroup)"
+            return
+        }
         
         foreach ($loadBalancerName in $loadBalancerNames) {
             $publicIps += get-loadBalancerIps -ResourceGroup $resourceGroup -loadBalancerName $loadBalancerName
-            # get-loadBalancerIps -ResourceGroup $resourceGroup -loadBalancerName $loadBalancerName
         }
 
-        $job = start-job -ScriptBlock { while ($true) { Start-Sleep -Seconds 1 } }
-        wait-forJob -JobId $job.Id -ipAddresses $publicIps
+        watch-job -ipAddresses $publicIps
     }
     catch [Exception] {
         write-error "[main] $($psitem | out-string)"
     }
     finally {
-        remove-jobId -JobId $job.Id
         write-host "global:status: $global:status"
         write-host "[main] Completed"
     }
 }
 
 function get-dnsMatches($job, $jobResults, $ipAddresses) {
-    $dnsMatches = [regex]::matches($jobResults, '(?<time>.+?): dns:(?<name>.+?) ip:(?<ip>.+?) resolvedip:(?<resolvedip>.+?)$', $regexOptions)
+    $dnsMatches = [regex]::matches($jobResults, '(?<time>.+?): dns:(?<name>.+?) ip:(?<ip>.+?) resolvedip:(?<resolvedip>.*?)$', $regexOptions)
     $executionTime = ((get-date) - $job.PSBeginTime).TotalSeconds
 
     foreach ($dnsMatch in $dnsMatches) {
+        $percentAvailable = 0
+        $successSamples = 0
         $ipAddress = $ipAddresses[$dnsMatch.Groups['ip'].Value]
         $dnsName = $dnsMatch.Groups['name'].Value
         $resolvedIp = $dnsMatch.Groups['resolvedip'].Value
 
         if ($ipAddress) {
             $ipAddress.dnsTotalSamples++
+            $totalSamples = $ipAddress.dnsTotalSamples
+
             if ($ipAddress.ip -eq $resolvedIp) {
                 $ipAddress.dnsSuccessSamples++
                 $successSamples = $ipAddress.dnsSuccessSamples
-                $totalSamples = $ipAddress.dnsTotalSamples
-                $percentAvailable = 0
-
-                if ($totalSamples -gt 0) {
-                    $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
-                }
-
-                $downtime = [decimal]($executionTime - ($executionTime * ($percentAvailable / 100)))
-                $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60,2))"
-                write-progress -Activity "$($dnsName):$($ipAddress.ip)" -id "$($ipAddress.id)" -Status $probeStatus -PercentComplete $percentAvailable
             }
             else {
-                Write-Warning "[wait-forJob] DNS Mismatch: $($dnsMatch.Groups['name'].Value) $($dnsMatch.Groups['ip'].Value) $($resolvedIp)"
+                Write-Warning "[watch-job] DNS Mismatch: $($dnsMatch.Groups['name'].Value) $($dnsMatch.Groups['ip'].Value) $($resolvedIp)"
                 $resolvedIpAddress = $ipAddresses[$resolvedIp]
                 if ($resolvedIpAddress) {
                     $resolvedIpAddress.fqdn = $dnsMatch.Groups['name'].Value
@@ -105,6 +101,14 @@ function get-dnsMatches($job, $jobResults, $ipAddresses) {
                     $resolvedIpAddress.dnsSuccessSamples++
                 }
             }
+
+            if ($totalSamples -gt 0) {
+                $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
+            }
+
+            $downtime = [decimal]($executionTime - ($executionTime * ($successSamples / $totalSamples)))
+            $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60, 2))"
+            write-progress -Activity "$($dnsName):$($ipAddress.ip)" -id "$($ipAddress.id)" -Status $probeStatus -PercentComplete $percentAvailable
         }
     }
 }
@@ -179,11 +183,12 @@ function start-ipMonitorJob([hashtable]$publicIps) {
     $tcpJob = $null
     if ($publicIps) {
         $tcpJob = Start-Job -ScriptBlock {
-            param([hashtable]$publicIps, [int]$sleepSeconds = 5, [switch]$verbose)
+            param([hashtable]$publicIps, [int]$sleepSeconds = 5, [bool]$verbose)
             $WarningPreference = $ProgressPreference = 'SilentlyContinue'
 
             while ($true) {
                 $tcpClient = $null
+
                 try {
                     Start-Sleep -Seconds $sleepSeconds
                     $tcpTestSucceeded = $true
@@ -200,13 +205,14 @@ function start-ipMonitorJob([hashtable]$publicIps) {
                             }
 
                             write-output $dnsResult
-
                             $portTestSucceeded = $portTestSucceeded -and $dnsIp -eq $publicIp.Value.ip
+
                             if ($dnsIp -and $dnsIp -ne $publicIp.Value.ip -and $publicIps[$publicIp.Value.ip]) {
                                 $publicIps[$publicIp.Value.ip].fqdn = $publicIp.Value.fqdn
                                 write-host "$((get-date).tostring('o')):$($publicIp.Key)updating DNS ip value:$($publicIp.Value.ip)==$($dns)" -ForegroundColor Yellow
                             }
                         }
+
                         foreach ($port in $publicIp.Value.probes.Keys.GetEnumerator()) {
                             $tcpClient = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
                             $tcpClient.SendTimeout = $tcpClient.ReceiveTimeout = 1000
@@ -236,10 +242,10 @@ function start-ipMonitorJob([hashtable]$publicIps) {
                     }
 
                     $ipResult = "$((get-date).tostring('o')): ip:$($publicIp.Key) result:$tcpTestSucceeded"
+
                     if ($verbose) {
                         write-host $ipResult -ForegroundColor magenta
                     }
-                    
                     write-output $ipResult
                 }
                 catch {
@@ -267,55 +273,49 @@ function remove-jobId([string]$JobId) {
     }
 }
 
-function wait-forJob ([string]$JobId, [hashtable]$ipAddresses) {
-    $job = $null
-    $percentAvailable = 0
-    $publicIpInfo = ''
+function watch-job ([hashtable]$ipAddresses) {
+    $tcpJob = $null
     $global:status = ''
-    $tcpTestSucceeded = $false
 
-    write-host "[wait-forJob] Checking Job Id: $($JobId)"
-    $tcpJob = start-ipMonitorJob -publicIps $ipAddresses
+    write-host "[watch-job] starting and monitoring job"
+    try {
+        $tcpJob = start-ipMonitorJob -publicIps $ipAddresses
 
-    while ($job = get-job -Id $JobId) {
-        $jobInfo = (receive-job -Id $JobId)
-        $Message = $job.Name
+        while ($true) {
+            if ($ipAddresses -and (Get-Job -id $tcpJob.Id)) {
+                $jobResults = [string]::Join("`n", @(Receive-Job -Id $tcpJob.Id))
 
-        if ($jobInfo) {
-            write-host "[wait-forJob] Receiving Job: $($jobInfo)"
-        }
-        elseif ($DebugPreference -ieq 'Continue') {
-            write-host "[wait-forJob] Receiving Job No Update: $($job | ConvertTo-Json -Depth 1 -WarningAction SilentlyContinue)"
-        }
-
-        if ($ipAddresses -and (Get-Job -id $tcpJob.Id)) {
-            $jobResults = [string]::Join("`n", @(Receive-Job -Id $tcpJob.Id))
-
-            get-ipMatches -jobResults $jobResults -ipAddresses $ipAddresses
-            get-dnsMatches -job $job -jobResults $jobResults -ipAddresses $ipAddresses
-        }
-
-        write-ipAddresses -job $job -ipAddresses $ipAddresses
-
-        if ($job.State -ine "Running") {
-            write-host "[wait-forJob] Job Not Running: $($job)"
-
-            if ($job.State -imatch "fail" -or $job.StatusMessage -imatch "fail") {
-                write-error "[wait-forJob] Job Failed: $($job)"
+                get-ipMatches -jobResults $jobResults -ipAddresses $ipAddresses
+                get-dnsMatches -job $tcpJob -jobResults $jobResults -ipAddresses $ipAddresses
             }
 
-            remove-jobId -JobId $JobId
-            Write-Progress -Activity 'Complete' -id 0 -Completed
-            break
-        }
+            write-ipAddresses -job $tcpJob -ipAddresses $ipAddresses
+
+            if ($tcpJob.State -ine "Running") {
+                write-host "[watch-job] Job Not Running: $($tcpJob)"
+
+                if ($tcpJob.State -imatch "fail" -or $tcpJob.StatusMessage -imatch "fail") {
+                    write-error "[watch-job] Job Failed: $($tcpJob)"
+                }
+
+                remove-jobId -JobId $tcpJob.Id
+                Write-Progress -Activity 'Complete' -id 0 -Completed
+                break
+            }
         
-        Start-Sleep -Seconds $sleepSeconds
+            Start-Sleep -Seconds $sleepSeconds
+        }
+
+        write-host "[watch-job] Job Complete: $global:status"
     }
-
-    write-host "[wait-forJob] Job Complete: $global:status"
-
-    if ($tcpJob) {
-        remove-jobId -JobId $tcpJob.Id
+    catch [Exception] {
+        write-error "[watch-job] $($psitem | out-string)"
+        return
+    }
+    finally {
+        if ($tcpJob) {
+            remove-jobId -JobId $tcpJob.Id
+        }
     }
 }
 
@@ -328,11 +328,12 @@ function write-ipAddresses($job, $ipAddresses) {
         $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
     }
 
+    $Message = $job.Name
     $publicIpInfo = "IP Avail:$tcpTestSucceeded ($percentAvailable% Total Avail)"
     $executionTime = ((get-date) - $job.PSBeginTime).TotalSeconds
     $uptime = [decimal]($executionTime * ($percentAvailable / 100))
     $global:status = "$publicIpInfo Minutes Executing:$([Math]::Round($executionTime / 60, 2)) Minutes Available:$([Math]::Round($uptime / 60,2)) State:$($job.State)"
-    Write-Progress -Activity $Message -id 0 -Status $global:status -PercentComplete $percentAvailable
+    Write-Progress -Activity $message -id 0 -Status $global:status -PercentComplete $percentAvailable
 
     foreach ($ipAddress in $ipAddresses.Values) {
         foreach ($probe in $ipAddress.probes.Values) {
