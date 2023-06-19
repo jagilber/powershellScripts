@@ -1,14 +1,14 @@
 <#
 .Synopsis
-    provide powershell commands to add a new node type to an existing Azure Service Fabric cluster
+    provide powershell commands to copy a reference node type to an existing Azure Service Fabric cluster
     provide powershell commands to configure all existing applications to use PLB before adding new nodetype if not already done
     
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
-    ./azure-az-sf-add-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-copy-nodetype.ps1" -outFile "$pwd/azure-az-sf-copy-nodetype.ps1";
+    ./azure-az-sf-copy-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
 .PARAMETER connectionEndpoint
     the connection endpoint for the service fabric cluster
 .PARAMETER thumbprint
@@ -42,11 +42,11 @@
 .PARAMETER adminPassword
     the admin password of the new node type
 .EXAMPLE
-    ./azure-az-sf-add-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
+    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
 .EXAMPLE
-    ./azure-az-sf-add-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -referenceNodeTypeName nt0 -newNodeTypeName nt1
+    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -referenceNodeTypeName nt0 -newNodeTypeName nt1
 .EXAMPLE
-    ./azure-az-sf-add-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
+    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
 #>
 
 [cmdletbinding()]
@@ -58,8 +58,9 @@ param(
   [Parameter(Mandatory = $true)]
   $resourceGroupName = '', #'sfcluster',
   $clusterName = $resourceGroupName,
-  #[Parameter(Mandatory = $true)]
-  $newNodeTypeName = 'nt1', #'nt1',
+  [Parameter(Mandatory = $true)]
+  $newNodeTypeName = 'nt1', #'nt1'
+  [Parameter(Mandatory = $true)]
   $referenceNodeTypeName = 'nt0', #'nt0',
   $isPrimaryNodeType = $false,
   $vmImagePublisher = 'MicrosoftWindowsServer',
@@ -98,44 +99,38 @@ function main() {
     Connect-AzAccount
   }
 
-  if (!(Get-ServiceFabricClusterConnection) -or (get-ServiceFabricClusterConnection).connectionendpoint -ine $connectionEndpoint) {
-    $error.Clear()
-    $message = "Connecting to Service Fabric cluster $connectionEndpoint"
-    write-console $message
-    Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
-      -KeepAliveIntervalInSec 10 `
-      -X509Credential `
-      -ServerCertThumbprint $thumbprint `
-      -FindType FindByThumbprint `
-      -FindValue $thumbprint `
-      -StoreLocation CurrentUser `
-      -StoreName My `
-      -Verbose
+  # if (!(Get-ServiceFabricClusterConnection) -or (get-ServiceFabricClusterConnection).connectionendpoint -ine $connectionEndpoint) {
+  #   $error.Clear()
+  #   $message = "Connecting to Service Fabric cluster $connectionEndpoint"
+  #   write-console $message
+  #   Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
+  #     -KeepAliveIntervalInSec 10 `
+  #     -X509Credential `
+  #     -ServerCertThumbprint $thumbprint `
+  #     -FindType FindByThumbprint `
+  #     -FindValue $thumbprint `
+  #     -StoreLocation CurrentUser `
+  #     -StoreName My `
+  #     -Verbose
+  # }
+
+  # if ($error -or !(Get-ServiceFabricClusterConnection)) {
+  #   write-error("error connecting to service fabric cluster")
+  #   return $error
+  # }
+
+  $referenceVmssCollection = @{
+    #[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSetList]
+    referenceVmss         = $null
+    referenceIp           = $null
+    referenceLoadBalancer = $null
   }
 
-  if ($error -or !(Get-ServiceFabricClusterConnection)) {
-    write-error("error connecting to service fabric cluster")
-    return $error
-  }
-
-  if ($referenceNodeTypeName) {
-    $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
-    if (!$referenceVmss) {
-      write-error("reference node type $referenceNodeTypeName not found")
-      return $error
-    }
-    write-console "using reference node type $referenceNodeTypeName"
-    $sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
-    $durabilityLevel = $sfExtension.Settings.durabilityLevel.Value
-    #$isPrimaryNodeType = $referenceNodeType.IsPrimary,
-    $vmImageSku = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
-    $vmSku = $referenceVmss.Sku.Name
-    $adminUserName = $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
-    $vmInstanceCount = $referenceVmss.Sku.Capacity
-    $vmImagePublisher = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
-    $vmImageOffer = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
-    $vmImageVersion = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
-  }
+  $referenceVmssCollection = get-referenceVmssCollection
+  $referenceVmssCollection = update-referenceVmssCollection $referenceVmssCollection
+  $referenceVmssCollection | convertto-json
+  #test
+  return
   
   $manifest = Get-ServiceFabricClusterManifest
   write-console ($manifest) -Verbose
@@ -224,8 +219,8 @@ function main() {
       if ($placementConstraints -and $placementConstraints -ine 'None') {
         $pattern = "(?<replacement>NodeType\s?==\s?$newNodeTypeName)(?<termination>\W|$)"
         if ($placementConstraints -imatch $pattern) {
-            # ensure that the nodetype name is not part of a larger word when replacing
-            $placementConstraints = [regex]::replace($placementConstraints, $pattern, "NodeType != $newNodeTypeName`${termination}", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+          # ensure that the nodetype name is not part of a larger word when replacing
+          $placementConstraints = [regex]::replace($placementConstraints, $pattern, "NodeType != $newNodeTypeName`${termination}", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
         }
         else {
           $placementConstraints = "($($service.placementConstraints.trim('()'))) && (NodeType != $newNodeTypeName)"
@@ -268,8 +263,74 @@ function main() {
   write-console "finished"
 }
 
+function get-referenceVmssCollection() {
+  write-console "using reference node type $referenceNodeTypeName"
+
+  $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
+  if (!$referenceVmss) {
+    write-error("reference node type $referenceNodeTypeName not found")
+    return $error
+  }
+
+  $loadBalancerName = $referenceVmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].IpConfigurations[0].LoadBalancerInboundNatPools[0].Id.Split('/')[8]
+  if (!$loadBalancerName) {
+    write-error("reference load balancer not found")
+    return $error
+  }
+
+  $referenceLoadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName
+  if (!$referenceLoadBalancer) {
+    write-error("reference load balancer not found")
+    return $error
+  }
+  
+  $referenceIpName = $referenceLoadBalancer.FrontendIpConfigurations[0].PublicIpAddress.Id.Split('/')[8]
+  if (!$referenceIpName) {
+    write-error("reference ip not found")
+    return $error
+  }
+
+  $referenceIp = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $referenceIpName
+  if (!$referenceIp) {
+    write-error("reference ip not found")
+    return $error
+  }
+  
+  $referenceVmssCollection = @{
+    #[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSetList]
+    referenceVmss         = $referenceVmss
+    #[Microsoft.Azure.Commands.Network.Automation.Models.PSPublicIPAddress]
+    referenceIp           = $referenceIp
+    #[Microsoft.Azure.Commands.Network.Automation.Models.PSLoadBalancer]
+    referenceLoadBalancer = $referenceLoadBalancer
+  }
+
+  return $referenceVmssCollection
+}
+
+function update-referenceVmssCollection($referenceVmssCollection) {
+  write-console "updating reference node type $referenceNodeTypeName"
+  $vmss = $referenceVmssCollection.referenceVmss
+  $ip = $referenceVmssCollection.referenceIp
+  $loadBalancer = $referenceVmssCollection.referenceLoadBalancer
+
+  # update ip
+
+  # update load balancer
+
+  # update vmss
+  $existingName = $vmss.Name
+  $vmss.Id = $vmss.Id.Replace($existingName, $newNodeTypeName)
+  $vmss.Name = $newNodeTypeName
+  $vmss.VirtualMachineProfile.OsProfile.ComputerNamePrefix = $newNodeTypeName
+  $vmss.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
+  $vmss.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword
+  $sfExtension = $vmss.VirtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -eq 'Microsoft.Azure.ServiceFabric'
+  $sfExtension.Name = $sfExtension.Name.Replace($existingName, $newNodeTypeName)
+}
+
 function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
-  if(!$message) {return}
+  if (!$message) { return }
   if ($verbose) {
     write-verbose($message)
   }

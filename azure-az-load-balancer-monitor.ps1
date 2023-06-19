@@ -29,6 +29,7 @@ param(
     [string]$resourceGroup = '',
     [string]$loadBalancerName,
     [int]$sleepSeconds = 5,
+    [int]$refreshSeconds = 60,
     [switch]$verbose
 )
 
@@ -39,6 +40,7 @@ $regexOptions = [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.Re
 
 $global:status = ''
 $global:counter = 1
+$global:startTime = [datetime]::Now
 
 function main() {
     $job = $null
@@ -46,23 +48,7 @@ function main() {
     $loadBalancerNames = $null
 
     try {
-        if (!$loadBalancerName) {
-            $loadBalancerNames = (get-azLoadBalancer -ResourceGroupName $resourceGroup).Name
-        }
-        else {
-            $loadBalancerNames = @($loadBalancerName)
-        }
-
-        if (!$loadBalancerNames) {
-            write-error "[main] No load balancers found in resource group: $($resourceGroup)"
-            return
-        }
-        
-        foreach ($loadBalancerName in $loadBalancerNames) {
-            $publicIps += get-loadBalancerIps -ResourceGroup $resourceGroup -loadBalancerName $loadBalancerName
-        }
-
-        watch-job -ipAddresses $publicIps
+        new-monitorJob
     }
     catch [Exception] {
         write-error "[main] $($psitem | out-string)"
@@ -73,9 +59,9 @@ function main() {
     }
 }
 
-function get-dnsMatches($job, $jobResults, $ipAddresses) {
+function get-dnsMatches($jobResults, $ipAddresses) {
     $dnsMatches = [regex]::matches($jobResults, '(?<time>.+?): dns:(?<name>.+?) ip:(?<ip>.+?) resolvedip:(?<resolvedip>.*?)$', $regexOptions)
-    $executionTime = ((get-date) - $job.PSBeginTime).TotalSeconds
+    $executionTime = ((get-date) - $global:startTime).TotalSeconds
 
     foreach ($dnsMatch in $dnsMatches) {
         $percentAvailable = 0
@@ -137,6 +123,22 @@ function get-ipMatches($jobResults, $ipAddresses) {
             }
         }
     }
+}
+
+function get-loadBalancers() {
+    if (!$loadBalancerName) {
+        $loadBalancerNames = (get-azLoadBalancer -ResourceGroupName $resourceGroup).Name
+    }
+    else {
+        $loadBalancerNames = @($loadBalancerName)
+    }
+
+    if (!$loadBalancerNames) {
+        write-error "[main] No load balancers found in resource group: $($resourceGroup)"
+        return $null
+    }
+
+    return $loadBalancerNames
 }
 
 function get-loadBalancerIps([string]$resourceGroup, [string]$loadBalancerName) {
@@ -273,23 +275,54 @@ function remove-jobId([string]$JobId) {
     }
 }
 
-function watch-job ([hashtable]$ipAddresses) {
+function new-monitorJob() {
+    $publicIps = @{}
+
+    while ($refreshSeconds) {
+        update-loadBalancerIps -loadBalancerNames (get-loadBalancers) -publicIps $publicIps
+        watch-job -ipAddresses $publicIps -refreshSeconds $refreshSeconds
+    }
+}
+
+function update-loadBalancerIps([string[]]$loadBalancerNames, [hashtable]$publicIps) {
+    foreach ($loadBalancerName in $loadBalancerNames) {
+        $ips = get-loadBalancerIps -ResourceGroup $resourceGroup -loadBalancerName $loadBalancerName
+        foreach ($ip in $ips.Values) {
+            if (!$publicIps[$ip.ip]) {
+                [void]$publicIps.Add($ip.ip, $ip)
+            }
+            else {
+                $publicIps[$ip.ip].fqdn = $ip.fqdn
+                foreach ($probe in $ip.probes.Values) {
+                    if (!$publicIps[$ip.ip].probes[$probe.port]) {
+                        [void]$publicIps[$ip.ip].probes.Add($probe.port, $probe)
+                    }
+                    else {
+                        $publicIps[$ip.ip].probes[$probe.port].port = $probe.port
+                    }
+                }
+            }
+        }
+    }
+}
+function watch-job ([hashtable]$ipAddresses, [int]$refreshSeconds = 0) {
     $tcpJob = $null
     $global:status = ''
+    $watchTime = [datetime]::Now
 
     write-host "[watch-job] starting and monitoring job"
     try {
         $tcpJob = start-ipMonitorJob -publicIps $ipAddresses
 
-        while ($true) {
+        while ($refreshSeconds -eq 0 -or ((get-date) - $watchTime).TotalSeconds -lt $refreshSeconds) {
             if ($ipAddresses -and (Get-Job -id $tcpJob.Id)) {
                 $jobResults = [string]::Join("`n", @(Receive-Job -Id $tcpJob.Id))
 
                 get-ipMatches -jobResults $jobResults -ipAddresses $ipAddresses
-                get-dnsMatches -job $tcpJob -jobResults $jobResults -ipAddresses $ipAddresses
+                get-dnsMatches -jobResults $jobResults -ipAddresses $ipAddresses
             }
 
-            write-ipAddresses -job $tcpJob -ipAddresses $ipAddresses
+            write-ipAddresses -ipAddresses $ipAddresses
 
             if ($tcpJob.State -ine "Running") {
                 write-host "[watch-job] Job Not Running: $($tcpJob)"
@@ -319,7 +352,7 @@ function watch-job ([hashtable]$ipAddresses) {
     }
 }
 
-function write-ipAddresses($job, $ipAddresses) {
+function write-ipAddresses($ipAddresses) {
     $successSamples = ($ipAddresses.Values.successSamples | Measure-Object -sum).Sum
     $totalSamples = ($ipAddresses.Values.totalSamples | measure-object -sum).Sum 
     $percentAvailable = 0
@@ -328,11 +361,11 @@ function write-ipAddresses($job, $ipAddresses) {
         $percentAvailable = [decimal][Math]::Min(100, [Math]::Round(($successSamples / $totalSamples) * 100))
     }
 
-    $Message = $job.Name
+    $message = "$resourceGroup : "
     $publicIpInfo = "IP Avail:$tcpTestSucceeded ($percentAvailable% Total Avail)"
-    $executionTime = ((get-date) - $job.PSBeginTime).TotalSeconds
+    $executionTime = ((get-date) - $global:startTime).TotalSeconds
     $uptime = [decimal]($executionTime * ($percentAvailable / 100))
-    $global:status = "$publicIpInfo Minutes Executing:$([Math]::Round($executionTime / 60, 2)) Minutes Available:$([Math]::Round($uptime / 60,2)) State:$($job.State)"
+    $global:status = "$publicIpInfo Minutes Executing:$([Math]::Round($executionTime / 60, 2)) Minutes Available:$([Math]::Round($uptime / 60,2))"
     Write-Progress -Activity $message -id 0 -Status $global:status -PercentComplete $percentAvailable
 
     foreach ($ipAddress in $ipAddresses.Values) {
