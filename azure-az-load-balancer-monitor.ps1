@@ -69,6 +69,7 @@ function get-dnsMatches($jobResults, $ipAddresses) {
         $ipAddress = $ipAddresses[$dnsMatch.Groups['ip'].Value]
         $dnsName = $dnsMatch.Groups['name'].Value
         $resolvedIp = $dnsMatch.Groups['resolvedip'].Value
+        $currentlyAvailable = $false
 
         if ($ipAddress) {
             $ipAddress.dnsTotalSamples++
@@ -77,6 +78,8 @@ function get-dnsMatches($jobResults, $ipAddresses) {
             if ($ipAddress.ip -eq $resolvedIp) {
                 $ipAddress.dnsSuccessSamples++
                 $successSamples = $ipAddress.dnsSuccessSamples
+                $ipAddress.lastResult = $true
+                $currentlyAvailable = $true
             }
             else {
                 Write-Warning "[watch-job] DNS Mismatch: $($dnsMatch.Groups['name'].Value) $($dnsMatch.Groups['ip'].Value) $($resolvedIp)"
@@ -86,6 +89,7 @@ function get-dnsMatches($jobResults, $ipAddresses) {
                     $resolvedIpAddress.dnsTotalSamples++
                     $resolvedIpAddress.dnsSuccessSamples++
                 }
+                $ipAddress.lastResult = $false
             }
 
             if ($totalSamples -gt 0) {
@@ -93,8 +97,11 @@ function get-dnsMatches($jobResults, $ipAddresses) {
             }
 
             $downtime = [decimal]($executionTime - ($executionTime * ($successSamples / $totalSamples)))
-            $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60, 2))"
+            $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60, 2)) Currently: $currentlyAvailable"
             write-progress -Activity "$($dnsName):$($ipAddress.ip)" -id "$($ipAddress.id)" -Status $probeStatus -PercentComplete $percentAvailable
+        }
+        else {
+            write-warning "[watch-job] DNS no IP match: $($dnsMatch.Groups['name'].Value) $($dnsMatch.Groups['ip'].Value) $($resolvedIp)"
         }
     }
 }
@@ -378,7 +385,7 @@ function write-ipAddresses($ipAddresses) {
             }
 
             $downtime = [decimal]($executionTime - ($executionTime * ($percentAvailable / 100)))
-            $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60,2))"
+            $probeStatus = "$percentAvailable% Available. Minutes Unavailable:$([Math]::Round($downtime / 60,2)) Currently: $($ipAddress.lastResult)"
             write-progress -Activity "$($ipAddress.ip):$($probe.port)" -id "$($ipAddress.id)$($probe.port)" -Status $probeStatus -PercentComplete $percentAvailable 
         }
     }
