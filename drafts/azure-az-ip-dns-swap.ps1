@@ -1,4 +1,6 @@
+<#
 
+#>
 param(
   $resourceGroupName = 'sfjagilber1nt3',
   $oldPublicIPName = 'PublicIP-LB-FE-0',
@@ -8,6 +10,7 @@ param(
 )
 
 $errorActionPreference = 'Stop'
+$startTime = get-date
 $publicIps = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName | Select-Object Name, ResourceGroupName, IpAddress, DnsSettings
 
 write-host "current public IPs:"
@@ -53,7 +56,7 @@ if ($swap) {
   }
 }
 
-write-host "to execute:
+write-host "to execute (or rerun with -execute)):
   `$resourceGroupName = '$resourceGroupName'
   `$oldPublicIPName = '$oldPublicIPName'
   `$newPublicIPName = '$newPublicIPName'
@@ -96,4 +99,4 @@ write-host "to revert:
   Set-AzPublicIpAddress -PublicIpAddress `$publicIP
 " -ForegroundColor Yellow
 
-write-host "Done"
+write-host "Done: $(get-date -format 'HH:mm:ss') - $(get-date $startTime -format 'HH:mm:ss')"
