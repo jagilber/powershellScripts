@@ -78,7 +78,7 @@ $PSModuleAutoLoadingPreference = 'auto'
 $global:deployedServices = @{}
 
 function main() {
-  write-verbose("main() started");
+  write-verbose ("main() started")
   $error.Clear()
 
   if (!(Get-Module servicefabric)) {
@@ -102,6 +102,16 @@ function main() {
     $error.Clear()
     $message = "Connecting to Service Fabric cluster $connectionEndpoint"
     write-console $message
+    write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
+    -KeepAliveIntervalInSec 10 `
+    -X509Credential `
+    -ServerCertThumbprint $thumbprint `
+    -FindType FindByThumbprint `
+    -FindValue $thumbprint `
+    -StoreLocation CurrentUser `
+    -StoreName My `
+    -Verbose
+    "
     Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
       -KeepAliveIntervalInSec 10 `
       -X509Credential `
@@ -211,7 +221,7 @@ function main() {
   if ($global:servicesWithoutPlacementConstraints) {
     write-console ($global:servicesWithoutPlacementConstraints | ConvertTo-Json -depth 5) -Verbose
     foreach ($service in $global:servicesWithoutPlacementConstraints) {
-      $global:deployedServices[$service.serviceTypeName].updateCommand = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '(NodeType != $newNodeTypeName)';"
+      $global:deployedServices[$service.serviceTypeName].updateCommand = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '(NodeType != $newNodeTypeName)' -force;"
     }
   }
 
@@ -234,14 +244,14 @@ function main() {
       else {
         $placementConstraints = "(NodeType != $newNodeTypeName)"
       }
-      $global:deployedServices[$service.serviceTypeName].updateCommand = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$placementConstraints';"
+      $global:deployedServices[$service.serviceTypeName].updateCommand = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$placementConstraints' -force;"
     }
   }
 
   write-console ($global:deployedServices | ConvertTo-Json -depth 5) -Verbose
 
   write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, execute the following after all services have placement constraints configured:" -ForegroundColor Yellow
-  write-console "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
+  $global:addNodeTypeCommand = "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
     -Name '$clusterName' ``
     -Capacity $vmInstanceCount ``
     -VmUserName '$adminUserName' ``
@@ -255,7 +265,8 @@ function main() {
     -VMImageVersion '$vmImageVersion' ``
     -NodeType '$newNodeTypeName' ``
     -Verbose
-  " -ForegroundColor Magenta
+  "
+  write-host $global:addNodeTypeCommand -ForegroundColor Magenta
 
   write-console "current node type placement properties: $($global:nodeTypePlbNames | ConvertTo-Json -depth 5)" -ForegroundColor Green
   write-console "current deployed services: $($global:deployedServices | ConvertTo-Json -depth 5)" -ForegroundColor Cyan
@@ -265,6 +276,7 @@ function main() {
   write-console "services on new nodetype: $($global:servicesOnNewNodeType | ConvertTo-Json -depth 5)" -ForegroundColor Red
 
   write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $($global:deployedServices.Values | Where-object updateCommand | select-object updateCommand | ConvertTo-Json -depth 5)"
+  write-console "values stored in `$global:addNodeTypeCommand and `$global:deployedServices" -ForegroundColor gray
   write-console "finished"
 }
 
