@@ -1,0 +1,417 @@
+{
+  "variables": {},
+  "parameters": {},
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json",
+  "resources": [
+    {
+      "Tags": {
+        "clusterName": "sftestcluster"
+      },
+      "Id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/publicIPAddresses/pip-nt2",
+      "Location": "eastus",
+      "Name": "pip-nt2",
+      "Sku": {
+        "Tier": "Regional",
+        "Name": "Basic",
+        "Capacity": null
+      },
+      "Properties": {
+        "publicIPAddressVersion": "IPv4",
+        "publicIPAllocationMethod": "Dynamic",
+        "idleTimeoutInMinutes": 4,
+        "ipAddress": "20.232.208.164",
+        "ipTags": [],
+        "dnsSettings": {
+          "fqdn": "nt2-sftestcluster.eastus.cloudapp.azure.com",
+          "domainNameLabel": "nt2-sftestcluster"
+        },
+        "ipConfiguration": {
+          "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/frontendIPConfigurations/LoadBalancerIPConfig"
+        }
+      },
+      "apiVersion": "2023-04-01",
+      "Type": "Microsoft.Network/publicIPAddresses"
+    },
+    {
+      "Properties": {
+        "loadBalancingRules": [
+          {
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/frontendIPConfigurations/LoadBalancerIPConfig"
+              },
+              "probe": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/probes/FabricGatewayProbe"
+              },
+              "allowBackendPortConflict": false,
+              "backendPort": 19000,
+              "idleTimeoutInMinutes": 5,
+              "enableDestinationServiceEndpoint": false,
+              "loadDistribution": "Default",
+              "protocol": "Tcp",
+              "backendAddressPool": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/backendAddressPools/LoadBalancerBEAddressPool"
+              },
+              "enableFloatingIP": false,
+              "enableTcpReset": false,
+              "frontendPort": 19000,
+              "backendAddressPools": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/backendAddressPools/LoadBalancerBEAddressPool"
+                }
+              ]
+            },
+            "name": "LBRule",
+            "type": "Microsoft.Network/loadBalancers/loadBalancingRules",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBRule"
+          },
+          {
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/frontendIPConfigurations/LoadBalancerIPConfig"
+              },
+              "probe": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/probes/FabricHttpGatewayProbe"
+              },
+              "allowBackendPortConflict": false,
+              "backendPort": 19080,
+              "idleTimeoutInMinutes": 5,
+              "enableDestinationServiceEndpoint": false,
+              "loadDistribution": "Default",
+              "protocol": "Tcp",
+              "backendAddressPool": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/backendAddressPools/LoadBalancerBEAddressPool"
+              },
+              "enableFloatingIP": false,
+              "enableTcpReset": false,
+              "frontendPort": 19080,
+              "backendAddressPools": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/backendAddressPools/LoadBalancerBEAddressPool"
+                }
+              ]
+            },
+            "name": "LBHttpRule",
+            "type": "Microsoft.Network/loadBalancers/loadBalancingRules",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBHttpRule"
+          }
+        ],
+        "inboundNatPools": [
+          {
+            "name": "LoadBalancerBEAddressNatPool",
+            "properties": {
+              "protocol": "Tcp",
+              "frontendPortRangeEnd": 4500,
+              "enableTcpReset": false,
+              "backendPort": 3389,
+              "enableDestinationServiceEndpoint": false,
+              "allowBackendPortConflict": false,
+              "frontendIPConfiguration": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/frontendIPConfigurations/LoadBalancerIPConfig"
+              },
+              "enableFloatingIP": false,
+              "frontendPortRangeStart": 3389,
+              "idleTimeoutInMinutes": 4
+            },
+            "type": "Microsoft.Network/loadBalancers/inboundNatPools",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/inboundNatPools/LoadBalancerBEAddressNatPool"
+          }
+        ],
+        "inboundNatRules": [],
+        "probes": [
+          {
+            "name": "FabricGatewayProbe",
+            "properties": {
+              "loadBalancingRules": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBRule"
+                }
+              ],
+              "protocol": "Tcp",
+              "port": 19000,
+              "numberOfProbes": 2,
+              "intervalInSeconds": 5,
+              "probeThreshold": 1
+            },
+            "type": "Microsoft.Network/loadBalancers/probes",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/probes/FabricGatewayProbe"
+          },
+          {
+            "name": "FabricHttpGatewayProbe",
+            "properties": {
+              "loadBalancingRules": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBHttpRule"
+                }
+              ],
+              "protocol": "Tcp",
+              "port": 19080,
+              "numberOfProbes": 2,
+              "intervalInSeconds": 5,
+              "probeThreshold": 1
+            },
+            "type": "Microsoft.Network/loadBalancers/probes",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/probes/FabricHttpGatewayProbe"
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "LoadBalancerBEAddressPool",
+            "properties": {
+              "backendIPConfigurations": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Compute/virtualMachineScaleSets/nt2/virtualMachines/0/networkInterfaces/NIC-sftestcluster-0/ipConfigurations/NIC-sftestcluster-0"
+                },
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Compute/virtualMachineScaleSets/nt2/virtualMachines/1/networkInterfaces/NIC-sftestcluster-0/ipConfigurations/NIC-sftestcluster-0"
+                },
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Compute/virtualMachineScaleSets/nt2/virtualMachines/2/networkInterfaces/NIC-sftestcluster-0/ipConfigurations/NIC-sftestcluster-0"
+                },
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Compute/virtualMachineScaleSets/nt2/virtualMachines/3/networkInterfaces/NIC-sftestcluster-0/ipConfigurations/NIC-sftestcluster-0"
+                },
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Compute/virtualMachineScaleSets/nt2/virtualMachines/4/networkInterfaces/NIC-sftestcluster-0/ipConfigurations/NIC-sftestcluster-0"
+                }
+              ],
+              "loadBalancingRules": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBRule"
+                },
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBHttpRule"
+                }
+              ]
+            },
+            "type": "Microsoft.Network/loadBalancers/backendAddressPools",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/backendAddressPools/LoadBalancerBEAddressPool"
+          }
+        ],
+        "frontendIPConfigurations": [
+          {
+            "properties": {
+              "inboundNatPools": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/inboundNatPools/LoadBalancerBEAddressNatPool"
+                }
+              ],
+              "loadBalancingRules": [
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBRule"
+                },
+                {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/loadBalancingRules/LBHttpRule"
+                }
+              ],
+              "inboundNatRules": [],
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/publicIPAddresses/pip-nt2"
+              }
+            },
+            "name": "LoadBalancerIPConfig",
+            "type": "Microsoft.Network/loadBalancers/frontendIPConfigurations",
+            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/frontendIPConfigurations/LoadBalancerIPConfig"
+          }
+        ]
+      },
+      "Type": "Microsoft.Network/loadBalancers",
+      "Tags": {
+        "clusterName": "sftestcluster"
+      },
+      "dependsOn": [
+        "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/publicIPAddresses/pip-nt2"
+      ],
+      "Id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2",
+      "apiVersion": "2023-04-01",
+      "Name": "lb-nt2",
+      "Location": "eastus",
+      "Sku": {
+        "Tier": "Regional",
+        "Name": "Basic",
+        "Capacity": null
+      }
+    },
+    {
+      "Properties": {
+        "upgradePolicy": {
+          "mode": "Automatic"
+        },
+        "timeCreated": "2023-04-14T17:12:36.2117311Z",
+        "doNotRunExtensionsOnOverprovisionedVMs": false,
+        "orchestrationMode": "Uniform",
+        "overprovision": false,
+        "virtualMachineProfile": {
+          "extensionProfile": {
+            "extensions": [
+              {
+                "properties": {
+                  "publisher": "Microsoft.Azure.ServiceFabric",
+                  "autoUpgradeMinorVersion": true,
+                  "typeHandlerVersion": "1.1",
+                  "type": "ServiceFabricNode",
+                  "settings": {
+                    "clusterEndpoint": "https://eastus.servicefabric.azure.com/runtime/clusters/a508674c-cfbb-4db1-b1ff-4b1978d5ba4a",
+                    "dataPath": "D:\\\\SvcFab",
+                    "durabilityLevel": "Silver",
+                    "enableParallelJobs": true,
+                    "nicPrefixOverride": "10.0.0.0/24",
+                    "certificate": {
+                      "x509StoreName": "My",
+                      "thumbprint": "***REMOVED***"
+                    },
+                    "nodeTypeRef": "Type809"
+                  }
+                },
+                "name": "Type809_ServiceFabricNode"
+              },
+              {
+                "properties": {
+                  "publisher": "Microsoft.Azure.Diagnostics",
+                  "autoUpgradeMinorVersion": true,
+                  "typeHandlerVersion": "1.5",
+                  "type": "IaaSDiagnostics",
+                  "settings": {
+                    "StorageAccount": "sfdgsftestcluster3849",
+                    "WadCfg": {
+                      "DiagnosticMonitorConfiguration": {
+                        "overallQuotaInMB": "50000",
+                        "EtwProviders": {
+                          "EtwEventSourceProviderConfiguration": [
+                            {
+                              "provider": "Microsoft-ServiceFabric-Actors",
+                              "scheduledTransferKeywordFilter": "1",
+                              "DefaultEvents": {
+                                "eventDestination": "ServiceFabricReliableActorEventTable"
+                              },
+                              "scheduledTransferPeriod": "PT5M"
+                            },
+                            {
+                              "provider": "Microsoft-ServiceFabric-Services",
+                              "DefaultEvents": {
+                                "eventDestination": "ServiceFabricReliableServiceEventTable"
+                              },
+                              "scheduledTransferPeriod": "PT5M"
+                            }
+                          ],
+                          "EtwManifestProviderConfiguration": [
+                            {
+                              "provider": "cbd93bc2-71e5-4566-b3a7-595d8eeca6e8",
+                              "scheduledTransferKeywordFilter": "4611686018427387904",
+                              "scheduledTransferLogLevelFilter": "Information",
+                              "DefaultEvents": {
+                                "eventDestination": "ServiceFabricSystemEventTable"
+                              },
+                              "scheduledTransferPeriod": "PT5M"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "name": "VMDiagnosticsVmExt_vmnt2_0"
+              }
+            ]
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "properties": {
+                  "ipConfigurations": [
+                    {
+                      "properties": {
+                        "subnet": {
+                          "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/virtualNetworks/VNet-sftestcluster/subnets/Subnet-0"
+                        },
+                        "loadBalancerInboundNatPools": [
+                          {
+                            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/inboundNatPools/LoadBalancerBEAddressNatPool"
+                          }
+                        ],
+                        "privateIPAddressVersion": "IPv4",
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2/backendAddressPools/LoadBalancerBEAddressPool"
+                          }
+                        ]
+                      },
+                      "name": "NIC-sftestcluster-0"
+                    }
+                  ],
+                  "enableAcceleratedNetworking": false,
+                  "dnsSettings": {
+                    "dnsServers": []
+                  },
+                  "disableTcpStateTracking": false,
+                  "primary": true
+                },
+                "name": "NIC-sftestcluster-0"
+              }
+            ]
+          },
+          "osProfile": {
+            "windowsConfiguration": {
+              "enableAutomaticUpdates": true,
+              "provisionVMAgent": true,
+              "enableVMAgentPlatformUpdates": false
+            },
+            "adminPassword": "P@ssw0rd!",
+            "adminUsername": "cloudadmin",
+            "secrets": [
+              {
+                "vaultCertificates": [
+                  {
+                    "certificateUrl": "https://certsjagilber.vault.azure.net/secrets/sfjagilber/cdad1edc751e406ca88c78f99d57c069",
+                    "certificateStore": "My"
+                  }
+                ],
+                "sourceVault": {
+                  "id": "/subscriptions/***REMOVED***/resourceGroups/certsjagilber/providers/Microsoft.KeyVault/vaults/certsjagilber"
+                }
+              }
+            ],
+            "computerNamePrefix": "Type809"
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "MicrosoftWindowsServer",
+              "version": "latest",
+              "sku": "2022-datacenter",
+              "offer": "WindowsServer"
+            },
+            "osDisk": {
+              "managedDisk": {
+                "storageAccountType": "Standard_LRS"
+              },
+              "caching": "ReadOnly",
+              "diskSizeGB": 127,
+              "osType": "Windows",
+              "createOption": "FromImage"
+            }
+          }
+        },
+        "singlePlacementGroup": true,
+        "uniqueId": "06470ea0-9e54-4a66-8f22-2d2a5773fc7b"
+      },
+      "Type": "Microsoft.Compute/virtualMachineScaleSets",
+      "Tags": {
+        "clusterName": "sftestcluster"
+      },
+      "dependsOn": [
+        "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Network/loadBalancers/lb-nt2"
+      ],
+      "Id": "/subscriptions/***REMOVED***/resourceGroups/sftestcluster/providers/Microsoft.Compute/virtualMachineScaleSets/nt2",
+      "apiVersion": "2023-03-01",
+      "Name": "nt2",
+      "Location": "eastus",
+      "Sku": {
+        "Tier": "Standard",
+        "Name": "Standard_D2_v2",
+        "Capacity": 3
+      }
+    }
+  ],
+  "contentVersion": "1.0.0.0"
+}

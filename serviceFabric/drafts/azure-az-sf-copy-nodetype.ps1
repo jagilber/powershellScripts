@@ -44,7 +44,11 @@
     ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -referenceNodeTypeName nt0 -newNodeTypeName nt1
 .EXAMPLE
     ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
-#>
+todo:
+sf nodetype
+protected settings
+remove ip address?
+    #>
 
 [cmdletbinding()]
 param(
@@ -60,13 +64,13 @@ param(
   $vmImageOffer = 'WindowsServer',
   $vmImageSku = '2022-Datacenter',
   $vmImageVersion = 'latest',
-  $vmInstanceCount = 5,
+  $vmInstanceCount = 3,
   $vmSku = 'Standard_D2_v2',
   [ValidateSet('Bronze', 'Silver', 'Gold')]
   $durabilityLevel = 'Silver',
   $adminUserName = 'cloudadmin',
   $adminPassword = 'P@ssw0rd!',
-  $newIpAddressName = 'ip-' + $newNodeTypeName,
+  $newIpAddressName = 'pip-' + $newNodeTypeName,
   $newLoadBalancerName = 'lb-' + $newNodeTypeName,
   $template = "$psscriptroot\azure-az-sf-copy-nodetype.json",
   $whatIf = $true
@@ -74,6 +78,7 @@ param(
 
 $PSModuleAutoLoadingPreference = 'auto'
 $global:deployedServices = @{}
+$regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
 
 function main() {
   write-console "main() started"
@@ -87,17 +92,17 @@ function main() {
     Connect-AzAccount
   }
 
-  if((get-azvmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName)) {
+  if ((get-azvmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName -errorAction SilentlyContinue)) {
     write-error("node type $newNodeTypeName already exists")
     return $error
   }
 
-  if((Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName)) {
+  if ((Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName -ErrorAction SilentlyContinue)) {
     write-error("ip address $newIpAddressName already exists")
     return $error
   }
 
-  if((Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName)) {
+  if ((Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName -ErrorAction SilentlyContinue)) {
     write-error("load balancer $newLoadBalancerName already exists")
     return $error
   }
@@ -110,7 +115,10 @@ function main() {
   }
   write-console $serviceFabricCluster
 
-  $referenceVmssCollection = get-vmssCollection
+  $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $referenceNodeTypeName
+  $global:referenceVmssCollection = $referenceVmssCollection
+  
+  #$referenceVmssCollection = get-vmssCollection
   #$referenceVmssCollection = update-referenceVmssCollection $referenceVmssCollection
   write-console $referenceVmssCollection
   $global:referenceVmssCollection = $referenceVmssCollection
@@ -118,9 +126,34 @@ function main() {
   $newVmssCollection = copy-vmssCollection -vmssCollection $referenceVmssCollection
   deploy-vmssCollection $newVmssCollection
 
-  write-console $newVmssCollection
+  #write-console $newVmssCollection
+  $global:newVmssCollection = $newVmssCollection
 
   write-console "finished"
+}
+
+function add-property($resource, $name, $value) {
+  write-console "adding property '$name' = '$value' to $resource"
+  if ($name -match '\.') {
+    foreach ($object in $name.split('.')) {
+      $childName = $name.replace("$object.", '')
+      $resource.$object = add-property -resource $resource.$object -name $childName -value $value
+      return $resource
+    }
+  }
+  else {
+    foreach ($property in $resource.PSObject.Properties) {
+      if ($property.Name -eq $name) {
+        write-console "property '$name' already exists" -foregroundColor 'Yellow'
+        return $resource
+      }
+    }
+  
+  }
+
+  $resource | add-member -MemberType NoteProperty -Name $name -Value $value
+  write-console "added property '$name' = '$value' to resource" -foregroundColor 'Green'
+  return $resource
 }
 
 function copy-vmssCollection($VmssCollection) {
@@ -129,45 +162,83 @@ function copy-vmssCollection($VmssCollection) {
   $lb = $VmssCollection.loadBalancerConfig
 
   # set credentials
-  $vmss.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
-  $vmss.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword
+  $vmss.properties.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
+  $vmss = add-property -resource $vmss -name 'properties.VirtualMachineProfile.OsProfile.adminPassword' -value ''
+  $vmss.properties.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword
+  $vmss = add-property -resource $vmss -name 'dependsOn' -value @()
+  $vmss.dependsOn += $lb.Id
+  
+  # set capacity
+  $vmss.Sku.Capacity = if ($vmInstanceCount) { $vmInstanceCount } else { $vmss.Sku.Capacity }
 
   # remove existing state
-  $vmss.ProvisioningState = ''
-  $vmss.Id = ''
   $vmssName = "/$($vmss.Name)(?<terminator>/|$|`"|,|\\)"
   $newVmssName = "/$($newNodeTypeName)`${terminator}"
-  #$vmss.Name = $newNodeTypeName
-  $vmss.Etag = ''
 
-  $ip.ProvisioningState = ''
-  $ip.Id = ''
-  $ip.ResourceGuid = ''
+  #$ip.ResourceGuid = ''
   $ipName = "/$($ip.Name)(?<terminator>/|$|`"|,|\\)"
   $newIpName = "/$($newIpAddressName)`${terminator}"
-  #$ip.Name = $newIpAddressName
-  $ip.Etag = ''
 
-  $lb.ProvisioningState = ''
-  $lb.Id = ''
+  #$lb.Id = ''
+  $lb = add-property -resource $lb -name 'dependsOn' -value @()
+  $lb.dependsOn += $ip.Id
   $lbName = "/$($lb.Name)(?<terminator>/|$|`"|,|\\)"
   $newLBName = "/$($newLoadBalancerName)`${terminator}"
-  #$lb.Name = $newLoadBalancerName
-  $lb.Etag = ''
 
-  $vmssJson = $vmss | convertto-json -Depth 10
-  $ipJson = $ip | convertto-json -Depth 10
-  $lbJson = $lb | convertto-json -Depth 10
+  # 
+  $vmssJson = $vmss | convertto-json -Depth 99
+  $ipJson = $ip | convertto-json -Depth 99
+  $lbJson = $lb | convertto-json -Depth 99
 
   # remove existing state
-  $ipJson = set-resourceName -referenceName "`"ProvisioningState`": `".+?`"," -newName "`"ProvisioningState`": `"`"," -json $ipJson
-  $vmssJson = set-resourceName -referenceName "`"ProvisioningState`": `".+?`"," -newName "`"ProvisioningState`": `"`"," -json $vmssJson
-  $lbJson = set-resourceName -referenceName "`"ProvisioningState`": `".+?`"," -newName "`"ProvisioningState`": `"`"," -json $lbJson
+  $ipJson = remove-nulls -json $ipJson
+  $vmssJson = remove-nulls -json $vmssJson
+  $lbJson = remove-nulls -json $lbJson
 
-  $ipJson = set-resourceName -referenceName "`"Etag`": `".+?`"," -newName "`"Etag`": `"`"," -json $ipJson
-  $vmssJson = set-resourceName -referenceName "`"Etag`": `".+?`"," -newName "`"Etag`": `"`"," -json $vmssJson
-  $lbJson = set-resourceName -referenceName "`"Etag`": `".+?`"," -newName "`"Etag`": `"`"," -json $lbJson
 
+  $ipJson = remove-property -name "ResourceId" -json $ipJson
+  $vmssJson = remove-property -name "ResourceId" -json $vmssJson
+  $lbJson = remove-property -name "ResourceId" -json $lbJson
+
+  $ipJson = remove-property -name "SubscriptionId" -json $ipJson
+  $vmssJson = remove-property -name "SubscriptionId" -json $vmssJson
+  $lbJson = remove-property -name "SubscriptionId" -json $lbJson
+
+  $ipJson = remove-property -name "TagsTable" -json $ipJson
+  $vmssJson = remove-property -name "TagsTable" -json $vmssJson
+  $lbJson = remove-property -name "TagsTable" -json $lbJson
+
+  $ipJson = remove-property -name "ResourceGuid" -json $ipJson
+  $vmssJson = remove-property -name "ResourceGuid" -json $vmssJson
+  $lbJson = remove-property -name "ResourceGuid" -json $lbJson
+
+  $ipJson = remove-property -name "ResourceName" -json $ipJson
+  $vmssJson = remove-property -name "ResourceName" -json $vmssJson
+  $lbJson = remove-property -name "ResourceName" -json $lbJson
+
+  $ipJson = remove-property -name "ResourceType" -json $ipJson
+  $vmssJson = remove-property -name "ResourceType" -json $vmssJson
+  $lbJson = remove-property -name "ResourceType" -json $lbJson
+
+  $ipJson = remove-property -name "ResourceGroupName" -json $ipJson
+  $vmssJson = remove-property -name "ResourceGroupName" -json $vmssJson
+  $lbJson = remove-property -name "ResourceGroupName" -json $lbJson
+
+  $ipJson = remove-property -name "ProvisioningState" -json $ipJson
+  $vmssJson = remove-property -name "ProvisioningState" -json $vmssJson
+  $lbJson = remove-property -name "ProvisioningState" -json $lbJson
+
+  $ipJson = remove-property -name "CreatedTime" -json $ipJson
+  $vmssJson = remove-property -name "CreatedTime" -json $vmssJson
+  $lbJson = remove-property -name "CreatedTime" -json $lbJson
+
+  $ipJson = remove-property -name "ChangedTime" -json $ipJson
+  $vmssJson = remove-property -name "ChangedTime" -json $vmssJson
+  $lbJson = remove-property -name "ChangedTime" -json $lbJson
+
+  $ipJson = remove-property -name "Etag" -json $ipJson
+  $vmssJson = remove-property -name "Etag" -json $vmssJson
+  $lbJson = remove-property -name "Etag" -json $lbJson
 
   # set new names
   $ipJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
@@ -182,14 +253,20 @@ function copy-vmssCollection($VmssCollection) {
 
   $vmssJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $vmssJson
   $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
-  $vmssJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
+  $vmssJson = set-resourceName -referenceName $ipName -newName $newIpName -json $vmssJson
   $vmss = $vmssJson | convertfrom-json -asHashtable
 
   # set names
   $vmss.Name = $newNodeTypeName
   $ip.Name = $newIpAddressName
-  $lb.Name = $newLoadBalancerName
 
+  $ip.Properties.dnsSettings.fqdn = "$newNodeTypeName-$($ip.Properties.dnsSettings.fqdn)"
+  $ip.Properties.dnsSettings.domainNameLabel = "$newNodeTypeName-$($ip.Properties.dnsSettings.domainNameLabel)"
+
+  $lb.Name = $newLoadBalancerName
+  $lb.Properties.inboundNatRules = @()
+  $lb.Properties.frontendIPConfigurations.properties.inboundNatRules = @()
+  
   # $existingName = $vmss.Name
   # $vmss.Id = $vmss.Id.Replace($existingName, $newNodeTypeName)
   # $vmss.Name = $newNodeTypeName
@@ -204,9 +281,34 @@ function copy-vmssCollection($VmssCollection) {
   return $newVmssCollection
 }
 
-function deploy-vmssCollection($vmssCollection){
+function deploy-vmssCollection($vmssCollection) {
   write-console "deploying new node type $newNodeTypeName"
-  write-console $vmssCollection
+  #write-console $vmssCollection
+
+  $templateJson = @{
+    "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json"
+    "contentVersion" = "1.0.0.0"
+    "parameters"     = @{}
+    "variables"      = @{}
+    "resources"      = @()
+  }
+
+  $templateJson.resources += $vmssCollection.ipConfig
+  $templateJson.resources += $vmssCollection.loadBalancerConfig
+  $templateJson.resources += $vmssCollection.vmssConfig
+
+  write-console $template -foregroundColor 'Cyan'
+  $templateJson | convertto-json -Depth 99 | Out-File $template -Force
+  write-console "template saved to $template"
+
+}
+
+function get-latestApiVersion($resourceType) {
+  $provider = get-azresourceProvider -ProviderNamespace $resourceType.Split('/')[0]
+  $resource = $provider.ResourceTypes | where-object ResourceTypeName -eq $resourceType.Split('/')[1]
+  $apiVersion = $resource.ApiVersions[0]
+  write-console "latest api version for $resourceType is $apiVersion"
+  return $apiVersion
 }
 
 function get-vmssCollection($nodeTypeName) {
@@ -245,6 +347,28 @@ function get-vmssCollection($nodeTypeName) {
   $VmssCollection = new-vmssCollection -vmss $Vmss -ip $Ip -loadBalancer $LoadBalancer
   write-console $VmssCollection
   return $VmssCollection
+}
+
+function get-vmssResources($resourceGroupName, $nodeTypeName) {
+  $vmssResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $nodeTypeName -ExpandProperties
+  $vmssResource = add-property -resource $vmssResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $vmssResource.Type)
+
+  $ipProperties = $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations.properties
+  # todo modify subnet?
+  #$subnetName = $ipProperties.subnet.id.Split('/')[10]
+  
+  $lbName = $ipProperties.loadBalancerBackendAddressPools.id.Split('/')[8]
+  $lbResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties
+  $lbResource = add-property -resource $lbResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $lbResource.Type)
+  
+  $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
+  $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
+  $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
+
+  $vmssCollection = new-vmssCollection -vmss $vmssResource -ip $ipResource -loadBalancer $lbResource
+  
+  write-console $vmssCollection
+  return $vmssCollection
 }
 
 function new-psVmssCollection($VmssCollection) {
@@ -294,32 +418,67 @@ function new-vmssCollection($vmss = $null, $ip = $null, $loadBalancer = $null) {
   return $vmssCollection
 }
 
-function set-resourceName($referenceName, $newName, $json) {
-  $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+function remove-nulls($json, $name = $null) {
+  $findName = "`"(?<propertyName>.+?)`": null,"
+  $replaceName = "//`"${propertyName}`":"
 
-  if(!$json) {
+  if (!$json) {
     write-console "error: json is null" #-err
   }
-  elseif(!$referenceName) {
+
+  if ($name) {
+    $findName = "`"$name`": null,"
+    $replaceName = "//`"$name`": null,"
+  }
+
+  if ([regex]::isMatch($json, $findName, $regexOptions)) {
+    write-console "replacing $findName with $replaceName in `$json" -foregroundColor 'Green'
+    $json = [regex]::Replace($json, $findName, $replaceName, $regexOptions)
+  }
+  else {
+    write-console "$findName not found" #-err
+  }  
+  return $json
+}
+
+function remove-property($name, $json) {
+  
+  $findName = "`"$name`":"
+  $replaceName = "//`"$name`":"
+
+  if (!$json) {
+    write-console "error: json is null" #-err
+  }
+  elseif (!$name) {
+    write-console "error: name is null" #-err
+  }
+
+  if ([regex]::isMatch($json, $findName, $regexOptions)) {
+    write-console "replacing $findName with $replaceName in `$json" -foregroundColor 'Green'
+    $json = [regex]::Replace($json, $findName, $replaceName, $regexOptions)
+  }
+  else {
+    write-console "$findName not found" #-err
+  }  
+  return $json
+}
+
+function set-resourceName($referenceName, $newName, $json) {
+  
+
+  if (!$json) {
+    write-console "error: json is null" #-err
+  }
+  elseif (!$referenceName) {
     write-console "error: referenceName is null" #-err
   }
-  elseif(!$newName) {
+  elseif (!$newName) {
     write-console "newName is null"
   }
 
-  # if([regex]::isMatch($json, $newName, $regexOptions)) {
-  #   write-console "$newName already in `$json" #-err
-  # }
-  # elseif([regex]::isMatch($json, $referenceName, $regexOptions)) {
-  #   write-console "replacing $referenceName with $newName in `$json" -foregroundColor 'Green'
-  #   $json = [regex]::Replace($json, $referenceName, $newName)
-  # }
-  # else {
-  #   write-console "$referenceName not found" #-err
-  # }
-  if([regex]::isMatch($json, $referenceName, $regexOptions)) {
+  if ([regex]::isMatch($json, $referenceName, $regexOptions)) {
     write-console "replacing $referenceName with $newName in `$json" -foregroundColor 'Green'
-    $json = [regex]::Replace($json, $referenceName, $newName)
+    $json = [regex]::Replace($json, $referenceName, $newName, $regexOptions)
   }
   else {
     write-console "$referenceName not found" #-err
@@ -340,7 +499,7 @@ function write-console($message, $foregroundColor = 'White', [switch]$verbose, [
     write-host($message) -ForegroundColor $foregroundColor
   }
 
-  if($err) {
+  if ($err) {
     write-error($message)
     throw
   }
