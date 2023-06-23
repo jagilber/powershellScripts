@@ -9,7 +9,7 @@
      
 .NOTES
    file name  : azure-az-deploy-template.ps1
-   version    : 200924 fix for serialization bug in cmdlet
+   version    : 23/06/22 update comments
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -19,6 +19,9 @@
     .\azure-az-deploy-template.ps1 -adminPassword changeme3240e2938r92 -resourceGroup rdsdeptest
     Example command to deploy rds-deployment with 2 instances using A1 machines. the resource group is rdsdeptest and domain fqdn is rdsdeptest.lab
 
+.PARAMETER additionalParameters
+    if specified, will use these additional parameters for the deployment. if not specified, will use empty hashtable
+
 .PARAMETER adminUsername
     if specified, the name of the administrator account. 
 
@@ -26,8 +29,23 @@
     if specified, the administrator account password in clear text. password needs to meet azure password requirements.
     use -credentials to pass credentials securely
 
+.PARAMETER clean
+    if specified, will delete existing resource group and deployment
+
 .PARAMETER credentials
     can be used for administrator account password. password needs to meet azure password requirements.
+
+.PARAMETER deploymentName
+    if specified, will use this name for the deployment. if not specified, will use resource group name and date
+
+.PARAMETER location
+    if specified, will use this location for the deployment. if not specified, will use location of resource group
+
+.PARAMETER mode
+    if specified, will use this mode for the deployment. if not specified, will use incremental
+
+.PARAMETER force
+    if specified, will delete existing resource group and deployment without prompting
 
 .PARAMETER resourceGroup
     resourceGroup is a mandatory paramenter and is the azure arm resourcegroup to use / create for this deployment
@@ -40,7 +58,6 @@
 
 .PARAMETER templateParameterFile
     required. path to template parameter file on disk
-
 #>
 [cmdletbinding()]
 param(
