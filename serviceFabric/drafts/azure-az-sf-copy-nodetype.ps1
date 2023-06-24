@@ -73,6 +73,7 @@ param(
   $newIpAddressName = 'pip-' + $newNodeTypeName,
   $newLoadBalancerName = 'lb-' + $newNodeTypeName,
   $template = "$psscriptroot\azure-az-sf-copy-nodetype.json",
+  $protectedSettings = @{},
   $whatIf = $true
 )
 
@@ -118,22 +119,19 @@ function main() {
   $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $referenceNodeTypeName
   $global:referenceVmssCollection = $referenceVmssCollection
   
-  #$referenceVmssCollection = get-vmssCollection
-  #$referenceVmssCollection = update-referenceVmssCollection $referenceVmssCollection
   write-console $referenceVmssCollection
   $global:referenceVmssCollection = $referenceVmssCollection
 
   $newVmssCollection = copy-vmssCollection -vmssCollection $referenceVmssCollection
-  deploy-vmssCollection $newVmssCollection
-
-  #write-console $newVmssCollection
-  $global:newVmssCollection = $newVmssCollection
+  $newServiceFabricCluster = update-serviceFabricResource -serviceFabricCluster $serviceFabricCluster
+  deploy-vmssCollection -vmssCollection $newVmssCollection -serviceFabricCluster $newServiceFabricCluster
 
   write-console "finished"
 }
 
-function add-property($resource, $name, $value) {
-  write-console "adding property '$name' = '$value' to $resource"
+function add-property($resource, $name, $value = $null, $overwrite = $false) {
+  write-console "checking property '$name' = '$value' to $resource"
+  if(!$resource) { return $resource }
   if ($name -match '\.') {
     foreach ($object in $name.split('.')) {
       $childName = $name.replace("$object.", '')
@@ -143,14 +141,15 @@ function add-property($resource, $name, $value) {
   }
   else {
     foreach ($property in $resource.PSObject.Properties) {
-      if ($property.Name -eq $name) {
+      if ($property.Name -ieq $name) {
         write-console "property '$name' already exists" -foregroundColor 'Yellow'
-        return $resource
+        if (!$overwrite) { return $resource }
       }
     }
   
   }
 
+  write-console "add-member -MemberType NoteProperty -Name $name -Value $value"
   $resource | add-member -MemberType NoteProperty -Name $name -Value $value
   write-console "added property '$name' = '$value' to resource" -foregroundColor 'Green'
   return $resource
@@ -167,23 +166,36 @@ function copy-vmssCollection($VmssCollection) {
   $vmss.properties.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword
   $vmss = add-property -resource $vmss -name 'dependsOn' -value @()
   $vmss.dependsOn += $lb.Id
+
+  $extensions = $vmss.properties.VirtualMachineProfile.ExtensionProfile.Extensions
   
+  $wadExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.Diagnostics' }
+  $wadStorageAccount = $wadExtension.properties.settings.StorageAccount
+  $protectedSettings = get-wadProtectedSettings -storageAccountName $wadStorageAccount
+  $wadExtension = add-property -resource $wadExtension -name 'properties.protectedSettings' -value $protectedSettings
+  #$vmss = add-property -resource $vmss -name  -value @{}
+  
+  $sfExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.ServiceFabric' }
+  $sfStorageAccount = $serviceFabricCluster.DiagnosticsStorageAccountConfig.StorageAccountName
+  $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount
+  $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
+
   # set capacity
   $vmss.Sku.Capacity = if ($vmInstanceCount) { $vmInstanceCount } else { $vmss.Sku.Capacity }
 
   # remove existing state
-  $vmssName = "/$($vmss.Name)(?<terminator>/|$|`"|,|\\)"
-  $newVmssName = "/$($newNodeTypeName)`${terminator}"
+  $vmssName = "(?<initiator>/|`"|_| )$($vmss.Name)(?<terminator>/|$|`"|_| |,|\\)"
+  $newVmssName = "`${initiator}$($newNodeTypeName)`${terminator}"
 
   #$ip.ResourceGuid = ''
-  $ipName = "/$($ip.Name)(?<terminator>/|$|`"|,|\\)"
-  $newIpName = "/$($newIpAddressName)`${terminator}"
+  $ipName = "(?<initiator>/|`"|_| )$($ip.Name)(?<terminator>/|$|`"|,|\\)"
+  $newIpName = "`${initiator}$($newIpAddressName)`${terminator}"
 
   #$lb.Id = ''
   $lb = add-property -resource $lb -name 'dependsOn' -value @()
   $lb.dependsOn += $ip.Id
-  $lbName = "/$($lb.Name)(?<terminator>/|$|`"|,|\\)"
-  $newLBName = "/$($newLoadBalancerName)`${terminator}"
+  $lbName = "(?<initiator>/|`"|_| )$($lb.Name)(?<terminator>/|$|`"|,|\\)"
+  $newLBName = "`${initiator}$($newLoadBalancerName)`${terminator}"
 
   # 
   $vmssJson = $vmss | convertto-json -Depth 99
@@ -281,7 +293,7 @@ function copy-vmssCollection($VmssCollection) {
   return $newVmssCollection
 }
 
-function deploy-vmssCollection($vmssCollection) {
+function deploy-vmssCollection($vmssCollection, $serviceFabricCluster) {
   write-console "deploying new node type $newNodeTypeName"
   #write-console $vmssCollection
 
@@ -296,11 +308,22 @@ function deploy-vmssCollection($vmssCollection) {
   $templateJson.resources += $vmssCollection.ipConfig
   $templateJson.resources += $vmssCollection.loadBalancerConfig
   $templateJson.resources += $vmssCollection.vmssConfig
+  $templateJson.resources += $serviceFabricCluster
 
   write-console $template -foregroundColor 'Cyan'
   $templateJson | convertto-json -Depth 99 | Out-File $template -Force
   write-console "template saved to $template"
 
+  $result = test-azResourceGroupDeployment -template $template -resourceGroupName $resourceGroupName -Verbose
+  if($result) {
+    write-console "error: test-azResourceGroupDeployment failed" -err
+    return $result
+  }
+
+  write-console "new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -WhatIf:$whatIf -Verbose -DeploymentDebugLogLevel All"
+  $result = new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -WhatIf:$whatIf -Verbose -DeploymentDebugLogLevel All
+  
+  return $result
 }
 
 function get-latestApiVersion($resourceType) {
@@ -309,6 +332,31 @@ function get-latestApiVersion($resourceType) {
   $apiVersion = $resource.ApiVersions[0]
   write-console "latest api version for $resourceType is $apiVersion"
   return $apiVersion
+}
+
+function get-sfProtectedSettings($storageAccountName) {
+  $storageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('supportLogStorageAccountName')),'2015-05-01-preview').key1]"
+  $storageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('supportLogStorageAccountName')),'2015-05-01-preview').key2]"
+  write-console "get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName"
+  $storageAccountKeys = get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName
+
+  if (!$storageAccountKeys) {
+    write-error("storage account key not found")
+    $error.Clear()
+    #return $error
+  }
+  else {
+    $storageAccountKey1 = $storageAccountKeys[0].Value
+    $storageAccountKey2 = $storageAccountKeys[1].Value
+  }
+
+  $storageAccountProtectedSettings = @{
+      "storageAccountKey1"  = $storageAccountKey1
+      "storageAccountKey2"  = $storageAccountKey2
+  }
+
+  write-console $storageAccountProtectedSettings
+  return $storageAccountProtectedSettings
 }
 
 function get-vmssCollection($nodeTypeName) {
@@ -371,39 +419,30 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
   return $vmssCollection
 }
 
-function new-psVmssCollection($VmssCollection) {
-  write-console "deploying new node type $newNodeTypeName"
-  $vmss = $VmssCollection.vmssConfig
-  $ip = $VmssCollection.ipConfig
-  $loadBalancer = $VmssCollection.loadBalancerConfig
+function get-wadProtectedSettings($storageAccountName) {
+  $storageAccountTemplate = "[variables('applicationDiagnosticsStorageAccountName')]"
+  $storageAccountKey = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('applicationDiagnosticsStorageAccountName')),'2015-05-01-preview').key1]"
+  $storageAccountEndPoint = "https://core.windows.net/"
 
-  # deploy ip
-  write-console "New-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName -AllocationMethod Static -DomainNameLabel $newNodeTypeName -Location $vmss.Location -Sku Standard -Zone 1"
-  $result = New-AzPublicIpAddress -ResourceGroupName $resourceGroupName `
-    -Name $newIpAddressName `
-    -AllocationMethod Static `
-    -DomainNameLabel $newNodeTypeName `
-    -Location $vmss.Location `
-    -Sku Standard `
-    -Zone 1 `
-    -WhatIf:$whatIf
-  write-console $result
+  write-console "get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName"
+  $storageAccountKeys = get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName
 
-  # deploy load balancer
-  write-console "New-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName -LoadBalancingRule $loadBalancer.LoadBalancingRules[0] -FrontendIpConfiguration $loadBalancer.FrontendIpConfigurations[0] -BackendAddressPool $loadBalancer.BackendAddressPools[0] -Probe $loadBalancer.Probes[0] -InboundNatPool $loadBalancer.InboundNatPools[0]"
-  $result = New-AzLoadBalancer -ResourceGroupName $resourceGroupName `
-    -Name $newLoadBalancerName `
-    -LoadBalancingRule $loadBalancer.LoadBalancingRules `
-    -FrontendIpConfiguration $loadBalancer.FrontendIpConfigurations `
-    -BackendAddressPool $loadBalancer.BackendAddressPools `
-    -Probe $loadBalancer.Probes `
-    -InboundNatPool $loadBalancer.InboundNatPools
-  write-console $result
+  if (!$storageAccountKeys) {
+    write-console "storage account key not found"
+    $storageAccountName = $storageAccountTemplate
+  }
+  else {
+    $storageAccountName = $storageAccountName
+    $storageAccountKey = $storageAccountKeys[0].Value
+  }
 
-  # deploy vmss
-  write-console "New-AzVmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName -VirtualMachineScaleSet $vmss"
-  $result = New-AzVmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName -VirtualMachineScaleSet $vmss
-  write-console $result
+  $storageAccountProtectedSettings = @{
+      "storageAccountName" = $storageAccountName
+      "storageAccountKey"  = $storageAccountKey
+      "storageAccountEndPoint" = $storageAccountEndPoint
+  }
+  write-console $storageAccountProtectedSettings
+  return $storageAccountProtectedSettings
 }
 
 function new-vmssCollection($vmss = $null, $ip = $null, $loadBalancer = $null) {
@@ -442,7 +481,7 @@ function remove-nulls($json, $name = $null) {
 }
 
 function remove-property($name, $json) {
-  
+  # todo implement same as add-property?
   $findName = "`"$name`":"
   $replaceName = "//`"$name`":"
 
@@ -464,8 +503,6 @@ function remove-property($name, $json) {
 }
 
 function set-resourceName($referenceName, $newName, $json) {
-  
-
   if (!$json) {
     write-console "error: json is null" #-err
   }
@@ -484,6 +521,28 @@ function set-resourceName($referenceName, $newName, $json) {
     write-console "$referenceName not found" #-err
   }  
   return $json
+}
+
+function update-serviceFabricResource($serviceFabricResource){
+  $nodeTypes = $serviceFabricResource.Properties.NodeTypes
+  if(!$nodeTypes) { 
+    write-error("node types not found")
+    return $serviceFabricResource 
+  }
+
+  $nodeType = $nodeTypes | where-object Name -ieq $referenceNodeTypeName
+  if($nodeType) { 
+    write-console "node type $referenceNodeTypeName already exists" -err
+    return $serviceFabricResource 
+  }
+
+  $nodeTypeTemplate = $nodeTypes[0]
+  $nodeTypeTemplate.isPrimaryNodeType = $isPrimaryNodeType
+  $nodeTypeTemplate.name = $newNodeTypeName
+  $nodeTypes += $nodeTypeTemplate
+  
+  write-console $serviceFabricResource
+  return $serviceFabricResource
 }
 
 function write-console($message, $foregroundColor = 'White', [switch]$verbose, [switch]$err) {
