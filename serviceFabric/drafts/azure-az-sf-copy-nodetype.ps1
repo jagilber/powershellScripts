@@ -94,27 +94,28 @@ function main() {
   }
 
   if ((get-azvmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName -errorAction SilentlyContinue)) {
-    write-error("node type $newNodeTypeName already exists")
+    write-console "node type $newNodeTypeName already exists" -err
     return $error
   }
 
   if ((Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName -ErrorAction SilentlyContinue)) {
-    write-error("ip address $newIpAddressName already exists")
+    write-console "ip address $newIpAddressName already exists" -err
     return $error
   }
 
   if ((Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName -ErrorAction SilentlyContinue)) {
-    write-error("load balancer $newLoadBalancerName already exists")
+    write-console "load balancer $newLoadBalancerName already exists" -err
     return $error
   }
 
   $referenceVmssCollection = new-vmssCollection
-  $serviceFabricCluster = get-azServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
-  if (!$serviceFabricCluster) {
-    write-error("service fabric cluster $clusterName not found")
+  $serviceFabricResource = get-sfResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+  
+  if (!$serviceFabricResource) {
+    write-console "service fabric cluster $clusterName not found" -err
     return $error
   }
-  write-console $serviceFabricCluster
+  write-console $serviceFabricResource
 
   $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $referenceNodeTypeName
   $global:referenceVmssCollection = $referenceVmssCollection
@@ -123,7 +124,7 @@ function main() {
   $global:referenceVmssCollection = $referenceVmssCollection
 
   $newVmssCollection = copy-vmssCollection -vmssCollection $referenceVmssCollection
-  $newServiceFabricCluster = update-serviceFabricResource -serviceFabricCluster $serviceFabricCluster
+  $newServiceFabricCluster = update-serviceFabricResource -serviceFabricResource $serviceFabricResource
   deploy-vmssCollection -vmssCollection $newVmssCollection -serviceFabricCluster $newServiceFabricCluster
 
   write-console "finished"
@@ -131,7 +132,7 @@ function main() {
 
 function add-property($resource, $name, $value = $null, $overwrite = $false) {
   write-console "checking property '$name' = '$value' to $resource"
-  if(!$resource) { return $resource }
+  if (!$resource) { return $resource }
   if ($name -match '\.') {
     foreach ($object in $name.split('.')) {
       $childName = $name.replace("$object.", '')
@@ -176,7 +177,7 @@ function copy-vmssCollection($VmssCollection) {
   #$vmss = add-property -resource $vmss -name  -value @{}
   
   $sfExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.ServiceFabric' }
-  $sfStorageAccount = $serviceFabricCluster.DiagnosticsStorageAccountConfig.StorageAccountName
+  $sfStorageAccount = $serviceFabricResource.Properties.DiagnosticsStorageAccountConfig.StorageAccountName
   $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount
   $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
@@ -293,7 +294,7 @@ function copy-vmssCollection($VmssCollection) {
   return $newVmssCollection
 }
 
-function deploy-vmssCollection($vmssCollection, $serviceFabricCluster) {
+function deploy-vmssCollection($vmssCollection, $serviceFabricResourc3) {
   write-console "deploying new node type $newNodeTypeName"
   #write-console $vmssCollection
 
@@ -308,15 +309,16 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricCluster) {
   $templateJson.resources += $vmssCollection.ipConfig
   $templateJson.resources += $vmssCollection.loadBalancerConfig
   $templateJson.resources += $vmssCollection.vmssConfig
-  $templateJson.resources += $serviceFabricCluster
+  $templateJson.resources += $serviceFabricResource
 
   write-console $template -foregroundColor 'Cyan'
   $templateJson | convertto-json -Depth 99 | Out-File $template -Force
   write-console "template saved to $template"
 
-  $result = test-azResourceGroupDeployment -template $template -resourceGroupName $resourceGroupName -Verbose
-  if($result) {
-    write-console "error: test-azResourceGroupDeployment failed" -err
+  write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose"
+  $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
+  if ($result) {
+    write-console "error: test-azResourceGroupDeployment failed:$($result)" -err
     return $result
   }
 
@@ -341,7 +343,7 @@ function get-sfProtectedSettings($storageAccountName) {
   $storageAccountKeys = get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName
 
   if (!$storageAccountKeys) {
-    write-error("storage account key not found")
+    write-console "storage account key not found" -err
     $error.Clear()
     #return $error
   }
@@ -351,12 +353,23 @@ function get-sfProtectedSettings($storageAccountName) {
   }
 
   $storageAccountProtectedSettings = @{
-      "storageAccountKey1"  = $storageAccountKey1
-      "storageAccountKey2"  = $storageAccountKey2
+    "storageAccountKey1" = $storageAccountKey1
+    "storageAccountKey2" = $storageAccountKey2
   }
 
   write-console $storageAccountProtectedSettings
   return $storageAccountProtectedSettings
+}
+
+function get-sfResource($resourceGroupName, $clusterName) {
+  $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
+  if (!$serviceFabricResource) {
+    write-console "service fabric cluster $clusterName not found" -err
+    return $error
+  }
+
+  write-console $serviceFabricResource
+  return $serviceFabricResource
 }
 
 function get-vmssCollection($nodeTypeName) {
@@ -364,31 +377,31 @@ function get-vmssCollection($nodeTypeName) {
 
   $Vmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName
   if (!$Vmss) {
-    write-error("node type $nodeTypeName not found")
+    write-console "node type $nodeTypeName not found" -err
     return $error
   }
 
   $loadBalancerName = $Vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].IpConfigurations[0].LoadBalancerInboundNatPools[0].Id.Split('/')[8]
   if (!$loadBalancerName) {
-    write-error("load balancer not found")
+    write-console "load balancer not found" -err
     return $error
   }
 
   $LoadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName
   if (!$LoadBalancer) {
-    write-error("load balancer not found")
+    write-console "load balancer not found" -err
     return $error
   }
   
   $IpName = $LoadBalancer.FrontendIpConfigurations[0].PublicIpAddress.Id.Split('/')[8]
   if (!$IpName) {
-    write-error("ip not found")
+    write-console "ip not found" -err
     return $error
   }
 
   $Ip = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $IpName
   if (!$Ip) {
-    write-error("ip not found")
+    write-console "ip not found" -err
     return $error
   }
 
@@ -437,9 +450,9 @@ function get-wadProtectedSettings($storageAccountName) {
   }
 
   $storageAccountProtectedSettings = @{
-      "storageAccountName" = $storageAccountName
-      "storageAccountKey"  = $storageAccountKey
-      "storageAccountEndPoint" = $storageAccountEndPoint
+    "storageAccountName"     = $storageAccountName
+    "storageAccountKey"      = $storageAccountKey
+    "storageAccountEndPoint" = $storageAccountEndPoint
   }
   write-console $storageAccountProtectedSettings
   return $storageAccountProtectedSettings
@@ -523,23 +536,65 @@ function set-resourceName($referenceName, $newName, $json) {
   return $json
 }
 
-function update-serviceFabricResource($serviceFabricResource){
-  $nodeTypes = $serviceFabricResource.Properties.NodeTypes
-  if(!$nodeTypes) { 
-    write-error("node types not found")
+function update-serviceFabricResource($serviceFabricResource) {
+
+  if (!$serviceFabricResource) {
+    write-console "service fabric cluster $clusterName not found" -err
+    return $error
+  }
+
+  $sfJson = $serviceFabricResource | convertto-json -Depth 99
+
+  # remove properties not supported for deployment
+  $sfJson = remove-nulls -json $sfJson
+  $sfJson = remove-property -name "ResourceId" -json $sfJson
+  $sfJson = remove-property -name "ResourceName" -json $sfJson
+  $sfJson = remove-property -name "ResourceType" -json $sfJson
+  #$sfJson = remove-property -name "ExtensionResourceName" -json $sfJson
+  #$sfJson = remove-property -name "ParentResource" -json $sfJson
+
+  $serviceFabricResource = $sfJson | convertfrom-json -asHashtable
+  $nodeTypes = $serviceFabricResource.Properties.nodeTypes
+
+  if (!$nodeTypes) { 
+    write-console "node types not found" -err
     return $serviceFabricResource 
   }
 
-  $nodeType = $nodeTypes | where-object Name -ieq $referenceNodeTypeName
-  if($nodeType) { 
+  $serviceFabricResource = add-property -resource $serviceFabricResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $serviceFabricResource.Type)
+  $referenceNodeType = $nodeTypes | where-object Name -ieq $referenceNodeTypeName
+  
+  if (!$referenceNodeType) { 
+    write-console "node type $referenceNodeTypeName not found" -err
+    return $serviceFabricResource 
+  }
+
+  $nodeType = $nodeTypes | where-object Name -ieq $newNodeTypeName
+  if ($nodeType) { 
     write-console "node type $referenceNodeTypeName already exists" -err
     return $serviceFabricResource 
   }
+  
+  $newList = [collections.Generic.List[Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]]::new()
+  $newList.AddRange($nodeTypes)
+  $nodeTypeTemplate = [Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]::new()
 
-  $nodeTypeTemplate = $nodeTypes[0]
-  $nodeTypeTemplate.isPrimaryNodeType = $isPrimaryNodeType
-  $nodeTypeTemplate.name = $newNodeTypeName
-  $nodeTypes += $nodeTypeTemplate
+  $nodeTypeTemplate.IsPrimary = $isPrimaryNodeType
+  $nodeTypeTemplate.Name = $newNodeTypeName
+  $nodeTypeTemplate.VmInstanceCount = $vmInstanceCount
+  $nodeTypeTemplate.DurabilityLevel = $durabilityLevel
+
+  $nodeTypeTemplate.ApplicationPorts = $referenceNodeType.ApplicationPorts
+  #$nodeTypeTemplaet.Capacities = $referenceNodeType.Capacities
+  $nodeTypeTemplate.ClientConnectionEndpointPort = $referenceNodeType.ClientConnectionEndpointPort
+  $nodeTypeTemplate.EphemeralPorts = $referenceNodeType.EphemeralPorts
+  $nodeTypeTemplate.HttpGatewayEndpointPort = $referenceNodeType.HttpGatewayEndpointPort
+  #$nodeTypeTemplate.IsStateless = $referenceNodeType.IsStateless
+  $nodeTypeTemplate.PlacementProperties = $referenceNodeType.PlacementProperties
+  $nodeTypeTemplate.ReverseProxyEndpointPort = $referenceNodeType.ReverseProxyEndpointPort
+
+  $newList.Add($nodeTypeTemplate)
+  $serviceFabricResource.Properties.nodeTypes = $newList
   
   write-console $serviceFabricResource
   return $serviceFabricResource
