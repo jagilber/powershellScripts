@@ -2,7 +2,7 @@
 .Synopsis
     provide powershell commands to copy a reference node type to an existing Azure Service Fabric cluster
     provide powershell commands to configure all existing applications to use PLB before adding new nodetype if not already done
-    
+
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 
 .LINK
@@ -55,9 +55,7 @@
 .EXAMPLE
     ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
 todo:
-sf nodetype
-protected settings
-remove ip address?
+private ip?
 #>
 
 [cmdletbinding()]
@@ -90,6 +88,9 @@ $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
 $vmImagePublisher = 'MicrosoftWindowsServer'
 $vmImageOffer = 'WindowsServer'
 $vmImageVersion = 'latest'
+$nameFindPattern = "(?<initiator>/|`"|_|,|\\){0}(?<terminator>/|$|`"|_|,|\\)"
+$nameReplacePattern = "`${{initiator}}{0}`${{terminator}}"
+
 
 $error.clear()
 $templateJson = @{
@@ -133,20 +134,20 @@ function main() {
     $error.Clear()
     $referenceVmssCollection = new-vmssCollection
     $serviceFabricResource = get-sfResource -resourceGroupName $resourceGroupName -clusterName $clusterName
-    
+
     if (!$serviceFabricResource) {
       write-console "service fabric cluster $clusterName not found" -err
       return $error
     }
     write-console $serviceFabricResource
-  
+
     $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $referenceNodeTypeName
     write-console $referenceVmssCollection
 
     $templateJson = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
     $templateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $templateJson
     $result = deploy-vmssCollection -templateJson $templateJson
-  
+
     write-console "deploy result: $result"
   }
   catch [Exception] {
@@ -175,7 +176,7 @@ function add-property($resource, $name, $value = $null, $overwrite = $false) {
         if (!$overwrite) { return $resource }
       }
     }
-  
+
   }
 
   write-console "add-member -MemberType NoteProperty -Name $name -Value $value"
@@ -184,10 +185,10 @@ function add-property($resource, $name, $value = $null, $overwrite = $false) {
   return $resource
 }
 
-function copy-vmssCollection($VmssCollection, $templateJson) {
-  $vmss = $VmssCollection.vmssConfig
-  $ip = $VmssCollection.ipConfig
-  $lb = $VmssCollection.loadBalancerConfig
+function copy-vmssCollection($vmssCollection, $templateJson) {
+  $vmss = $vmssCollection.vmssConfig
+  $ip = $null
+  $lb = $vmssCollection.loadBalancerConfig
 
   # set credentials
   $vmss.properties.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
@@ -197,13 +198,12 @@ function copy-vmssCollection($VmssCollection, $templateJson) {
   $vmss.dependsOn += $lb.Id
 
   $extensions = $vmss.properties.VirtualMachineProfile.ExtensionProfile.Extensions
-  
+
   $wadExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.Diagnostics' }
   $wadStorageAccount = $wadExtension.properties.settings.StorageAccount
   $protectedSettings = get-wadProtectedSettings -storageAccountName $wadStorageAccount -templaetJson $templateJson
   $wadExtension = add-property -resource $wadExtension -name 'properties.protectedSettings' -value $protectedSettings
-  #$vmss = add-property -resource $vmss -name  -value @{}
-  
+
   $sfExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.ServiceFabric' }
   $sfStorageAccount = $serviceFabricResource.Properties.DiagnosticsStorageAccountConfig.StorageAccountName
   $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templaetJson $templateJson
@@ -213,71 +213,85 @@ function copy-vmssCollection($VmssCollection, $templateJson) {
   $vmss.Sku.Capacity = if ($vmInstanceCount) { $vmInstanceCount } else { $vmss.Sku.Capacity }
 
   # remove existing state
-  $vmssName = "(?<initiator>/|`")$($vmss.Name)(?<terminator>/|$|`"|,|\\)"
-  $newVmssName = "`${initiator}$($newNodeTypeName)`${terminator}"
+  $vmssName = $nameFindPattern -f $vmss.Name
+  $newVmssName = $nameReplacePattern -f $newNodeTypeName
 
-  $ip.Properties.ipAddress = $newIpAddress
-  $ip.Properties.publicIPAllocationMethod = if ($newIpAddress) { 'Static' } else { 'Dynamic' }
-  $ipName = "(?<initiator>/|`")$($ip.Name)(?<terminator>/|$|`"|,|\\)"
-  $newIpName = "`${initiator}$($newIpAddressName)`${terminator}"
+  if ($vmssCollection.isPublicIp) {
+    write-console "setting public ip address to $newIpAddress"
+    $ip = $vmssCollection.ipConfig
 
-  $lb = add-property -resource $lb -name 'dependsOn' -value @()
-  $lb.dependsOn += $ip.Id
-  $lbName = "(?<initiator>/|`")$($lb.Name)(?<terminator>/|$|`"|,|\\)"
-  $newLBName = "`${initiator}$($newLoadBalancerName)`${terminator}"
+    $lb = add-property -resource $lb -name 'dependsOn' -value @()
+    $lb.dependsOn += $ip.Id
+  
+    $ipJson = $ip | convertto-json -Depth 99
+    $ipJson = remove-nulls -json $ipJson
+    $ipJson = remove-commonProperties -json $ipJson
+  
+    # set new resource names
+    $ipJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
+    $ipJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $ipJson
+    $ipJson = set-resourceName -referenceName $lbName -newName $newLBName -json $ipJson
+    $ip = $ipJson | convertfrom-json -asHashTable
+  
+    $lbJson = set-resourceName -referenceName $ipName -newName $newIpName -json $lbJson
+    $vmssJson = set-resourceName -referenceName $ipName -newName $newIpName -json $vmssJson
+  
+    # set names
+    $ip.Name = $newIpAddressName
+    $ip.Properties.dnsSettings.fqdn = "$newNodeTypeName-$($ip.Properties.dnsSettings.fqdn)"
+    $ip.Properties.dnsSettings.domainNameLabel = "$newNodeTypeName-$($ip.Properties.dnsSettings.domainNameLabel)"
+  
+
+    if ($vmssCollection.ipType -ieq 'Static') {
+      $ip.Properties.ipAddress = $newIpAddress
+      $ipName = $nameFindPattern -f $ip.Name
+      $newIpName = $nameReplacePattern -f $newIpAddressName
+    }
+  }
+  else {
+    # remove ip address from new loadbalancer to avoid conflict
+    write-console "setting private ip address to $newIpAddress"
+    if ($vmssCollection.ipType -ieq 'Static' -and $newIpAddress) {
+      $loadBalancer.FrontendIpConfigurations.properties.privateIpAddress = $newIpAddress
+    }
+  }
+
+  $lbName = $nameFindPattern -f $lb.Name
+  $newLBName = $nameReplacePattern -f $newLoadBalancerName
 
   # convert to json
   $vmssJson = $vmss | convertto-json -Depth 99
-  $ipJson = $ip | convertto-json -Depth 99
+  #$ipJson = $ip | convertto-json -Depth 99
   $lbJson = $lb | convertto-json -Depth 99
 
   # remove existing state
-  $ipJson = remove-nulls -json $ipJson
   $vmssJson = remove-nulls -json $vmssJson
   $lbJson = remove-nulls -json $lbJson
 
-  $ipJson = remove-commonProperties -json $ipJson
+  #$ipJson = remove-commonProperties -json $ipJson
   $vmssJson = remove-commonProperties -json $vmssJson
   $lbJson = remove-commonProperties -json $lbJson
 
   # set new names
-  $ipJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
-  $ipJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $ipJson
-  $ipJson = set-resourceName -referenceName $lbName -newName $newLBName -json $ipJson
-  $ip = $ipJson | convertfrom-json -asHashTable
-
   $lbJson = set-resourceName -referenceName $lbName -newName $newLBName -json $lbJson
   $lbJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $lbJson
-  $lbJson = set-resourceName -referenceName $ipName -newName $newIpName -json $lbJson
   $lb = $lbJson | convertfrom-json -asHashTable
 
   $vmssJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $vmssJson
   $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
-  $vmssJson = set-resourceName -referenceName $ipName -newName $newIpName -json $vmssJson
   $vmss = $vmssJson | convertfrom-json -asHashTable
 
   # set names
   $vmss.Name = $newNodeTypeName
-  $ip.Name = $newIpAddressName
-
-  $ip.Properties.dnsSettings.fqdn = "$newNodeTypeName-$($ip.Properties.dnsSettings.fqdn)"
-  $ip.Properties.dnsSettings.domainNameLabel = "$newNodeTypeName-$($ip.Properties.dnsSettings.domainNameLabel)"
 
   $lb.Name = $newLoadBalancerName
   $lb.Properties.inboundNatRules = @()
   $lb.Properties.frontendIPConfigurations.properties.inboundNatRules = @()
+
+  if ($ip) {
+    $templateJson.resources += $ip
+  }
   
-  # $existingName = $vmss.Name
-  # $vmss.Id = $vmss.Id.Replace($existingName, $newNodeTypeName)
-  # $vmss.Name = $newNodeTypeName
-  # $vmss.VirtualMachineProfile.OsProfile.ComputerNamePrefix = $newNodeTypeName
-  # $vmss.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
-  # $vmss.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword
-  # $sfExtension = $vmss.VirtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -eq 'Microsoft.Azure.ServiceFabric'
-  # $sfExtension.Name = $sfExtension.Name.Replace($existingName, $newNodeTypeName)
-  
-  #$newVmssCollection = new-vmssCollection -vmss $vmss -ip $ip -loadBalancer $lb
-  $templateJson.resources += $ip
   $templateJson.resources += $lb
   $templateJson.resources += $vmss
   write-console $newVmssCollection  -foregroundColor 'Green'
@@ -366,27 +380,41 @@ function get-vmssCollection($nodeTypeName) {
     return $error
   }
 
-  $LoadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName
-  if (!$LoadBalancer) {
+  $loadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName
+  if (!$loadBalancer) {
     write-console "load balancer not found" -err
     return $error
   }
-  
-  $IpName = $LoadBalancer.FrontendIpConfigurations[0].PublicIpAddress.Id.Split('/')[8]
-  if (!$IpName) {
-    write-console "ip not found" -err
-    return $error
+
+  $vmssCollection = new-vmssCollection -vmss $Vmss -loadBalancer $loadBalancer
+
+  # private ip check
+  $vmssCollection.isPublicIp = if ($loadBalancer.FrontendIpConfigurations.PublicIpAddress) { $true } else { $false }
+
+  if ($vmssCollection.isPublicIp) {
+    write-console "public ip found"
+    $ipName = $loadBalancer.FrontendIpConfigurations.PublicIpAddress.Id.Split('/')[8]
+    $ip = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $ipName
+    $vmssCollection.ipAddress = $ip.IpAddress
+    $vmssCollection.ipType = $ip.PublicIpAllocationMethod
+  }
+  else {
+    write-console "private ip found"
+    $vmssCollection.ipAddress = $loadBalancer.FrontendIpConfigurations.PrivateIpAddress
+    $vmssCollection.ipType = $loadBalancer.FrontendIpConfigurations.PrivateIpAllocationMethod
   }
 
-  $Ip = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $IpName
-  if (!$Ip) {
-    write-console "ip not found" -err
-    return $error
+  if (!$ip) {
+    write-console "public ip not found" -foregroundColor 'Yellow'
+  }
+  else {
+    $vmssCollection.ipConfig = $ip
   }
 
-  $VmssCollection = new-vmssCollection -vmss $Vmss -ip $Ip -loadBalancer $LoadBalancer
-  write-console $VmssCollection
-  return $VmssCollection
+  write-console "current ip address is type:$($vmssCollection.ipType) public:$($vmssCollection.isPublicIp) address:$($vmssCollection.ipAddress)" -foregroundColor 'Cyan'
+  write-console $vmssCollection
+
+  return $vmssCollection
 }
 
 function get-vmssResources($resourceGroupName, $nodeTypeName) {
@@ -400,17 +428,17 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
   $ipProperties = $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations.properties
   # todo modify subnet?
   #$subnetName = $ipProperties.subnet.id.Split('/')[10]
-  
+
   $lbName = $ipProperties.loadBalancerBackendAddressPools.id.Split('/')[8]
   $lbResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties
   $lbResource = add-property -resource $lbResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $lbResource.Type)
-  
+
   $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
   $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
   $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
 
   $vmssCollection = new-vmssCollection -vmss $vmssResource -ip $ipResource -loadBalancer $lbResource
-  
+
   write-console $vmssCollection
   return $vmssCollection
 }
@@ -450,6 +478,9 @@ function new-vmssCollection($vmss = $null, $ip = $null, $loadBalancer = $null) {
     ipConfig           = $ip
     #[Microsoft.Azure.Commands.Network.Automation.Models.PSLoadBalancer]
     loadBalancerConfig = $loadBalancer
+    isPublicIp         = $false
+    ipAddress          = ''
+    ipType             = ''
   }
   return $vmssCollection
 }
@@ -494,7 +525,7 @@ function remove-nulls($json, $name = $null) {
   }
   else {
     write-console "$findName not found" #-err
-  }  
+  }
   return $json
 }
 
@@ -516,13 +547,13 @@ function remove-property($name, $json) {
   }
   else {
     write-console "$findName not found" #-err
-  }  
+  }
   return $json
 }
 
 function set-resourceName($referenceName, $newName, $json) {
   if (!$json) {
-    write-console "error: json is null" #-err
+    write-console "error: json is null" -err
   }
   elseif (!$referenceName) {
     write-console "error: referenceName is null" #-err
@@ -537,7 +568,7 @@ function set-resourceName($referenceName, $newName, $json) {
   }
   else {
     write-console "$referenceName not found" #-err
-  }  
+  }
   return $json
 }
 
@@ -557,25 +588,25 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
   $serviceFabricResource = $sfJson | convertfrom-json -asHashTable
   $nodeTypes = $serviceFabricResource.Properties.nodeTypes
 
-  if (!$nodeTypes) { 
+  if (!$nodeTypes) {
     write-console "node types not found" -err
-    return $serviceFabricResource 
+    return $serviceFabricResource
   }
 
   $serviceFabricResource = add-property -resource $serviceFabricResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $serviceFabricResource.Type)
-  $referenceNodeTypeJson = $nodeTypes | where-object name -ieq $referenceNodeTypeName | convertto-json -Depth 99 
-  
-  if (!$referenceNodeTypeJson) { 
+  $referenceNodeTypeJson = $nodeTypes | where-object name -ieq $referenceNodeTypeName | convertto-json -Depth 99
+
+  if (!$referenceNodeTypeJson) {
     write-console "node type $referenceNodeTypeName not found" -err
-    return $serviceFabricResource 
+    return $serviceFabricResource
   }
 
   $nodeType = $nodeTypes | where-object Name -ieq $newNodeTypeName
-  if ($nodeType) { 
+  if ($nodeType) {
     write-console "node type $referenceNodeTypeName already exists" -err
-    return $serviceFabricResource 
+    return $serviceFabricResource
   }
-  
+
   #$newList = [collections.Generic.List[Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]]::new()
   $newList = [collections.arrayList]::new()
   [void]$newList.AddRange($nodeTypes)
@@ -587,10 +618,10 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
   $nodeTypeTemplate.name = $newNodeTypeName
   $nodeTypeTemplate.vmInstanceCount = $vmInstanceCount
   $nodeTypeTemplate.durabilityLevel = $durabilityLevel
-  
+
   [void]$newList.Add($nodeTypeTemplate)
-  $serviceFabricResource.properties.nodeTypes = $newList
-  
+  $serviceFabricResource.Properties.nodeTypes = $newList
+
   write-console $serviceFabricResource
   $templateJson.resources += $serviceFabricResource
   return $templateJson
