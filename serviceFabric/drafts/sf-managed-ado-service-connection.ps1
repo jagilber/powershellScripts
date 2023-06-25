@@ -9,7 +9,7 @@
 # https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/utility/powershell?view=azure-devops
 - task: AzurePowerShell@5
   inputs:
-    azureSubscription: 'Microsoft Azure Internal Consumption(***REMOVED***)'
+    azureSubscription: 'Microsoft Azure Internal Consumption(bedf79d7-6500-409e-b475-c4d0003bb6a7)'
     serviceConnection: serviceFabricConnection
     ScriptType: InlineScript
     Inline: |
