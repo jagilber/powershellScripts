@@ -38,6 +38,16 @@
     the admin username of the new node type
 .PARAMETER adminPassword
     the admin password of the new node type
+.PARAMETER newIpAddress
+    the ip address of the new node type
+.PARAMETER newIpAddressName
+    the name of the new ip address
+.PARAMETER newLoadBalancerName
+    the name of the new load balancer
+.PARAMETER template
+    the path to the template file to use for deployment
+.PARAMETER whatIf
+    whether to perform a whatIf deployment
 .EXAMPLE
     ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
 .EXAMPLE
@@ -48,7 +58,7 @@ todo:
 sf nodetype
 protected settings
 remove ip address?
-    #>
+#>
 
 [cmdletbinding()]
 param(
@@ -60,26 +70,37 @@ param(
   [Parameter(Mandatory = $true)]
   $referenceNodeTypeName = 'nt0', #'nt0',
   $isPrimaryNodeType = $false,
-  $vmImagePublisher = 'MicrosoftWindowsServer',
-  $vmImageOffer = 'WindowsServer',
   $vmImageSku = '2022-Datacenter',
-  $vmImageVersion = 'latest',
   $vmInstanceCount = 3,
   $vmSku = 'Standard_D2_v2',
   [ValidateSet('Bronze', 'Silver', 'Gold')]
   $durabilityLevel = 'Silver',
   $adminUserName = 'cloudadmin',
   $adminPassword = 'P@ssw0rd!',
+  $newIpAddress = $null,
   $newIpAddressName = 'pip-' + $newNodeTypeName,
   $newLoadBalancerName = 'lb-' + $newNodeTypeName,
   $template = "$psscriptroot\azure-az-sf-copy-nodetype.json",
-  $protectedSettings = @{},
   $whatIf = $true
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
-$global:deployedServices = @{}
+$deployedServices = @{}
 $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+$vmImagePublisher = 'MicrosoftWindowsServer'
+$vmImageOffer = 'WindowsServer'
+$vmImageVersion = 'latest'
+
+$error.clear()
+$templateJson = @{
+  "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json"
+  "contentVersion" = "1.0.0.0"
+  "parameters"     = @{}
+  "variables"      = @{}
+  "resources"      = @()
+  "outputs"        = @{}
+}
+
 
 function main() {
   write-console "main() started"
@@ -108,26 +129,33 @@ function main() {
     return $error
   }
 
-  $referenceVmssCollection = new-vmssCollection
-  $serviceFabricResource = get-sfResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+  try {
+    $error.Clear()
+    $referenceVmssCollection = new-vmssCollection
+    $serviceFabricResource = get-sfResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+    
+    if (!$serviceFabricResource) {
+      write-console "service fabric cluster $clusterName not found" -err
+      return $error
+    }
+    write-console $serviceFabricResource
   
-  if (!$serviceFabricResource) {
-    write-console "service fabric cluster $clusterName not found" -err
-    return $error
+    $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $referenceNodeTypeName
+    write-console $referenceVmssCollection
+
+    $templateJson = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
+    $templateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $templateJson
+    $result = deploy-vmssCollection -templateJson $templateJson
+  
+    write-console "deploy result: $result"
   }
-  write-console $serviceFabricResource
-
-  $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $referenceNodeTypeName
-  $global:referenceVmssCollection = $referenceVmssCollection
-  
-  write-console $referenceVmssCollection
-  $global:referenceVmssCollection = $referenceVmssCollection
-
-  $newVmssCollection = copy-vmssCollection -vmssCollection $referenceVmssCollection
-  $newServiceFabricCluster = update-serviceFabricResource -serviceFabricResource $serviceFabricResource
-  deploy-vmssCollection -vmssCollection $newVmssCollection -serviceFabricCluster $newServiceFabricCluster
-
-  write-console "finished"
+  catch [Exception] {
+    $errorString = "exception: $($psitem.Exception.Response.StatusCode.value__)`r`nexception:`r`n$($psitem.Exception.Message)`r`n$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
+    Write-Host $errorString -foregroundColor 'Red'
+  }
+  finally {
+    write-console "finished"
+  }
 }
 
 function add-property($resource, $name, $value = $null, $overwrite = $false) {
@@ -156,7 +184,7 @@ function add-property($resource, $name, $value = $null, $overwrite = $false) {
   return $resource
 }
 
-function copy-vmssCollection($VmssCollection) {
+function copy-vmssCollection($VmssCollection, $templateJson) {
   $vmss = $VmssCollection.vmssConfig
   $ip = $VmssCollection.ipConfig
   $lb = $VmssCollection.loadBalancerConfig
@@ -172,33 +200,33 @@ function copy-vmssCollection($VmssCollection) {
   
   $wadExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.Diagnostics' }
   $wadStorageAccount = $wadExtension.properties.settings.StorageAccount
-  $protectedSettings = get-wadProtectedSettings -storageAccountName $wadStorageAccount
+  $protectedSettings = get-wadProtectedSettings -storageAccountName $wadStorageAccount -templaetJson $templateJson
   $wadExtension = add-property -resource $wadExtension -name 'properties.protectedSettings' -value $protectedSettings
   #$vmss = add-property -resource $vmss -name  -value @{}
   
   $sfExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.ServiceFabric' }
   $sfStorageAccount = $serviceFabricResource.Properties.DiagnosticsStorageAccountConfig.StorageAccountName
-  $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount
+  $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templaetJson $templateJson
   $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
   # set capacity
   $vmss.Sku.Capacity = if ($vmInstanceCount) { $vmInstanceCount } else { $vmss.Sku.Capacity }
 
   # remove existing state
-  $vmssName = "(?<initiator>/|`"|_| )$($vmss.Name)(?<terminator>/|$|`"|_| |,|\\)"
+  $vmssName = "(?<initiator>/|`")$($vmss.Name)(?<terminator>/|$|`"|,|\\)"
   $newVmssName = "`${initiator}$($newNodeTypeName)`${terminator}"
 
-  #$ip.ResourceGuid = ''
-  $ipName = "(?<initiator>/|`"|_| )$($ip.Name)(?<terminator>/|$|`"|,|\\)"
+  $ip.Properties.ipAddress = $newIpAddress
+  $ip.Properties.publicIPAllocationMethod = if ($newIpAddress) { 'Static' } else { 'Dynamic' }
+  $ipName = "(?<initiator>/|`")$($ip.Name)(?<terminator>/|$|`"|,|\\)"
   $newIpName = "`${initiator}$($newIpAddressName)`${terminator}"
 
-  #$lb.Id = ''
   $lb = add-property -resource $lb -name 'dependsOn' -value @()
   $lb.dependsOn += $ip.Id
-  $lbName = "(?<initiator>/|`"|_| )$($lb.Name)(?<terminator>/|$|`"|,|\\)"
+  $lbName = "(?<initiator>/|`")$($lb.Name)(?<terminator>/|$|`"|,|\\)"
   $newLBName = "`${initiator}$($newLoadBalancerName)`${terminator}"
 
-  # 
+  # convert to json
   $vmssJson = $vmss | convertto-json -Depth 99
   $ipJson = $ip | convertto-json -Depth 99
   $lbJson = $lb | convertto-json -Depth 99
@@ -208,66 +236,25 @@ function copy-vmssCollection($VmssCollection) {
   $vmssJson = remove-nulls -json $vmssJson
   $lbJson = remove-nulls -json $lbJson
 
-
-  $ipJson = remove-property -name "ResourceId" -json $ipJson
-  $vmssJson = remove-property -name "ResourceId" -json $vmssJson
-  $lbJson = remove-property -name "ResourceId" -json $lbJson
-
-  $ipJson = remove-property -name "SubscriptionId" -json $ipJson
-  $vmssJson = remove-property -name "SubscriptionId" -json $vmssJson
-  $lbJson = remove-property -name "SubscriptionId" -json $lbJson
-
-  $ipJson = remove-property -name "TagsTable" -json $ipJson
-  $vmssJson = remove-property -name "TagsTable" -json $vmssJson
-  $lbJson = remove-property -name "TagsTable" -json $lbJson
-
-  $ipJson = remove-property -name "ResourceGuid" -json $ipJson
-  $vmssJson = remove-property -name "ResourceGuid" -json $vmssJson
-  $lbJson = remove-property -name "ResourceGuid" -json $lbJson
-
-  $ipJson = remove-property -name "ResourceName" -json $ipJson
-  $vmssJson = remove-property -name "ResourceName" -json $vmssJson
-  $lbJson = remove-property -name "ResourceName" -json $lbJson
-
-  $ipJson = remove-property -name "ResourceType" -json $ipJson
-  $vmssJson = remove-property -name "ResourceType" -json $vmssJson
-  $lbJson = remove-property -name "ResourceType" -json $lbJson
-
-  $ipJson = remove-property -name "ResourceGroupName" -json $ipJson
-  $vmssJson = remove-property -name "ResourceGroupName" -json $vmssJson
-  $lbJson = remove-property -name "ResourceGroupName" -json $lbJson
-
-  $ipJson = remove-property -name "ProvisioningState" -json $ipJson
-  $vmssJson = remove-property -name "ProvisioningState" -json $vmssJson
-  $lbJson = remove-property -name "ProvisioningState" -json $lbJson
-
-  $ipJson = remove-property -name "CreatedTime" -json $ipJson
-  $vmssJson = remove-property -name "CreatedTime" -json $vmssJson
-  $lbJson = remove-property -name "CreatedTime" -json $lbJson
-
-  $ipJson = remove-property -name "ChangedTime" -json $ipJson
-  $vmssJson = remove-property -name "ChangedTime" -json $vmssJson
-  $lbJson = remove-property -name "ChangedTime" -json $lbJson
-
-  $ipJson = remove-property -name "Etag" -json $ipJson
-  $vmssJson = remove-property -name "Etag" -json $vmssJson
-  $lbJson = remove-property -name "Etag" -json $lbJson
+  $ipJson = remove-commonProperties -json $ipJson
+  $vmssJson = remove-commonProperties -json $vmssJson
+  $lbJson = remove-commonProperties -json $lbJson
 
   # set new names
   $ipJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
   $ipJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $ipJson
   $ipJson = set-resourceName -referenceName $lbName -newName $newLBName -json $ipJson
-  $ip = $ipJson | convertfrom-json -asHashtable
+  $ip = $ipJson | convertfrom-json -asHashTable
 
   $lbJson = set-resourceName -referenceName $lbName -newName $newLBName -json $lbJson
   $lbJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $lbJson
   $lbJson = set-resourceName -referenceName $ipName -newName $newIpName -json $lbJson
-  $lb = $lbJson | convertfrom-json -asHashtable
+  $lb = $lbJson | convertfrom-json -asHashTable
 
   $vmssJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $vmssJson
   $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
   $vmssJson = set-resourceName -referenceName $ipName -newName $newIpName -json $vmssJson
-  $vmss = $vmssJson | convertfrom-json -asHashtable
+  $vmss = $vmssJson | convertfrom-json -asHashTable
 
   # set names
   $vmss.Name = $newNodeTypeName
@@ -289,27 +276,17 @@ function copy-vmssCollection($VmssCollection) {
   # $sfExtension = $vmss.VirtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -eq 'Microsoft.Azure.ServiceFabric'
   # $sfExtension.Name = $sfExtension.Name.Replace($existingName, $newNodeTypeName)
   
-  $newVmssCollection = new-vmssCollection -vmss $vmss -ip $ip -loadBalancer $lb
+  #$newVmssCollection = new-vmssCollection -vmss $vmss -ip $ip -loadBalancer $lb
+  $templateJson.resources += $ip
+  $templateJson.resources += $lb
+  $templateJson.resources += $vmss
   write-console $newVmssCollection  -foregroundColor 'Green'
-  return $newVmssCollection
+  return $templateJson
 }
 
-function deploy-vmssCollection($vmssCollection, $serviceFabricResourc3) {
+function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
   write-console "deploying new node type $newNodeTypeName"
   #write-console $vmssCollection
-
-  $templateJson = @{
-    "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json"
-    "contentVersion" = "1.0.0.0"
-    "parameters"     = @{}
-    "variables"      = @{}
-    "resources"      = @()
-  }
-
-  $templateJson.resources += $vmssCollection.ipConfig
-  $templateJson.resources += $vmssCollection.loadBalancerConfig
-  $templateJson.resources += $vmssCollection.vmssConfig
-  $templateJson.resources += $serviceFabricResource
 
   write-console $template -foregroundColor 'Cyan'
   $templateJson | convertto-json -Depth 99 | Out-File $template -Force
@@ -318,13 +295,15 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResourc3) {
   write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose"
   $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
   if ($result) {
-    write-console "error: test-azResourceGroupDeployment failed:$($result)" -err
+    write-console "error: test-azResourceGroupDeployment failed:$($result | out-string)" -err
     return $result
   }
 
-  write-console "new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -WhatIf:$whatIf -Verbose -DeploymentDebugLogLevel All"
-  $result = new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -WhatIf:$whatIf -Verbose -DeploymentDebugLogLevel All
-  
+  write-console "new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -Verbose -DeploymentDebugLogLevel All"
+  if (!$whatIf) {
+    $result = new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
+  }
+
   return $result
 }
 
@@ -336,7 +315,7 @@ function get-latestApiVersion($resourceType) {
   return $apiVersion
 }
 
-function get-sfProtectedSettings($storageAccountName) {
+function get-sfProtectedSettings($storageAccountName, $templateJson) {
   $storageAccountKey1 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('supportLogStorageAccountName')),'2015-05-01-preview').key1]"
   $storageAccountKey2 = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('supportLogStorageAccountName')),'2015-05-01-preview').key2]"
   write-console "get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName"
@@ -345,7 +324,7 @@ function get-sfProtectedSettings($storageAccountName) {
   if (!$storageAccountKeys) {
     write-console "storage account key not found" -err
     $error.Clear()
-    #return $error
+    $templateJson = add-property -resource $templateJson -name 'variables.supportLogStorageAccountName' -value $storageAccountName
   }
   else {
     $storageAccountKey1 = $storageAccountKeys[0].Value
@@ -412,6 +391,10 @@ function get-vmssCollection($nodeTypeName) {
 
 function get-vmssResources($resourceGroupName, $nodeTypeName) {
   $vmssResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $nodeTypeName -ExpandProperties
+  if (!$vmssResource) {
+    write-console "node type $nodeTypeName not found" -err
+    return $error
+  }
   $vmssResource = add-property -resource $vmssResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $vmssResource.Type)
 
   $ipProperties = $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations.properties
@@ -432,7 +415,7 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
   return $vmssCollection
 }
 
-function get-wadProtectedSettings($storageAccountName) {
+function get-wadProtectedSettings($storageAccountName, $templateJson) {
   $storageAccountTemplate = "[variables('applicationDiagnosticsStorageAccountName')]"
   $storageAccountKey = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('applicationDiagnosticsStorageAccountName')),'2015-05-01-preview').key1]"
   $storageAccountEndPoint = "https://core.windows.net/"
@@ -443,6 +426,7 @@ function get-wadProtectedSettings($storageAccountName) {
   if (!$storageAccountKeys) {
     write-console "storage account key not found"
     $storageAccountName = $storageAccountTemplate
+    $templateJson = add-property -resource $templateJson -name 'variables.applicationDiagnosticsStorageAccountName' -value $storageAccountName
   }
   else {
     $storageAccountName = $storageAccountName
@@ -470,12 +454,33 @@ function new-vmssCollection($vmss = $null, $ip = $null, $loadBalancer = $null) {
   return $vmssCollection
 }
 
+function remove-commonProperties($json) {
+  $commonProperties = @(
+    'ResourceId',
+    'SubscriptionId',
+    'TagsTable',
+    'ResourceGuid',
+    'ResourceName',
+    'ResourceType',
+    'ResourceGroupName',
+    'ProvisioningState',
+    'CreatedTime',
+    'ChangedTime',
+    'Etag'
+  )
+
+  foreach ($property in $commonProperties) {
+    $json = remove-property -name $property -json $json
+  }
+  return $json
+}
+
 function remove-nulls($json, $name = $null) {
   $findName = "`"(?<propertyName>.+?)`": null,"
-  $replaceName = "//`"${propertyName}`":"
+  $replaceName = "//`"`${propertyName}`": null,"
 
   if (!$json) {
-    write-console "error: json is null" #-err
+    write-console "error: json is null" -err
   }
 
   if ($name) {
@@ -499,10 +504,10 @@ function remove-property($name, $json) {
   $replaceName = "//`"$name`":"
 
   if (!$json) {
-    write-console "error: json is null" #-err
+    write-console "error: json is null" -err
   }
   elseif (!$name) {
-    write-console "error: name is null" #-err
+    write-console "error: name is null" -err
   }
 
   if ([regex]::isMatch($json, $findName, $regexOptions)) {
@@ -536,7 +541,7 @@ function set-resourceName($referenceName, $newName, $json) {
   return $json
 }
 
-function update-serviceFabricResource($serviceFabricResource) {
+function update-serviceFabricResource($serviceFabricResource, $templateJson) {
 
   if (!$serviceFabricResource) {
     write-console "service fabric cluster $clusterName not found" -err
@@ -547,13 +552,9 @@ function update-serviceFabricResource($serviceFabricResource) {
 
   # remove properties not supported for deployment
   $sfJson = remove-nulls -json $sfJson
-  $sfJson = remove-property -name "ResourceId" -json $sfJson
-  $sfJson = remove-property -name "ResourceName" -json $sfJson
-  $sfJson = remove-property -name "ResourceType" -json $sfJson
-  #$sfJson = remove-property -name "ExtensionResourceName" -json $sfJson
-  #$sfJson = remove-property -name "ParentResource" -json $sfJson
+  $sfJson = remove-commonProperties -json $sfJson
 
-  $serviceFabricResource = $sfJson | convertfrom-json -asHashtable
+  $serviceFabricResource = $sfJson | convertfrom-json -asHashTable
   $nodeTypes = $serviceFabricResource.Properties.nodeTypes
 
   if (!$nodeTypes) { 
@@ -562,9 +563,9 @@ function update-serviceFabricResource($serviceFabricResource) {
   }
 
   $serviceFabricResource = add-property -resource $serviceFabricResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $serviceFabricResource.Type)
-  $referenceNodeType = $nodeTypes | where-object Name -ieq $referenceNodeTypeName
+  $referenceNodeTypeJson = $nodeTypes | where-object name -ieq $referenceNodeTypeName | convertto-json -Depth 99 
   
-  if (!$referenceNodeType) { 
+  if (!$referenceNodeTypeJson) { 
     write-console "node type $referenceNodeTypeName not found" -err
     return $serviceFabricResource 
   }
@@ -575,29 +576,24 @@ function update-serviceFabricResource($serviceFabricResource) {
     return $serviceFabricResource 
   }
   
-  $newList = [collections.Generic.List[Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]]::new()
-  $newList.AddRange($nodeTypes)
-  $nodeTypeTemplate = [Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]::new()
+  #$newList = [collections.Generic.List[Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]]::new()
+  $newList = [collections.arrayList]::new()
+  [void]$newList.AddRange($nodeTypes)
+  #$nodeTypeTemplate = [Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]::new()
+  # clone reference node type
+  $nodeTypeTemplate = $referenceNodeTypeJson | convertfrom-json -asHashTable
 
-  $nodeTypeTemplate.IsPrimary = $isPrimaryNodeType
-  $nodeTypeTemplate.Name = $newNodeTypeName
-  $nodeTypeTemplate.VmInstanceCount = $vmInstanceCount
-  $nodeTypeTemplate.DurabilityLevel = $durabilityLevel
-
-  $nodeTypeTemplate.ApplicationPorts = $referenceNodeType.ApplicationPorts
-  #$nodeTypeTemplaet.Capacities = $referenceNodeType.Capacities
-  $nodeTypeTemplate.ClientConnectionEndpointPort = $referenceNodeType.ClientConnectionEndpointPort
-  $nodeTypeTemplate.EphemeralPorts = $referenceNodeType.EphemeralPorts
-  $nodeTypeTemplate.HttpGatewayEndpointPort = $referenceNodeType.HttpGatewayEndpointPort
-  #$nodeTypeTemplate.IsStateless = $referenceNodeType.IsStateless
-  $nodeTypeTemplate.PlacementProperties = $referenceNodeType.PlacementProperties
-  $nodeTypeTemplate.ReverseProxyEndpointPort = $referenceNodeType.ReverseProxyEndpointPort
-
-  $newList.Add($nodeTypeTemplate)
-  $serviceFabricResource.Properties.nodeTypes = $newList
+  $nodeTypeTemplate.isPrimary = $isPrimaryNodeType
+  $nodeTypeTemplate.name = $newNodeTypeName
+  $nodeTypeTemplate.vmInstanceCount = $vmInstanceCount
+  $nodeTypeTemplate.durabilityLevel = $durabilityLevel
+  
+  [void]$newList.Add($nodeTypeTemplate)
+  $serviceFabricResource.properties.nodeTypes = $newList
   
   write-console $serviceFabricResource
-  return $serviceFabricResource
+  $templateJson.resources += $serviceFabricResource
+  return $templateJson
 }
 
 function write-console($message, $foregroundColor = 'White', [switch]$verbose, [switch]$err) {
