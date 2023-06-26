@@ -1,0 +1,32 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "durabilityLevel": {
+            "type": "string",
+            "allowedValues": [
+                "Bronze",
+                "Silver",
+                "Gold"
+            ],
+            "defaultValue": "Silver"
+        },
+        "vmInstanceCount": {
+            "type": "int",
+            "defaultValue": 5
+        }
+    },
+    "variables": {
+        "durabilityCheck": "[if(or(equals(parameters('durabilityLevel'),'Silver'),equals(parameters('durabilityLevel'),'Gold')),true(),false())]",
+        "proceed": "[if(equals(variables('durabilityCheck'),greaterOrEquals(parameters('vmInstanceCount'),5)),1,0)]",
+        "sfValidation": "[div(0,variables('proceed'))]"
+    },
+    "resources": [
+    ],
+    "outputs": {
+        "service fabric validation": {
+            "value": "[variables('sfValidation')]",
+            "type": "string"
+        }
+    }
+}
