@@ -2,9 +2,10 @@
 .Synopsis
     provide powershell commands to add a new node type to an existing Azure Service Fabric cluster
     provide powershell commands to configure all existing applications to use PLB before adding new nodetype if not already done
-    
-    https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 
+    https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
+.NOTES
+    version 0.1
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
@@ -88,7 +89,7 @@ function main() {
       write-error("run from developer machine with service fabric sdk installed from from service fabric cluster node locally.")
       return $error
     }
-  } 
+  }
 
   if (!(Get-Module az)) {
     Import-Module az
@@ -98,18 +99,79 @@ function main() {
     Connect-AzAccount
   }
 
+  if (!(get-clusterConnection)) {
+    return
+  }
+
+  get-clusterInformation
+  set-referenceNodeTypeInformation
+  add-placementConstraints
+  write-results
+
+  write-console "finished"
+}
+
+function add-placementConstraints() {
+  $plbNodeTypePattern = "($($global:nodeTypePlbNames.name -join '|'))\s?(=|!|<|>){1,2}+\s?($($global:nodeTypePlbNames.value -join '|'))"
+  $temporaryNodeTypeExclusion = "(NodeType != $newNodeTypeName)"
+  $deployedServices = get-deployedServices
+
+  $global:servicesWithPlacementConstraints = $global:deployedServices.Values | where-object {
+    $psitem.placementConstraints -and $psitem.placementConstraints -ine 'None'
+  }
+  if ($global:servicesWithPlacementConstraints) {
+    write-console ($global:servicesWithPlacementConstraints | convertto-json -depth 5) -Verbose
+    
+    foreach ($service in $global:servicesWithPlacementConstraints) {
+      if (![regex]::IsMatch($service.placementConstraints, $plbNodeTypePattern)) {
+        $placementConstraints = $service.placementConstraints
+        $currentPlacementConstraints = $placementConstraints.replace('None', '')
+        $placementConstraints = modify-placementConstraints -placementConstraints $placementConstraints -plbNodeTypePattern $plbNodeTypePattern -temporaryNodeTypeExclusion $temporaryNodeTypeExclusion
+        $global:deployedServices[$service.serviceTypeName].temporaryPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$placementConstraints' -force;"
+        $global:deployedServices[$service.serviceTypeName].revertPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$currentPlacementConstraints' -force;"
+      }
+    }
+  }
+
+  $global:servicesWithoutPlacementConstraints = $global:deployedServices.Values | where-object {
+    !$psitem.placementConstraints -or $psitem.placementConstraints -ieq 'None'
+  }
+  if ($global:servicesWithoutPlacementConstraints) {
+    write-console ($global:servicesWithoutPlacementConstraints | convertto-json -depth 5) -Verbose
+
+    foreach ($service in $global:servicesWithoutPlacementConstraints) {
+      $global:deployedServices[$service.serviceTypeName].temporaryPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '(NodeType != $newNodeTypeName)' -force;"
+      $global:deployedServices[$service.serviceTypeName].revertPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '' -force;"
+    }
+  }
+
+  $global:servicesOnNewNodeType = $global:deployedServices.Values | where-object { $psitem.deployedNodeTypes.Contains($newNodeTypeName) }
+  if ($global:servicesOnNewNodeType) {
+    write-console ($global:servicesOnNewNodeType | convertto-json -depth 5) -Verbose
+    foreach ($service in $global:servicesOnNewNodeType) {
+      $placementConstraints = $service.placementConstraints
+      $currentPlacementConstraints = $placementConstraints.replace('None', '')
+      $placementConstraints = modify-placementConstraints -placementConstraints $placementConstraints -plbNodeTypePattern $plbNodeTypePattern -temporaryNodeTypeExclusion $temporaryNodeTypeExclusion
+
+      $global:deployedServices[$service.serviceTypeName].temporaryPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$placementConstraints' -force;"
+      $global:deployedServices[$service.serviceTypeName].revertPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$($currentPlacementConstraints.replace($temporaryNodeTypeExclusion,''))' -force;"
+    }
+  }
+}
+
+function get-clusterConnection() {
   if (!(Get-ServiceFabricClusterConnection) -or (get-ServiceFabricClusterConnection).connectionendpoint -ine $connectionEndpoint) {
     $error.Clear()
     $message = "Connecting to Service Fabric cluster $connectionEndpoint"
     write-console $message
-    write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
-    -KeepAliveIntervalInSec 10 `
-    -X509Credential `
-    -ServerCertThumbprint $thumbprint `
-    -FindType FindByThumbprint `
-    -FindValue $thumbprint `
-    -StoreLocation CurrentUser `
-    -StoreName My `
+    write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
+    -KeepAliveIntervalInSec 10 ``
+    -X509Credential ``
+    -ServerCertThumbprint $thumbprint ``
+    -FindType FindByThumbprint ``
+    -FindValue $thumbprint ``
+    -StoreLocation CurrentUser ``
+    -StoreName My ``
     -Verbose
     "
     Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
@@ -125,67 +187,54 @@ function main() {
 
   if ($error -or !(Get-ServiceFabricClusterConnection)) {
     write-error("error connecting to service fabric cluster")
-    return $error
+    return $null
   }
+  return $true
+}
 
-  if ($referenceNodeTypeName) {
-    $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
-    if (!$referenceVmss) {
-      write-error("reference node type $referenceNodeTypeName not found")
-      return $error
-    }
-    write-console "using reference node type $referenceNodeTypeName"
-    $sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
-    $durabilityLevel = $sfExtension.Settings.durabilityLevel.Value
-    #$isPrimaryNodeType = $referenceNodeType.IsPrimary,
-    $vmImageSku = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
-    $vmSku = $referenceVmss.Sku.Name
-    $adminUserName = $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
-    $vmInstanceCount = $referenceVmss.Sku.Capacity
-    $vmImagePublisher = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
-    $vmImageOffer = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
-    $vmImageVersion = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
-  }
-  
+function get-clusterInformation() {
   $manifest = Get-ServiceFabricClusterManifest
   write-console ($manifest) -Verbose
-  
+
   $xmlManifest = [xml]::new()
   $xmlManifest.LoadXml($manifest)
   write-console ($xmlManifest) -Verbose
 
   $global:nodeTypePlbNames = ($xmlManifest.ClusterManifest.NodeTypes.NodeType.PlacementProperties.Property | Select-Object Name, Value)
-  write-console ($global:nodeTypePlbNames | ConvertTo-Json -depth 5) -Verbose
+  write-console ($global:nodeTypePlbNames | convertto-json -depth 5) -Verbose
 
   $global:applications = Get-ServiceFabricApplication
-  write-console ($global:applications | ConvertTo-Json -depth 5) -Verbose
+  write-console ($global:applications | convertto-json -depth 5) -Verbose
 
   $global:services = $global:applications | Get-ServiceFabricService
-  write-console ($global:services | ConvertTo-Json -depth 5) -Verbose
+  write-console ($global:services | convertto-json -depth 5) -Verbose
 
   $global:serviceDescriptions = $global:services | Get-ServiceFabricServiceDescription
-  write-console ($global:serviceDescriptions | ConvertTo-Json -depth 5) -Verbose
+  write-console ($global:serviceDescriptions | convertto-json -depth 5) -Verbose
 
   $global:placementConstraints = $global:serviceDescriptions | Select-Object PlacementConstraints
-  write-console ($global:placementConstraints | ConvertTo-Json -depth 5) -Verbose
+  write-console ($global:placementConstraints | convertto-json -depth 5) -Verbose
 
   $global:nodes = Get-ServiceFabricNode
-  write-console ($global:nodes | ConvertTo-Json -depth 5) -Verbose
+  write-console ($global:nodes | convertto-json -depth 5) -Verbose
 
   foreach ($service in $global:serviceDescriptions) {
     write-console "Creating deployed service for service type $($service.ServiceTypeName)"
     $global:deployedServices.Add($service.ServiceTypeName , @{
-        serviceTypeName      = $service.ServiceTypeName
-        deployedNodeTypes    = @()
-        deployedNodes        = @()
-        placementConstraints = $service.PlacementConstraints
-        serviceKind          = $service.ServiceKind.ToString()
-        serviceName          = $service.ServiceName
-        updateCommand        = ""
-      } 
+        serviceTypeName               = $service.ServiceTypeName
+        deployedNodeTypes             = @()
+        deployedNodes                 = @()
+        placementConstraints          = $service.PlacementConstraints
+        serviceKind                   = $service.ServiceKind.ToString()
+        serviceName                   = $service.ServiceName
+        temporaryPlacementConstraints = ""
+        revertPlacementConstraints    = ""
+      }
     )
   }
+}
 
+function get-deployedServices() {
   foreach ($application in $global:applications) {
     write-console "Adding deployed service types for $($application.ApplicationName)"
 
@@ -205,52 +254,70 @@ function main() {
     }
   }
 
-  $global:servicesWithPlacementConstraints = $global:deployedServices.Values | Where-Object { 
-    $psitem.placementConstraints `
-      -and $psitem.placementConstraints -ine 'None' #`
-    #-and !$psitem.deployedNodeTypes.Contains($newNodeTypeName)
-  }
-  if ($global:servicesWithPlacementConstraints) {
-    write-console ($global:servicesWithPlacementConstraints | ConvertTo-Json -depth 5) -Verbose
-  }
+  return $global:deployedServices
+}
 
-  $global:servicesWithoutPlacementConstraints = $global:deployedServices.Values | Where-Object { 
-    !$psitem.placementConstraints `
-      -or $psitem.placementConstraints -ieq 'None' 
+function modify-placementConstraints($placementConstraints, $plbNodeTypePattern, $temporaryNodeTypeExclusion) {
+  if (!$placementConstraints) {
+    return $temporaryNodeTypeExclusion
   }
-  if ($global:servicesWithoutPlacementConstraints) {
-    write-console ($global:servicesWithoutPlacementConstraints | ConvertTo-Json -depth 5) -Verbose
-    foreach ($service in $global:servicesWithoutPlacementConstraints) {
-      $global:deployedServices[$service.serviceTypeName].updateCommand = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '(NodeType != $newNodeTypeName)' -force;"
+  if ($placementConstraints -ine 'None') {
+    
+    $placementConstraints = [regex]::replace($placementConstraints, "(\s?&&\s?)?$([regex]::escape($temporaryNodeTypeExclusion))", "").Trim() # $placementConstraints.replace(" && $temporaryNodeTypeExclusion","").trim()
+    $pattern = "(?<replacement>NodeType\s?==\s?$newNodeTypeName)(?<termination>\W|$)"
+    if ($placementConstraints -imatch $pattern) {
+      # ensure that the nodetype name is not part of a larger word when replacing
+      $placementConstraints = [regex]::replace($placementConstraints, $pattern, "NodeType != $newNodeTypeName`${termination}", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    }
+    else {
+      $placementConstraints = "($($service.placementConstraints.trim('()'))) && $temporaryNodeTypeExclusion"
     }
   }
-
-  $global:servicesOnNewNodeType = $global:deployedServices.Values | Where-Object { $psitem.deployedNodeTypes.Contains($newNodeTypeName) }
-  if ($global:servicesOnNewNodeType) {
-    write-console ($global:servicesOnNewNodeType | ConvertTo-Json -depth 5) -Verbose
-    foreach ($service in $global:servicesOnNewNodeType) {
-      $placementConstraints = $service.placementConstraints
-      
-      if ($placementConstraints -and $placementConstraints -ine 'None') {
-        $pattern = "(?<replacement>NodeType\s?==\s?$newNodeTypeName)(?<termination>\W|$)"
-        if ($placementConstraints -imatch $pattern) {
-            # ensure that the nodetype name is not part of a larger word when replacing
-            $placementConstraints = [regex]::replace($placementConstraints, $pattern, "NodeType != $newNodeTypeName`${termination}", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-        }
-        else {
-          $placementConstraints = "($($service.placementConstraints.trim('()'))) && (NodeType != $newNodeTypeName)"
-        }
-      }
-      else {
-        $placementConstraints = "(NodeType != $newNodeTypeName)"
-      }
-      $global:deployedServices[$service.serviceTypeName].updateCommand = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$placementConstraints' -force;"
-    }
+  else {
+    $placementConstraints = $temporaryNodeTypeExclusion
   }
 
-  write-console ($global:deployedServices | ConvertTo-Json -depth 5) -Verbose
+  return $placementConstraints
+}
 
-  write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, execute the following after all services have placement constraints configured:" -ForegroundColor Yellow
+function set-referenceNodeTypeInformation() {
+  if ($referenceNodeTypeName) {
+    $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
+    if (!$referenceVmss) {
+      write-error("reference node type $referenceNodeTypeName not found")
+      return $error
+    }
+    write-console "using reference node type $referenceNodeTypeName"
+    $sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
+    $durabilityLevel = $sfExtension.Settings.durabilityLevel.Value
+    #$isPrimaryNodeType = $referenceNodeType.IsPrimary,
+    $vmImageSku = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
+    $vmSku = $referenceVmss.Sku.Name
+    $adminUserName = $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
+    $vmInstanceCount = $referenceVmss.Sku.Capacity
+    $vmImagePublisher = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
+    $vmImageOffer = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
+    $vmImageVersion = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
+  }
+  else {
+    write-console "using default values for reference node type"
+  }
+}
+function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
+  if (!$message) { return }
+  if ($verbose) {
+    write-verbose($message)
+  }
+  else {
+    write-host($message) -ForegroundColor $foregroundColor
+  }
+}
+
+function write-results() {
+  write-console ($global:deployedServices | convertto-json -depth 5) -Verbose
+
+  write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, 
+    execute the following after all services have placement constraints configured:" -ForegroundColor Yellow
   $global:addNodeTypeCommand = "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
     -Name '$clusterName' ``
     -Capacity $vmInstanceCount ``
@@ -268,26 +335,20 @@ function main() {
   "
   write-host $global:addNodeTypeCommand -ForegroundColor Magenta
 
-  write-console "current node type placement properties: $($global:nodeTypePlbNames | ConvertTo-Json -depth 5)" -ForegroundColor Green
-  write-console "current deployed services: $($global:deployedServices | ConvertTo-Json -depth 5)" -ForegroundColor Cyan
+  write-console "current node type placement properties: $($global:nodeTypePlbNames | convertto-json -depth 5)" -ForegroundColor Green
+  write-console "current deployed services: $($global:deployedServices | convertto-json -depth 5)" -ForegroundColor Cyan
 
-  write-console "services with placement constraints: $($global:servicesWithPlacementConstraints | ConvertTo-Json -depth 5)" -ForegroundColor Green
-  write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | ConvertTo-Json -depth 5)" -ForegroundColor Yellow
-  write-console "services on new nodetype: $($global:servicesOnNewNodeType | ConvertTo-Json -depth 5)" -ForegroundColor Red
+  write-console "services with placement constraints: $($global:servicesWithPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Green
+  write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Yellow
+  write-console "services on new nodetype: $($global:servicesOnNewNodeType | convertto-json -depth 5)" -ForegroundColor Red
 
-  write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $($global:deployedServices.Values | Where-object updateCommand | select-object updateCommand | ConvertTo-Json -depth 5)"
+  $plbCommands = $global:deployedServices.Values
+  | where-object temporaryPlacementConstraints
+  | select-object temporaryPlacementConstraints, revertPlacementConstraints
+  | convertto-json -depth 5
+
+  write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $plbCommands"
   write-console "values stored in `$global:addNodeTypeCommand and `$global:deployedServices" -ForegroundColor gray
-  write-console "finished"
-}
-
-function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
-  if(!$message) {return}
-  if ($verbose) {
-    write-verbose($message)
-  }
-  else {
-    write-host($message) -ForegroundColor $foregroundColor
-  }
 }
 
 main
