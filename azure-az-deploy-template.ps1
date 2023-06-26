@@ -9,7 +9,7 @@
      
 .NOTES
    file name  : azure-az-deploy-template.ps1
-   version    : 23/06/22 update comments
+   version    : 200924 fix for serialization bug in cmdlet
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;

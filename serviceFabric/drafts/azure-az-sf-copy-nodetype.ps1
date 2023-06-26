@@ -2,14 +2,12 @@
 .Synopsis
     provide powershell commands to copy a reference node type to an existing Azure Service Fabric cluster
     provide powershell commands to configure all existing applications to use PLB before adding new nodetype if not already done
-
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-copy-nodetype.ps1" -outFile "$pwd/azure-az-sf-copy-nodetype.ps1";
     ./azure-az-sf-copy-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
-
 .PARAMETER resourceGroupName
     the resource group name of the service fabric cluster
 .PARAMETER clusterName
