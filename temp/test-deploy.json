@@ -18,14 +18,17 @@
     },
     "variables": {
         "durabilityCheck": "[if(or(equals(parameters('durabilityLevel'),'Silver'),equals(parameters('durabilityLevel'),'Gold')),true(),false())]",
-        "proceed": "[if(equals(variables('durabilityCheck'),greaterOrEquals(parameters('vmInstanceCount'),5)),1,0)]",
-        "sfValidation": "[div(0,variables('proceed'))]"
+        "proceed": "[if(equals(variables('durabilityCheck'),greaterOrEquals(parameters('vmInstanceCount'),5)),1,0)]"
     },
     "resources": [
     ],
     "outputs": {
         "service fabric validation": {
-            "value": "[variables('sfValidation')]",
+            "value": "[variables('proceed')]",
+            "type": "string"
+        },
+        "result": {
+            "value": "[div(0,variables('proceed'))]",
             "type": "string"
         }
     }
