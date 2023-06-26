@@ -94,7 +94,7 @@ $nameReplacePattern = "`${{initiator}}{0}`${{terminator}}"
 
 $error.clear()
 $templateJson = @{
-  "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json"
+  "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
   "contentVersion" = "1.0.0.0"
   "parameters"     = @{}
   "variables"      = @{}
@@ -433,11 +433,15 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
   $lbResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties
   $lbResource = add-property -resource $lbResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $lbResource.Type)
 
-  $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
-  $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
-  $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
+  $vmssCollection = new-vmssCollection -vmss $vmssResource -loadBalancer $lbResource
+  $vmssResource.isPublicIp = if ($loadBalancer.FrontendIpConfigurations.PublicIpAddress) { $true } else { $false }
 
-  $vmssCollection = new-vmssCollection -vmss $vmssResource -ip $ipResource -loadBalancer $lbResource
+  if ($vmssResource.isPublicIp) {
+    $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
+    $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
+    $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
+
+  }
 
   write-console $vmssCollection
   return $vmssCollection
