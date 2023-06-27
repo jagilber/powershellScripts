@@ -217,6 +217,10 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templaetJson $templateJson
   $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
+  # clear workspace id to prevent deployment error
+  $mmsExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.EnterpriseCloud.Monitoring' }
+  $mmsExtension.properties.settings.workspaceId = ""
+
   # set durabilty level
   $sfExtension.properties.settings.durabilityLevel = $durabilityLevel
 
@@ -317,7 +321,7 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
 
   $templateJson | convertto-json -Depth 99 | Out-File $template -Force
   write-console "template saved to $template"
-  write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose"
+  write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose" -foregroundColor 'Cyan'
   $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
 
   if ($result) {
@@ -325,8 +329,8 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     return $result
   }
   
-  $deploymentName = $($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')
-  write-console "new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -Verbose -DeploymentDebugLogLevel All"
+  $deploymentName = "$($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')"
+  write-console "new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All" -foregroundColor 'Cyan'
   
   if (!$whatIf) {
     $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
