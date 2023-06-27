@@ -193,6 +193,20 @@ function add-property($resource, $name, $value = $null, $overwrite = $false) {
   return $resource
 }
 
+function convert-fromJson($json, $display = $false) {
+  write-console "convert-fromJson:$json" -verbose:$display
+  $object = $json | convertfrom-json -asHashTable
+  
+  return $object
+}
+
+function convert-toJson($object, $display = $false) {
+  $json = $object | convertto-json -Depth 99
+  write-console $json -verbose:$display  
+  
+  return $json
+}
+
 function copy-vmssCollection($vmssCollection, $templateJson) {
   $vmss = $vmssCollection.vmssConfig
   $ip = $null
@@ -240,9 +254,9 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   $newLBName = $nameReplacePattern -f $newLoadBalancerName
 
   # convert to json
-  $vmssJson = $vmss | convertto-json -Depth 99
-  #$ipJson = $ip | convertto-json -Depth 99
-  $lbJson = $lb | convertto-json -Depth 99
+  $vmssJson = convert-toJson $vmss
+  #$ipJson = convert-toJson $ip
+  $lbJson = convert-toJson $lb
   
   if ($vmssCollection.isPublicIp) {
     write-console "setting public ip address to $newIpAddress"
@@ -252,9 +266,9 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   
     $lb = add-property -resource $lb -name 'dependsOn' -value @()
     $lb.dependsOn += $ip.Id
-    $lbJson = $lb | convertto-json -Depth 99
+    $lbJson = convert-toJson $lb
 
-    $ipJson = $ip | convertto-json -Depth 99
+    $ipJson = convert-toJson $ip
     $ipJson = remove-nulls -json $ipJson
     $ipJson = remove-commonProperties -json $ipJson
 
@@ -262,7 +276,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $ipJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
     $ipJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $ipJson
     $ipJson = set-resourceName -referenceName $lbName -newName $newLBName -json $ipJson
-    $ip = $ipJson | convertfrom-json -asHashTable
+    $ip = convert-fromJson $ipJson
   
     $lbJson = set-resourceName -referenceName $ipName -newName $newIpName -json $lbJson
     $vmssJson = set-resourceName -referenceName $ipName -newName $newIpName -json $vmssJson
@@ -296,11 +310,11 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   # set new names
   $lbJson = set-resourceName -referenceName $lbName -newName $newLBName -json $lbJson
   $lbJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $lbJson
-  $lb = $lbJson | convertfrom-json -asHashTable
+  $lb = convert-fromJson $lbJson
 
   $vmssJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $vmssJson
   $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
-  $vmss = $vmssJson | convertfrom-json -asHashTable
+  $vmss = convert-fromJson $vmssJson
 
   # set names
   $vmss.Name = $newNodeTypeName
@@ -323,8 +337,8 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
   write-console "deploying new node type $newNodeTypeName"
   write-console $template -foregroundColor 'Cyan'
 
-  $templateJson | convertto-json -Depth 99 | Out-File $template -Force
-  write-console "template saved to $template"
+  convert-toJson $templateJson | Out-File $template -Force
+  write-console "template saved to $template" -foregroundColor 'Green'
   write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose" -foregroundColor 'Cyan'
   $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
 
@@ -338,6 +352,9 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
   
   if (!$whatIf) {
     $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
+  }
+  else {
+    write-console "after verifying / modifying $template, run the above 'new-azresourcegroupdeployment' command to deploy the template" -foregroundColor 'Yellow'
   }
 
   return $result
@@ -611,13 +628,30 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     return $error
   }
 
-  $sfJson = $serviceFabricResource | convertto-json -Depth 99
+  $sfJson = convert-toJson $serviceFabricResource
 
   # remove properties not supported for deployment
   $sfJson = remove-nulls -json $sfJson
   $sfJson = remove-commonProperties -json $sfJson
 
-  $serviceFabricResource = $sfJson | convertfrom-json -asHashTable
+  $serviceFabricResource = convert-fromJson $sfJson
+
+  # todo parameterize cluster id ?
+  #$clusterEndpoint = $serviceFabricResource.Properties.ClusterId
+
+  # todo remove version if upgradeMode is Automatic?
+  if ($serviceFabricResource.Properties.upgradeMode -ieq 'Automatic') {
+    write-console "removing cluster code version since upgrade mode is Automatic" -foregroundColor 'Yellow'
+    $serviceFabricResource.Properties.ClusterCodeVersion = $null
+  }
+
+  # check cluster provisioning state
+  if($serviceFabricResource.Properties.clusterState -ine 'Ready') {
+    write-console "cluster provisioning state is $($serviceFabricResource.Properties.clusterState)"
+    write-console "cluster must be in 'Ready' state to add node type" -err
+    return $serviceFabricResource
+  }
+
   $nodeTypes = $serviceFabricResource.Properties.nodeTypes
 
   if (!$nodeTypes) {
@@ -626,7 +660,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
   }
 
   $serviceFabricResource = add-property -resource $serviceFabricResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $serviceFabricResource.Type)
-  $referenceNodeTypeJson = $nodeTypes | where-object name -ieq $referenceNodeTypeName | convertto-json -Depth 99
+  $referenceNodeTypeJson = convert-toJson ($nodeTypes | where-object name -ieq $referenceNodeTypeName)
 
   if (!$referenceNodeTypeJson) {
     write-console "node type $referenceNodeTypeName not found" -err
@@ -641,7 +675,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
 
   $newList = [collections.arrayList]::new()
   [void]$newList.AddRange($nodeTypes)
-  $nodeTypeTemplate = $referenceNodeTypeJson | convertfrom-json -asHashTable
+  $nodeTypeTemplate = convert-fromJson $referenceNodeTypeJson
 
   $nodeTypeTemplate.isPrimary = $isPrimaryNodeType
   $nodeTypeTemplate.name = $newNodeTypeName
