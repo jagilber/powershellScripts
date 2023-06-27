@@ -4,6 +4,15 @@
     provide powershell commands to configure all existing applications to use PLB before adding new nodetype if not already done
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 
+.NOTE
+    this script is a work in progress
+    this script is not supported by Microsoft
+    this script is not supported under any Microsoft standard support program or service
+    the script is provided AS IS without warranty of any kind
+    Microsoft further disclaims all implied warranties including, without limitation, any implied warranties of merchantability or of fitness for a particular purpose
+    the entire risk arising out of the use or performance of the sample scripts and documentation remains with you
+    in no event shall Microsoft, its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation, even if Microsoft has been advised of the possibility of such damages 
+
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-copy-nodetype.ps1" -outFile "$pwd/azure-az-sf-copy-nodetype.ps1";
@@ -77,7 +86,7 @@ param(
   $newIpAddressName = 'pip-' + $newNodeTypeName,
   $newLoadBalancerName = 'lb-' + $newNodeTypeName,
   $template = "$psscriptroot\azure-az-sf-copy-nodetype.json",
-  $whatIf = $true
+  [switch]$whatIf
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
@@ -86,8 +95,9 @@ $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
 $vmImagePublisher = 'MicrosoftWindowsServer'
 $vmImageOffer = 'WindowsServer'
 $vmImageVersion = 'latest'
-$nameFindPattern = "(?<initiator>/|`"|_|,|\\){0}(?<terminator>/|$|`"|_|,|\\)"
-$nameReplacePattern = "`${{initiator}}{0}`${{terminator}}"
+$nameFindPattern = '(?<initiator>/|"|_|,|\\){0}(?<terminator>/|$|"|_|,|\\)'
+$nameReplacePattern = '${{initiator}}{0}${{terminator}}'
+#$nameReplacePattern = "`${initiator}{0}`${terminator}"
 
 
 $error.clear()
@@ -207,24 +217,39 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templaetJson $templateJson
   $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
+  # set durabilty level
+  $sfExtension.properties.settings.durabilityLevel = $durabilityLevel
+
+  # todo parameterize cluster id ?
+  #$clusterEndpoint = $serviceFabricResource.Properties.ClusterEndpoint
+
   # set capacity
   $vmss.Sku.Capacity = if ($vmInstanceCount) { $vmInstanceCount } else { $vmss.Sku.Capacity }
 
-  # remove existing state
   $vmssName = $nameFindPattern -f $vmss.Name
   $newVmssName = $nameReplacePattern -f $newNodeTypeName
+  $lbName = $nameFindPattern -f $lb.Name
+  $newLBName = $nameReplacePattern -f $newLoadBalancerName
 
+  # convert to json
+  $vmssJson = $vmss | convertto-json -Depth 99
+  #$ipJson = $ip | convertto-json -Depth 99
+  $lbJson = $lb | convertto-json -Depth 99
+  
   if ($vmssCollection.isPublicIp) {
     write-console "setting public ip address to $newIpAddress"
     $ip = $vmssCollection.ipConfig
-
+    $ipName = $nameFindPattern -f $ip.Name
+    $newIpName = $nameReplacePattern -f $newIpAddressName
+  
     $lb = add-property -resource $lb -name 'dependsOn' -value @()
     $lb.dependsOn += $ip.Id
-  
+    $lbJson = $lb | convertto-json -Depth 99
+
     $ipJson = $ip | convertto-json -Depth 99
     $ipJson = remove-nulls -json $ipJson
     $ipJson = remove-commonProperties -json $ipJson
-  
+
     # set new resource names
     $ipJson = set-resourceName -referenceName $ipName -newName $newIpName -json $ipJson
     $ipJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $ipJson
@@ -242,8 +267,6 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
 
     if ($vmssCollection.ipType -ieq 'Static') {
       $ip.Properties.ipAddress = $newIpAddress
-      $ipName = $nameFindPattern -f $ip.Name
-      $newIpName = $nameReplacePattern -f $newIpAddressName
     }
   }
   else {
@@ -253,14 +276,6 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
       $loadBalancer.FrontendIpConfigurations.properties.privateIpAddress = $newIpAddress
     }
   }
-
-  $lbName = $nameFindPattern -f $lb.Name
-  $newLBName = $nameReplacePattern -f $newLoadBalancerName
-
-  # convert to json
-  $vmssJson = $vmss | convertto-json -Depth 99
-  #$ipJson = $ip | convertto-json -Depth 99
-  $lbJson = $lb | convertto-json -Depth 99
 
   # remove existing state
   $vmssJson = remove-nulls -json $vmssJson
@@ -298,22 +313,23 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
 
 function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
   write-console "deploying new node type $newNodeTypeName"
-  #write-console $vmssCollection
-
   write-console $template -foregroundColor 'Cyan'
+
   $templateJson | convertto-json -Depth 99 | Out-File $template -Force
   write-console "template saved to $template"
-
   write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose"
   $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
+
   if ($result) {
     write-console "error: test-azResourceGroupDeployment failed:$($result | out-string)" -err
     return $result
   }
-
-  write-console "new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -Verbose -DeploymentDebugLogLevel All"
+  
+  $deploymentName = $($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')
+  write-console "new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -Verbose -DeploymentDebugLogLevel All"
+  
   if (!$whatIf) {
-    $result = new-azResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
+    $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
   }
 
   return $result
@@ -323,7 +339,9 @@ function get-latestApiVersion($resourceType) {
   $provider = get-azresourceProvider -ProviderNamespace $resourceType.Split('/')[0]
   $resource = $provider.ResourceTypes | where-object ResourceTypeName -eq $resourceType.Split('/')[1]
   $apiVersion = $resource.ApiVersions[0]
+
   write-console "latest api version for $resourceType is $apiVersion"
+
   return $apiVersion
 }
 
@@ -354,6 +372,7 @@ function get-sfProtectedSettings($storageAccountName, $templateJson) {
 
 function get-sfResource($resourceGroupName, $clusterName) {
   $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
+  
   if (!$serviceFabricResource) {
     write-console "service fabric cluster $clusterName not found" -err
     return $error
@@ -391,7 +410,7 @@ function get-vmssCollection($nodeTypeName) {
 
   if ($vmssCollection.isPublicIp) {
     write-console "public ip found"
-    $ipName = $loadBalancer.FrontendIpConfigurations.PublicIpAddress.Id.Split('/')[8]
+    #$ipName = $loadBalancer.FrontendIpConfigurations.PublicIpAddress.Id.Split('/')[8]
     $ip = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $ipName
     $vmssCollection.ipAddress = $ip.IpAddress
     $vmssCollection.ipType = $ip.PublicIpAllocationMethod
@@ -417,6 +436,7 @@ function get-vmssCollection($nodeTypeName) {
 
 function get-vmssResources($resourceGroupName, $nodeTypeName) {
   $vmssResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $nodeTypeName -ExpandProperties
+  
   if (!$vmssResource) {
     write-console "node type $nodeTypeName not found" -err
     return $error
@@ -432,13 +452,13 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
   $lbResource = add-property -resource $lbResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $lbResource.Type)
 
   $vmssCollection = new-vmssCollection -vmss $vmssResource -loadBalancer $lbResource
-  $vmssResource.isPublicIp = if ($loadBalancer.FrontendIpConfigurations.PublicIpAddress) { $true } else { $false }
+  $vmssCollection.isPublicIp = if ($lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress) { $true } else { $false }
 
-  if ($vmssResource.isPublicIp) {
+  if ($vmssCollection.isPublicIp) {
     $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
     $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
     $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
-
+    $vmssCollection.ipConfig = $ipResource
   }
 
   write-console $vmssCollection
@@ -499,7 +519,8 @@ function remove-commonProperties($json) {
     'ProvisioningState',
     'CreatedTime',
     'ChangedTime',
-    'Etag'
+    'Etag',
+    'requireGuestProvisionSignal'
   )
 
   foreach ($property in $commonProperties) {
@@ -558,14 +579,15 @@ function set-resourceName($referenceName, $newName, $json) {
     write-console "error: json is null" -err
   }
   elseif (!$referenceName) {
-    write-console "error: referenceName is null" #-err
+    write-console "error: referenceName is null" -err
   }
   elseif (!$newName) {
-    write-console "newName is null"
+    write-console "newName is null" -err
   }
 
   if ([regex]::isMatch($json, $referenceName, $regexOptions)) {
     write-console "replacing $referenceName with $newName in `$json" -foregroundColor 'Green'
+    write-console "[regex]::Replace($json, $referenceName, $newName, $regexOptions)"
     $json = [regex]::Replace($json, $referenceName, $newName, $regexOptions)
   }
   else {
@@ -609,11 +631,8 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     return $serviceFabricResource
   }
 
-  #$newList = [collections.Generic.List[Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]]::new()
   $newList = [collections.arrayList]::new()
   [void]$newList.AddRange($nodeTypes)
-  #$nodeTypeTemplate = [Microsoft.Azure.Management.ServiceFabric.Models.NodeTypeDescription]::new()
-  # clone reference node type
   $nodeTypeTemplate = $referenceNodeTypeJson | convertfrom-json -asHashTable
 
   $nodeTypeTemplate.isPrimary = $isPrimaryNodeType
