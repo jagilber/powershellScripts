@@ -205,7 +205,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   $vmss = add-property -resource $vmss -name 'dependsOn' -value @()
   $vmss.dependsOn += $lb.Id
 
-  $extensions = $vmss.properties.VirtualMachineProfile.ExtensionProfile.Extensions
+  $extensions = [collections.arraylist]::new($vmss.properties.VirtualMachineProfile.ExtensionProfile.Extensions)
 
   $wadExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.Diagnostics' }
   $wadStorageAccount = $wadExtension.properties.settings.StorageAccount
@@ -217,12 +217,16 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
   $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templaetJson $templateJson
   $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
-  # clear workspace id to prevent deployment error
+  # remove microsoft monitoring agent extension to prevent deployment error
+  # reinstalls automatically
   $mmsExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.EnterpriseCloud.Monitoring' }
-  $mmsExtension.properties.settings.workspaceId = ""
+  $extensions.Remove($mmsExtension)
 
   # set durabilty level
   $sfExtension.properties.settings.durabilityLevel = $durabilityLevel
+
+  # set extensions
+  $vmss.properties.VirtualMachineProfile.ExtensionProfile.Extensions = $extensions
 
   # todo parameterize cluster id ?
   #$clusterEndpoint = $serviceFabricResource.Properties.ClusterEndpoint
