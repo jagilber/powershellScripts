@@ -33,8 +33,17 @@ JavaScript script successfully loaded from 'c:\WinDbg\Scripts\arrayVisualizer.js
 
 
 0:000> dx @$myScript = Debugger.State.Scripts.do2json.Contents
-@$myScript = Debugger.State.Scripts.do2json.Contents                
+dx @$myScript = Debugger.State.Scripts.do2json.Contents                
 
+no command or content
+0:000> dx @$myScript = Debugger.State.Scripts.do2json.Contents
+@$myScript = Debugger.State.Scripts.do2json.Contents                 : [object Object]
+    host             : [object Object]
+    parentQueueLevel : 0x0
+    parentQueue     
+    jsonResultObject : [object Object]
+
+dx @$myScript.parseOutput("0x000001d61af5e430","c:\\temp\\test1.json")
 
 */
 
@@ -46,9 +55,17 @@ JavaScript script successfully loaded from 'c:\WinDbg\Scripts\arrayVisualizer.js
 var parentQueueLevel = 0;
 var parentQueue = [];
 var jsonResultObject = {};
+var debug = false;
+var isLogOpen = false;
+var currentLogFile = '';
+var commandResult = null;
 
-function convertToJson(jsonObject) {
-    var json = JSON.stringify(jsonObject, null, 2);
+function convertToJson(jsonObject, indent = false) {
+    var indention = 0;
+    if (indent) {
+        indention = 2;
+    }
+    var json = JSON.stringify(jsonObject, null, indention);
     return json;
 }
 
@@ -70,6 +87,25 @@ function createJsonObject(match = null) {
     return jsonObject;
 }
 
+function enableDebug(enable = true) {
+    debug = enable;
+}
+
+function executeCommand(command) {
+    logln(`executing command:${command}`, true);
+    commandResult = null;
+    if (command) {
+        let Control = host.namespace.Debugger.Utility.Control;
+        commandResult = Control.ExecuteCommand(command);
+    }
+    else {
+        logln('error:empty command result');
+    }
+
+    logln(`commandResult:${commandResult}`, true);
+    return commandResult;
+}
+
 function getParent() {
     if (parentQueue.length > 0) {
         return parentQueue[parentQueueLevel - 1];
@@ -80,7 +116,32 @@ function getParent() {
     }
 }
 
-function invokeScript(command = null, content = null, outFile = null) {
+function parseCommandResult(commandResult, regExp) {
+    logln(`parseCommandResults:enter:${regExp}`, true);
+    var results = [];
+    var matchResults = null;
+    for (let lineItem of commandResult) {
+        logln(`parseCommandResults:checking lineItem:${lineItem}`, true);
+        if (matchResults = lineItem.match(regExp)) {
+            logln(`parseCommandResults:adding lineItem:${lineItem}`, true);
+            results.push(matchResults);
+        }
+    }
+    logln(`parseCommandResults:returning results:${convertToJson(results)}`, true);
+    if (!results.length) {
+        return null;
+    }
+    return results;
+}
+
+function parseOutputs(command = null, outFile = null, indent = false, content = null) {
+    parseOutput(command, outFile, indent, content);
+    command = `-static ${command}`;
+    outFile = outFile.toLowerCase().replace('.json', '-static.json');
+    parseOutput(command, outFile, indent, content);
+}
+
+function parseOutput(command = null, outFile = null, indent = false, content = null) {
     var rootPattern = new RegExp(/0x[A-Fa-f0-9]+?\s+(\S+?)$/, 'ig');
     var propertyPattern = new RegExp(/(\s+?)([A-Fa-f0-9]{4})\s(\S+?)\s+?:\s?(.+?)?\s(\(.+?\)|NULL)\S?($|.+$)/); //, 'ig');
     var lineObject = null;
@@ -91,8 +152,11 @@ function invokeScript(command = null, content = null, outFile = null) {
     var commandResult = null;
     var counter = 0;
     var levelSize = 0;
-
+    logln(`parseOutput:enter:command:${command}`);
     if (command) {
+        command = `!do2 -c 0 -e 20 -f -vi ${command}`;
+        logln(`parseOutput:modified command:${command}`);
+
         let Control = host.namespace.Debugger.Utility.Control;
         commandResult = Control.ExecuteCommand(command);
     }
@@ -104,10 +168,10 @@ function invokeScript(command = null, content = null, outFile = null) {
         return;
     }
     try {
-        //for (let line of commandResult) {
-        while (counter < commandResult.length) {
+        for (let line of commandResult) {
+            //while (counter < commandResult.length) {
             var line = commandResult[counter++];
-
+            logln(`parsing line:${line}`, true);
             if (!line) { continue };
 
             var rootMatch = rootPattern.exec(line);
@@ -139,7 +203,7 @@ function invokeScript(command = null, content = null, outFile = null) {
                     parentObj = pushParent(currentObj);
                     currentObj[lineObject.name] = lineObject;
                     currentLineObjectName = lineObject.name;
-                    logln('>' + line);
+                    logln('>' + line, true);
                 }
                 // return to parent
                 else if (currentObjLevel > lineObject.level) {
@@ -159,13 +223,13 @@ function invokeScript(command = null, content = null, outFile = null) {
 
                     currentObj[lineObject.name] = lineObject;
                     currentLineObjectName = lineObject.name;
-                    logln('<' + line);
+                    logln('<' + line, true);
                 }
                 // add to current parent
                 else {
                     currentLineObjectName = lineObject.name;
                     currentObj[currentLineObjectName] = lineObject;
-                    logln('=' + line);
+                    logln('=' + line, true);
                 }
             }
             else {
@@ -173,25 +237,72 @@ function invokeScript(command = null, content = null, outFile = null) {
             }
         }
 
-        writeJson(jsonResultObject);
+        logln('writing json', true);
+        writeJson(jsonResultObject, outFile, indent);
     }
     catch (e) {
         logln(e);
     }
     finally {
-        writeFile(outFile, convertToJson(jsonResultObject));
+        logln('finished');
     }
 }
 
-function logln(e) {
+function logln(e, debugOutput = false) {
     try {
-        //writeFile(logFile, e + '\n');
-        //writeFile(outFile, convertToJson(jsonResultObject));
-        host.diagnostics.debugLog(e + '\n');
+        if (debug || debug === debugOutput) {
+            if (e.length > 1000) {
+                // so json does not get truncated and allows for formatting  without \n
+                for (let line of e.match(/.{1,80}/g)) {
+                    host.diagnostics.debugLog(line);
+                }
+            }
+            else {
+                host.diagnostics.debugLog(e + '\n');
+            }
+        }
     }
     catch (exception) {
-        console.log(e);
+        //console.log(e);
     }
+}
+
+function logClose() {
+    if (logState().isLogOpen) {
+        logln(`closing open log file:${logState.currentLogFile}`, true);
+        executeCommand('.logClose');
+    }
+    else {
+        logln('log file already closed.', true);
+    }
+}
+
+function logOpen(logFile) {
+    if (!logState().isLogOpen) {
+        logln(`opening log file:${logFile}`, true);
+        executeCommand(`.logOpen ${logFile}`);
+    }
+    else {
+        logln('log file already open.', true);
+    }
+}
+
+function logState() {
+    var logResult = executeCommand('.logFile');
+    var logMatch = parseCommandResult(logResult, /No log file open/i);
+    if (!logMatch) {
+
+        logMatch = parseCommandResult(logResult, /Log '(.+?)' (.*)$/i);
+    }
+
+    var logInfo = {
+        currentLogFile: logMatch[0][1],
+        isLogOpen: logMatch[0][2] === 'open'
+    }
+    currentLogFile = logInfo.currentLogFile;
+    isLogOpen = logInfo.isLogOpen;
+    logln(`logState:returning:${convertToJson(logInfo)}`, true);
+    return logInfo;
 }
 
 function popParent() {
@@ -199,7 +310,7 @@ function popParent() {
     if (parentQueue.length > 0) {
         parentQueue.pop();
         parentObj = parentQueue[--parentQueueLevel - 1];
-        logln('popped parentqueue. queue size:' + parentQueueLevel);
+        logln('popped parentqueue. queue size:' + parentQueueLevel, true);
     }
     else {
         logln('error:popParent:parent queue is empty');
@@ -215,7 +326,7 @@ function pushParent(parentObj) {
     parentQueue.push(parentObj);
     parentQueueLevel++;
 
-    logln('pushed parentqueue. queue size:' + parentQueueLevel);
+    logln('pushed parentqueue. queue size:' + parentQueueLevel, true);
     return parentObj;
 }
 
@@ -227,27 +338,38 @@ function readFile(file) {
 }
 
 function writeFile(file, content) {
-    try {
-        fs.writeFileSync(file, content);
+    logln(`writing file:${file}`);
+    // try {
+    //fs.writeFileSync(file, content);
+    // }
+    // catch (e) {
+    logOpen(file);
+    logln(content);
+    logClose();
+    // }
+}
+
+function writeJson(jsonObject, outFile = null, indent = false) {
+    logln(`writing json:${outFile}`, true);
+    var json = convertToJson(jsonObject, indent);
+    if (outFile) {
+        writeFile(outFile, json);
     }
-    catch (e) {
-        logln(e);
+    else {
+        logln(json);
     }
 }
 
-function writeJson(jsonObject) {
-    var json = convertToJson(jsonObject);
-    logln(json);
-}
-
-function initializeScript()
-{
+function initializeScript() {
     // Add code here that you want to run every time the script is loaded. 
     // We will just send a message to indicate that function was called.
     logln("***> initializeScript was called\n");
 }
 
+function invokeScript() {
+    isLogOpen = logState();
+}
 
 // test
-//invokeScript('!do2 -c 0 -e 20 -f -vi 0x000001d61af5e430');
+//parseOutput('!do2 -c 0 -e 20 -f -vi 0x000001d61af5e430');
 //invokeScript();
