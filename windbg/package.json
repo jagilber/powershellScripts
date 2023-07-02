@@ -1,0 +1,17 @@
+{
+  "name": "windbg",
+  "version": "1.0.0",
+  "description": "do2json",
+  "main": "do2json.js",
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "readline": "^1.3.0",
+    "util": "^0.10.3"
+  },
+  "scripts": {
+    "test": "debugTest"
+  },
+  "author": "jagilber",
+  "license": "ISC"
+}

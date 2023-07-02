@@ -253,5 +253,5 @@ ModelManifest.xml
 *.pfx
 **/gather
 **/Configuration
-.vscode
+#.vscode
 secrets.ps1
