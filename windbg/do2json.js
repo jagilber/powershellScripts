@@ -170,7 +170,7 @@ function parseOutput(command = null, outFile = null, indent = false, content = n
     try {
         for (let line of commandResult) {
             //while (counter < commandResult.length) {
-            var line = commandResult[counter++];
+            //var line = commandResult[counter++];
             logln(`parsing line:${line}`, true);
             if (!line) { continue };
 
@@ -251,11 +251,40 @@ function parseOutput(command = null, outFile = null, indent = false, content = n
 function logln(e, debugOutput = false) {
     try {
         if (debug || debug === debugOutput) {
-            if (e.length > 1000) {
-                // so json does not get truncated and allows for formatting  without \n
-                for (let line of e.match(/.{1,80}/g)) {
-                    host.diagnostics.debugLog(line);
+            if (String(e).length > 500) {
+            // so json does not get truncated and allows for formatting  without \n
+            var matches = String(e).match(/.{1,500}(\,|\}|\|\]|$)/g);
+            if (matches === null || matches === undefined) {
+                host.diagnostics.debugLog(e + '\n');
+                return;
+            }
+            // Use the value
+            var tempLine = null;
+            for (let line of matches) {
+                if (tempLine) {
+                    line = tempLine + line;
+                    tempLine = null;
                 }
+                //host.diagnostics.debugLog('debug:' + line.match(/"+/)[0].length + '\n');
+                if (line === null || line === undefined) {
+                    host.diagnostics.debugLog('ERROR:line null');
+                    continue;
+                }
+
+                var lineMatches = line.match(/"/g);
+                if (lineMatches === null || lineMatches === undefined) {
+                    host.diagnostics.debugLog('ERROR:line matches null');
+                    continue;
+                }
+                
+                if (lineMatches.length % 2) {
+                    host.diagnostics.debugLog(`ERROR:${lineMatches.length} is odd\n${line}`);
+                    tempLine = line;
+                    continue;
+                }
+                host.diagnostics.debugLog(line + '\n');
+                tempLine = null;
+            }
             }
             else {
                 host.diagnostics.debugLog(e + '\n');
@@ -263,7 +292,14 @@ function logln(e, debugOutput = false) {
         }
     }
     catch (exception) {
-        //console.log(e);
+        try {
+            host.diagnostics.debugLog(`exception:${exception}\n`);
+            host.diagnostics.debugLog(e + '\n');
+        }
+        catch (exception) {
+            console.log(e + '\n');
+        }
+        
     }
 }
 
@@ -289,15 +325,16 @@ function logOpen(logFile) {
 
 function logState() {
     var logResult = executeCommand('.logFile');
+    var logFileOpen = false;
     var logMatch = parseCommandResult(logResult, /No log file open/i);
     if (!logMatch) {
-
         logMatch = parseCommandResult(logResult, /Log '(.+?)' (.*)$/i);
+        logFileOpen = logMatch[0][2].toLowerCase() === 'open';
     }
 
     var logInfo = {
         currentLogFile: logMatch[0][1],
-        isLogOpen: logMatch[0][2] === 'open'
+        isLogOpen: logFileOpen
     }
     currentLogFile = logInfo.currentLogFile;
     isLogOpen = logInfo.isLogOpen;
@@ -331,10 +368,10 @@ function pushParent(parentObj) {
 }
 
 function readFile(file) {
-    //const fs = require('fs')
     throw 'not implemented';
-    //var content = fs.readFileSync(file, 'utf8');
-    //return content;
+    // const fs = require('fs')
+    // var content = fs.readFileSync(file, 'utf8');
+    // return content;
 }
 
 function writeFile(file, content) {
@@ -360,6 +397,12 @@ function writeJson(jsonObject, outFile = null, indent = false) {
     }
 }
 
+function debugTest(inputFile = null, outputFile = null) {
+    const fs = require('fs');
+    var testContent = readFile(inputFile);
+    parseOutput(null, outputFile, true, testContent);
+}
+
 function initializeScript() {
     // Add code here that you want to run every time the script is loaded. 
     // We will just send a message to indicate that function was called.
@@ -367,9 +410,12 @@ function initializeScript() {
 }
 
 function invokeScript() {
-    isLogOpen = logState();
+    logState();
 }
 
 // test
 //parseOutput('!do2 -c 0 -e 20 -f -vi 0x000001d61af5e430');
+//initializeScript();
 //invokeScript();
+//debugTest('c:\\temp\\test1-static.json');
+
