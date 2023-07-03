@@ -105,15 +105,138 @@ interface sessionInterface
     Processes: processInterface[];
 }
 
+enum disposition
+{
+    OpenExisting = "OpenExisting",
+    CreateNew = "CreateNew",
+    CreateAlways = "CreateAlways"
+}
+
+enum encoding
+{
+    Ascii = "Ascii",
+    Utf8 = "Utf8",
+    Utf16 = "Utf16"
+}
+
+interface fileInterface
+{
+    Close();
+    Delete();
+    ReadBytes(count: number): number[];
+    WriteBytes(bytes: number[]);
+    Extension:string;
+    Name:string;
+    Path:string;
+    Position:number;
+    Size: number;
+}
+
+interface textReaderInterface
+{
+    ReadLine(): string;
+    ReadLineContents(): string;
+}
+
+interface textWriterInterface
+{
+    Write(object:string);
+    WriteLine(object:string);
+    WriteContents(object:string);
+    WriteLineContents(object:string);
+}
+
+interface fileSystemInterface
+{
+    CreateFile(path: string, disposition:disposition|string): fileInterface;
+    CreateTempFile(): file;
+    CreateTextReader(path: string, encoding:encoding|string): textReaderInterface;
+    CreateTextReader(file: file, encoding:encoding|string): textReaderInterface;
+    CreateTextWriter(path: string, encoding:encoding|string): textWriterInterface;
+    CreateTextWriter(file: file, encoding:encoding|string): textWriterInterface;
+    DeleteFile(path: string);
+    FileExists(path: string): boolean;
+    OpenFile(path: string): file;
+    CurrentDirectory: directory;
+    TempDirectory: directory;
+}
+
+interface controlInterface
+{
+    ExecuteCommand(command: string);
+}    
+
+interface utilityInterface
+{
+    FileSystem: fileSystemInterface;
+    Control: controlInterface;
+}
+
 interface debuggerInterface
 {
     Sessions: sessionInterface[];
+    Utility: utilityInterface;
 }
 
 interface namespaceInterface
 {
     Debugger: debuggerInterface;
 }
+
+class Control implements controlInterface {
+    ExecuteCommand(command: string);
+}
+
+class directory
+{
+    Name: string;
+    Path: string;
+}
+
+class textWriter implements textWriterInterface {
+    Write(object:string);
+    WriteLine(object:string);
+    WriteContents(object:string);
+    WriteLineContents(object:string);
+}
+
+class textReader implements textReaderInterface {
+    ReadLine(): string;
+    ReadLineContents(): string;
+}
+
+class FileSystem implements fileSystemInterface {
+    CreateFile(path: string, disposition:disposition): fileInterface;
+    CreateTempFile(): file;
+    CreateTextReader(path: string, encoding:encoding): textReaderInterface;
+    CreateTextReader(file: file, encoding:encoding): textReaderInterface;
+    CreateTextWriter(path: string, encoding:encoding): textWriterInterface;
+    CreateTextWriter(file: file, encoding:encoding): textWriterInterface;
+    DeleteFile(path: string);
+    FileExists(path: string): boolean;
+    OpenFile(path: string): file;
+    CurrentDirectory: directory;
+    TempDirectory: directory;
+}
+
+class file implements fileInterface
+{
+    Close();
+    Delete();
+    ReadBytes(count: number): number[];
+    WriteBytes(bytes: number[]);
+    Extension:string;
+    Name:string;
+    Path:string;
+    Position:number;
+    Size: number;
+}
+
+class Utility implements utilityInterface {
+    FileSystem: FileSystem;
+    Control: Control;
+}
+
 
 interface baseClassInterface
 {
@@ -1001,4 +1124,3 @@ declare namespace host {
         }
     }
 }
-

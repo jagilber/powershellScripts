@@ -1,4 +1,4 @@
-﻿//// <reference path="JSProvider.d.ts" /> 
+//// <reference path="JSProvider.d.ts" /> 
 /*
 calls  mex  do2 -c 0 -e 20 -f -vi <address>
 parses output and creates json file
@@ -118,17 +118,16 @@ function logln(data, debugOutput) {
 }
 function createFile(fileName) {
     logln("creating file:" + fileName);
-    var file = undefined;
+    var newFile = null;
     try {
-        //@ts-ignore TS2339
         var fileSystem = host.namespace.Debugger.Utility.FileSystem;
-        file = fileSystem.CreateFile(fileName, 'CreateAlways');
-        return file;
+        newFile = fileSystem.CreateFile(fileName, disposition.CreateAlways.toString());
+        return newFile;
     }
     catch (e) {
         logln("error:creating file:" + fileName + "\n" + e);
-        if (file) {
-            file.Close();
+        if (newFile) {
+            newFile.Close();
         }
         return null;
     }
@@ -168,7 +167,6 @@ function executeCommand(command) {
     logln("executing command:" + command, true);
     var commandResult = null;
     if (command) {
-        //@ts-ignore TS2339
         var control = host.namespace.Debugger.Utility.Control;
         commandResult = control.ExecuteCommand(command);
     }
@@ -205,10 +203,10 @@ function do2json(command, outFile, indent, content) {
     if (indent === void 0) { indent = false; }
     if (content === void 0) { content = null; }
     var rootPattern = /0x[A-Fa-f0-9]+?\s+(\S+?)$/ig;
-    var propertyPattern = /(\s+?)([A-Fa-f0-9]{4})\s(\S+?)\s+?:\s?(.+?)?\s(\(.+?\)|NULL)\S?($|.+$)/; //, 'ig');
-    var lineObject = undefined;
-    var currentLineObjectName = null;
-    var currentObj = null;
+    var propertyPattern = /(\s+?)([A-Fa-f0-9]{4})\s(\S+?)\s+?:\s?(.+?)?\s(\(.+?\)|NULL)\S?($|.+$)/;
+    var lineObject = null;
+    var currentLineObjectName = undefined;
+    var currentObj = undefined;
     var currentObjLevel = 0;
     var parentObj = {};
     var commandResult = null;
@@ -218,7 +216,6 @@ function do2json(command, outFile, indent, content) {
     if (command) {
         command = do2command + " " + command;
         logln("parseOutput:modified command:" + command);
-        //@ts-ignore TS2339
         var control = host.namespace.Debugger.Utility.Control;
         commandResult = control.ExecuteCommand(command);
     }
@@ -414,14 +411,13 @@ function pushParent(parentObj) {
 }
 function readFile(fileName) {
     logln("reading file:" + fileName);
-    var file = undefined;
+    var currentFile = null;
     try {
-        //@ts-ignore TS2339
         var fileSystem = host.namespace.Debugger.Utility.FileSystem;
-        file = fileSystem.OpenFile(fileName, 'OpenExisting');
-        var reader = fileSystem.CreateTextReader(file, 'Utf8');
+        currentFile = fileSystem.OpenFile(fileName);
+        var reader = fileSystem.CreateTextReader(currentFile, encoding.Utf8.toString());
         var content = reader.ReadLineContents();
-        file.Close();
+        currentFile.Close();
         return content;
     }
     catch (e) {
@@ -430,8 +426,8 @@ function readFile(fileName) {
         throw exStr;
     }
     finally {
-        if (file) {
-            file.Close();
+        if (currentFile) {
+            currentFile.Close();
         }
     }
 }
@@ -451,19 +447,21 @@ function writeFile(fileName, content) {
     logln("writing file:" + fileName);
     // uncomment below to debug
     // const fs = require('fs')
-    var file = undefined;
+    var newFile = null;
     try {
         //      fs.writeFileSync(file, content);
-        //@ts-ignore TS2339
         var fileSystem = host.namespace.Debugger.Utility.FileSystem;
         if (fileSystem.FileExists(fileName)) {
             logln("deleting file:" + fileName);
             fileSystem.DeleteFile(fileName);
         }
-        file = createFile(fileName);
-        var writer = fileSystem.CreateTextWriter(file, 'Utf8');
+        newFile = createFile(fileName);
+        if (!newFile) {
+            throw "error:creating file:" + fileName;
+        }
+        var writer = fileSystem.CreateTextWriter(newFile, encoding.Utf8.toString());
         writer.Write(content);
-        file.Close();
+        newFile.Close();
         logln("file: " + fileName + " written successfully.\n" + content, true);
     }
     catch (e) {
@@ -475,8 +473,8 @@ function writeFile(fileName, content) {
         throw exStr;
     }
     finally {
-        if (file) {
-            file.Close();
+        if (newFile) {
+            newFile.Close();
         }
     }
 }

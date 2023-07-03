@@ -123,17 +123,17 @@ function logln(data: any | null, debugOutput: boolean = false) {
 
 function createFile(fileName: string) {
     logln(`creating file:${fileName}`);
-    var file: any = undefined;
+    var newFile: file | null = null;
     try {
-        //@ts-ignore TS2339
-        let fileSystem: any = host.namespace.Debugger.Utility.FileSystem;
-        file = fileSystem.CreateFile(fileName, 'CreateAlways');
-        return file;
+
+        let fileSystem: typeof host.namespace.Debugger.Utility.FileSystem = host.namespace.Debugger.Utility.FileSystem;
+        newFile = fileSystem.CreateFile(fileName, disposition.CreateAlways.toString());
+        return newFile;
     }
     catch (e) {
         logln(`error:creating file:${fileName}\n${e}`);
-        if (file) {
-            file.Close();
+        if (newFile) {
+            newFile.Close();
         }
 
         return null;
@@ -175,8 +175,8 @@ function executeCommand(command: string | null = null) {
     logln(`executing command:${command}`, true);
     var commandResult: string[] | null = null;
     if (command) {
-        //@ts-ignore TS2339
-        let control: any = host.namespace.Debugger.Utility.Control;
+
+        let control: typeof host.namespace.Debugger.Utility.Control = host.namespace.Debugger.Utility.Control;
         commandResult = control.ExecuteCommand(command);
     }
     else {
@@ -211,10 +211,10 @@ function do2jsons(command: string | null = null, outFile: string | null = null, 
 
 function do2json(command: string | null = null, outFile: string | null = null, indent: boolean = false, content: string | null = null) {
     var rootPattern = /0x[A-Fa-f0-9]+?\s+(\S+?)$/ig;
-    var propertyPattern = /(\s+?)([A-Fa-f0-9]{4})\s(\S+?)\s+?:\s?(.+?)?\s(\(.+?\)|NULL)\S?($|.+$)/; //, 'ig');
-    var lineObject: any | undefined = undefined;
-    var currentLineObjectName: any = null;
-    var currentObj: any = null;
+    var propertyPattern = /(\s+?)([A-Fa-f0-9]{4})\s(\S+?)\s+?:\s?(.+?)?\s(\(.+?\)|NULL)\S?($|.+$)/;
+    var lineObject: any | null = null;
+    var currentLineObjectName: any = undefined;
+    var currentObj: any = undefined;
     var currentObjLevel: number = 0;
     var parentObj: any = {};
     var commandResult: string[] | null = null;
@@ -227,7 +227,7 @@ function do2json(command: string | null = null, outFile: string | null = null, i
         command = `${do2command} ${command}`;
         logln(`parseOutput:modified command:${command}`);
 
-        //@ts-ignore TS2339
+
         let control = host.namespace.Debugger.Utility.Control;
         commandResult = control.ExecuteCommand(command);
     }
@@ -433,14 +433,14 @@ function pushParent(parentObj: any) {
 
 function readFile(fileName: string) {
     logln(`reading file:${fileName}`);
-    var file: any = undefined;
+    var currentFile: file | null = null;
     try {
-        //@ts-ignore TS2339
-        let fileSystem: any = host.namespace.Debugger.Utility.FileSystem;
-        file = fileSystem.OpenFile(fileName, 'OpenExisting');
-        var reader: any = fileSystem.CreateTextReader(file, 'Utf8');
+
+        let fileSystem: typeof host.namespace.Debugger.Utility.FileSystem = host.namespace.Debugger.Utility.FileSystem;
+        currentFile = fileSystem.OpenFile(fileName);
+        var reader: textReader = fileSystem.CreateTextReader(currentFile, encoding.Utf8.toString());
         var content: any = reader.ReadLineContents();
-        file.Close();
+        currentFile.Close();
         return content;
     }
     catch (e) {
@@ -449,8 +449,8 @@ function readFile(fileName: string) {
         throw exStr;
     }
     finally {
-        if (file) {
-            file.Close();
+        if (currentFile) {
+            currentFile.Close();
         }
     }
 
@@ -472,10 +472,9 @@ function writeFile(fileName: string, content: string) {
     logln(`writing file:${fileName}`);
     // uncomment below to debug
     // const fs = require('fs')
-    var file: any = undefined;
+    var newFile: file | null = null;
     try {
         //      fs.writeFileSync(file, content);
-        //@ts-ignore TS2339
         let fileSystem: any = host.namespace.Debugger.Utility.FileSystem;
 
         if (fileSystem.FileExists(fileName)) {
@@ -483,10 +482,12 @@ function writeFile(fileName: string, content: string) {
             fileSystem.DeleteFile(fileName);
         }
 
-        file = createFile(fileName);
-        var writer: any = fileSystem.CreateTextWriter(file, 'Utf8');
+        newFile = createFile(fileName);
+        if(!newFile){ throw `error:creating file:${fileName}`;}
+
+        var writer: textWriter = fileSystem.CreateTextWriter(newFile, encoding.Utf8.toString());
         writer.Write(content);
-        file.Close();
+        newFile.Close();
         logln(`file: ${fileName} written successfully.\n${content}`, true)
     }
     catch (e) {
@@ -498,8 +499,8 @@ function writeFile(fileName: string, content: string) {
         throw exStr;
     }
     finally {
-        if (file) {
-            file.Close();
+        if (newFile) {
+            newFile.Close();
         }
     }
 }
