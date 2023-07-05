@@ -55,47 +55,41 @@
 
 [cmdletbinding()]
 param(
+  #[parameter(Mandatory = $true)]
+  $resourceGroupName = 'sfcluster',
+  #[parameter(Mandatory = $true)]
+  $backupStorageAccountName = 'sfclusterbackup',
+  [parameter(Mandatory = $true)]
   $connectionEndpoint = 'https://sfcluster.eastus.cloudapp.azure.com:19080',
+  [parameter(Mandatory = $true)]
+  $thumbprint = '',
+  #[parameter(Mandatory = $true)]
   $applicationName = 'fabric:/Voting',
   $applicationId = '', #'Voting~VotingData',
   $backupId = '',
-  $backupStorageAccountName = '',
-  $thumbprint = '',
   $containerName = 'backup',
   $backupStorageAccountKey = '',
-  $resourceGroupName = 'sfcluster',
   $apiVersion = '9.1',
   $timeoutSeconds = '3',
   $backupTimeoutMinutes = '10', # default is 10 minutes
   [switch]$enableBackups,
   [switch]$startBackup,
-  [switch]$loadFunctionsOnly
+  [switch]$loadFunctionsOnly,
+  [switch]$createStorageAccount
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
 $global:httpStatusCode = 0
+$global:storageAccountKey
 $maxResults = 100
 $baseUrl = "$connectionEndpoint{0}?api-version=$apiVersion&timeout=$timeoutSeconds{1}"
+$script:location = $null
 
 function main() {
   write-host "starting $((get-date).tostring())" -foregroundColor yellow
-
-  #get key if not provided
-  if (!$backupStorageAccountKey) {
-    if (!(get-azresourcegroup)) {
-      connect-azaccount
-    }
-
-    if (!(get-azresourcegroup)) {
-      write-host "failed to connect to azure" -foregroundColor red
-      return
-    }
-
-    $backupStorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $backupStorageAccountName).Value[0]
-
-  }
-
-  if (!$backupStorageAccountKey) {
+  $global:storageAccountKey = get-storageAccountKey $backupStorageAccountKey
+  
+  if (!$global:storageAccountKey) {
     write-host "failed to get storage account key" -foregroundColor red
     return
   }
@@ -124,7 +118,7 @@ function main() {
     #return
   }
 
-  if(!$enableBackups -or !$startBackup) {
+  if (!$enableBackups -or !$startBackup) {
     return
   }
 
@@ -138,7 +132,7 @@ function main() {
     write-host "application name is required" -foregroundColor red
     return
   }
-  if(!$applicationId){
+  if (!$applicationId) {
     $applicationId = (get-clusterApplicationList $applicationName).Id
   }
 
@@ -155,7 +149,7 @@ function main() {
     }
   }
 
-  if($startBackup) {
+  if ($startBackup) {
     if (!(start-partitionBackup $partitionId)) {
       write-host "failed to start partition backup" -foregroundColor red
       return
@@ -182,7 +176,7 @@ function create-clusterDailyAzureBackupPolicy() {
       Storage               = @{
         StorageKind      = 'AzureBlobStore'
         FriendlyName     = 'Azure_storagesample'
-        ConnectionString = "DefaultEndpointsProtocol=https;AccountName=$backupStorageAccountName;AccountKey=$backupStorageAccountKey;EndpointSuffix=core.windows.net"
+        ConnectionString = "DefaultEndpointsProtocol=https;AccountName=$backupStorageAccountName;AccountKey=$global:storageAccountKey;EndpointSuffix=core.windows.net"
         ContainerName    = $containerName
       }
       RetentionPolicy       = @{
@@ -220,7 +214,7 @@ function get-clusterBackups() {
   write-host "get-clusterBackups"
   $response = invoke-rest -method 'POST' -absolutePath '/BackupRestore/$/GetBackups' -body (convertto-json @{
       Storage      = @{
-        ConnectionString = "DefaultEndpointsProtocol=https;AccountName=$backupStorageAccountName;AccountKey=$backupStorageAccountKey;EndpointSuffix=core.windows.net"
+        ConnectionString = "DefaultEndpointsProtocol=https;AccountName=$backupStorageAccountName;AccountKey=$global:storageAccountKey;EndpointSuffix=core.windows.net"
         ContainerName    = $containerName
         StorageKind      = 'AzureBlobStore'
       }
@@ -269,6 +263,94 @@ function get-clusterPartitionList($serviceId) {
 function get-clusterServiceList($applicationId) {
   $response = invoke-rest -method 'GET' -absolutePath "/Applications/$applicationId/$/GetServices"
   return $response
+}
+
+
+function create-storageAccount($storageAccountName) {
+  $storageAccount = get-storageAccount $storageAccountName -ErrorAction SilentlyContinue
+  if (!$storageAccount) {
+    write-host "storage account not found: $storageAccountName" -foregroundColor red
+    if (!$createStorageAccount) {
+      return $null
+    }
+    if (!(new-azstorageaccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -SkuName Standard_LRS -Location $script:location)) {
+      write-host "failed to create storage account: $storageAccountName" -foregroundColor red
+      return $null
+    }
+  }
+  return $storageAccount
+}
+
+function get-resourceGroup($name = $null) {
+  $resourceGroup = $null
+  if (!$name) {
+    $resourceGroup = get-azresourcegroup -ErrorAction SilentlyContinue
+    if (!$resourceGroup) {
+      write-verbose "resource group not found"
+      return $null
+    }
+    return $resourceGroup
+  }
+  else {
+    $resourceGroup = get-azresourcegroup -Name $name -ErrorAction SilentlyContinue
+    if (!$resourceGroup) {
+      write-host "resource group not found: $name" -foregroundColor red
+      return $null
+    }
+  }
+  return $resourceGroup
+}
+
+function get-storageAccount($storageAccountName) {
+  $storageAccount = get-azStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -ErrorAction SilentlyContinue
+  if (!$storageAccount) {
+    write-host "storage account not found: $storageAccountName" -foregroundColor red
+    return $null
+  }
+  return $storageAccount
+}
+
+function get-storageAccountKey($storageAccountKey = $null) {
+  #get key if not provided
+  $resourceGroup = $null
+
+  if (!$storageAccountKey -and !$global:storageAccountKey) {
+    if (!(get-azresourcegroup)) {
+      connect-azaccount
+    }
+
+    if (!(get-resourcegroup)) {
+      Connect-AzAccount
+      if (!(get-resourcegroup)) {
+        write-host "failed to connect to azure" -foregroundColor red
+        return $null
+      }
+    }
+
+    $resourceGroup = get-resourcegroup -Name $resourceGroupName
+    if (!$resourceGroup) {
+      write-host "failed to get resource group: $resourceGroupName" -foregroundColor red
+      return $null
+    }
+
+    # set location to resource group location
+    $script:location = $resourceGroup.Location
+    if (!(create-storageAccount $backupStorageAccountName)) {
+      write-host "failed to create storage account: $backupStorageAccountName" -foregroundColor red
+      return $null
+    }
+
+    $storageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $backupStorageAccountName).Value[0]
+  }
+  elseif ($storageAccountKey) {
+    return $storageAccountKey
+  }
+  else {
+    $storageAccountKey = $global:storageAccountKey
+  }
+  
+  write-verbose "storage account key: $storageAccountKey"
+  return $storageAccountKey
 }
 
 function invoke-rest($method = 'GET', $absolutePath, $body = $null, $attributes = @{}) {
@@ -397,7 +479,7 @@ function start-partitionBackup($partitionId) {
   $response = invoke-rest -method 'POST' -absolutePath "/Partitions/$partitionId/$/Backup" -body (convertto-json @{
       BackupStorage = @{
         StorageKind      = 'AzureBlobStore'
-        ConnectionString = "DefaultEndpointsProtocol=https;AccountName=$backupStorageAccountName;AccountKey=$backupStorageAccountKey;EndpointSuffix=core.windows.net"
+        ConnectionString = "DefaultEndpointsProtocol=https;AccountName=$backupStorageAccountName;AccountKey=$global:storageAccountKey;EndpointSuffix=core.windows.net"
         ContainerName    = $containerName
       }
     }) `
