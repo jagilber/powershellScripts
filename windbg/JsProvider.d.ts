@@ -105,14 +105,14 @@ interface sessionInterface
     Processes: processInterface[];
 }
 
-enum disposition
+const enum disposition
 {
     OpenExisting = "OpenExisting",
     CreateNew = "CreateNew",
     CreateAlways = "CreateAlways"
 }
 
-enum encoding
+const enum encoding
 {
     Ascii = "Ascii",
     Utf8 = "Utf8",
@@ -163,7 +163,7 @@ interface fileSystemInterface
 
 interface controlInterface
 {
-    ExecuteCommand(command: string);
+    ExecuteCommand(command: string): object|Iterable<String>;
 }    
 
 interface utilityInterface

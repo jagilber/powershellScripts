@@ -1,45 +1,43 @@
-//// <reference path="JSProvider.d.ts" /> 
+﻿//// <reference path="JSProvider.d.ts" />
 /*
 calls  mex  do2 -c 0 -e 20 -f -vi <address>
 parses output and creates json file
 
-example do2 output:
-    dx Debugger.State.Scripts.testscript.Contents.ListProcs()
-        009d m_BufferOnly              : False (System.Boolean)"
-        009e m_Chunked                 : False (System.Boolean)"
-        009f m_ChunkEofRecvd           : False (System.Boolean)"
-        00a0 FinishedAfterWrite        : False (System.Boolean)"
-        00a1 m_IgnoreSocketErrors      : False (System.Boolean)"
-        00a2 m_ErrorResponseStatus     : False (System.Boolean)"
-    0020 m_ContentLength     : 221 (System.Int64)"
-    0028 m_StatusCode        : NotFound (404) (System.Net.HttpStatusCode)"
-    002c m_IsVersionHttp11   : True (System.Boolean)"
-    0040 m_HttpResponseHeaders       : 000001d61af5d8a0 (System.Net.WebHeaderCollection)"
-    0048 m_MediaType                 : NULL"
-    0050 m_CharacterSet              : NULL"
-
 reference:
 https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/javascript-debugger-scripting
+https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/-scriptdebug--debug-javascript-
 
-startup:
+startup debug commands:
 (shouldnt be needed)
-0:000> .load C:\ScriptProviders\jsprovider.dll
-0:000> .scriptload c:\WinDbg\Scripts\do2json.js
+.load jsprovider.dll;
+.scriptlist;
+.scriptload I:\githubshared\jagilber\powershellScripts\windbg\do2jsondev.js;
+.scriptdebug I:\githubshared\jagilber\powershellScripts\windbg\do2jsondev.js;
+sxe en;
+bp 0:0;
+q;
+# use below to load all js content
+dx @$scriptContents.do2json("k")
+# should breakin
 
 
-0:000> dx @$myScript = Debugger.State.Scripts.do2json.Contents
+>>> Debug [do2jsondev 169:5] >dv
+             command = .logFile
+      commandResults = []
+       commandResult = {...}
+             control = {...}
+                  _i = undefined
+     commandResult_1 = undefined
+                line = undefined
+>>> Debug [do2jsondev 169:5] >
+
+startup commands:
+.scriptlist
+.scriptload I:\githubshared\jagilber\powershellScripts\windbg\do2json.js
+.scriptrun I:\githubshared\jagilber\powershellScripts\windbg\do2json.js
+
 dx @$myScript = Debugger.State.Scripts.do2json.Contents
-
-0:000> dx @$myScript = Debugger.State.Scripts.do2json.Contents
-@$myScript = Debugger.State.Scripts.do2json.Contents                 : [object Object]
-    host             : [object Object]
-    parentQueueLevel : 0x0
-    parentQueue
-    jsonResultObject : [object Object]
-
-example usage
-dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test1.json")
-dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test1.json", true)
+dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test.json",true)
 
 */
 "use strict";
@@ -52,9 +50,9 @@ var currentLogFile = '';
 var commandResult = null;
 var depth = 20;
 var resultCount = 0; // unlimited
-var do2command = "!do2 -c " + resultCount + " -e " + depth + " -f -vi";
-function logln(data, debugOutput) {
-    if (debugOutput === void 0) { debugOutput = false; }
+var do2command = `!do2 -c ${resultCount} -e ${depth} -f -vi`;
+function logln(data, debugOutput = false) {
+    //host.diagnostics.debugLog('test::' + data + '\n');
     try {
         if (debug || debug === debugOutput) {
             if (String(data).length > 500) {
@@ -69,8 +67,7 @@ function logln(data, debugOutput) {
                 }
                 // Use the value
                 var tempLine = null;
-                for (var _i = 0, matches_1 = matches; _i < matches_1.length; _i++) {
-                    var line = matches_1[_i];
+                for (let line of matches) {
                     if (tempLine) {
                         line = tempLine + line;
                         tempLine = null;
@@ -92,7 +89,7 @@ function logln(data, debugOutput) {
                     }
                     if (lineMatches.length % 2) {
                         if (debug) {
-                            host.diagnostics.debugLog("ERROR:" + lineMatches.length + " line has odd number of quotes. appending:" + line + "\n");
+                            host.diagnostics.debugLog(`ERROR:${lineMatches.length} line has odd number of quotes. appending:${line}\n`);
                         }
                         tempLine = line;
                         continue;
@@ -101,14 +98,14 @@ function logln(data, debugOutput) {
                     tempLine = null;
                 }
             }
-            else {
-                host.diagnostics.debugLog(data + '\n');
-            }
+        }
+        else {
+            host.diagnostics.debugLog(data + '\n');
         }
     }
     catch (exception) {
         try {
-            host.diagnostics.debugLog("exception:" + exception + "\n");
+            host.diagnostics.debugLog(`exception:${exception}\n`);
             host.diagnostics.debugLog(data + '\n');
         }
         catch (exception) {
@@ -117,23 +114,22 @@ function logln(data, debugOutput) {
     }
 }
 function createFile(fileName) {
-    logln("creating file:" + fileName);
+    logln(`creating file:${fileName}`);
     var newFile = null;
     try {
-        var fileSystem = host.namespace.Debugger.Utility.FileSystem;
-        newFile = fileSystem.CreateFile(fileName, disposition.CreateAlways.toString());
+        let fileSystem = host.namespace.Debugger.Utility.FileSystem;
+        newFile = fileSystem.CreateFile(fileName, "CreateAlways" /* disposition.CreateAlways */);
         return newFile;
     }
     catch (e) {
-        logln("error:creating file:" + fileName + "\n" + e);
+        logln(`error:creating file:${fileName}\n${e}`);
         if (newFile) {
             newFile.Close();
         }
         return null;
     }
 }
-function convertToJson(jsonObject, indent) {
-    if (indent === void 0) { indent = false; }
+function convertToJson(jsonObject, indent = false) {
     var indention = 0;
     if (indent) {
         indention = 2;
@@ -141,8 +137,7 @@ function convertToJson(jsonObject, indent) {
     var json = JSON.stringify(jsonObject, null, indention);
     return json;
 }
-function createJsonObject(match) {
-    if (match === void 0) { match = null; }
+function createJsonObject(match = null) {
     if (!match) {
         match = [0, 0, null, null, null, null, {}];
     }
@@ -162,19 +157,30 @@ function debugTest(inputFile, outputFile) {
     var testContent = readFile(inputFile);
     do2json(null, outputFile, true, testContent);
 }
-function executeCommand(command) {
-    if (command === void 0) { command = null; }
-    logln("executing command:" + command, true);
-    var commandResult = null;
+function executeCommand(command = null) {
+    logln(`executing command:${command}`, true);
+    var commandResults = [];
+    var commandResult = undefined; //: any = null;
     if (command) {
-        var control = host.namespace.Debugger.Utility.Control;
+        let control = host.namespace.Debugger.Utility.Control;
         commandResult = control.ExecuteCommand(command);
     }
     else {
-        logln('error:empty command result');
+        logln('error:empty command');
     }
-    logln("commandResult:" + commandResult, true);
-    return commandResult;
+    if (!commandResult) {
+        logln('error:commandResult is null');
+        return null;
+    }
+    else {
+        logln(`commandResult:${convertToJson(commandResult)}`, true);
+    }
+    logln(`commandResults:`, true);
+    for (let line of commandResult) {
+        logln(line, true);
+        commandResults.push(line);
+    }
+    return commandResults;
 }
 function getParent() {
     if (parentQueue.length > 0) {
@@ -185,23 +191,15 @@ function getParent() {
         return null;
     }
 }
-function do2jsons(command, outFile, indent, content) {
-    if (command === void 0) { command = null; }
-    if (outFile === void 0) { outFile = null; }
-    if (indent === void 0) { indent = false; }
-    if (content === void 0) { content = null; }
+function do2jsons(command = null, outFile = null, indent = false, content = null) {
     do2json(command, outFile, indent, content);
-    command = "-static " + command;
+    command = `-static ${command}`;
     if (outFile !== null) {
         outFile = outFile.toLowerCase().replace('.json', '-static.json');
     }
     do2json(command, outFile, indent, content);
 }
-function do2json(command, outFile, indent, content) {
-    if (command === void 0) { command = null; }
-    if (outFile === void 0) { outFile = null; }
-    if (indent === void 0) { indent = false; }
-    if (content === void 0) { content = null; }
+function do2json(command = null, outFile = null, indent = false, content = null) {
     var rootPattern = /0x[A-Fa-f0-9]+?\s+(\S+?)$/ig;
     var propertyPattern = /(\s+?)([A-Fa-f0-9]{4})\s(\S+?)\s+?:\s?(.+?)?\s(\(.+?\)|NULL)\S?($|.+$)/;
     var lineObject = null;
@@ -212,12 +210,11 @@ function do2json(command, outFile, indent, content) {
     var commandResult = null;
     var levelSize = 0;
     initializeVariables();
-    logln("parseOutput:enter:command:" + command);
+    logln(`parseOutput:enter:command:${command}`);
     if (command) {
-        command = do2command + " " + command;
-        logln("parseOutput:modified command:" + command);
-        var control = host.namespace.Debugger.Utility.Control;
-        commandResult = control.ExecuteCommand(command);
+        command = `${do2command} ${command}`;
+        logln(`parseOutput:modified command:${command}`);
+        commandResult = executeCommand(command);
     }
     else if (content) {
         commandResult = content.split(/\r?\n/);
@@ -231,9 +228,8 @@ function do2json(command, outFile, indent, content) {
             logln('no command result');
             return;
         }
-        for (var _i = 0, commandResult_1 = commandResult; _i < commandResult_1.length; _i++) {
-            var line = commandResult_1[_i];
-            logln("parsing line:" + line, true);
+        for (let line of commandResult) {
+            logln(`parsing line:${line}`, true);
             if (!line) {
                 continue;
             }
@@ -270,7 +266,7 @@ function do2json(command, outFile, indent, content) {
                 }
                 // return to parent
                 else if (currentObjLevel > lineObject.level) {
-                    for (var i = 0; i < (currentObjLevel - lineObject.level) / levelSize; i++) {
+                    for (let i = 0; i < (currentObjLevel - lineObject.level) / levelSize; i++) {
                         parentObj = popParent();
                     }
                     currentObjLevel = lineObject.level;
@@ -318,13 +314,13 @@ function initializeVariables() {
     commandResult = null;
     //depth = 20;
     //resultCount = 0; // unlimited
-    do2command = "!do2 -c " + resultCount + " -e " + depth + " -f -vi";
+    //do2command = `!do2 -c ${resultCount} -e ${depth} -f -vi`;
 }
 function logClose() {
     if (isLogOpen) {
         //@ts-ignore TS2339
-        logln("closing open log file:" + logState.currentLogFile, true);
-        executeCommand('.logClose');
+        logln(`closing open log file:${logState.currentLogFile}`, true);
+        void executeCommand('.logClose');
         isLogOpen = false;
         currentLogFile = '';
     }
@@ -334,8 +330,8 @@ function logClose() {
 }
 function logOpen(logFile) {
     if (!isLogOpen) {
-        logln("opening log file:" + logFile, true);
-        executeCommand(".logOpen " + logFile);
+        logln(`opening log file:${logFile}`, true);
+        void executeCommand(`.logOpen ${logFile}`);
         isLogOpen = true;
         currentLogFile = logFile;
     }
@@ -363,26 +359,25 @@ function logState() {
     };
     currentLogFile = logInfo.currentLogFile;
     isLogOpen = logInfo.isLogOpen;
-    logln("logState:returning:" + convertToJson(logInfo), true);
+    logln(`logState:returning:${convertToJson(logInfo)}`, true);
     return logInfo;
 }
 function parseCommandResult(commandResult, regExp) {
-    logln("parseCommandResults:enter:" + regExp, true);
+    logln(`parseCommandResults:enter:${regExp}`, true);
     var results = [];
     var matchResults = null;
     if (!commandResult) {
-        logln("parseCommandResults:commandResult is null", true);
+        logln(`parseCommandResults:commandResult is null`, true);
         return null;
     }
-    for (var _i = 0, commandResult_2 = commandResult; _i < commandResult_2.length; _i++) {
-        var lineItem = commandResult_2[_i];
-        logln("parseCommandResults:checking lineItem:" + lineItem, true);
+    for (let lineItem of commandResult) {
+        logln(`parseCommandResults:checking lineItem:${lineItem}`, true);
         if (matchResults = lineItem.match(regExp)) {
-            logln("parseCommandResults:adding lineItem:" + lineItem, true);
+            logln(`parseCommandResults:adding lineItem:${lineItem}`, true);
             results.push(matchResults);
         }
     }
-    logln("parseCommandResults:returning results:" + convertToJson(results), true);
+    logln(`parseCommandResults:returning results:${convertToJson(results)}`, true);
     if (!results.length) {
         return null;
     }
@@ -410,18 +405,18 @@ function pushParent(parentObj) {
     return parentObj;
 }
 function readFile(fileName) {
-    logln("reading file:" + fileName);
+    logln(`reading file:${fileName}`);
     var currentFile = null;
     try {
-        var fileSystem = host.namespace.Debugger.Utility.FileSystem;
+        let fileSystem = host.namespace.Debugger.Utility.FileSystem;
         currentFile = fileSystem.OpenFile(fileName);
-        var reader = fileSystem.CreateTextReader(currentFile, encoding.Utf8.toString());
+        var reader = fileSystem.CreateTextReader(currentFile, "Utf8" /* encoding.Utf8 */);
         var content = reader.ReadLineContents();
         currentFile.Close();
         return content;
     }
     catch (e) {
-        var exStr = "error:reading file:" + fileName + "\n" + e;
+        var exStr = `error:reading file:${fileName}\n${e}`;
         logln(exStr);
         throw exStr;
     }
@@ -431,41 +426,58 @@ function readFile(fileName) {
         }
     }
 }
-function setDebug(enable) {
-    if (enable === void 0) { enable = true; }
+function set(name, value) {
+    if (name === 'debug') {
+        setDebug(value);
+    }
+    else if (name === 'depth') {
+        setDepth(value);
+    }
+    else if (name === 'resultCount') {
+        setResultCount(value);
+    }
+    else if (name === 'do2command') {
+        setCommand(value);
+    }
+    else {
+        logln(`error:set:unknown name:${name}`);
+    }
+}
+function setCommand(command) {
+    do2command = command;
+}
+function setDebug(enable = true) {
     debug = enable;
 }
-function setDepth(level) {
-    if (level === void 0) { level = 20; }
+function setDepth(level = 20) {
     depth = level;
 }
-function setResultCount(count) {
-    if (count === void 0) { count = 0; }
+function setResultCount(count = 0) {
     resultCount = count;
 }
 function writeFile(fileName, content) {
-    logln("writing file:" + fileName);
+    logln(`writing file:${fileName}`);
     // uncomment below to debug
     // const fs = require('fs')
     var newFile = null;
     try {
         //      fs.writeFileSync(file, content);
-        var fileSystem = host.namespace.Debugger.Utility.FileSystem;
+        let fileSystem = host.namespace.Debugger.Utility.FileSystem;
         if (fileSystem.FileExists(fileName)) {
-            logln("deleting file:" + fileName);
+            logln(`deleting file:${fileName}`);
             fileSystem.DeleteFile(fileName);
         }
         newFile = createFile(fileName);
         if (!newFile) {
-            throw "error:creating file:" + fileName;
+            throw `error:creating file:${fileName}`;
         }
-        var writer = fileSystem.CreateTextWriter(newFile, encoding.Utf8.toString());
+        var writer = fileSystem.CreateTextWriter(newFile, "Utf8" /* encoding.Utf8 */);
         writer.Write(content);
         newFile.Close();
-        logln("file: " + fileName + " written successfully.\n" + content, true);
+        logln(`file: ${fileName} written successfully.\n${content}`, true);
     }
     catch (e) {
-        var exStr = "error:writing file:" + fileName + "\n" + e;
+        var exStr = `error:writing file:${fileName}\n${e}`;
         logln(exStr);
         logOpen(fileName);
         logln(content);
@@ -478,10 +490,8 @@ function writeFile(fileName, content) {
         }
     }
 }
-function writeJson(jsonObject, outFile, indent) {
-    if (outFile === void 0) { outFile = null; }
-    if (indent === void 0) { indent = false; }
-    logln("writing json:" + outFile, true);
+function writeJson(jsonObject, outFile = null, indent = false) {
+    logln(`writing json:${outFile}`, true);
     var json = convertToJson(jsonObject, indent);
     if (outFile) {
         writeFile(outFile, json);
@@ -492,7 +502,7 @@ function writeJson(jsonObject, outFile, indent) {
 }
 function initializeScript() {
     // called when the script is loaded by windbg
-    // Add code here that you want to run every time the script is loaded. 
+    // Add code here that you want to run every time the script is loaded.
     // We will just send a message to indicate that function was called.
     logln("***> initializeScript was called\n");
     initializeVariables();

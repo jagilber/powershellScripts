@@ -1,45 +1,43 @@
-﻿//// <reference path="JSProvider.d.ts" /> 
+﻿//// <reference path="JSProvider.d.ts" />
 /*
 calls  mex  do2 -c 0 -e 20 -f -vi <address>
 parses output and creates json file
 
-example do2 output:
-    dx Debugger.State.Scripts.testscript.Contents.ListProcs()
-        009d m_BufferOnly              : False (System.Boolean)"
-        009e m_Chunked                 : False (System.Boolean)"
-        009f m_ChunkEofRecvd           : False (System.Boolean)"
-        00a0 FinishedAfterWrite        : False (System.Boolean)"
-        00a1 m_IgnoreSocketErrors      : False (System.Boolean)"
-        00a2 m_ErrorResponseStatus     : False (System.Boolean)"
-    0020 m_ContentLength     : 221 (System.Int64)"
-    0028 m_StatusCode        : NotFound (404) (System.Net.HttpStatusCode)"
-    002c m_IsVersionHttp11   : True (System.Boolean)"
-    0040 m_HttpResponseHeaders       : 000001d61af5d8a0 (System.Net.WebHeaderCollection)"
-    0048 m_MediaType                 : NULL"
-    0050 m_CharacterSet              : NULL"
-
 reference:
 https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/javascript-debugger-scripting
+https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/-scriptdebug--debug-javascript-
 
-startup:
+startup debug commands:
 (shouldnt be needed)
-0:000> .load C:\ScriptProviders\jsprovider.dll
-0:000> .scriptload c:\WinDbg\Scripts\do2json.js
+.load jsprovider.dll;
+.scriptlist;
+.scriptload I:\githubshared\jagilber\powershellScripts\windbg\do2jsondev.js;
+.scriptdebug I:\githubshared\jagilber\powershellScripts\windbg\do2jsondev.js;
+sxe en;
+bp 0:0;
+q;
+# use below to load all js content
+dx @$scriptContents.do2json("k")
+# should breakin
 
 
-0:000> dx @$myScript = Debugger.State.Scripts.do2json.Contents
-dx @$myScript = Debugger.State.Scripts.do2json.Contents                
+>>> Debug [do2jsondev 169:5] >dv
+             command = .logFile
+      commandResults = []
+       commandResult = {...}
+             control = {...}
+                  _i = undefined
+     commandResult_1 = undefined
+                line = undefined
+>>> Debug [do2jsondev 169:5] >
 
-0:000> dx @$myScript = Debugger.State.Scripts.do2json.Contents
-@$myScript = Debugger.State.Scripts.do2json.Contents                 : [object Object]
-    host             : [object Object]
-    parentQueueLevel : 0x0
-    parentQueue     
-    jsonResultObject : [object Object]
+startup commands:
+.scriptlist
+.scriptload I:\githubshared\jagilber\powershellScripts\windbg\do2json.js
+.scriptrun I:\githubshared\jagilber\powershellScripts\windbg\do2json.js
 
-example usage
-dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test1.json")
-dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test1.json", true)
+dx @$myScript = Debugger.State.Scripts.do2json.Contents
+dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test.json",true)
 
 */
 
@@ -57,6 +55,7 @@ var resultCount: number = 0; // unlimited
 var do2command: string = `!do2 -c ${resultCount} -e ${depth} -f -vi`;
 
 function logln(data: any | null, debugOutput: boolean = false) {
+    //host.diagnostics.debugLog('test::' + data + '\n');
     try {
         if (debug || debug === debugOutput) {
             if (String(data).length > 500) {
@@ -104,9 +103,9 @@ function logln(data: any | null, debugOutput: boolean = false) {
                     tempLine = null;
                 }
             }
-            else {
-                host.diagnostics.debugLog(data + '\n');
-            }
+        }
+        else {
+            host.diagnostics.debugLog(data + '\n');
         }
     }
     catch (exception) {
@@ -117,7 +116,6 @@ function logln(data: any | null, debugOutput: boolean = false) {
         catch (exception) {
             console.log(data + '\n');
         }
-
     }
 }
 
@@ -127,7 +125,7 @@ function createFile(fileName: string) {
     try {
 
         let fileSystem: typeof host.namespace.Debugger.Utility.FileSystem = host.namespace.Debugger.Utility.FileSystem;
-        newFile = fileSystem.CreateFile(fileName, disposition.CreateAlways.toString());
+        newFile = fileSystem.CreateFile(fileName, disposition.CreateAlways);
         return newFile;
     }
     catch (e) {
@@ -173,18 +171,34 @@ function debugTest(inputFile: string, outputFile: string) {
 
 function executeCommand(command: string | null = null) {
     logln(`executing command:${command}`, true);
-    var commandResult: string[] | null = null;
+    var commandResults: string[] = [];
+    var commandResult: any = undefined; //: any = null;
+
     if (command) {
 
         let control: typeof host.namespace.Debugger.Utility.Control = host.namespace.Debugger.Utility.Control;
         commandResult = control.ExecuteCommand(command);
     }
     else {
-        logln('error:empty command result');
+        logln('error:empty command');
     }
 
-    logln(`commandResult:${commandResult}`, true);
-    return commandResult;
+    if (!commandResult) {
+        logln('error:commandResult is null');
+        return null;
+    }
+    else {
+        logln(`commandResult:${convertToJson(commandResult)}`, true);
+    }
+
+    logln(`commandResults:`, true);
+
+    for (let line of commandResult) {
+        logln(line, true);
+        commandResults.push(line);
+    }
+
+    return commandResults;
 }
 
 function getParent() {
@@ -227,9 +241,7 @@ function do2json(command: string | null = null, outFile: string | null = null, i
         command = `${do2command} ${command}`;
         logln(`parseOutput:modified command:${command}`);
 
-
-        let control = host.namespace.Debugger.Utility.Control;
-        commandResult = control.ExecuteCommand(command);
+        commandResult = executeCommand(command);
     }
     else if (content) {
         commandResult = content.split(/\r?\n/);
@@ -331,14 +343,14 @@ function initializeVariables() {
     commandResult = null;
     //depth = 20;
     //resultCount = 0; // unlimited
-    do2command = `!do2 -c ${resultCount} -e ${depth} -f -vi`;
+    //do2command = `!do2 -c ${resultCount} -e ${depth} -f -vi`;
 }
 
 function logClose() {
     if (isLogOpen) {
         //@ts-ignore TS2339
         logln(`closing open log file:${logState.currentLogFile}`, true);
-        executeCommand('.logClose');
+        void executeCommand('.logClose');
         isLogOpen = false;
         currentLogFile = '';
     }
@@ -350,7 +362,7 @@ function logClose() {
 function logOpen(logFile: string) {
     if (!isLogOpen) {
         logln(`opening log file:${logFile}`, true);
-        executeCommand(`.logOpen ${logFile}`);
+        void executeCommand(`.logOpen ${logFile}`);
         isLogOpen = true;
         currentLogFile = logFile;
     }
@@ -438,7 +450,7 @@ function readFile(fileName: string) {
 
         let fileSystem: typeof host.namespace.Debugger.Utility.FileSystem = host.namespace.Debugger.Utility.FileSystem;
         currentFile = fileSystem.OpenFile(fileName);
-        var reader: textReader = fileSystem.CreateTextReader(currentFile, encoding.Utf8.toString());
+        var reader: textReader = fileSystem.CreateTextReader(currentFile, encoding.Utf8);
         var content: any = reader.ReadLineContents();
         currentFile.Close();
         return content;
@@ -454,6 +466,28 @@ function readFile(fileName: string) {
         }
     }
 
+}
+
+function set(name: string, value: object) {
+    if (name === 'debug') {
+        setDebug(<boolean><unknown>value);
+    }
+    else if (name === 'depth') {
+        setDepth(<number><unknown>value);
+    }
+    else if (name === 'resultCount') {
+        setResultCount(<number><unknown>value);
+    }
+    else if (name === 'do2command') {
+        setCommand(<string><unknown>value);
+    }
+    else {
+        logln(`error:set:unknown name:${name}`);
+    }
+}
+
+function setCommand(command: string) {
+    do2command = command;
 }
 
 function setDebug(enable: boolean = true) {
@@ -483,9 +517,9 @@ function writeFile(fileName: string, content: string) {
         }
 
         newFile = createFile(fileName);
-        if(!newFile){ throw `error:creating file:${fileName}`;}
+        if (!newFile) { throw `error:creating file:${fileName}`; }
 
-        var writer: textWriter = fileSystem.CreateTextWriter(newFile, encoding.Utf8.toString());
+        var writer: textWriter = fileSystem.CreateTextWriter(newFile, encoding.Utf8);
         writer.Write(content);
         newFile.Close();
         logln(`file: ${fileName} written successfully.\n${content}`, true)
@@ -519,7 +553,7 @@ function writeJson(jsonObject: any, outFile: string | null = null, indent: boole
 
 function initializeScript() {
     // called when the script is loaded by windbg
-    // Add code here that you want to run every time the script is loaded. 
+    // Add code here that you want to run every time the script is loaded.
     // We will just send a message to indicate that function was called.
     logln("***> initializeScript was called\n");
     initializeVariables();
