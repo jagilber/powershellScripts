@@ -70,7 +70,7 @@ param(
   $containerName = 'backup',
   $backupStorageAccountKey = '',
   $apiVersion = '9.1',
-  $timeoutSeconds = '3',
+  $timeoutSeconds = '10',
   $backupTimeoutMinutes = '10', # default is 10 minutes
   [switch]$enableBackups,
   [switch]$startBackup,
