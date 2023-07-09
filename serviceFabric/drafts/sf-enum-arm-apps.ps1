@@ -36,7 +36,7 @@ foreach ($applicationType in $applicationTypes) {
         foreach ($application in $applications) {
             $appType.Add($application.Name, @{$typeVersion.Name = [collections.arraylist]::new()})
             $resourceId = "$($application.ResourceId)"
-            $applicationVersions = Get-AzResource -ResourceId $resourceId | where-object { $psitem.properties.version -ieq $typeVersion.Id }
+            $applicationVersions = Get-AzResource -ResourceId $resourceId | where-object { $psitem.Properties.TypeVersion -ieq $typeVersion.Name }
 
             foreach ($applicationVersion in $applicationVersions) {
                 [void]$appType.($application.Name).($typeVersion.Name).Add($applicationVersion)
