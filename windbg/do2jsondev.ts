@@ -1,6 +1,6 @@
 ﻿//// <reference path="JSProvider.d.ts" />
 /*
-calls  mex  do2 -c 0 -e 20 -f -vi <address>
+calls  mex  !do2 -c 0 -e 20 -f -vi <address>
 parses output and creates json file
 
 reference:
@@ -8,6 +8,8 @@ https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/javascript-d
 https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/-scriptdebug--debug-javascript-
 
 startup debug commands:
+node .\do2jsondev.js
+tsc --b --watch
 (shouldnt be needed)
 .load jsprovider.dll;
 .scriptlist;
@@ -17,19 +19,10 @@ sxe en;
 bp 0:0;
 q;
 # use below to load all js content
-dx @$scriptContents.do2json("k")
+dx @$scriptContents.set("debug",true)
+dx @$scriptContents.set("do2command","k")
+dx @$scriptContents.do2json(" ")
 # should breakin
-
-
->>> Debug [do2jsondev 169:5] >dv
-             command = .logFile
-      commandResults = []
-       commandResult = {...}
-             control = {...}
-                  _i = undefined
-     commandResult_1 = undefined
-                line = undefined
->>> Debug [do2jsondev 169:5] >
 
 startup commands:
 .scriptlist
@@ -38,6 +31,8 @@ startup commands:
 
 dx @$myScript = Debugger.State.Scripts.do2json.Contents
 dx @$myScript.do2json("0x000001d61af5e430","c:\\temp\\test.json",true)
+or
+dx @$scriptContents.do2json("0x000001d61af5e430","c:\\temp\\test.json",true)
 
 */
 
