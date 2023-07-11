@@ -1,5 +1,18 @@
 <#
  script to enumerate ARM deployed service fabric applications
+
+$subscriptionId = ''
+$resourceGroupName = 'sfjagilber1nt3v'
+$clusterName = $resourceGroupName
+$clusterResource = "/subscriptions/$subscriptionId/resourcegroups/$resourceGroupName/providers/Microsoft.ServiceFabric/clusters/$clusterName"
+$applicationResourceId = "$clusterResource/applications/Voting"
+$applicationTypeResourceId = "$clusterResource/applicationTypes/VotingType"
+$applicationTypeVersionsResourceId = "$clusterResource/applicationTypes/VotingType/versions"
+
+Remove-AzResource -ResourceId $applicationResourceId -Force -Verbose
+Remove-AzResource -ResourceId $applicationTypeVersionsResourceId -Force -Verbose
+Remove-AzResource -ResourceId $applicationTypeResourceId -Force -Verbose
+
 #>
 [cmdletbinding()]
 param(

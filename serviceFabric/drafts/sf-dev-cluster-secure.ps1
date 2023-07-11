@@ -3,6 +3,7 @@ script to create a secure service fabric standalone development cluster
 devclustersetup.ps1 currently requires admin privileges and .net framework 4.7.2 so powershell.exe is used
 devclustersetup.ps1 calls certsetup.ps1 to create a self signed certificate named 'ServiceFabricDevClusterCert'
 this cert is created in the current user's personal certificate store with an exportable private key and expiration of 1 year
+https://slproweb.com/download/Win64OpenSSL_Light-3_1_1.exe
 #>
 param(
     $asSecureCluster = $true,
