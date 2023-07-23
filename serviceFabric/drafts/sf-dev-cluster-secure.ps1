@@ -4,11 +4,12 @@ devclustersetup.ps1 currently requires admin privileges and .net framework 4.7.2
 devclustersetup.ps1 calls certsetup.ps1 to create a self signed certificate named 'ServiceFabricDevClusterCert'
 this cert is created in the current user's personal certificate store with an exportable private key and expiration of 1 year
 https://slproweb.com/download/Win64OpenSSL_Light-3_1_1.exe
+
 #>
 param(
-    $asSecureCluster = $true,
-    $devClusterScriptDir = 'c:\program files\microsoft sdks\service fabric\clustersetup',
-    $createOneNodeCluster = $true
+    [switch]$asSecureCluster,
+    [switch]$createOneNodeCluster,
+    [string]$devClusterScriptDir = 'c:\program files\microsoft sdks\service fabric\clustersetup'
 )
 
 $clusterSetupScript = 'devClusterSetup.ps1'
@@ -33,14 +34,19 @@ function main() {
             return
         }
 
-        #\$($MyInvocation.ScriptName)
         $arguments = @(
             "-noexit",
             "-file"
-            "`"$devClusterScriptDir\$clusterSetupScript`"",
-            "-AsSecureCluster:$asSecureCluster",
-            "-CreateOneNodeCluster:$createOneNodeCluster"
+            "`"$devClusterScriptDir\$clusterSetupScript`""
         )
+
+        if($asSecureCluster){
+            $arguments += "-asSecureCluster"
+        }
+        
+        if($createOneNodeCluster){
+            $arguments += "-createOneNodeCluster"
+        }
     
         # have to run as admin and in powershell.exe 5.1 for .net framework 4.7.2
         write-host "start-process ``

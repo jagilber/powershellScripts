@@ -41,7 +41,7 @@ function main()
             {
                 If([regex]::IsMatch($line, $regex, [Text.RegularExpressions.RegexOptions]::IgnoreCase))
                 {
-                    $line = [regex]::Match($line, $regex,[Text.RegularExpressions.RegexOptions]::IgnoreCase) 
+                    $line = [regex]::Match($line, $regex,[Text.RegularExpressions.RegexOptions]::IgnoreCase) #.groups[-1].Value 
                 }
                 else
                 {
