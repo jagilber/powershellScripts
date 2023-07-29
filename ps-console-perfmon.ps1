@@ -124,10 +124,6 @@ function main() {
                 $hostForegroundColor = $global:counterObjs[$sampleName].foregroundColor
                 $hostBackgroundColor = $global:counterObjs[$sampleName].backgroundColor
                 
-                if (!$global:counterObjs[$sampleName]) {
-                    continue
-                }
-
                 $global:counterObjs[$sampleName].counterSamples++
                 $avgCounter = $global:counterObjs[$sampleName].averageCounter = (($global:counterObjs[$sampleName].averageCounter * ($global:counterObjs[$sampleName].counterSamples - 1)) + $data) / $global:counterObjs[$sampleName].counterSamples
                 $maxCounter = $global:counterObjs[$sampleName].maxCounter = [math]::Max($global:counterObjs[$sampleName].maxCounter, $data)
@@ -207,7 +203,6 @@ function add-counterObj($counter, $noMatch = $false) {
     $withRootCounter = "\\$computername\$($noRootCounter.TrimStart('\'))"
 
     if ($noMatch) {
-    
         $counters = @($global:allCounters.paths -imatch [regex]::Escape($noRootCounter))
         if ($counters.Count -gt 0) {
             write-host "multiple counters found for $counter" -ForegroundColor Cyan
@@ -223,7 +218,6 @@ function add-counterObj($counter, $noMatch = $false) {
     }
     elseif (!($global:allCounters.paths -contains $noRootCounter)) {
         write-host "counter $counter not found" -ForegroundColor Yellow
-        #return $null
     }
 
     do {
