@@ -188,13 +188,15 @@ function main() {
     finally {
         [console]::BackgroundColor = $currentBackgroundColor
         [console]::ForegroundColor = $currentForegroundColor
+        write-host "values stored in `$global:counterObjs" -ForegroundColor Green
+        write-host "counters stored in `$global:allCounters" -ForegroundColor Green
     }
 }
 
 function add-counterObj($counter, $noMatch = $false) {
     $backgroundColor = $currentBackgroundColor
     $foregroundColor = $currentForegroundColor
-    write-host "adding counter $counter" -ForegroundColor Yellow
+    write-host "adding counter $counter" -ForegroundColor Cyan
     $noRootCounter = [regex]::match($counter, '[^\\](\\.+?\\.+)').groups[1].value
     if (!$noRootCounter) {
         $noRootCounter = $counter
