@@ -5,7 +5,7 @@
 
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
-    version 0.1
+    version 0.2
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
@@ -160,7 +160,21 @@ function add-placementConstraints() {
 }
 
 function get-clusterConnection() {
-  if (!(Get-ServiceFabricClusterConnection) -or (get-ServiceFabricClusterConnection).connectionendpoint -ine $connectionEndpoint) {
+  $connected = $false
+
+  try {
+    # keep try for 5.1 compatibility
+    $error.Clear()
+    if ((Get-ServiceFabricClusterConnection).connectionEndpoint -ieq $connectionEndpoint) {
+      $connected = $true
+    }
+  }
+  catch [NullReferenceException] {
+    write-verbose("Get-AzServiceFabricConnection not found. attempting to connect to cluster using Connect-ServiceFabricCluster")
+    $error.Clear()
+  }
+
+  if (!$connected) {
     $error.Clear()
     $message = "Connecting to Service Fabric cluster $connectionEndpoint"
     write-console $message
@@ -174,6 +188,7 @@ function get-clusterConnection() {
     -StoreName My ``
     -Verbose
     "
+
     Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
       -KeepAliveIntervalInSec 10 `
       -X509Credential `
@@ -183,6 +198,8 @@ function get-clusterConnection() {
       -StoreLocation CurrentUser `
       -StoreName My `
       -Verbose
+    # for 5.1 compatibility 
+    $global:ClusterConnection = $ClusterConnection
   }
 
   if ($error -or !(Get-ServiceFabricClusterConnection)) {
@@ -342,9 +359,9 @@ function write-results() {
   write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Yellow
   write-console "services on new nodetype: $($global:servicesOnNewNodeType | convertto-json -depth 5)" -ForegroundColor Red
 
-  $plbCommands = $global:deployedServices.Values
-  | where-object temporaryPlacementConstraints
-  | select-object temporaryPlacementConstraints, revertPlacementConstraints
+  $plbCommands = $global:deployedServices.Values `
+  | where-object temporaryPlacementConstraints `
+  | select-object temporaryPlacementConstraints, revertPlacementConstraints `
   | convertto-json -depth 5
 
   write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $plbCommands"
