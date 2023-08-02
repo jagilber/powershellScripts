@@ -76,6 +76,7 @@ if ($showDetail) {
 
 foreach ($sku in $skus) {
     write-host "checking sku image $($publisherName) $($offer) $($imageSku) $($sku.skus)"
+    write-host "Get-azVMImage -Location $location -PublisherName $publisherName -Offer $offer -skus $($sku.skus)" -ForegroundColor Cyan
     $imageskus = Get-azVMImage -Location $location -PublisherName $publisherName -Offer $offer -skus $sku.skus
     if ($showDetail) {
         $imageskus | Format-List *
