@@ -91,6 +91,24 @@
     remove the invoke run command extension that is required for running commands.
     it is *not* required to remove extension
 
+.EXAMPLE
+    azure-az-vmss-run-command.ps1 -script '& {
+        $errorActionPreference = "continue"
+        $transcript = "$pwd/fixexpiredcert.log"
+        start-transcript -path $transcript -append
+        $oldThumbprint = "<old thumbprint>"
+        $newThumbprint = "<new thumbprint>"
+        $file = "fixexpiredcert.ps1"
+        $downloadUrl = "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/FixExpiredCert.ps1"
+        invoke-webRequest $downloadUrl -outFile "$pwd/$file"
+        .\fixexpiredcert.ps1 -oldThumbprint $oldThumbprint -newThumbprint $newThumbprint -localOnly
+        stop-transcript
+        New-EventLog -LogName Application -Source vmssRunCommand -ErrorAction silentlycontinue
+        Write-EventLog -LogName Application -Source vmssRunCommand -EntryType Information -EventId 1 -Message (Get-Content $transcript -Raw)
+    }' -resourceGroup sfjagilber1nt3 -vmssName nt0 -instanceId 0-4 -concurrent
+
+    update expired certificate on nodes 0-4 for service fabric cluster
+
 .PARAMETER resourceGroup
     name of resource group containing vm scale set. if not provided, script prompt for input.
 
@@ -254,7 +272,7 @@ function main() {
 
     write-host "checking provisioning states"
     $instances = @(Get-azVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView)
-    write-host "$($instances.InstanceView.Statuses | fl * | out-string)"
+    write-host "$($instances.InstanceView.Statuses | format-list * | out-string)"
 
     foreach ($instance in $instances) {
         if (($instance.InstanceView.Statuses.DisplayStatus -inotcontains "provisioning succeeded" `
@@ -295,7 +313,7 @@ function main() {
         ($global:joboutputs | convertto-json).replace("\r\n", "").replace("\`"", "`"").replace("`"{", "{").replace("}`"", "}") | out-file $jsonOutputFile -Force
     }
 
-    $global:joboutputs | fl *
+    $global:joboutputs | format-list *
     write-host "finished. output stored in `$global:joboutputs"
     write-host "total fail:$($global:fail) total success:$($global:success)"
     write-host "total time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
@@ -359,15 +377,13 @@ function generate-list([string]$strList) {
 
 function monitor-jobs() {
     $originalJobsCount = (get-job).count
-    $minCount = 1
-    $count = 0
 
     while (get-job) {
         foreach ($job in get-job) {
-            write-verbose ($job | fl * | out-string)
+            write-verbose ($job | format-list * | out-string)
 
             if ($job.state -ine "running") {
-                write-host ($job | fl * | out-string)
+                write-host ($job | format-list * | out-string)
                 if ($job.state -imatch "fail" -or $job.statusmessage -imatch "fail") {
                     [void]$global:joboutputs.add(($global:jobs[$job.id]), ($job | ConvertTo-Json))
                     $global:fail++
@@ -384,25 +400,18 @@ function monitor-jobs() {
                 $jobInfo = Receive-Job -Job $job
                 
                 if ($jobInfo) {
-                    write-host ($jobInfo | fl * | out-string)
+                    write-host ($jobInfo | format-list * | out-string)
                 }
             }
         }
 
-        if ($count -ge 60) {
-            write-host $minCount
-            $minCount++
-            $count = 0
-        }
-
-        write-host "." -NoNewline    
         $instances = Get-azVmssVM -ResourceGroupName $resourceGroup -vmscalesetname $vmssName -InstanceView
         write-verbose "$($instances | convertto-json -WarningAction SilentlyContinue)"
 
         $currentJobsCount = (get-job).count
         $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed:"
-        $status = "extension installed:$($global:extensionInstalled)    not installed:$($global:extensionNotInstalled)    fail results:$($global:fail)" `
-            + "    success results:$($global:success)    time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+        $status = "elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes installed:$($global:extensionInstalled) not installed:$($global:extensionNotInstalled) fail:$($global:fail)" `
+            + " success:$($global:success)"
         $percentComplete = ((($originalJobsCount - $currentJobsCount) / $originalJobsCount) * 100)
 
         Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
@@ -464,7 +473,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -ScriptPath $script `
                 -Parameter $parameters `
                 -CommandId $commandId `
-                -AsJob"
+                -AsJob" -foregroundcolor cyan
         
                 $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                     -VMScaleSetName $vmssName `
@@ -480,7 +489,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -InstanceId $instanceId `
                 -ScriptPath $script `
                 -CommandId $commandId `
-                -AsJob"
+                -AsJob" -foregroundcolor cyan
         
                 $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                     -VMScaleSetName $vmssName `
@@ -496,7 +505,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             -InstanceId $instanceId `
             -Parameter $parameters `
             -CommandId $commandId `
-            -AsJob"
+            -AsJob" -foregroundcolor cyan
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
@@ -510,7 +519,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             -VMScaleSetName $vmssName `
             -InstanceId $instanceId `
             -CommandId $commandId `
-            -AsJob"
+            -AsJob" -foregroundcolor cyan
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
                 -VMScaleSetName $vmssName `
@@ -525,7 +534,7 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
 
         if ($response) {
             $global:jobs.Add($response.Id, "$resourceGroup`:$vmssName`:$instanceId")
-            write-host ($response | fl * | out-string)
+            write-host ($response | format-list * | out-string)
         }
         else {
             write-warning "no response from command!"
