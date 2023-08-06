@@ -122,6 +122,9 @@
 .PARAMETER script
     path and file name to script to invoke on vm scale set nodes
 
+.PARAMETER eventLogOutput
+    switch to output results to 'Application' event log on remote machine as 'RunPowerShellScript' using powershell transcript if 'script' argument is a command.
+
 .PARAMETER parameters
     hashtable of script arguments in format of @{"name" = "value"}
     example: @{"adminUserName" = "cloudadmin"}
@@ -156,6 +159,7 @@ param(
     [string]$vmssName,
     [string]$instanceId,
     [string]$script, # script string content or file path to script
+    [switch]$eventLogOutput,
     [hashtable]$parameters = @{ }, # hashtable @{"name" = "value";}
     [string]$jsonOutputFile,
     [string]$commandId = "RunPowerShellScript",
@@ -284,6 +288,16 @@ function main() {
     }
 
     if ($pscommand -and !(test-path $script)) {
+        if($eventLogOutput) {
+            $newScript = [text.stringbuilder]::new()
+            $newScript.AppendLine("$transcript = `"$pwd/fixexpiredcert.log`"")
+            $newScript.AppendLine("start-transcript -path $transcript -append")
+            $newScript.AppendLine($script)
+            $newScript.AppendLine("New-EventLog -LogName Application -Source $commandId -ErrorAction silentlycontinue")
+            $newScript.AppendLine("Write-EventLog -LogName Application -Source $commandId -EntryType Information -EventId 1 -Message (Get-Content $script -Raw)")
+            $script = $newScript.ToString()
+            Write-Host "script with transcript and event log output:`r`n$script"
+        }
         out-file -InputObject $script -filepath $tempscript -Force
         $script = $tempScript
     }
@@ -429,7 +443,7 @@ function node-psTestScript() {
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters) {
     write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
-        subsequent executions take between a 2 and 30 minutes..." -foregroundcolor yellow
+        subsequent executions take between 2 and 30 minutes..." -foregroundcolor yellow
 
     foreach ($instanceId in $instanceIds) {
         $instance = get-azvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
