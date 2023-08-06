@@ -17,7 +17,7 @@
     File Name  : azure-az-patch-resource.ps1
     Author     : jagilber
     Version    : 230806
-    History    :    add cleanup of userassignedidentities
+    History    :    add ordered
 
 .EXAMPLE 
     .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup
@@ -265,11 +265,11 @@ function deploy-template() {
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
     $error.Clear()
-    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
-        -TemplateFile $tempJsonFile `
-        -Verbose:$detail `
-        -TemplateParameterObject $templateParameters `
-        -Debug:$detail `
+    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName ``
+        -TemplateFile $tempJsonFile ``
+        -Verbose:$detail ``
+        -TemplateParameterObject $templateParameters ``
+        -Debug:$detail ``
         -Mode $mode" -ForegroundColor Cyan
 
     $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
@@ -288,12 +288,12 @@ function deploy-template() {
             }
 
             write-host "using file: $tempJsonFile"
-            write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
-                -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel $debuglevel `
-                -TemplateFile $tempJsonFile `
-                -TemplateParameterObject $templateParameters `
-                -Verbose:$detail `
+            write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName ``
+                -ResourceGroupName $resourceGroupName ``
+                -DeploymentDebugLogLevel $debuglevel ``
+                -TemplateFile $tempJsonFile ``
+                -TemplateParameterObject $templateParameters ``
+                -Verbose:$detail ``
                 -Mode $mode" -ForegroundColor Cyan
 
             New-AzResourceGroupDeployment -Name $deploymentName `
