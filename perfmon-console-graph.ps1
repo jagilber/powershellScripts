@@ -10,9 +10,6 @@ version 1.0
 .PARAMETER counters
 [string[]]one or more perfmon counters to write to the console
 
-.PARAMETER scale
-[double]the scale of the graph. default is 100
-
 .PARAMETER sleepSeconds
 [double]the number of seconds to sleep between samples. default is 1
 
@@ -70,7 +67,6 @@ param(
         "\\$computername\Tcpv4\Segments Sent/sec",
         "\\$computername\Tcpv4\Segments Retransmitted/sec"
     ),
-    [double]$scale = 100,
     [double]$sleepSeconds = 1,
     [double]$maxSamples = 1,
     [switch]$noChart,
@@ -89,6 +85,7 @@ $script:bgColorCount = 0
 $consoleColors = [enum]::GetNames([consolecolor])
 $currentBackgroundColor = [console]::BackgroundColor
 $currentForegroundColor = [console]::ForegroundColor
+[double]$scale = 100
 
 function main() {
     try {
@@ -199,7 +196,7 @@ function monitor-counters() {
             $data = $sample.CookedValue
             $sampleName = $sample.Path # $sample.Readings.split(' :')[0]
             $sizedScale = $scale
-            $percentSize = 101
+            $percentSize = ($data * 100) / $sizedScale
 
             if (!$global:counterObjs[$sampleName]) {
                 add-counterObj $sampleName $matchCounters
@@ -249,20 +246,20 @@ function monitor-counters() {
                 $graphSymbol = "<"
                 $diffSymbol = "-"
                 $graphSymbolMultiplier = [math]::min($percentSize, [math]::abs($percentSize - $diffSize))
-                $diffSymbolMultiplier = [math]::min($scale - $percentSize, [math]::abs($diffSize))
+                $diffSymbolMultiplier = [math]::min($sizedScale - $percentSize, [math]::abs($diffSize))
             }
 
             if ($useScaleAsSymbol) {
-                $graphSymbol = $(($sizedScale.tostring().length - $scale.tostring().length).tostring())
+                $graphSymbol = $(($sizedScale.tostring().length - $sizedScale.tostring().length).tostring())
             }
-
-            $graph = "[$((($graphSymbol * $graphSymbolMultiplier) + ($diffSymbol * $diffSymbolMultiplier)).tostring().padright($scale))]"
 
             if ($noChart) {
                 $output = "$trend $($data.ToString("0.0")) $counterDetails"
             }
             else {
                 if ($newLine) {
+                    $graphPoint =  ($graphSymbol * $graphSymbolMultiplier) + ($diffSymbol * $diffSymbolMultiplier)
+                    $graph = "[$(($graphPoint).tostring().padright(100))]"
                     $output = "$trend $($data.ToString("0.0")) $counterDetails`r`n`t$graph"
                 }
                 else {
@@ -278,7 +275,7 @@ function monitor-counters() {
             }
         }
 
-        start-sleep -Milliseconds ($sleepSeconds * 1000)
+        start-sleep -Seconds $sleepSeconds
     }
 }
 
