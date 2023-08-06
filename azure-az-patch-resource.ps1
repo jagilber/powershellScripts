@@ -16,8 +16,8 @@
 .NOTES  
     File Name  : azure-az-patch-resource.ps1
     Author     : jagilber
-    Version    : 200917
-    History    : 
+    Version    : 230806
+    History    :    add cleanup of userassignedidentities
 
 .EXAMPLE 
     .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup
@@ -53,7 +53,7 @@ param (
     [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
-    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
+    [string]$schema = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental',
@@ -205,13 +205,13 @@ function create-jsonTemplate([collections.arraylist]$resources,
     [hashtable]$outputs = @{}
 ) {
     try {
-        $resourceTemplate = @{ 
-            resources      = $resources
+        $resourceTemplate = [ordered]@{ 
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
-            outputs        = $outputs
             parameters     = $parameters
             variables      = $variables
+            resources      = $resources
+            outputs        = $outputs
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
