@@ -15,7 +15,7 @@ The password for the PFX file
 .\convert-pfx-to-pem.ps1 -pfxFile cert:\CurrentUser\My\1234567890abcdef1234567890abcdef12345678 -password 'password'
 
 .EXAMPLE
-.\convert-pfx-to-pem.ps1 -pfxFile c:\temp\contoso.pfx -useFile
+.\convert-pfx-to-pem.ps1 -pfxFile c:\temp\contoso.pfx
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -32,7 +32,7 @@ param(
 $ErrorActionPreference = "stop"
 
 if ($pfxFile.toLower().startsWith("cert:")) {
-    $cert = Get-Item $pfxFile
+    $cert = Get-childItem $pfxFile
 }
 elseif ((test-path $pfxFile)) {
     $cert = [security.cryptography.x509Certificates.x509Certificate2]::new($pfxFile, $password);
@@ -50,20 +50,21 @@ if ($PSVersionTable.PSEdition -ine 'core') {
     }
     else {
         if($rsaCng.key.ExportPolicy.HasFlag([security.cryptography.cngExportPolicies]::AllowExport)){
+            write-warning "private key pkcs#8 export may not work. rerun script with powershell core pwsh.exe instead of powershell.exe"
             $keyBytes = $RSACng.Key.Export([security.cryptography.cngKeyBlobFormat]::Pkcs8PrivateBlob)
 
-            write-host '---- BEGIN RSA PRIVATE KEY ----'
+            write-output '---- BEGIN RSA PRIVATE KEY ----'
             [convert]::ToBase64String($keyBytes) -split '(.{64})' | where-object { $psitem }
-            write-host '---- END RSA PRIVATE KEY ----'    
+            write-output '---- END RSA PRIVATE KEY ----'    
         }
         else {
             Write-Warning "private key export not allowed"
         }    
     }
 
-    write-host '---- BEGIN CERTIFICATE ----'
+    write-output '---- BEGIN CERTIFICATE ----'
     [convert]::ToBase64String($cert.GetRawCertData()) -split '(.{64})' | where-object { $psitem }
-    write-host '---- END CERTIFICATE ----'
+    write-output '---- END CERTIFICATE ----'
 }
 else {
     # pscore only
