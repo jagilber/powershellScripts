@@ -90,7 +90,7 @@ GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powe
 
 ###
 # SFRP
-@cluster = sfjagilber1lx3
+@cluster = sfjagilber1nt3
 @location = eastus
 @api = 6.0
 @managementPort = 19080

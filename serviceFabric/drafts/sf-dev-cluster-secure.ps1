@@ -69,12 +69,10 @@ function main() {
         write-host "service fabric dev cluster cert: $($cert | Format-List *| out-string)" -ForegroundColor Green
 
         write-host "to export the dev cluster cert to pem format run the following commands:
-            $cert = get-item Cert:\CurrentUser\My | ? Subject -imatch '$devCertSubjectName'
-            $bytes = $cert.GetRawCertData()
-            $base64 = [System.Convert]::ToBase64String($bytes)
-            out-file -append 'c:\temp\cert.pem' -inputobject '-----BEGIN CERTIFICATE-----'
-            out-file -append 'c:\temp\cert.pem' -inputobject $base64
-            out-file -append 'c:\temp\cert.pem' -inputobject '-----END CERTIFICATE-----'
+            # pscore only
+            `$cert = Get-ChildItem cert:\CurrentUser\my | where-object Subject -imatch $devCertSubjectName
+            `$cert.PrivateKey.ExportRSAPrivateKeyPem()
+            `$cert.ExportCertificatePem()
         "
     }
     catch {
