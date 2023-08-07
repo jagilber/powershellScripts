@@ -29,16 +29,13 @@ param(
     [switch]$useFile
 )
 
-$ErrorActionPreference = "continue"
-[byte[]]$bytes = $null
+$ErrorActionPreference = "stop"
 
 if ($pfxFile.toLower().startsWith("cert:")) {
     $cert = Get-Item $pfxFile
-    $bytes = $cert.GetRawCertData()
 }
 elseif ((test-path $pfxFile)) {
     $cert = [security.cryptography.x509Certificates.x509Certificate2]::new($pfxFile, $password);
-    $bytes = $cert.GetRawCertData()
 }
 else {
     write-error "$pfxFile not found"
@@ -48,23 +45,38 @@ else {
 $global:cert = $cert
 if ($PSVersionTable.PSEdition -ine 'core') {
     $rsaCng = [security.cryptography.x509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cert)
-    $keyBytes = $RSACng.Key.Export([security.cryptography.cngKeyBlobFormat]::Pkcs8PrivateBlob)
-    $keyBase64 = [convert]::ToBase64String($KeyBytes, [base64FormattingOptions]::InsertLineBreaks)
+    if ($rsaCng -eq $null) {
+        write-warning "no private key found"
+    }
+    else {
+        if($rsaCng.key.ExportPolicy.HasFlag([security.cryptography.cngExportPolicies]::AllowExport)){
+            $keyBytes = $RSACng.Key.Export([security.cryptography.cngKeyBlobFormat]::Pkcs8PrivateBlob)
 
-    write-host '---- BEGIN RSA PRIVATE KEY ----'
-    [convert]::ToBase64String($keyBytes) -split '(.{64})' | where-object { $psitem }
-    write-host '---- END RSA PRIVATE KEY ----'
+            write-host '---- BEGIN RSA PRIVATE KEY ----'
+            [convert]::ToBase64String($keyBytes) -split '(.{64})' | where-object { $psitem }
+            write-host '---- END RSA PRIVATE KEY ----'    
+        }
+        else {
+            Write-Warning "private key export not allowed"
+        }    
+    }
+
     write-host '---- BEGIN CERTIFICATE ----'
     [convert]::ToBase64String($cert.GetRawCertData()) -split '(.{64})' | where-object { $psitem }
     write-host '---- END CERTIFICATE ----'
 }
 else {
     # pscore only
-    if ($cert.PrivateKey.key.ExportPolicy.HasFlag([security.cryptography.cngExportPolicies]::AllowExport)) {
-        $cert.PrivateKey.ExportRSAPrivateKeyPem()
+    if($cert.PrivateKey){
+        if ($cert.PrivateKey.key.ExportPolicy.HasFlag([security.cryptography.cngExportPolicies]::AllowExport)) {
+            $cert.PrivateKey.ExportRSAPrivateKeyPem()
+        }
+        else {
+            Write-Warning "private key export not allowed"
+        }    
     }
     else {
-        Write-Warning "private key export not allowed"
+        Write-Warning "no private key found"
     }
     $cert.ExportCertificatePem()
 }
