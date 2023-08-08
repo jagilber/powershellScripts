@@ -24,7 +24,7 @@ param(
     [string]$email,
     [switch]$ssh,
     [int]$sshPort = 22,
-    [string]$vscodeScriptUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/Install-VSCode.ps1",
+    [string]$vscodeScriptUrl = "https://raw.githubusercontent.com/PowerShell/vscode-powershell/main/scripts/Install-VSCode.ps1",
     [string]$pwshReleaseApi = "https://api.github.com/repos/powershell/powershell/releases/latest"
 )
 
@@ -67,12 +67,12 @@ git config --global user.email $email
 git config --global core.editor "code --wait"
 
 # hub git wrapper
-$error.clear()
-(hub) | out-null
+# $error.clear()
+# (hub) | out-null
 
-if ($error) {
-    .\download-git-client.ps1 -hub -setpath
-}
+# if ($error) {
+#     .\download-git-client.ps1 -hub -setpath
+# }
 
 Set-Location $gitHubDir
 
