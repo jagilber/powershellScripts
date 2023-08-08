@@ -44,9 +44,9 @@ SOFTWARE
 param(
     [Parameter(Mandatory = $true)]
     [string]$secretUrl = '',
-    [string]$certStoreLocation = 'cert:\LocalMachine\CA', #'cert:\LocalMachine\Root', #'cert:\LocalMachine\My',
+    [string]$certStoreLocation = 'cert:\LocalMachine\My', #'cert:\LocalMachine\Root', #'cert:\LocalMachine\CA',
     [switch]$base64,
-    [switch]$pfx
+    [bool]$pfx = $true
 )
 
 $error.Clear()  
