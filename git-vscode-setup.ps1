@@ -6,6 +6,8 @@
 
     or to just install vscode:
     [net.webclient]::new().DownloadFile('https://vscode-update.azurewebsites.net/latest/win32-x64-user/stable', $pwd\VSCodeUserSetup-x64.exe)
+
+todo set "security.workspace.trust.untrustedFiles": "open",
 #>
 
 param(
