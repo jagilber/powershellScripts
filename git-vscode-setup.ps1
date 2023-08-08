@@ -12,18 +12,18 @@ param(
     [string]$gitHubDir = "c:\github",
     [string[]]$additionalExtensions = @(
         'msazurermtools.azurerm-vscode-tools',
-        'eamodio.gitlens',
         'wengerk.highlight-bad-chars',
         'rsbondi.highlight-words',
         'sandcastle.vscode-open',
         'mechatroner.rainbow-csv',
-        'grapeCity.gc-excelviewer',
         'ms-dotnettools.csharp',
         'ms-vscode.powershell'),
     [string]$user,
     [string]$email,
     [switch]$ssh,
-    [int]$sshPort = 22
+    [int]$sshPort = 22,
+    [string]$vscodeScriptUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/Install-VSCode.ps1",
+    [string]$pwshReleaseApi = "https://api.github.com/repos/powershell/powershell/releases/latest"
 )
 
 [io.directory]::CreateDirectory($gitHubDir)
@@ -75,10 +75,21 @@ if ($error) {
 Set-Location $gitHubDir
 
 $error.clear()
+(pwsh /?) | out-null
+
+if ($error) {
+    $outputFile = "$pwd\pwsh.msi"
+    $apiResults = convertfrom-json (Invoke-WebRequest $pwshReleaseApi -UseBasicParsing)
+    $downloadUrl = @($apiResults.assets -imatch 'PowerShell-.+?-win-x64.msi')[0].browser_download_url
+    [net.webclient]::new().DownloadFile($downloadUrl, $outputFile)
+    msiexec /i $outputFile /qn /norestart
+}
+
+$error.clear()
 (code /?) | out-null
 
 if ($error) {
-    invoke-webRequest "https://raw.githubusercontent.com/PowerShell/vscode-powershell/master/scripts/Install-VSCode.ps1" -outFile  "$pwd/Install-VSCode.ps1";
+    invoke-webRequest $vscodeScriptUrl -outFile  "$pwd/Install-VSCode.ps1";
     .\Install-VSCode.ps1 -additionalExtensions @($additionalExtensions) -launchWhenDone -enableContextMenus
 }
 
