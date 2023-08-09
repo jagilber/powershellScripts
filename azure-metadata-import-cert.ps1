@@ -104,7 +104,7 @@ if ($keyvaultName -and $secretName -and $secretVersion) {
             write-host "Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile"
             Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile     
             
-            $rsaCert = [security.cryptography.x509Certificates.rsaCertificateExtensions]::GetRSAPrivateKey($certificate)
+            $rsaCert = [security.cryptography.x509Certificates.rsaCertificateExtensions]::GetRSAPrivateKey($global:secret)
             $fileName = $rsaCert.key.UniqueName
             $path = "$env:ALLUSERSPROFILE\Microsoft\Crypto\Keys\$fileName"
             $permissions = get-acl -path $path
