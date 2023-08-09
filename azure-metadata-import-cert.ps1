@@ -46,7 +46,8 @@ param(
     [string]$secretUrl = '',
     [string]$certStoreLocation = 'cert:\LocalMachine\My', #'cert:\LocalMachine\Root', #'cert:\LocalMachine\CA',
     [switch]$base64,
-    [bool]$pfx = $true
+    [bool]$pfx = $true,
+    [string]$acl = 'NetworkService'
 )
 
 $error.Clear()  
@@ -101,7 +102,19 @@ if ($keyvaultName -and $secretName -and $secretVersion) {
         if ($pfx) {
         
             write-host "Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile"
-            Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile        
+            Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile     
+            
+            $rsaCert = [security.cryptography.x509Certificates.rsaCertificateExtensions]::GetRSAPrivateKey($certificate)
+            $fileName = $rsaCert.key.UniqueName
+            $path = "$env:ALLUSERSPROFILE\Microsoft\Crypto\Keys\$fileName"
+            $permissions = get-acl -path $path
+            $access_rule = [security.accessControl.fileSystemAccessRule]::new($acl, 
+                [security.accessControl.fileSystemRights]::FullControl,
+                [security.accessControl.inheritanceFlags]::None,
+                [security.accessControl.propagationFlags]::None,
+                [security.accessControl.accessControlType]::Allow)
+            $permissions.AddAccessRule($access_rule)
+            set-acl -path $path -aclObject $permissions
         }
         else {
         
