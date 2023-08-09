@@ -12,7 +12,7 @@
 .NOTES
    File Name  : azure-az-vmss-run-command.ps1
    Author     : jagilber
-   Version    : 230809
+   Version    : 230809.1
    History    :
 
 .EXAMPLE
@@ -118,9 +118,9 @@
 
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
-        netsh trace start capture=yes overwrite=yes maxsize=1024 tracefile=.\net.etl filemode=circular;
+        netsh trace start capture=yes overwrite=yes maxsize=1024 tracefile=.\net.etl filemode=circular | out-host;
         start-sleep -seconds 300;
-        netsh trace stop;
+        netsh trace stop | out-host;
         copy .\net.etl D:\SvcFab\Log\CrashDumps\net.etl;
         copy .\net.cab D:\SvcFab\Log\CrashDumps\net.cab;
     }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
@@ -130,11 +130,11 @@
 
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
-        pktmon start --capture -f .\net.etl;
+        pktmon start --capture -f .\net.etl | out-host;
         start-sleep -seconds 300;
-        pktmon stop;
-        pktmon etl2pcap .\net.etl -o D:\SvcFab\Log\CrashDumps\net.pcap;
-        pktmon etl2txt .\net.etl -o D:\SvcFab\Log\CrashDumps\net.csv;
+        pktmon stop | out-host;
+        pktmon etl2pcap .\net.etl -o D:\SvcFab\Log\CrashDumps\net.pcap | out-host;
+        pktmon etl2txt .\net.etl -o D:\SvcFab\Log\CrashDumps\net.csv | out-host;
     }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
 
     start network capture concurrently to nodes 0-4 and output to service fabric crash dump folder and json file. logs output to remote event log.
@@ -491,7 +491,9 @@ function node-psTestScript() {
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters) {
     write-host "first time only can take up to 45 minutes if the run command extension is not installed.
-        subsequent executions take between 2 and 30 minutes..." -foregroundcolor yellow
+        subsequent executions take between 15 and 30 minutes.
+        vmss upgrade by default will only allow n-1 upgrade domains (UD) to be upgraded concurrently.
+        running commands to n-1 UD instance count will decrease total execution time in 1/2..." -foregroundcolor yellow
 
     foreach ($instanceId in $instanceIds) {
         $instance = get-azvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
@@ -515,10 +517,10 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             $script = $null
             $parameters = $null
 
-            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-            -VMScaleSetName $vmssName `
-            -InstanceId $instanceId `
-            -CommandId $commandId `
+            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+            -VMScaleSetName $vmssName ``
+            -InstanceId $instanceId ``
+            -CommandId $commandId ``
             -AsJob"
 
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -529,12 +531,12 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
         }
         elseif ($pscommand) {
             if ($parameters.Count -gt 0) {
-                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-                -VMScaleSetName $vmssName `
-                -InstanceId $instanceId `
-                -ScriptPath $script `
-                -Parameter $parameters `
-                -CommandId $commandId `
+                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+                -VMScaleSetName $vmssName ``
+                -InstanceId $instanceId ``
+                -ScriptPath $script ``
+                -Parameter $parameters ``
+                -CommandId $commandId ``
                 -AsJob" -foregroundcolor cyan
 
                 $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -546,11 +548,11 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                     -AsJob
             }
             else {
-                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-                -VMScaleSetName $vmssName `
-                -InstanceId $instanceId `
-                -ScriptPath $script `
-                -CommandId $commandId `
+                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+                -VMScaleSetName $vmssName ``
+                -InstanceId $instanceId ``
+                -ScriptPath $script ``
+                -CommandId $commandId ``
                 -AsJob" -foregroundcolor cyan
 
                 $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -562,11 +564,11 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             }
         }
         elseif ($parameters.Count -gt 0) {
-            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-            -VMScaleSetName $vmssName `
-            -InstanceId $instanceId `
-            -Parameter $parameters `
-            -CommandId $commandId `
+            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+            -VMScaleSetName $vmssName ``
+            -InstanceId $instanceId ``
+            -Parameter $parameters ``
+            -CommandId $commandId ``
             -AsJob" -foregroundcolor cyan
 
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -577,10 +579,10 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -AsJob
         }
         else {
-            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-            -VMScaleSetName $vmssName `
-            -InstanceId $instanceId `
-            -CommandId $commandId `
+            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+            -VMScaleSetName $vmssName ``
+            -InstanceId $instanceId ``
+            -CommandId $commandId ``
             -AsJob" -foregroundcolor cyan
 
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
