@@ -45,7 +45,7 @@
 
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
-        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
         $file = "dotnet-runtime-3.0.0-win-x64.exe"
         $downloadUrl = "https://download.visualstudio.microsoft.com/download/pr/b3b81103-619a-48d8-ac1b-e03bbe153b7c/566b0f50872164abd1478a5b3ec38ffa/$file"
         invoke-webRequest $downloadUrl -outFile "./$file"
@@ -94,24 +94,26 @@
 
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
-        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-        invoke-webrequest https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1 -outfile .\azure-metadata-import-cert.ps1;
-        .\azure-metadata-import-cert.ps1 -secretUrl 'https://<keyvaultName>.vault.azure.net/secrets/<secretName>/<secretVersion>';
-    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+        $importCertUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1";
+        $scriptFile = ".\azure-metadata-import-cert.ps1";
+        invoke-webrequest $importCertUrl -outfile $scriptFile;
+        . $scriptFile -secretUrl "https://<keyvaultName>.vault.azure.net/secrets/<secretName>/<secretVersion>";
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile .\output.json -eventLogOutput
 
     download and install pfx certificate from key vault to nodes 0-4 concurrently.
     NOTE: requires managed identity on vm scaleset with access to key vault.
 
 .EXAMPLE
     azure-az-vmss-run-command.ps1 -script '& {
-        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
         $errorActionPreference = "continue"
         $oldThumbprint = "<old thumbprint>"
         $newThumbprint = "<new thumbprint>"
-        $file = "fixexpiredcert.ps1"
+        $scriptFile = ".\fixexpiredcert.ps1"
         $downloadUrl = "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/FixExpiredCert.ps1"
-        invoke-webRequest $downloadUrl -outFile "./$file"
-        .\fixexpiredcert.ps1 -oldThumbprint $oldThumbprint -newThumbprint $newThumbprint -localOnly
+        invoke-webRequest $downloadUrl -outFile $scriptFile
+        . $scriptFile -oldThumbprint $oldThumbprint -newThumbprint $newThumbprint -localOnly
     }' -resourceGroup sfjagilber1nt3 -vmssName nt0 -instanceId 0-4 -concurrent -eventLogOutput
 
     fix expired certificate on nodes 0-4 for service fabric cluster and log output to remote event log
@@ -121,9 +123,9 @@
         netsh trace start capture=yes overwrite=yes maxsize=1024 tracefile=.\net.etl filemode=circular | out-host;
         start-sleep -seconds 300;
         netsh trace stop | out-host;
-        copy .\net.etl D:\SvcFab\Log\CrashDumps\net.etl;
-        copy .\net.cab D:\SvcFab\Log\CrashDumps\net.cab;
-    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
+        copy .\net.etl d:\svcFab\Log\crashDumps\net.etl;
+        copy .\net.cab d:\svcFab\Log\crashDumps\net.cab;
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile .\output.json -eventLogOutput
 
     start network capture concurrently to nodes 0-3 (UDn-1) and output to service fabric crash dump folder and json file. logs output to remote event log.
     windows 2012+ https://learn.microsoft.com/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012
@@ -133,9 +135,9 @@
         pktmon start --capture -f .\net.etl | out-host;
         start-sleep -seconds 300;
         pktmon stop | out-host;
-        pktmon etl2pcap .\net.etl -o D:\SvcFab\Log\CrashDumps\net.pcap | out-host;
-        pktmon etl2txt .\net.etl -o D:\SvcFab\Log\CrashDumps\net.csv | out-host;
-    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
+        pktmon etl2pcap .\net.etl -o d:\svcFab\log\crashDumps\net.pcap | out-host;
+        pktmon etl2txt .\net.etl -o d:\svcFab\log\crashDumps\net.csv | out-host;
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile .\output.json -eventLogOutput
 
     windows 2019+ https://learn.microsoft.com/windows-server/networking/technologies/pktmon/pktmon
     start network capture concurrently to nodes 0-3 (UDn-1) and output to service fabric crash dump folder and json file. logs output to remote event log.
@@ -181,7 +183,7 @@
     WARNING: running jobs concurrently on scalesets such as service fabric where there are minimum node requirements can cause an outage if the node is restarted.
 
 .LINK
-    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vmss-run-command.ps1" -outFile "$pwd\azure-az-vmss-run-command.ps1";
     help .\azure-az-vmss-run-command.ps1 -examples
 #>
