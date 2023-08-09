@@ -331,6 +331,7 @@ function main() {
                 $newScript.AppendLine("`$transcript = `".\run-command-transcript.log`"")
                 $newScript.AppendLine("start-transcript -path `$transcript")
                 $newScript.AppendLine($script)
+                $newScript.AppendLine("stop-transcript")
                 $newScript.AppendLine("new-eventLog -logName application -source $commandId -errorAction silentlyContinue")
                 $newScript.AppendLine("write-eventLog -logName application -source $commandId -entryType information -eventId 1 -message (get-content `$transcript | out-string)")
                 $script = $newScript.ToString()
