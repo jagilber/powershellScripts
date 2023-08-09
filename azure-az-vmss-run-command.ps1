@@ -123,9 +123,9 @@
         netsh trace stop | out-host;
         copy .\net.etl D:\SvcFab\Log\CrashDumps\net.etl;
         copy .\net.cab D:\SvcFab\Log\CrashDumps\net.cab;
-    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
 
-    start network capture concurrently to nodes 0-4 and output to service fabric crash dump folder and json file. logs output to remote event log.
+    start network capture concurrently to nodes 0-3 (UDn-1) and output to service fabric crash dump folder and json file. logs output to remote event log.
     windows 2012+ https://learn.microsoft.com/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012
 
 .EXAMPLE
@@ -135,10 +135,10 @@
         pktmon stop | out-host;
         pktmon etl2pcap .\net.etl -o D:\SvcFab\Log\CrashDumps\net.pcap | out-host;
         pktmon etl2txt .\net.etl -o D:\SvcFab\Log\CrashDumps\net.csv | out-host;
-    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile ".\output.json" -eventLogOutput
 
-    start network capture concurrently to nodes 0-4 and output to service fabric crash dump folder and json file. logs output to remote event log.
     windows 2019+ https://learn.microsoft.com/windows-server/networking/technologies/pktmon/pktmon
+    start network capture concurrently to nodes 0-3 (UDn-1) and output to service fabric crash dump folder and json file. logs output to remote event log.
 
 .PARAMETER resourceGroup
     name of resource group containing vm scale set. if not provided, script prompt for input.
