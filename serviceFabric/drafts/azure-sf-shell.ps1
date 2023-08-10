@@ -12,18 +12,21 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 
 #>
 param(
-    $keyvaultName = "mykeyvault",
-    $x509CertificateName = "myclustercert",
-    $clusterHttpConnectionEndpoint = 'https://mycluster.eastus.cloudapp.azure.com:19080',
-    $x509Certificate = $null,
-    $absolutePath = '/$/GetClusterHealth',
-    $apiVersion = '9.1',
-    $timeoutSeconds = '10'  
+    [string]$keyvaultName = "mykeyvault",
+    [string]$x509CertificateName = "myclustercert",
+    [string]$clusterHttpConnectionEndpoint = 'https://mycluster.eastus.cloudapp.azure.com:19080',
+    [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
+    [string]$absolutePath = '', #'/$/GetClusterHealth',
+    [string]$apiVersion = '9.1',
+    [string]$timeoutSeconds = '10',
+    [switch]$loadOnly
 )
 
 $sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
 $isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
 $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
+$global:apiVersion = $apiVersion
+$global:timeoutSeconds = $timeoutSeconds
 
 function main() {
     $publicip = @((Invoke-RestMethod https://ipinfo.io/json).ip)
@@ -60,7 +63,7 @@ function main() {
         }
         $global:x509Certificate = $x509Certificate
     }
-    elseif(!$x509Certificate) {
+    elseif (!$x509Certificate) {
         $x509Certificate = $global:x509Certificate
     }
 
@@ -118,6 +121,9 @@ function main() {
     "  -foregroundcolor Green
     
     write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-requeust -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
+    if ($absolutePath) {
+        invoke-request -absolutePath $absolutePath
+    }
 }
 
 function test-connection($tcpEndpoint) {
@@ -129,10 +135,10 @@ function test-connection($tcpEndpoint) {
         $hostName = $match.Groups['hostName'].Value
         $port = $match.Groups['port'].Value
         $portTestSucceeded = $false
-        if(!$port) {
+        if (!$port) {
             throw "test-connection:invalid tcp endpoint port: $tcpEndpoint"
         }
-        if(!$hostName) {
+        if (!$hostName) {
             throw "test-connection:invalid tcp endpoint: $tcpEndpoint"
         }
         $tcpClient = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
@@ -158,9 +164,30 @@ function test-connection($tcpEndpoint) {
     }
 }
 
-function invoke-request($absolutePath, $endpoint = $global:clusterHttpConnectionEndpoint, $x509Certificate = $global:x509Certificate, $apiVersion = $global:apiVersion, $timeoutSeconds = $global:timeoutSeconds, $isCloudShell = $global:isCloudShell) {
+function invoke-request($absolutePath, 
+    $endpoint = $global:clusterHttpConnectionEndpoint, 
+    $x509Certificate = $global:x509Certificate, 
+    $apiVersion = $global:apiVersion, 
+    $timeoutSeconds = $global:timeoutSecondsl) {
+
+    if (!$endpoint) {
+        write-error "endpoint not specified"
+        return $null
+    }
+    if (!$x509Certificate) {
+        write-error "x509Certificate not specified"
+        return $null
+    }
+    if (!$apiVersion) {
+        $global:apiVersion = "6.0"
+    }
+    if (!$timeoutSeconds) {
+        $global:timeoutSeconds = 60
+    }
+
     $baseUrl = "$endpoint{0}?api-version=$apiVersion&timeout=$timeoutSeconds" -f $absolutePath
-    if ($isCloudShell) {
+
+    if ($PSVersionTable.Platform -ieq 'Unix') {
         # cloud shell
         write-host "Invoke-WebRequest -Uri '$baseUrl' -certificate `$global:x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
         $result = Invoke-WebRequest -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
@@ -177,4 +204,12 @@ function invoke-request($absolutePath, $endpoint = $global:clusterHttpConnection
     return $result
 }
 
-main
+if(!$loadOnly) {
+    main
+}
+else {
+    write-host "load only"
+    . ./azure-sf-shell.ps1 -loadonly
+}
+
+
