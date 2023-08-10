@@ -1,9 +1,16 @@
 <#
 .SYNOPSIS
-    Connect to a Service Fabric cluster using Azure Cloud Shell
+    Connect to a Service Fabric cluster using Azure Cloud Shell. can use local or remote certificate in keyvault.
 .DESCRIPTION
-    Connect to a Service Fabric cluster using Azure Cloud Shell
+    Connect to a Service Fabric cluster using Azure Cloud Shell local or remote.
 .EXAMPLE
+    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+
+.EXAMPLE
+    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -absolutePath /$/GetClusterHealth
+
+.EXAMPLE
+    ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -18,8 +25,7 @@ param(
     [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
     [string]$absolutePath = '', #'/$/GetClusterHealth',
     [string]$apiVersion = '9.1',
-    [string]$timeoutSeconds = '10',
-    [switch]$loadOnly
+    [string]$timeoutSeconds = '10'
 )
 
 $global:sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
@@ -85,6 +91,11 @@ function main() {
         throw "$global:sfHttpModule not found"
     }
 
+    if ($absolutePath) {
+        invoke-request -absolutePath $absolutePath
+        return
+    }
+
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
     if ($error -or !$result) {
         write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip"
@@ -105,8 +116,8 @@ function main() {
         }
     }
     
-    $global:availableCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
-    write-host "available commands:stored in `$global:availableCommands`r`n $($global:availableCommands | out-string)" -foregroundcolor cyan
+    $global:sfHttpCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
+    write-host "available commands:stored in `$global:sfHttpCommands`r`n $($global:sfHttpCommands | out-string)" -foregroundcolor cyan
     if (!($global:SFHttpClusterConnection)) {
         $global:SFHttpClusterConnection = $SFHttpClusterConnection
     }
@@ -120,10 +131,8 @@ function main() {
     -verbose
     "  -foregroundcolor Green
     
-    write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-requeust -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
-    if ($absolutePath) {
-        invoke-request -absolutePath $absolutePath
-    }
+    #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
+    write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
 }
 
 function test-connection($tcpEndpoint) {
@@ -204,13 +213,4 @@ function invoke-request($absolutePath,
     return $result
 }
 
-if(!$loadOnly) {
-    main
-    write-host 'loading functions'
-    . ./azure-sf-shell.ps1 -loadonly
-}
-else {
-    write-verbose "load only"
-}
-
-
+main
