@@ -14,7 +14,7 @@
 
 .LINK
     to download and test from vmss node with managed identity enabled:
-    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
     invoke-webrequest https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1 -outfile $pwd/azure-metadata-import-cert.ps1;
 
 .EXAMPLE
@@ -104,9 +104,12 @@ if ($keyvaultName -and $secretName -and $secretVersion) {
             write-host "Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile"
             Import-PfxCertificate -Exportable -CertStoreLocation $certStoreLocation -FilePath $certFile     
             
-            $rsaCert = [security.cryptography.x509Certificates.rsaCertificateExtensions]::GetRSAPrivateKey($global:secret)
+            $rsaCert = [security.cryptography.x509Certificates.rsaCertificateExtensions]::GetRSAPrivateKey([convert]::FromBase64String($global:secret))
             $fileName = $rsaCert.key.UniqueName
-            $path = "$env:ALLUSERSPROFILE\Microsoft\Crypto\Keys\$fileName"
+            $path = "$env:ProgramData\Microsoft\Crypto\Keys\$fileName"
+            if ($pfx) {
+                $path = "$env:ALLUSERSPROFILE\Microsoft\Crypto\RSA\MachineKeys\$fileName"
+            }
             $permissions = get-acl -path $path
             $access_rule = [security.accessControl.fileSystemAccessRule]::new($acl, 
                 [security.accessControl.fileSystemRights]::FullControl,
