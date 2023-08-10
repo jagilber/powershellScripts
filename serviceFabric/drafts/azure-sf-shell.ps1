@@ -57,9 +57,12 @@ function main() {
         if (!$x509Certificate) {
             throw "failed to get certificate for thumbprint from keyvault: $x509CertificateName"
         }
+        $global:x509Certificate = $x509Certificate
+    }
+    elseif(!$x509Certificate) {
+        $x509Certificate = $global:x509Certificate
     }
 
-    $global:x509Certificate = $x509Certificate
     write-host "found certificate for: $x509CertificateName" -foregroundColor yellow
     write-host "subject: $($x509Certificate.Subject)" -foregroundColor yellow
     write-host "issuer: $($x509Certificate.Issuer)" -foregroundColor yellow
