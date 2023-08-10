@@ -10,12 +10,13 @@
     ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -absolutePath /$/GetClusterHealth
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
+    after running script you can run commands like below for direct rest api calls:
+        ./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
-./azure-sf-shell.ps1 -keyVaultName <key vault name> -x509CertificateName <certificate name> -clusterHttpConnectionEndpoint <cluster endpoint> -absolutePath <absolute path> -apiVersion <api version> -timeoutSeconds <timeout seconds>
+./azure-sf-shell.ps1 -keyVaultName <key vault name> -x509CertificateName <certificate name> -clusterHttpConnectionEndpoint <cluster endpoint>
 
 #>
 param(
