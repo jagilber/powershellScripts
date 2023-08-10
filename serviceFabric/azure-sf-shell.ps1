@@ -19,9 +19,9 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 
 #>
 param(
-    [string]$keyvaultName = "mykeyvault",
-    [string]$x509CertificateName = "myclustercert",
-    [string]$clusterHttpConnectionEndpoint = 'https://mycluster.eastus.cloudapp.azure.com:19080',
+    [string]$keyvaultName = '', #"mykeyvault",
+    [string]$x509CertificateName = '', #"myclustercert",
+    [string]$clusterHttpConnectionEndpoint = '', #'https://mycluster.eastus.cloudapp.azure.com:19080',
     [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
     [string]$absolutePath = '', #'/$/GetClusterHealth',
     [string]$apiVersion = '9.1',
@@ -30,7 +30,6 @@ param(
 
 $global:sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
 $global:isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
-$global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
 $global:apiVersion = $apiVersion
 $global:timeoutSeconds = $timeoutSeconds
 
@@ -41,6 +40,10 @@ function main() {
     if (!(get-azresourcegroup)) {
         write-host "connect-azaccount"
         Connect-AzAccount -UseDeviceAuthentication
+    }
+
+    if ($clusterHttpConnectionEndpoint) {
+        $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
     }
 
     if (!$x509Certificate -and !$global:x509Certificate) {
@@ -91,11 +94,6 @@ function main() {
         throw "$global:sfHttpModule not found"
     }
 
-    if ($absolutePath) {
-        invoke-request -absolutePath $absolutePath
-        return
-    }
-
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
     if ($error -or !$result) {
         write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip"
@@ -132,6 +130,9 @@ function main() {
     "  -foregroundcolor Green
     
     #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
+    if($absolutePath) {
+        invoke-request -absolutePath $absolutePath
+    }
     write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
 }
 
@@ -177,7 +178,7 @@ function invoke-request($absolutePath,
     $endpoint = $global:clusterHttpConnectionEndpoint, 
     $x509Certificate = $global:x509Certificate, 
     $apiVersion = $global:apiVersion, 
-    $timeoutSeconds = $global:timeoutSecondsl) {
+    $timeoutSeconds = $global:timeoutSeconds) {
 
     if (!$endpoint) {
         write-error "endpoint not specified"
@@ -213,4 +214,9 @@ function invoke-request($absolutePath,
     return $result
 }
 
-main
+if ($global:clusterHttpConnectionEndpoint -and $absolutePath) {
+    invoke-request -absolutePath $absolutePath
+}
+else {
+    main
+}
