@@ -28,6 +28,11 @@ function main() {
     $publicip = @((Invoke-RestMethod https://ipinfo.io/json).ip)
     write-host "publicip: $publicip"
 
+    if (!(get-azresourcegroup)) {
+        write-host "connect-azaccount"
+        Connect-AzAccount -UseDeviceAuthentication
+    }
+
     if (!$x509Certificate -and !$global:x509Certificate) {
 
         if (!$isCloudShell) {
@@ -39,7 +44,7 @@ function main() {
         }
 
         if (!$x509Certificate) {
-            write-host "get certificate from keyvault: $keyvaultName/$x509CertificateName"
+            write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $x509CertificateName"
             $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $x509CertificateName
             if (!$kvCertificate) {
                 throw "Certificate not found in keyvault"
@@ -73,10 +78,13 @@ function main() {
         throw "$sfHttpModule not found"
     }
 
-    $result = invoke-request -endpoint $clusterHttpConnectionEndpoint `
-        -absolutePath $absolutePath `
-        -x509certificate $x509Certificate
-        
+    $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
+    if ($error -or !$result) {
+        write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip"
+        write-error "error: $error"
+        return
+    }
+    
     $resultJson = ConvertFrom-Json $result.Content
     $resultJson = ConvertTo-Json $resultJson -Depth 99
     write-host "result: $resultJson"
@@ -108,6 +116,44 @@ function main() {
     -verbose
     "  -foregroundcolor Green
     
+}
+
+function test-connection($tcpEndpoint) {
+    # works for windows and linux powershell since linux doesn't have Test-NetConnection
+    $error.clear()
+    $tcpClient = $null
+    try {
+        $match = [regex]::match($tcpEndpoint, '^(?:http.?://)?(?<hostName>[^:]+?):(?<port>\d+)$');
+        $hostName = $match.Groups['hostName'].Value
+        $port = $match.Groups['port'].Value
+        $portTestSucceeded = $false
+        if(!$port) {
+            throw "test-connection:invalid tcp endpoint port: $tcpEndpoint"
+        }
+        if(!$hostName) {
+            throw "test-connection:invalid tcp endpoint: $tcpEndpoint"
+        }
+        $tcpClient = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
+        $tcpClient.SendTimeout = $tcpClient.ReceiveTimeout = 20000
+        [IAsyncResult]$asyncResult = $tcpClient.BeginConnect($hostName, $port, $null, $null)
+
+        if ($asyncResult.AsyncWaitHandle.WaitOne(3000, $false) -and $tcpClient.Connected) {
+            $portTestSucceeded = $true
+        }
+
+        write-host "test-connection: computer:$hostName port:$port result:$portTestSucceeded"
+        $tcpClient.Dispose()
+        return $portTestSucceeded
+    }
+    catch {
+        write-host "test-connection:exception:$($PSItem | out-string)"
+        return $false
+    }
+    finally {
+        if ($tcpClient) {
+            $tcpClient.Dispose()
+        }
+    }
 }
 
 function invoke-request($endpoint, $absolutePath, $x509Certificate) {
