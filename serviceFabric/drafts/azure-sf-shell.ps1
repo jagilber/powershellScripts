@@ -206,10 +206,11 @@ function invoke-request($absolutePath,
 
 if(!$loadOnly) {
     main
+    write-host 'loading functions'
+    . ./azure-sf-shell.ps1 -loadonly
 }
 else {
-    write-host "load only"
-    . ./azure-sf-shell.ps1 -loadonly
+    write-verbose "load only"
 }
 
 
