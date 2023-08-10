@@ -28,14 +28,6 @@ function main() {
     $publicip = @((Invoke-RestMethod https://ipinfo.io/json).ip)
     write-host "publicip: $publicip"
 
-    $error.Clear()
-    $hostname = $clusterHttpConnectionEndpoint.Split(':')[1].TrimStart('/')
-    $port = $clusterHttpConnectionEndpoint.Split(':')[2]
-    $result = Test-NetConnection -ComputerName $hostname -Port $port
-    if ($result.TcpTestSucceeded -ne $true) {
-        throw "Failed to connect to cluster endpoint: $clusterHttpConnectionEndpoint"
-    }
-
     if (!$x509Certificate -and !$global:x509Certificate) {
 
         if (!$isCloudShell) {
