@@ -3,6 +3,8 @@
     Connect to a Service Fabric cluster using Azure Cloud Shell. can use local or remote certificate in keyvault.
 .DESCRIPTION
     Connect to a Service Fabric cluster using Azure Cloud Shell local or remote.
+    requires connectivity to the cluster endpoint port 19080 from cloud shell.
+
 .EXAMPLE
     ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
 
