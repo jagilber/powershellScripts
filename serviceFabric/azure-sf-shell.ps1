@@ -16,6 +16,7 @@
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
+help ./azure-sf-shell.ps1 -examples;
 ./azure-sf-shell.ps1 -keyVaultName <key vault name> -x509CertificateName <certificate name> -clusterHttpConnectionEndpoint <cluster endpoint>
 
 #>
