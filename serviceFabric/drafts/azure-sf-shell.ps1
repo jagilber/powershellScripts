@@ -22,8 +22,8 @@ param(
     [switch]$loadOnly
 )
 
-$sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
-$isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
+$global:sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
+$global:isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
 $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
 $global:apiVersion = $apiVersion
 $global:timeoutSeconds = $timeoutSeconds
@@ -39,7 +39,7 @@ function main() {
 
     if (!$x509Certificate -and !$global:x509Certificate) {
 
-        if (!$isCloudShell) {
+        if (!$global:isCloudShell) {
             write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$x509CertificateName"
             $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Subject -ieq "CN=$x509CertificateName"
             if (!$x509Certificate) {
@@ -74,15 +74,15 @@ function main() {
     write-host "expiration date: $($x509Certificate.NotAfter)" -foregroundColor yellow
     write-host "thumbprint: $($x509Certificate.Thumbprint)" -foregroundColor yellow
 
-    if (!(get-module $sfHttpModule)) {
-        if (!(get-module -ListAvailable $sfHttpModule)) {
-            Install-Module -Name $sfHttpModule -AllowPrerelease -Force
+    if (!(get-module $global:sfHttpModule)) {
+        if (!(get-module -ListAvailable $global:sfHttpModule)) {
+            Install-Module -Name $global:sfHttpModule -AllowPrerelease -Force
         }
-        Import-Module $sfHttpModule
+        Import-Module $global:sfHttpModule
     }
     
-    if (!(get-module $sfHttpModule)) {
-        throw "$sfHttpModule not found"
+    if (!(get-module $global:sfHttpModule)) {
+        throw "$global:sfHttpModule not found"
     }
 
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
@@ -105,8 +105,8 @@ function main() {
         }
     }
     
-    $availableCommands = (get-command -module $sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
-    write-host "available commands:`r`n $($availableCommands | out-string)" -foregroundcolor cyan
+    $global:availableCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
+    write-host "available commands:stored in `$global:availableCommands`r`n $($global:availableCommands | out-string)" -foregroundcolor cyan
     if (!($global:SFHttpClusterConnection)) {
         $global:SFHttpClusterConnection = $SFHttpClusterConnection
     }
