@@ -23,6 +23,7 @@ param(
 
 $sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
 $isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
+$global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
 
 function main() {
     $publicip = @((Invoke-RestMethod https://ipinfo.io/json).ip)
@@ -88,10 +89,6 @@ function main() {
         return
     }
     
-    $resultJson = ConvertFrom-Json $result.Content
-    $resultJson = ConvertTo-Json $resultJson -Depth 99
-    write-host "result: $resultJson"
-
     $error.clear()
     if (!(Test-SFClusterConnection)) {
         Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint `
@@ -111,7 +108,8 @@ function main() {
         $global:SFHttpClusterConnection = $SFHttpClusterConnection
     }
     
-    write-host "cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
+    write-host "current cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
+    write-host "use function 'Connect-SFCluster' to reconnect to a cluster. example:" -foregroundcolor green
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
     -ServerCertThumbprint $($x509Certificate.Thumbprint) ``
     -X509Credential ``
@@ -119,6 +117,7 @@ function main() {
     -verbose
     "  -foregroundcolor Green
     
+    write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-requeust -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
 }
 
 function test-connection($tcpEndpoint) {
@@ -159,7 +158,7 @@ function test-connection($tcpEndpoint) {
     }
 }
 
-function invoke-request($endpoint, $absolutePath, $x509Certificate) {
+function invoke-request($absolutePath, $endpoint = $global:clusterHttpConnectionEndpoint, $x509Certificate = $global:x509Certificate, $apiVersion = $global:apiVersion, $timeoutSeconds = $global:timeoutSeconds, $isCloudShell = $global:isCloudShell) {
     $baseUrl = "$endpoint{0}?api-version=$apiVersion&timeout=$timeoutSeconds" -f $absolutePath
     if ($isCloudShell) {
         # cloud shell
