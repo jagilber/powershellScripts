@@ -10,7 +10,7 @@
     ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -absolutePath /$/GetClusterHealth
 
 .EXAMPLE
-    after running script you can run commands like below for direct rest api calls:
+    after running script with connection arguments, you can run commands like below for direct rest api calls:
         ./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'
 
 .LINK
