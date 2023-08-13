@@ -185,7 +185,7 @@
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vmss-run-command.ps1" -outFile "$pwd\azure-az-vmss-run-command.ps1";
-    help .\azure-az-vmss-run-command.ps1 -examples
+    .\azure-az-vmss-run-command.ps1 -examples
 #>
 
 [CmdletBinding()]
@@ -202,7 +202,8 @@ param(
     [switch]$listCommandIds,
     [string]$location = "westus",
     [switch]$force,
-    [switch]$concurrent
+    [switch]$concurrent,
+    [switch]$examples
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -217,10 +218,16 @@ $global:fail = 0
 $global:extensionInstalled = 0
 $global:extensionNotInstalled = 0
 $global:pscommand = $commandId -ieq "RunPowerShellScript"
+$scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 
 function main() {
     $error.Clear()
     get-job | remove-job -Force
+
+    if($examples) {
+        get-help $scriptName -examples
+        return
+    }
 
     if (!(check-module)) {
         return
