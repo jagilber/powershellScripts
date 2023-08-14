@@ -213,9 +213,12 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $lb = $vmssCollection.loadBalancerConfig
 
     # set credentials
-    $vmss.properties.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
-    $vmss = add-property -resource $vmss -name 'properties.VirtualMachineProfile.OsProfile.adminPassword' -value ''
-    $vmss.properties.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword
+    # custom images may hot have OsProfile
+    if ($vmss.properties.VirtualMachineProfile.OsProfile) {
+        $vmss.properties.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
+        $vmss = add-property -resource $vmss -name 'properties.VirtualMachineProfile.OsProfile.adminPassword' -value ''
+        $vmss.properties.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword    
+    }
     $vmss = add-property -resource $vmss -name 'dependsOn' -value @()
     $vmss.dependsOn += $lb.Id
 
