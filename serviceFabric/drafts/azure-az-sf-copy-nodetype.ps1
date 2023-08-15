@@ -53,10 +53,12 @@
     the name of the new load balancer
 .PARAMETER template
     the path to the template file to use for deployment
-.PARAMETER whatIf
-    whether to perform a whatIf deployment
+.PARAMETER deploy
+    whether to perform a deploy deployment. default creates template for modification and deployment
 .EXAMPLE
     ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
+.EXAMPLE
+    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -deploy
 .EXAMPLE
     ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -referenceNodeTypeName nt0 -newNodeTypeName nt1
 .EXAMPLE
@@ -86,7 +88,7 @@ param(
     $newIpAddressName = 'pip-' + $newNodeTypeName,
     $newLoadBalancerName = 'lb-' + $newNodeTypeName,
     $template = "$psscriptroot\azure-az-sf-copy-nodetype.json",
-    [switch]$whatIf
+    [switch]$deploy
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
@@ -226,12 +228,12 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
 
     $wadExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.Diagnostics' }
     $wadStorageAccount = $wadExtension.properties.settings.StorageAccount
-    $protectedSettings = get-wadProtectedSettings -storageAccountName $wadStorageAccount -templaetJson $templateJson
+    $protectedSettings = get-wadProtectedSettings -storageAccountName $wadStorageAccount -templateJson $templateJson
     $wadExtension = add-property -resource $wadExtension -name 'properties.protectedSettings' -value $protectedSettings
 
     $sfExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.ServiceFabric' }
     $sfStorageAccount = $serviceFabricResource.Properties.DiagnosticsStorageAccountConfig.StorageAccountName
-    $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templaetJson $templateJson
+    $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templateJson $templateJson
     $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
     # remove microsoft monitoring agent extension to prevent deployment error
@@ -318,6 +320,14 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $vmssJson = set-resourceName -referenceName $vmssName -newName $newVmssName -json $vmssJson
     $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
     $vmss = convert-fromJson $vmssJson
+    # remove user assigned managed identity principal id and client id
+    if($vmss.Identity -and $vmss.Identity.UserAssignedIdentities) {
+        write-console 'removing user assigned managed identity principal id and client id'
+        $userIdentitiesJson = convert-toJson $vmss.Identity.UserAssignedIdentities
+        $userIdentitiesJson = remove-property -name 'principalId' -json $userIdentitiesJson
+        $userIdentitiesJson = remove-property -name 'clientId' -json $userIdentitiesJson
+        $vmss.Identity.UserAssignedIdentities = convert-fromJson $userIdentitiesJson
+    }
 
     # set names
     $vmss.Name = $newNodeTypeName
@@ -353,7 +363,7 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     $deploymentName = "$($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')"
     write-console "new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All" -foregroundColor 'Cyan'
   
-    if (!$whatIf) {
+    if ($deploy) {
         $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
     }
     else {
