@@ -1,10 +1,22 @@
 <#
+.SYNOPSIS
  powershell test http listener for troubleshooting
- use the following to save and pass arguments:
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1" -outFile "$pwd/test-http-listener.ps1";
-.\test-http-listener
-
+.DESCRIPTION
+ powershell test http listener for troubleshooting
  do a final client connect to free up close
+
+.EXAMPLE
+    .\test-static-client-port-http.ps1
+.EXAMPLE
+    .\test-static-client-port-http.ps1 -server -asjob
+.EXAMPLE
+    .\test-static-client-port-http.ps1 -server -asjob -serverPort 8080
+.EXAMPLE
+    .\test-static-client-port-http.ps1 -server -asjob -serverPort 8080 -clientMethod POST -clientBody "test message from client"
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1" -outFile "$pwd/test-http-listener.ps1";
+    help .\test-http-listener.ps1 -examples
 #>
 using namespace System.Threading.Tasks;
 [cmdletbinding()]
@@ -40,7 +52,7 @@ function main() {
             write-host "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
             write-host "main:server:myinvocation: $($myinvocation |convertto-json -depth 2) asjob:$asjob"
             if ($host.Name -ieq "ServerRemoteHost") {
-            #if ($false) {
+                #if ($false) {
                 # called on foreground thread only
                 $asjob = $false
                 write-host "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
@@ -56,7 +68,7 @@ function main() {
     }
     finally {
         Get-Job | Remove-job -Force
-        if($httpClientHandler) {
+        if ($httpClientHandler) {
             $httpClientHandler.Dispose()
         }
         if ($http) {
@@ -78,35 +90,35 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
     $clientUri = [uri]::EscapeUriString($clientUri)
     $result = $null
 
-    if($useClientProxy) {
+    if ($useClientProxy) {
         $proxyPort = $port++
         start-server -asjob -serverPort $proxyPort
         $httpClientHandler.UseProxy = $true
-        $httpClientHandler.Proxy = net.webproxy("http://localhost:$proxyPort/",$false)
+        $httpClientHandler.Proxy = net.webproxy("http://localhost:$proxyPort/", $false)
     }
 
     $httpClient = [net.http.httpClient]::new($httpClientHandler)
 
     while ($iteration -lt $count -or $count -eq 0) {
-        try  {
+        try {
             $requestId = [guid]::NewGuid().ToString()
             write-host "request id: $requestId"
             $requestMessage = [net.http.httpRequestMessage]::new($method, $clientUri )
-            $responseMessage = $null;#[net.http.httpResponseMessage]::new()
+            $responseMessage = $null; #[net.http.httpResponseMessage]::new()
 
-            if($method -ine [net.http.httpMethod]::Get) {
-                $httpContent = [net.http.stringContent]::new([string]::Empty,[text.encoding]::ascii,'text/html')
+            if ($method -ine [net.http.httpMethod]::Get) {
+                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::ascii, 'text/html')
                 $requestMessage.Content = $httpContent
                 $responseMessage = $httpClient.SendAsync($requestMessage)
             }
             else {
-                $httpContent = [net.http.stringContent]::new([string]::Empty,[text.encoding]::ascii,'text/html')
-                $responseMessage = $httpClient.GetAsync($requestMessage.RequestUri,0)
+                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::ascii, 'text/html')
+                $responseMessage = $httpClient.GetAsync($requestMessage.RequestUri, 0)
             }
 
             if ($header.Count -lt 1) {
                 $requestMessage.Headers.Accept.TryParseAdd('application/json')
-                $requestMessage.Headers.Add('client',$env:COMPUTERNAME)
+                $requestMessage.Headers.Add('client', $env:COMPUTERNAME)
                 #$requestMessage.Headers.Add('host',$hostname)
                 $requestMessage.Headers.Add('x-ms-app', [io.path]::GetFileNameWithoutExtension($MyInvocation.ScriptName))
                 $requestMessage.Headers.Add('x-ms-user', $env:USERNAME)
@@ -141,7 +153,7 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
 
 function start-server([bool]$asjob, [int]$serverPort = $port) {
     write-host "enter:start-server:asjob:$asJob port:$serverPort"
-    if($asjob) {
+    if ($asjob) {
         start-job -ScriptBlock { 
             param($script, $params)
             write-host "enter:start-server backgroundjob:pid:$pid script:$script params:$params"
@@ -204,6 +216,10 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/health') {
+                write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                $html = @{"ApplicationHealthState" = "Healthy"} | convertto-json
+            }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/min') {
                 write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
@@ -214,7 +230,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 #$html += $context | ConvertTo-Json # -depth 99
                 write-host "Invoke-Expression $($context.Request.QueryString.GetValues('cmd'));"
-                $result = convertto-json (Invoke-Expression $($context.Request.QueryString.GetValues('cmd')));# -depth 99;
+                $result = convertto-json (Invoke-Expression $($context.Request.QueryString.GetValues('cmd'))); # -depth 99;
                 write-host "result: $result"
                 $html += $result
             }
