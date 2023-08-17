@@ -19,6 +19,8 @@ param(
         'sandcastle.vscode-open',
         'mechatroner.rainbow-csv',
         'ms-dotnettools.csharp',
+        'humao.rest-client',
+        'ms-vscode.remote-server',
         'ms-vscode.powershell'),
     [string]$user,
     [string]$email,
