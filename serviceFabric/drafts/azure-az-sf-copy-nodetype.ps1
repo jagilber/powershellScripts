@@ -157,8 +157,8 @@ function main() {
         $templateJson = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
         $templateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $templateJson
         $result = deploy-vmssCollection -templateJson $templateJson
-
-        write-console "deploy result: $result"
+        $global:templateJson = $templateJson
+        write-console "deploy result: $result template also stored in `$global:templateJson" -foregroundColor 'Green'
     }
     catch [Exception] {
         $errorString = "exception: $($psitem.Exception.Response.StatusCode.value__)`r`nexception:`r`n$($psitem.Exception.Message)`r`n$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
@@ -352,7 +352,10 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
 
     convert-toJson $templateJson | Out-File $template -Force
     write-console "template saved to $template" -foregroundColor 'Green'
-    write-console "test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose" -foregroundColor 'Cyan'
+    write-console "Test-AzResourceGroupDeployment -resourceGroupName $resourceGroupName ``
+        -TemplateFile $template ``
+        -Verbose" -foregroundColor 'Cyan'
+    
     $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
 
     if ($result) {
@@ -361,13 +364,22 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     }
   
     $deploymentName = "$($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')"
-    write-console "new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All" -foregroundColor 'Cyan'
+    write-console "New-AzResourceGroupDeployment -Name $deploymentName ``
+        -ResourceGroupName $resourceGroupName ``
+        -TemplateFile $template ``
+        -DeploymentDebugLogLevel All ``
+        -Verbose" -foregroundColor 'Magenta'
   
     if ($deploy) {
+        $error.clear()
         $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
+        if($result -or $error) {
+            write-console "error: new-azResourceGroupDeployment failed:$($result | out-string)`r`n$($error | out-string)" -err
+            return $result
+        }
     }
     else {
-        write-console "after verifying / modifying $template, run the above 'new-azresourcegroupdeployment' command to deploy the template" -foregroundColor 'Yellow'
+        write-console "after verifying / modifying $template`r`nrun the above 'new-azresourcegroupdeployment' command to deploy the template" -foregroundColor 'Yellow'
     }
 
     return $result
@@ -652,7 +664,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     # todo parameterize cluster id ?
     #$clusterEndpoint = $serviceFabricResource.Properties.ClusterId
 
-    # todo remove version if upgradeMode is Automatic?
+    # remove version if upgradeMode is Automatic
     if ($serviceFabricResource.Properties.upgradeMode -ieq 'Automatic') {
         write-console "removing cluster code version since upgrade mode is Automatic" -foregroundColor 'Yellow'
         $serviceFabricResource.Properties.ClusterCodeVersion = $null
@@ -661,8 +673,13 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     # check cluster provisioning state
     if ($serviceFabricResource.Properties.clusterState -ine 'Ready') {
         write-console "cluster provisioning state is $($serviceFabricResource.Properties.clusterState)"
-        write-console "cluster must be in 'Ready' state to add node type" -err
-        return $serviceFabricResource
+        if($deploy){
+            write-console "error: cluster must be in 'Ready' state to add node type" -err
+            return $serviceFabricResource
+        }
+        else {
+            write-console "cluster must be in 'Ready' state to add node type" -foregroundColor 'Yellow'
+        }
     }
 
     $nodeTypes = $serviceFabricResource.Properties.nodeTypes
