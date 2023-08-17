@@ -105,7 +105,7 @@
     NOTE: requires managed identity on vm scaleset with access to key vault.
 
 .EXAMPLE
-    azure-az-vmss-run-command.ps1 -script '& {
+    ,\azure-az-vmss-run-command.ps1 -script '& {
         [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
         $errorActionPreference = "continue"
         $oldThumbprint = "<old thumbprint>"
