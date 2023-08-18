@@ -132,11 +132,12 @@
 
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
-        pktmon start --capture -f .\net.etl | out-host;
+        pktmon start --capture -f .\net.etl --pkt-size 1024 | out-host;
         start-sleep -seconds 300;
         pktmon stop | out-host;
         pktmon etl2pcap .\net.etl -o d:\svcFab\log\crashDumps\net.pcap | out-host;
         pktmon etl2txt .\net.etl -o d:\svcFab\log\crashDumps\net.csv | out-host;
+        copy .\net.etl d:\svcFab\log\crashDumps\net.etl;
     }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile .\output.json -eventLogOutput
 
     windows 2019+ https://learn.microsoft.com/windows-server/networking/technologies/pktmon/pktmon
