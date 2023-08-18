@@ -122,6 +122,9 @@
 .PARAMETER script
     path and file name to script to invoke on vm scale set nodes
 
+.PARAMETER eventLogOutput
+    switch to output results to 'Application' event log on remote machine as 'RunPowerShellScript' using powershell transcript if 'script' argument is a command.
+
 .PARAMETER parameters
     hashtable of script arguments in format of @{"name" = "value"}
     example: @{"adminUserName" = "cloudadmin"}
@@ -156,6 +159,7 @@ param(
     [string]$vmssName,
     [string]$instanceId,
     [string]$script, # script string content or file path to script
+    [switch]$eventLogOutput,
     [hashtable]$parameters = @{ }, # hashtable @{"name" = "value";}
     [string]$jsonOutputFile,
     [string]$commandId = "RunPowerShellScript",
@@ -214,17 +218,17 @@ function main() {
         $nodePrompt = $true
         $count = 1
         $number = 0
-        $resourceGroups = Get-azResourceGroup
+        $resourceGroups = (Get-azResourceGroup).ResourceGroupName | sort-object
         
         foreach ($rg in @($resourceGroups)) {
-            write-host "$($count). $($rg.ResourceGroupName)"
+            write-host "$($count). $($rg)"
             $count++
         }
         
         $number = [convert]::ToInt32((read-host "enter number of the resource group to query or ctrl-c to exit:"))
 
         if ($number -le $count) {
-            $resourceGroup = $resourceGroups[$number - 1].ResourceGroupName
+            $resourceGroup = $resourceGroups[$number - 1]
             write-host $resourceGroup
         }
     }
@@ -284,6 +288,15 @@ function main() {
     }
 
     if ($pscommand -and !(test-path $script)) {
+        if($eventLogOutput) {
+            $script = "`$transcript = `"`$pwd\transcript.log`";
+                start-transcript -path `$transcript -append;
+                $script
+                stop-transcript;
+                New-EventLog -LogName Application -Source $commandId -ErrorAction silentlycontinue;
+                Write-EventLog -LogName Application -Source $commandId -EntryType Information -EventId 1 -Message (Get-Content `$transcript -Raw);"
+            Write-Host "script with transcript and event log output:`r`n$script"
+        }
         out-file -InputObject $script -filepath $tempscript -Force
         $script = $tempScript
     }
@@ -429,7 +442,7 @@ function node-psTestScript() {
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters) {
     write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
-        subsequent executions take between a 2 and 30 minutes..." -foregroundcolor yellow
+        subsequent executions take between 2 and 30 minutes..." -foregroundcolor yellow
 
     foreach ($instanceId in $instanceIds) {
         $instance = get-azvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
