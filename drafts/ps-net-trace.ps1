@@ -1,10 +1,14 @@
+<#
+.SYNOPSIS
+
+#>
 param(
     [int]$sleepMinutes = 1,
-    [string]$traceFile = "$env:TEMP\net.etl",
+    [string]$traceFile = "$env:TEMP\net.etl", #'D:\SvcFab\Log\CrashDumps\net.etl', 
     [int]$maxSizeMb = 1024,
     [string]$session = "nettrace",
     [string]$csvFile = "$env:TEMP\net.csv",
-    [switch]$withCommonProviders
+    [switch]$withoutCommonProviders
 )
 
 $ErrorActionPreference = "continue"
@@ -30,7 +34,7 @@ New-NetEventSession -Name $session `
     -TraceBufferSize 1024 `
     -LocalFilePath $traceFile
 
-if($withCommonProviders) {
+if(!$withoutCommonProviders) {
     Add-NetEventProvider -Name "Microsoft-Windows-TCPIP" -SessionName $session `
         -Level 4 `
         -MatchAnyKeyword ([UInt64]::MaxValue) `

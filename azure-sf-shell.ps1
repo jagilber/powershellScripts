@@ -3,8 +3,6 @@
     Connect to a Service Fabric cluster using Azure Cloud Shell. can use local or remote certificate in keyvault.
 .DESCRIPTION
     Connect to a Service Fabric cluster using Azure Cloud Shell local or remote.
-    requires connectivity to the cluster endpoint port 19080 from cloud shell.
-
 .EXAMPLE
     ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
 
@@ -12,14 +10,12 @@
     ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -absolutePath /$/GetClusterHealth
 
 .EXAMPLE
-    after running script with connection arguments, you can run commands like below for direct rest api calls:
-        ./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'
+    ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
-help ./azure-sf-shell.ps1 -examples;
-./azure-sf-shell.ps1 -keyVaultName <key vault name> -x509CertificateName <certificate name> -clusterHttpConnectionEndpoint <cluster endpoint>
+./azure-sf-shell.ps1 -keyVaultName <key vault name> -x509CertificateName <certificate name> -clusterHttpConnectionEndpoint <cluster endpoint> -absolutePath <absolute path> -apiVersion <api version> -timeoutSeconds <timeout seconds>
 
 #>
 param(
@@ -45,8 +41,7 @@ function main() {
         write-host "connect-azaccount"
         Connect-AzAccount -UseDeviceAuthentication
     }
-
-    if ($clusterHttpConnectionEndpoint) {
+    if($clusterHttpConnectionEndpoint){
         $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
     }
 
@@ -98,6 +93,11 @@ function main() {
         throw "$global:sfHttpModule not found"
     }
 
+    if ($absolutePath) {
+        invoke-request -absolutePath $absolutePath
+        return
+    }
+
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
     if ($error -or !$result) {
         write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip"
@@ -134,9 +134,6 @@ function main() {
     "  -foregroundcolor Green
     
     #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
-    if($absolutePath) {
-        invoke-request -absolutePath $absolutePath
-    }
     write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
 }
 
@@ -218,9 +215,4 @@ function invoke-request($absolutePath,
     return $result
 }
 
-if ($global:clusterHttpConnectionEndpoint -and $absolutePath) {
-    invoke-request -absolutePath $absolutePath
-}
-else {
-    main
-}
+main

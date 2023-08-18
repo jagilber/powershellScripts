@@ -1,3 +1,16 @@
+<#
+.SYNOPSIS
+    script to test static client port for http
+
+.DESCRIPTION
+    script to test static client port for http
+.EXAMPLE
+    .\test-static-client-port-http.ps1
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-static-client-port-http.ps1" -outFile "$pwd\test-static-client-port-http.ps1";
+    .\test-static-client-port-http.ps1
+#>
 param (
     [string]$localHostName = "",
     [int]$localHostPort = 8080,

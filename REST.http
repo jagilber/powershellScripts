@@ -90,7 +90,7 @@ GET https://www.w3.org/services/html2txt?url=https://devblogs.microsoft.com/powe
 
 ###
 # SFRP
-@cluster = sfjagilber1lx3
+@cluster = sfjagilber1nt3
 @location = eastus
 @api = 6.0
 @managementPort = 19080
@@ -128,50 +128,6 @@ content-type: application/json
 ###
 POST https://localhost:5001/api/configuration/update HTTP/1.1
 content-type: application/json
-
-{
-  "$schema": "https://raw.githubusercontent.com/microsoft/CollectServiceFabricData/master/configurationFiles/collectsfdata.schema.json",
-  "AzureClientId": null,
-  "AzureClientSecret": null,
-  "AzureResourceGroup": null,
-  "AzureResourceGroupLocation": null,
-  "AzureSubscriptionId": null,
-  "AzureTenantId": null,
-  "CacheLocation": null,
-  "ContainerFilter": null,
-  "DeleteCache": false,
-  "EndTimeStamp": "04/09/2021 21:46 -04:00",
-  "GatherType": "trace",
-  "KustoCluster": "https://ingest-sfus.kusto.windows.net/dblogs",
-  "KustoCompressed": true,
-  "KustoPurge": null,
-  "KustoRecreateTable": false,
-  "KustoTable": "jagilber_test",
-  "KustoUseBlobAsSource": true,
-  "KustoUseIngestMessage": false,
-  "List": false,
-  "LogAnalyticsCreate": false,
-  "LogAnalyticsId": null,
-  "LogAnalyticsKey": null,
-  "LogAnalyticsName": null,
-  "LogAnalyticsPurge": null,
-  "LogAnalyticsRecreate": false,
-  "LogAnalyticsWorkspaceName": null,
-  "LogAnalyticsWorkspaceSku": "PerGB2018",
-  "LogDebug": 4,
-  "LogFile": null,
-  "NodeFilter": null,
-  "NoProgressTimeoutMin": 10,
-  "ResourceUri": null,
-  "SasKey": "https://sflogsxxxxxxxxxxxxx.blob.core.windows.net/?sv=2019-07-07&sig=iifcH%2B6%2FZwrea9w%2BWwp52nYFvyvxl7NVjRxWCyLKKSw%3D&spr=https&st=2021-04-11T01%3A47%3A51Z&se=2021-04-11T09%3A48%3A51Z&srt=sco&ss=bfqt&sp=racupwdl",
-  "StartTimeStamp": "04/09/2021 19:46 -04:00",
-  "Threads": 12,
-  "Unique": true,
-  "UriFilter": null,
-  "UseMemoryStream": true,
-  "UseTx": false,
-  "Version": "${Process.GetCurrentProcess().MainModule?.FileVersionInfo.FileVersion}"
-}
 
 ###
 @storageAccountName = 

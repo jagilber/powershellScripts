@@ -16,8 +16,8 @@
 .NOTES  
     File Name  : azure-az-patch-resource.ps1
     Author     : jagilber
-    Version    : 200917
-    History    : 
+    Version    : 230806
+    History    :    add ordered
 
 .EXAMPLE 
     .\azure-az-patch-resource.ps1 -resourceGroupName clusterresourcegroup
@@ -53,7 +53,7 @@ param (
     [string]$templateJsonFile = "$psscriptroot/template.json", 
     [string]$templateParameterFile = '', 
     [string]$apiVersion = '' ,
-    [string]$schema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
+    [string]$schema = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json',
     [int]$sleepSeconds = 1, 
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental',
@@ -205,13 +205,13 @@ function create-jsonTemplate([collections.arraylist]$resources,
     [hashtable]$outputs = @{}
 ) {
     try {
-        $resourceTemplate = @{ 
-            resources      = $resources
+        $resourceTemplate = [ordered]@{ 
             '$schema'      = $schema
             contentVersion = "1.0.0.0"
-            outputs        = $outputs
             parameters     = $parameters
             variables      = $variables
+            resources      = $resources
+            outputs        = $outputs
         } | convertto-json -depth 99
 
         $resourceTemplate | out-file $jsonFile
@@ -265,11 +265,11 @@ function deploy-template() {
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
     $error.Clear()
-    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
-        -TemplateFile $tempJsonFile `
-        -Verbose:$detail `
-        -TemplateParameterObject $templateParameters `
-        -Debug:$detail `
+    write-host "validating template: Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName ``
+        -TemplateFile $tempJsonFile ``
+        -Verbose:$detail ``
+        -TemplateParameterObject $templateParameters ``
+        -Debug:$detail ``
         -Mode $mode" -ForegroundColor Cyan
 
     $result = Test-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
@@ -288,12 +288,12 @@ function deploy-template() {
             }
 
             write-host "using file: $tempJsonFile"
-            write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName `
-                -ResourceGroupName $resourceGroupName `
-                -DeploymentDebugLogLevel $debuglevel `
-                -TemplateFile $tempJsonFile `
-                -TemplateParameterObject $templateParameters `
-                -Verbose:$detail `
+            write-host "deploying template: New-AzResourceGroupDeployment -Name $deploymentName ``
+                -ResourceGroupName $resourceGroupName ``
+                -DeploymentDebugLogLevel $debuglevel ``
+                -TemplateFile $tempJsonFile ``
+                -TemplateParameterObject $templateParameters ``
+                -Verbose:$detail ``
                 -Mode $mode" -ForegroundColor Cyan
 
             New-AzResourceGroupDeployment -Name $deploymentName `

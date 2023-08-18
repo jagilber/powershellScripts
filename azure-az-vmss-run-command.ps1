@@ -45,12 +45,13 @@
 
 .EXAMPLE
     .\azure-az-vmss-run-command.ps1 -script '& {
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
         $file = "dotnet-runtime-3.0.0-win-x64.exe"
         $downloadUrl = "https://download.visualstudio.microsoft.com/download/pr/b3b81103-619a-48d8-ac1b-e03bbe153b7c/566b0f50872164abd1478a5b3ec38ffa/$file"
-        invoke-webRequest $downloadUrl -outFile "$pwd/$file"
+        invoke-webRequest $downloadUrl -outFile "./$file"
         # /install /repair /uninstall /layout /passive /quiet /norestart /log
-        start-process -wait -filePath ".\dotnet-runtime-3.0.0-win-x64.exe" -argumentList "/norestart /quiet /install /log `"$pwd/$file.log`""
-        type "$pwd/$file.log"
+        start-process -wait -filePath ".\dotnet-runtime-3.0.0-win-x64.exe" -argumentList "/norestart /quiet /install /log `"./$file.log`""
+        type "./$file.log"
     }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent
 
     install .net core 3.0 without restart concurrently to nodes 0-4
@@ -92,22 +93,54 @@
     it is *not* required to remove extension
 
 .EXAMPLE
-    azure-az-vmss-run-command.ps1 -script '& {
+    .\azure-az-vmss-run-command.ps1 -script '& {
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+        $importCertUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-metadata-import-cert.ps1";
+        $scriptFile = ".\azure-metadata-import-cert.ps1";
+        invoke-webrequest $importCertUrl -outfile $scriptFile;
+        . $scriptFile -secretUrl "https://<keyvaultName>.vault.azure.net/secrets/<secretName>/<secretVersion>";
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-4 -concurrent -jsonOutputFile .\output.json -eventLogOutput
+
+    download and install pfx certificate from key vault to nodes 0-4 concurrently.
+    NOTE: requires managed identity on vm scaleset with access to key vault.
+
+.EXAMPLE
+    ,\azure-az-vmss-run-command.ps1 -script '& {
+        [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
         $errorActionPreference = "continue"
-        $transcript = "$pwd/fixexpiredcert.log"
-        start-transcript -path $transcript -append
         $oldThumbprint = "<old thumbprint>"
         $newThumbprint = "<new thumbprint>"
-        $file = "fixexpiredcert.ps1"
+        $scriptFile = ".\fixexpiredcert.ps1"
         $downloadUrl = "https://raw.githubusercontent.com/Azure/Service-Fabric-Troubleshooting-Guides/master/Scripts/FixExpiredCert.ps1"
-        invoke-webRequest $downloadUrl -outFile "$pwd/$file"
-        .\fixexpiredcert.ps1 -oldThumbprint $oldThumbprint -newThumbprint $newThumbprint -localOnly
-        stop-transcript
-        New-EventLog -LogName Application -Source vmssRunCommand -ErrorAction silentlycontinue
-        Write-EventLog -LogName Application -Source vmssRunCommand -EntryType Information -EventId 1 -Message (Get-Content $transcript -Raw)
-    }' -resourceGroup sfjagilber1nt3 -vmssName nt0 -instanceId 0-4 -concurrent
+        invoke-webRequest $downloadUrl -outFile $scriptFile
+        . $scriptFile -oldThumbprint $oldThumbprint -newThumbprint $newThumbprint -localOnly
+    }' -resourceGroup sfjagilber1nt3 -vmssName nt0 -instanceId 0-4 -concurrent -eventLogOutput
 
-    update expired certificate on nodes 0-4 for service fabric cluster
+    fix expired certificate on nodes 0-4 for service fabric cluster and log output to remote event log
+
+.EXAMPLE
+    .\azure-az-vmss-run-command.ps1 -script '& {
+        netsh trace start capture=yes overwrite=yes maxsize=1024 tracefile=.\net.etl filemode=circular | out-host;
+        start-sleep -seconds 300;
+        netsh trace stop | out-host;
+        copy .\net.etl d:\svcFab\Log\crashDumps\net.etl;
+        copy .\net.cab d:\svcFab\Log\crashDumps\net.cab;
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile .\output.json -eventLogOutput
+
+    start network capture concurrently to nodes 0-3 (UDn-1) and output to service fabric crash dump folder and json file. logs output to remote event log.
+    windows 2012+ https://learn.microsoft.com/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012
+
+.EXAMPLE
+    .\azure-az-vmss-run-command.ps1 -script '& {
+        pktmon start --capture -f .\net.etl | out-host;
+        start-sleep -seconds 300;
+        pktmon stop | out-host;
+        pktmon etl2pcap .\net.etl -o d:\svcFab\log\crashDumps\net.pcap | out-host;
+        pktmon etl2txt .\net.etl -o d:\svcFab\log\crashDumps\net.csv | out-host;
+    }' -resourceGroup sfcluster -vmssName nt0 -instanceId 0-3 -concurrent -jsonOutputFile .\output.json -eventLogOutput
+
+    windows 2019+ https://learn.microsoft.com/windows-server/networking/technologies/pktmon/pktmon
+    start network capture concurrently to nodes 0-3 (UDn-1) and output to service fabric crash dump folder and json file. logs output to remote event log.
 
 .PARAMETER resourceGroup
     name of resource group containing vm scale set. if not provided, script prompt for input.
@@ -116,7 +149,7 @@
     name of vm scale set. if not provided, script prompt for input.
 
 .PARAMETER instanceId
-    string array of instance id(s). if not provided, script prompt for input. 
+    string array of instance id(s). if not provided, script prompt for input.
     examples: 0 or 0-2 or 0,1,2
 
 .PARAMETER script
@@ -150,8 +183,10 @@
     WARNING: running jobs concurrently on scalesets such as service fabric where there are minimum node requirements can cause an outage if the node is restarted.
 
 .LINK
-    https://github.com/jagilber/powershellScripts/blob/master/azure-az-vmss-run-command.ps1
-#>  
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vmss-run-command.ps1" -outFile "$pwd\azure-az-vmss-run-command.ps1";
+    .\azure-az-vmss-run-command.ps1 -examples
+#>
 
 [CmdletBinding()]
 param(
@@ -160,14 +195,15 @@ param(
     [string]$instanceId,
     [string]$script, # script string content or file path to script
     [switch]$eventLogOutput,
-    [hashtable]$parameters = @{ }, # hashtable @{"name" = "value";}
+    [hashtable]$parameters = @{}, # hashtable @{"name" = "value";}
     [string]$jsonOutputFile,
     [string]$commandId = "RunPowerShellScript",
     [switch]$removeExtension,
     [switch]$listCommandIds,
     [string]$location = "westus",
     [switch]$force,
-    [switch]$concurrent
+    [switch]$concurrent,
+    [switch]$examples
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -182,10 +218,16 @@ $global:fail = 0
 $global:extensionInstalled = 0
 $global:extensionNotInstalled = 0
 $global:pscommand = $commandId -ieq "RunPowerShellScript"
+$scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 
 function main() {
     $error.Clear()
     get-job | remove-job -Force
+
+    if($examples) {
+        get-help $scriptName -examples
+        return
+    }
 
     if (!(check-module)) {
         return
@@ -199,20 +241,25 @@ function main() {
         }
     }
 
-    if ($concurrent) {
-        write-warning "running jobs concurrently on scalesets with minimum node requirements such as service fabric, can cause an outage if the node is restarted from command being run!"
-        write-warning "ctrl-c now if this is incorrect"
-    }
+    try {
+        if ((test-path $tempScript)) {
+            remove-item $tempScript -Force
+        }
 
-    if ($listCommandIds) {
-        Get-azVMRunCommandDocument -Location $location | Select-Object ID, OSType, Label
-        return
-    }
+        if ($concurrent) {
+            write-warning "running jobs concurrently on scalesets with minimum node requirements such as service fabric, can cause an outage if the node is restarted from command being run!"
+            write-warning "ctrl-c now if this is incorrect"
+        }
 
-    if ($pscommand -and !$script) {
-        Write-Warning "using test script. use -script and -parameters arguments to supply script and parameters"
-        $script = node-psTestScript
-    }
+        if ($listCommandIds) {
+            Get-azVMRunCommandDocument -Location $location | Select-Object ID, OSType, Label
+            return
+        }
+
+        if ($pscommand -and !$script) {
+            Write-Warning "using test script. use -script and -parameters arguments to supply script and parameters"
+            $script = node-psTestScript
+        }
 
     if (!$resourceGroup) {
         $nodePrompt = $true
@@ -226,66 +273,83 @@ function main() {
         }
         
         $number = [convert]::ToInt32((read-host "enter number of the resource group to query or ctrl-c to exit:"))
+        if (!$resourceGroup) {
+            $nodePrompt = $true
+            $count = 1
+            $number = 0
+            $resourceGroups = Get-azResourceGroup
+
+            foreach ($rg in @($resourceGroups)) {
+                write-host "$($count). $($rg.ResourceGroupName)"
+                $count++
+            }
+
+            $number = [convert]::ToInt32((read-host "enter number of the resource group to query or ctrl-c to exit:"))
 
         if ($number -le $count) {
             $resourceGroup = $resourceGroups[$number - 1]
             write-host $resourceGroup
         }
     }
-
-    $scalesets = Get-azVmss -ResourceGroupName $resourceGroup
-
-    if (!$vmssName) {
-        $nodePrompt = $true
-        $number = 0
-        $count = 1
-        
-        foreach ($scaleset in @($scalesets)) {
-            write-host "$($count). $($scaleset.Name)"
-            $count++
-        }
-        
-        $number = [convert]::ToInt32((read-host "enter number of the scaleset to query or ctrl-c to exit:"))
-
-        if ($number -le $count) {
-            $vmssName = $scalesets[$number - 1].Name
-            write-host $vmssName
-        }
-    }
-
-    $scaleset = get-azvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
-    $maxInstanceId = $scaleset.Sku.Capacity
-    write-host "$vmssName capacity: $maxInstanceId (0 - $($maxInstanceId - 1))"
-
-    if (!$instanceId) {
-        $instanceIds = generate-list "0-$($maxInstanceId - 1)"
-
-        if ($nodePrompt) {
-            $numbers = read-host "enter 0 based, comma separated list of number(s), or number range of the nodes to invoke script:"
-
-            if ($numbers) {
-                $instanceIds = generate-list $numbers
+            if ($number -le $count) {
+                $resourceGroup = $resourceGroups[$number - 1].ResourceGroupName
+                write-host $resourceGroup
             }
         }
-    }
-    else {
-        $instanceIds = generate-list $instanceId
-    }
 
-    write-host $instanceIds
+        $scalesets = Get-azVmss -ResourceGroupName $resourceGroup
 
-    write-host "checking provisioning states"
-    $instances = @(Get-azVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView)
-    write-host "$($instances.InstanceView.Statuses | format-list * | out-string)"
+        if (!$vmssName) {
+            $nodePrompt = $true
+            $number = 0
+            $count = 1
 
-    foreach ($instance in $instances) {
-        if (($instance.InstanceView.Statuses.DisplayStatus -inotcontains "provisioning succeeded" `
-                    -or $instance.InstanceView.Statuses.DisplayStatus -inotcontains "vm running") `
-                -and !$force) {
-            Write-Warning "not all nodes are in 'succeeded' provisioning state or 'vm running' so command may fail. returning. use -force to attempt command regardless of provisioning state."
-            return
+            foreach ($scaleset in @($scalesets)) {
+                write-host "$($count). $($scaleset.Name)"
+                $count++
+            }
+
+            $number = [convert]::ToInt32((read-host "enter number of the scaleset to query or ctrl-c to exit:"))
+
+            if ($number -le $count) {
+                $vmssName = $scalesets[$number - 1].Name
+                write-host $vmssName
+            }
         }
-    }
+
+        $scaleset = get-azvmss -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName
+        $maxInstanceId = $scaleset.Sku.Capacity
+        write-host "$vmssName capacity: $maxInstanceId (0 - $($maxInstanceId - 1))"
+
+        if (!$instanceId) {
+            $instanceIds = generate-list "0-$($maxInstanceId - 1)"
+
+            if ($nodePrompt) {
+                $numbers = read-host "enter 0 based, comma separated list of number(s), or number range of the nodes to invoke script:"
+
+                if ($numbers) {
+                    $instanceIds = generate-list $numbers
+                }
+            }
+        }
+        else {
+            $instanceIds = generate-list $instanceId
+        }
+
+        write-host $instanceIds
+
+        write-host "checking provisioning states"
+        $instances = @(Get-azVmssVM -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceView)
+        write-host "$($instances.InstanceView.Statuses | format-list * | out-string)"
+
+        foreach ($instance in $instances) {
+            if (($instance.InstanceView.Statuses.DisplayStatus -inotcontains "provisioning succeeded" `
+                        -or $instance.InstanceView.Statuses.DisplayStatus -inotcontains "vm running") `
+                    -and !$force) {
+                Write-Warning "not all nodes are in 'succeeded' provisioning state or 'vm running' so command may fail. returning. use -force to attempt command regardless of provisioning state."
+                return
+            }
+        }
 
     if ($pscommand -and !(test-path $script)) {
         if($eventLogOutput) {
@@ -300,47 +364,71 @@ function main() {
         out-file -InputObject $script -filepath $tempscript -Force
         $script = $tempScript
     }
+        if ($pscommand -and !(test-path $script)) {
+            if ($eventLogOutput) {
+                $newScript = [text.stringbuilder]::new()
+                $newScript.AppendLine("`$transcript = `".\run-command-transcript.log`"")
+                $newScript.AppendLine("start-transcript -path `$transcript")
+                $newScript.AppendLine($script)
+                $newScript.AppendLine("stop-transcript")
+                $newScript.AppendLine("new-eventLog -logName application -source $commandId -errorAction silentlyContinue")
+                $newScript.AppendLine("write-eventLog -logName application -source $commandId -entryType information -eventId 1 -message (get-content `$transcript | out-string)")
+                $script = $newScript.ToString()
+                Write-Host "script with transcript and event log output:`r`n$script"
+            }
+            out-file -InputObject $script -filepath $tempscript -Force
+            $script = $tempScript
+        }
 
-    if ($removeExtension) {
-        $commandId = $removeCommandId
-    }
+        if ($removeExtension) {
+            $commandId = $removeCommandId
+        }
 
-    $result = run-vmssPsCommand -resourceGroup $resourceGroup `
-        -vmssName $vmssName `
-        -instanceIds $instanceIds `
-        -script $script `
-        -parameters $parameters
+        write-host "run-vmssPsCommand -resourceGroup $resourceGroup ``
+            -vmssName $vmssName ``
+            -instanceIds $instanceIds ``
+            -script $script ``
+            -parameters $parameters
+        "
 
-    write-host $result
-    $count = 0
+        $result = run-vmssPsCommand -resourceGroup $resourceGroup `
+            -vmssName $vmssName `
+            -instanceIds $instanceIds `
+            -script $script `
+            -parameters $parameters
 
-    monitor-jobs
+        write-host $result
+        $count = 0
 
-    if ((test-path $tempScript)) {
-        remove-item $tempScript -Force
-    }
+        monitor-jobs
 
-    if ($jsonOutputFile) {
-        write-host "saving json to file $jsonOutputFile"
-        #out-file -InputObject ($global:joboutputs | ConvertTo-Json) -filepath $jsonOutputFile -force
+        if ($jsonOutputFile) {
+            write-host "saving json to file $jsonOutputFile"
+            #out-file -InputObject ($global:joboutputs | ConvertTo-Json) -filepath $jsonOutputFile -force
         ($global:joboutputs | convertto-json).replace("\r\n", "").replace("\`"", "`"").replace("`"{", "{").replace("}`"", "}") | out-file $jsonOutputFile -Force
+        }
+
+        $global:joboutputs | format-list *
+        write-host "finished. output stored in `$global:joboutputs"
+        write-host "total fail:$($global:fail) total success:$($global:success)"
+        write-host "total time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
+        write-host "optionally use -removeExtension to remove runcommand extension or reset."
+
+        if ($error) {
+            return 1
+        }
     }
-
-    $global:joboutputs | format-list *
-    write-host "finished. output stored in `$global:joboutputs"
-    write-host "total fail:$($global:fail) total success:$($global:success)"
-    write-host "total time elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes"
-    write-host "optionally use -removeExtension to remove runcommand extension or reset."
-
-    if ($error) {
-        return 1
+    finally {
+        if ((test-path $tempScript)) {
+            remove-item $tempScript -Force
+        }
     }
 }
 
 function check-module() {
     $error.clear()
     get-command Invoke-azVmssVMRunCommand -ErrorAction SilentlyContinue
-    
+
     if ($error) {
         $error.clear()
         write-warning "Invoke-azVmssVMRunCommand not installed."
@@ -441,8 +529,10 @@ function node-psTestScript() {
 }
 
 function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$script, $parameters) {
-    write-host "first time only can take up to 45 minutes if the run command extension is not installed. 
-        subsequent executions take between 2 and 30 minutes..." -foregroundcolor yellow
+    write-host "first time only can take up to 45 minutes if the run command extension is not installed.
+        subsequent executions take between 15 and 30 minutes.
+        vmss upgrade by default will only allow n-1 upgrade domains (UD) to be upgraded concurrently.
+        running commands to n-1 UD instance count will decrease total execution time in 1/2..." -foregroundcolor yellow
 
     foreach ($instanceId in $instanceIds) {
         $instance = get-azvmssvm -ResourceGroupName $resourceGroup -VMScaleSetName $vmssName -InstanceId $instanceId -InstanceView
@@ -466,10 +556,10 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             $script = $null
             $parameters = $null
 
-            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-            -VMScaleSetName $vmssName `
-            -InstanceId $instanceId `
-            -CommandId $commandId `
+            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+            -VMScaleSetName $vmssName ``
+            -InstanceId $instanceId ``
+            -CommandId $commandId ``
             -AsJob"
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -478,14 +568,14 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -CommandId $commandId `
                 -AsJob
         }
-        elseif($pscommand) {
+        elseif ($pscommand) {
             if ($parameters.Count -gt 0) {
-                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-                -VMScaleSetName $vmssName `
-                -InstanceId $instanceId `
-                -ScriptPath $script `
-                -Parameter $parameters `
-                -CommandId $commandId `
+                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+                -VMScaleSetName $vmssName ``
+                -InstanceId $instanceId ``
+                -ScriptPath $script ``
+                -Parameter $parameters ``
+                -CommandId $commandId ``
                 -AsJob" -foregroundcolor cyan
         
                 $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -497,11 +587,11 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                     -AsJob
             }
             else {
-                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-                -VMScaleSetName $vmssName `
-                -InstanceId $instanceId `
-                -ScriptPath $script `
-                -CommandId $commandId `
+                write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+                -VMScaleSetName $vmssName ``
+                -InstanceId $instanceId ``
+                -ScriptPath $script ``
+                -CommandId $commandId ``
                 -AsJob" -foregroundcolor cyan
         
                 $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -513,11 +603,11 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
             }
         }
         elseif ($parameters.Count -gt 0) {
-            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-            -VMScaleSetName $vmssName `
-            -InstanceId $instanceId `
-            -Parameter $parameters `
-            -CommandId $commandId `
+            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+            -VMScaleSetName $vmssName ``
+            -InstanceId $instanceId ``
+            -Parameter $parameters ``
+            -CommandId $commandId ``
             -AsJob" -foregroundcolor cyan
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
@@ -528,10 +618,10 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -AsJob
         }
         else {
-            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `
-            -VMScaleSetName $vmssName `
-            -InstanceId $instanceId `
-            -CommandId $commandId `
+            write-host "Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup ``
+            -VMScaleSetName $vmssName ``
+            -InstanceId $instanceId ``
+            -CommandId $commandId ``
             -AsJob" -foregroundcolor cyan
     
             $response = Invoke-azVmssVMRunCommand -ResourceGroupName $resourceGroup `

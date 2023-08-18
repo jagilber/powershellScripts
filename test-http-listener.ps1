@@ -1,10 +1,23 @@
 <#
+.SYNOPSIS
  powershell test http listener for troubleshooting
- use the following to save and pass arguments:
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1" -outFile "$pwd/test-http-listener.ps1";
-.\test-http-listener
-
+ 
+.DESCRIPTION
+ powershell test http listener for troubleshooting
  do a final client connect to free up close
+
+.EXAMPLE
+    .\test-static-client-port-http.ps1
+.EXAMPLE
+    .\test-static-client-port-http.ps1 -server -asjob
+.EXAMPLE
+    .\test-static-client-port-http.ps1 -server -asjob -serverPort 8080
+.EXAMPLE
+    .\test-static-client-port-http.ps1 -server -asjob -serverPort 8080 -clientMethod POST -clientBody "test message from client"
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1" -outFile "$pwd/test-http-listener.ps1";
+    help .\test-http-listener.ps1 -examples
 #>
 using namespace System.Threading.Tasks;
 [cmdletbinding()]
@@ -19,7 +32,9 @@ param(
     [string]$clientMethod = "GET",
     [string]$absolutePath = '/',
     [switch]$useClientProxy,
-    [bool]$asJob = $true
+    [bool]$asJob = $true,
+    [string]$key = [guid]::NewGuid().ToString(),
+    [string]$logFile
 )
 
 $uri = "http://$($hostname):$port$absolutePath"
@@ -36,27 +51,33 @@ function main() {
             start-client
         }
         else {
+            $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+
+            if (!$isAdmin) {
+                Write-Error "restart script as administrator for http 'server'"
+                return
+            }
             # start as job so server can exit gracefully after 2 minutes of cancellation
-            write-host "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
-            write-host "main:server:myinvocation: $($myinvocation |convertto-json -depth 2) asjob:$asjob"
+            write-log "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
+            write-log "main:server:myinvocation: $($myinvocation |convertto-json -depth 2) asjob:$asjob"
             if ($host.Name -ieq "ServerRemoteHost") {
-            #if ($false) {
+                #if ($false) {
                 # called on foreground thread only
                 $asjob = $false
-                write-host "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
+                write-log "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
                 start-server -asjob $asjob
             }
             else {
-                write-host "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
+                write-log "main:server:host: $($host.Name) asjob:$asjob" -ForegroundColor Cyan
                 start-server -asJob $asjob
             }
         }
 
-        Write-Host "$(get-date) Finished!";
+        write-log "$(get-date) Finished!";
     }
     finally {
         Get-Job | Remove-job -Force
-        if($httpClientHandler) {
+        if ($httpClientHandler) {
             $httpClientHandler.Dispose()
         }
         if ($http) {
@@ -78,35 +99,35 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
     $clientUri = [uri]::EscapeUriString($clientUri)
     $result = $null
 
-    if($useClientProxy) {
+    if ($useClientProxy) {
         $proxyPort = $port++
         start-server -asjob -serverPort $proxyPort
         $httpClientHandler.UseProxy = $true
-        $httpClientHandler.Proxy = net.webproxy("http://localhost:$proxyPort/",$false)
+        $httpClientHandler.Proxy = net.webproxy("http://localhost:$proxyPort/", $false)
     }
 
     $httpClient = [net.http.httpClient]::new($httpClientHandler)
 
     while ($iteration -lt $count -or $count -eq 0) {
-        try  {
+        try {
             $requestId = [guid]::NewGuid().ToString()
-            write-host "request id: $requestId"
+            write-log "request id: $requestId"
             $requestMessage = [net.http.httpRequestMessage]::new($method, $clientUri )
-            $responseMessage = $null;#[net.http.httpResponseMessage]::new()
+            $responseMessage = $null; #[net.http.httpResponseMessage]::new()
 
-            if($method -ine [net.http.httpMethod]::Get) {
-                $httpContent = [net.http.stringContent]::new([string]::Empty,[text.encoding]::ascii,'text/html')
+            if ($method -ine [net.http.httpMethod]::Get) {
+                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::ascii, 'text/html')
                 $requestMessage.Content = $httpContent
                 $responseMessage = $httpClient.SendAsync($requestMessage)
             }
             else {
-                $httpContent = [net.http.stringContent]::new([string]::Empty,[text.encoding]::ascii,'text/html')
-                $responseMessage = $httpClient.GetAsync($requestMessage.RequestUri,0)
+                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::ascii, 'text/html')
+                $responseMessage = $httpClient.GetAsync($requestMessage.RequestUri, 0)
             }
 
             if ($header.Count -lt 1) {
                 $requestMessage.Headers.Accept.TryParseAdd('application/json')
-                $requestMessage.Headers.Add('client',$env:COMPUTERNAME)
+                $requestMessage.Headers.Add('client', $env:COMPUTERNAME)
                 #$requestMessage.Headers.Add('host',$hostname)
                 $requestMessage.Headers.Add('x-ms-app', [io.path]::GetFileNameWithoutExtension($MyInvocation.ScriptName))
                 $requestMessage.Headers.Add('x-ms-user', $env:USERNAME)
@@ -116,17 +137,17 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
             $result = $responseMessage.Result
             $resultContent = $result.Content.ReadAsStringAsync().Result
 
-            write-host "result content: $resultContent" -ForegroundColor Cyan
+            write-log "result content: $resultContent" -ForegroundColor Cyan
 
             write-verbose "result: $($result | convertto-json)"
-            #write-host ($httpClient | fl * | convertto-json -Depth 99)
+            #write-log ($httpClient | fl * | convertto-json -Depth 99)
             write-verbose ($responseMessage | convertto-json)
             #$requestMessage.
             Write-Verbose ($httpClient | convertto-json)
             #pause
         
             if ($error) {
-                write-host "$($error | out-string)"
+                write-log "$($error | out-string)"
                 $error.Clear()
             }
         }
@@ -140,11 +161,11 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
 }
 
 function start-server([bool]$asjob, [int]$serverPort = $port) {
-    write-host "enter:start-server:asjob:$asJob port:$serverPort"
-    if($asjob) {
+    write-log "enter:start-server:asjob:$asJob port:$serverPort"
+    if ($asjob) {
         start-job -ScriptBlock { 
             param($script, $params)
-            write-host "enter:start-server backgroundjob:pid:$pid script:$script params:$params"
+            write-log "enter:start-server backgroundjob:pid:$pid script:$script params:$params"
             . $script @params 
         } -ArgumentList $MyInvocation.ScriptName, $scriptParams
 
@@ -152,7 +173,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
             foreach ($job in get-job) {
                 $jobInfo = Receive-Job -Job $job | convertto-json -Depth 5
                 if ($jobInfo) { 
-                    write-host $job.State
+                    write-log $job.State
                     write-verbose $jobInfo 
                 }
                 #if ($job.State -ine "running") {
@@ -166,26 +187,38 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     }
 
     # need admin access to set urlacl. maybe use tcp instead?
-    # write-host "netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes"
+    # write-log "netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes"
     # start-process -Verb runas -FilePath 'cmd.exe' -ArgumentList '/c netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes'
 
-    write-host "start-server:creating listener"
+    write-log "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
     $http.Prefixes.Add("http://$(hostname):$serverPort/")
     $http.Prefixes.Add("http://+:$serverPort/")
     # https://learn.microsoft.com/en-us/windows/win32/http/add-urlacl
     $http.Start();
-    $maxBuffer = 1024000
+    $maxBuffer = 10240
 
     if ($http.IsListening) {
-        write-host "http server listening. max buffer $maxBuffer"
-        write-host "navigate to $($http.Prefixes)" -ForegroundColor Yellow
+        write-log "http server listening. max buffer $maxBuffer"
+        write-log "navigate to $($http.Prefixes)" -ForegroundColor Yellow
+        if($key){
+            write-log "use key:`r`n$key" -ForegroundColor Yellow
+        }
     }
 
     while ($iteration -lt $count -or $count -eq 0) {
         try {
             $context = $http.GetContext()
+            if ($key) {
+                $clientKey = $context.Request.QueryString.GetValues('key')
+                if ($clientKey -ine $key) {
+                    write-log "invalid key: $clientKey"
+                    $context.Response.Close()
+                    continue
+                }
+                write-log "valid key: $clientKey"
+            }
             [hashtable]$requestHeaders = @{ }
             [string]$requestHeadersString = ""
 
@@ -195,31 +228,36 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
             }
 
             [string]$html = $null
-            write-host "$(get-date) http server $($context.Request.UserHostAddress) received $($context.Request.HttpMethod) request:`r`n"
+            write-log "$(get-date) http server $($context.Request.UserHostAddress) received $($context.Request.HttpMethod) request:`r`n"
             write-verbose "request: $($context.Request | ConvertTo-Json)"
 
             if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/') {
-                write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/health') {
+                write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                $html = @{"ApplicationHealthState" = "Healthy" } | convertto-json
+            }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/min') {
-                write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
             }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.StartsWith('/ps')) {
-                write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 #$html += $context | ConvertTo-Json # -depth 99
-                write-host "Invoke-Expression $($context.Request.QueryString.GetValues('cmd'));"
-                $result = convertto-json (Invoke-Expression $($context.Request.QueryString.GetValues('cmd')));# -depth 99;
-                write-host "result: $result"
+                $cmd = $context.Request.QueryString.GetValues('cmd') -join ' '
+                write-log "invoke-expression $cmd"
+                $result = convertto-json (invoke-expression $cmd); # -depth 99;
+                write-log "result: $result"
                 $html += $result
             }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq $absolutePath) {
-                write-host "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
+                write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
@@ -232,28 +270,41 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
             }
             else {
                 #$html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
+                write-log "$($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
             }
 
             if ($html) {
-                write-host $html
+                write-log $html
                 #respond to the request
                 $buffer = [Text.Encoding]::ASCII.GetBytes($html)
                 $context.Response.ContentLength64 = $buffer.Length
+                write-log "sending $($context.Response.ContentLength64) bytes"
                 $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
-                $context.Response.OutputStream.Close()
             }
             else {
                 # head
                 $context.Response.Headers.Add("requestHeaders", $requestHeadersString)    
-                $context.Response.OutputStream.Close()
             }
         
+            $context.Response.OutputStream.Close()
             $context.Response.Close()
             $iteration++
         }
         catch {
-            Write-Warning "error $($_)"
+            Write-Warning "error $psitem`r`n$($psitem.ScriptStackTrace)"
         }
+        finally {
+            if ($context.Response.IsClientConnected) {
+                $context.Response.Close()
+            }
+        }
+    }
+}
+
+function write-log([string]$message,[consoleColor]$foregroundColor = [consoleColor]::White) {
+    write-host "$(get-date) $message" -ForegroundColor $foregroundColor
+    if($logFile){
+        $message | out-file $logFile -append
     }
 }
 
