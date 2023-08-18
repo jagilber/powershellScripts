@@ -1,6 +1,16 @@
 <#
-in ps open $PROFILE and add the following:
-code $PROFILE
+.SYNOPSIS
+    Custom prompt for powershell
+.DESCRIPTION
+    Custom prompt for powershell
+    in ps open $PROFILE and add the following:
+    code $PROFILE
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/prompt.ps1" -outFile "$pwd\prompt.ps1";
+    code $PROFILE
+    code .\prompt.ps1
 #>
 $global:path = $null
 $global:branch = $null
@@ -49,7 +59,7 @@ function get-gitInfo(){
             $aheadBehind = "0 0"
         }
         if($aheadBehind){
-            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', 'v$1/^$2')
+            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', "$([char]0x2193)`$1/$([char]0x2191)`$2")
             $status += "[$($remote):$($aheadBehind)]"
         }
         #write-host "status:$($status)"
