@@ -12,9 +12,10 @@ $global:cacheTimer = [datetime]::MinValue
 
 function prompt() {
     $path = "'$pwd'".ToLower()
+    try{
     if ($path -ne $global:path `
-        -or (((get-date) - $global:cacheTimer).TotalMinutes) -gt 1) { #`
-        #-or ($global:branch -and (get-history -count 1) -imatch 'git')) {
+        -or (((get-date) - $global:cacheTimer).TotalMinutes) -gt 1 `
+        -or ($global:branch -and ($^ -and $^.startswith('git')))) {
         $global:cacheTimer = get-date
         $global:path = $path
         $global:branch = git branch --show-current
@@ -26,6 +27,10 @@ function prompt() {
     $date = (get-date).ToString('HH:mm:ss')
     write-host "$global:ps@$date$global:status $path" -ForegroundColor Cyan
     return ">"
+    } catch {
+        write-host "Error: $($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
+        return ">"
+    }
 }
 
 function get-gitInfo(){
@@ -43,8 +48,10 @@ function get-gitInfo(){
         } catch {
             $aheadBehind = "0 0"
         }
-        $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', 'v$1/^$2')
-        $status += "[$($remote):$($aheadBehind)]"
+        if($aheadBehind){
+            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', 'v$1/^$2')
+            $status += "[$($remote):$($aheadBehind)]"
+        }
         #write-host "status:$($status)"
     }
     return $status
