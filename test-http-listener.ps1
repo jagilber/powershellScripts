@@ -201,13 +201,17 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
     if ($http.IsListening) {
         write-log "http server listening. max buffer $maxBuffer"
-        write-log "navigate to $($http.Prefixes)" -ForegroundColor Yellow
-        if($key){
-            write-log "use key:`r`n$key" -ForegroundColor Yellow
+        write-log "navigate to $($http.Prefixes)" -ForegroundColor Green
+        if ($key) {
+            if ([uri]::IsWellFormedUriString($key, [urikind]::Absolute)) {
+                write-log "key is uri. downloading key" -ForegroundColor Green
+                [net.servicePointManager]::Expect100Continue = $true; [net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+                $key = invoke-restMethod $key
+            }
         }
-        if([uri]::IsWellFormedUriString($key,[urikind]::Absolute)){
-            [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
-            $key = invoke-webRequest $key
+
+        if ($key) {
+            write-log "use key: $key" -ForegroundColor Yellow
         }
     }
 
@@ -305,9 +309,9 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     }
 }
 
-function write-log([string]$message,[consoleColor]$foregroundColor = [consoleColor]::White) {
+function write-log([string]$message, [consoleColor]$foregroundColor = [consoleColor]::White) {
     write-host "$(get-date) $message" -ForegroundColor $foregroundColor
-    if($logFile){
+    if ($logFile) {
         $message | out-file $logFile -append
     }
 }
