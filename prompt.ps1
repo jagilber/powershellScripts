@@ -15,7 +15,7 @@
 $global:promptInfo = @{
     path       = $null
     branch     = $null
-    branches   = @()
+    #branches   = @()
     remotes    = @()
     status     = $null
     ps         = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
@@ -37,8 +37,8 @@ function prompt() {
         }
 
         $date = (get-date).ToString('HH:mm:ss')
-        write-host "$($promptInfo.ps)@$date" -ForegroundColor DarkCyan -NoNewline
-        write-host "$($promptInfo.status)" -ForegroundColor DarkGray -NoNewline
+        write-host "$($promptInfo.ps)@$date" -ForegroundColor DarkGray -NoNewline
+        write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
         write-host " $path" -ForegroundColor White
         return ">"
     }
@@ -54,12 +54,17 @@ function get-gitInfo() {
         return $status
     }
 
-    $promptInfo.branches = @(git branch)
-    if (!$promptInfo.branches) {
+    # $promptInfo.branches = @(git branch)
+    # if (!$promptInfo.branches) {
+    #     return $status
+    # }
+
+    # $promptInfo.branch = (($promptInfo.branches) -imatch '\*').TrimStart('*').Trim()
+    $promptInfo.branch = @(git branch --show-current)
+    if (!$promptInfo.branch) {
         return $status
     }
 
-    $promptInfo.branch = (($promptInfo.branches) -imatch '\*').TrimStart('*').Trim()
     $promptInfo.remotes = @(git remote)
     
     $status = " ($($promptInfo.branch))"
