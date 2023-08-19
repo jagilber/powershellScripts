@@ -37,7 +37,9 @@ function prompt() {
         }
 
         $date = (get-date).ToString('HH:mm:ss')
-        write-host "$($promptInfo.ps)@$date$($promptInfo.status) $path" -ForegroundColor Cyan
+        write-host "$($promptInfo.ps)@$date" -ForegroundColor DarkCyan -NoNewline
+        write-host "$($promptInfo.status)" -ForegroundColor DarkGray -NoNewline
+        write-host " $path" -ForegroundColor White
         return ">"
     }
     catch {
