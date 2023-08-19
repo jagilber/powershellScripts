@@ -205,6 +205,10 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
         if($key){
             write-log "use key:`r`n$key" -ForegroundColor Yellow
         }
+        if([uri]::IsWellFormedUriString($key,[urikind]::Absolute)){
+            [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
+            $key = invoke-webRequest $key
+        }
     }
 
     while ($iteration -lt $count -or $count -eq 0) {
