@@ -1336,6 +1336,11 @@ function run-command($group, $items, [DateTime]$timeStamp = $null)
 
                 foreach ($op in $ops)
                 {
+                    if(!$op.Properties)
+                    {
+                        continue
+                    }
+                    write-host "run-command:op: $($op| convertto-json))"
                     [DateTime]$timeadjust = $op.Properties.TimeStamp
 
                     while ($allItems.ContainsKey($timeadjust))
