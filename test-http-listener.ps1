@@ -223,6 +223,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $clientKey = $context.Request.QueryString.GetValues('key')
                 if ($clientKey -ine $key) {
                     write-log "invalid key: $clientKey"
+                    $context.Response.StatusCode = 404
                     $context.Response.Close()
                     continue
                 }
