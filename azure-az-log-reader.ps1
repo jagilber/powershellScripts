@@ -249,7 +249,7 @@ function main()
     }
     catch
     {
-        write-host "window:exception:$($error | out-string)"
+        write-host "window:exception:$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
     }
     finally
@@ -348,7 +348,7 @@ function add-depitem($lbitem, $color, $resourceGroup)
     }
     catch
     {
-        write-host "add-depitem:exception:$($error)"
+        write-host "add-depitem:exception:$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
     }
 }
@@ -544,7 +544,7 @@ function authenticate-az($context = $Null)
         }
         else
         {
-            write-host "job:auth error $($error)" -ForegroundColor Yellow
+            write-host "job:auth error $($error | out-string)" -ForegroundColor Yellow
             throw [Exception]
         }
     }
@@ -556,7 +556,7 @@ function authenticate-az($context = $Null)
         }
         catch
         {
-            write-host "exception authenticating. exiting $($error)" -ForegroundColor Yellow
+            write-host "exception authenticating. exiting $($error | out-string)`r`n$($psitem.ScriptStackTrace)" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -965,7 +965,7 @@ function get-time($item)
     }
     catch
     {
-        write-host "exception:get-time $($error)"
+        write-host "exception:get-time $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
         return $retVal
     }
@@ -1010,7 +1010,7 @@ function get-update($updateUrl, $destinationFile)
     }
     catch [System.Exception] 
     {
-        write-host "get-update:exception: $($error)"
+        write-host "get-update:exception: $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
         return $false    
     }
@@ -1034,7 +1034,7 @@ function is-deployment($items)
     }
     catch
     {
-        write-host "exception:is-deployment: $($error)"
+        write-host "exception:is-deployment: $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
         return $null
     }
@@ -1118,7 +1118,7 @@ function open-event()
     }
     catch
     {
-        write-host "open-event:exception $($error)"
+        write-host "open-event:exception $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
     }
     finally
@@ -1245,7 +1245,7 @@ function receive-backgroundJob()
     }
     catch
     {
-        write-host "receive-background job exception $($error)"
+        write-host "receive-background job exception $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
     }
 }
@@ -1373,7 +1373,7 @@ function run-command($group, $items, [DateTime]$timeStamp = $null)
     }
     catch
     {
-        write-host "Exception:run-command $($error | out-string)"
+        write-host "Exception:run-command $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.Clear()
     }
 }
@@ -1435,7 +1435,7 @@ function run-commands($jobObject = $null)
     }
     catch
     {
-        write-host "run-commands:exception:$($error)"
+        write-host "run-commands:exception:$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         $error.clear()
     }
 }
@@ -1486,7 +1486,7 @@ function start-backgroundJob()
     }
     catch
     {
-        write-host "start-backgroundjob: exception: $($error)"
+        write-host "start-backgroundjob: exception: $($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         exit 1
         $error.Clear()
     }
