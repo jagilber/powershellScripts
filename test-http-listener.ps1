@@ -166,7 +166,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     if ($asjob) {
         start-job -ScriptBlock { 
             param($script, $params)
-            write-log "enter:start-server backgroundjob:pid:$pid script:$script params:$params"
+            write-host "enter:start-server backgroundjob:pid:$pid script:$script params:$params"
             . $script @params 
         } -ArgumentList $MyInvocation.ScriptName, $scriptParams
 
