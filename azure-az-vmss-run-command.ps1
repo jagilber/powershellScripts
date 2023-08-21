@@ -207,7 +207,8 @@ param(
     [string]$location = "westus",
     [switch]$force,
     [switch]$concurrent,
-    [switch]$examples
+    [switch]$examples,
+    [bool]$removeTempScript = $true
 )
 
 Set-StrictMode -Version Latest
@@ -288,7 +289,7 @@ function main() {
             return 
         }
 
-        $script = create-tempScript -script $script
+        create-tempScript -script $script
 
         if ($removeExtension) {
             $commandId = $removeCommandId
@@ -297,7 +298,7 @@ function main() {
         $result = run-vmssPsCommand -resourceGroup $resourceGroup `
             -vmssName $vmssName `
             -instanceIds $instanceIds `
-            -script $script `
+            -script $scriptName `
             -parameters $parameters
 
         write-host $result
@@ -325,7 +326,7 @@ function main() {
         return 1
     }
     finally {
-        if ((test-path $tempScript)) {
+        if ($removeTempScript -and (test-path $tempScript)) {
             remove-item $tempScript -Force
         }
     }
@@ -381,7 +382,7 @@ function create-tempScript([string]$script) {
     if ($pscommand -and !(test-path $script)) {
         if ($eventLogOutput) {
             $newScript = [text.stringbuilder]::new()
-            $newScript.AppendLine("`$transcript = `".\run-command-transcript.log`"")
+            $newScript.AppendLine("`$transcript = `"`$psscriptroot\run-command-transcript.log`"")
             $newScript.AppendLine("start-transcript -path `$transcript")
             $newScript.AppendLine($script)
             $newScript.AppendLine("stop-transcript")
@@ -390,10 +391,9 @@ function create-tempScript([string]$script) {
             $script = $newScript.ToString()
             Write-Host "script with transcript and event log output:`r`n$script"
         }
-        out-file -InputObject $script -filepath $tempscript -Force
-        $script = $tempScript
+        write-host "out-file -InputObject $script -filepath $tempScript -Force"
+        out-file -InputObject $script -filepath $tempScript -Force
     }
-    return $script
 }
 
 function generate-list([string]$strList) {
