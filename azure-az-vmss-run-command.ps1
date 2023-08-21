@@ -216,7 +216,7 @@ $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "silentlycontinue"
 $global:jobs = @{}
 $global:joboutputs = @{}
-$tempScript = ".\tempscript.ps1"
+$tempScript = "$psscriptroot\tempscript.ps1"
 $removeCommandId = "RemoveRunCommandWindowsExtension"
 $global:startTime = get-date
 $global:success = 0
@@ -382,12 +382,12 @@ function create-tempScript([string]$script) {
     if ($pscommand -and !(test-path $script)) {
         if ($eventLogOutput) {
             $newScript = [text.stringbuilder]::new()
-            $newScript.AppendLine("`$transcript = `"`$psscriptroot\run-command-transcript.log`"")
-            $newScript.AppendLine("start-transcript -path `$transcript")
-            $newScript.AppendLine($script)
-            $newScript.AppendLine("stop-transcript")
-            $newScript.AppendLine("new-eventLog -logName application -source $commandId -errorAction silentlyContinue")
-            $newScript.AppendLine("write-eventLog -logName application -source $commandId -entryType information -eventId 1 -message (get-content `$transcript | out-string)")
+            [void]$newScript.AppendLine("`$transcript = `"`$psscriptroot\run-command-transcript.log`"")
+            [void]$newScript.AppendLine("start-transcript -path `$transcript")
+            [void]$newScript.AppendLine($script)
+            [void]$newScript.AppendLine("stop-transcript")
+            [void]$newScript.AppendLine("new-eventLog -logName application -source $commandId -errorAction silentlyContinue")
+            [void]$newScript.AppendLine("write-eventLog -logName application -source $commandId -entryType information -eventId 1 -message (get-content `$transcript | out-string)")
             $script = $newScript.ToString()
             Write-Host "script with transcript and event log output:`r`n$script"
         }
@@ -473,7 +473,7 @@ function monitor-jobs() {
 
         $currentJobsCount = @(get-job).count
         $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed:"
-        $status = "elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes installed:$($global:extensionInstalled) not installed:$($global:extensionNotInstalled) fail:$($global:fail)" `
+        $status = "elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes installed:$($global:extensionInstalled) not-installed:$($global:extensionNotInstalled) fail:$($global:fail)" `
             + " success:$($global:success)"
         $percentComplete = ((($originalJobsCount - $currentJobsCount) / $originalJobsCount) * 100)
 
