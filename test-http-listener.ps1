@@ -223,7 +223,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $clientKey = $context.Request.QueryString.GetValues('key')
                 if ($clientKey -ine $key) {
                     write-log "invalid key: $clientKey"
-                    $context.Response.StatusCode = 404
+                    $context.Response.StatusCode = 401
                     $context.Response.Close()
                     continue
                 }
@@ -247,11 +247,11 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
                 $html += $context | ConvertTo-Json -depth 99
             }
-            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/health') {
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.StartsWith('/health')) {
                 write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = @{"ApplicationHealthState" = "Healthy" } | convertto-json
             }
-            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq '/min') {
+            elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.StartsWith('/min')) {
                 write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
