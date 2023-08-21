@@ -289,7 +289,7 @@ function main() {
             return 
         }
 
-        create-tempScript -script $script
+        $scriptFile = create-tempScript -script $script
 
         if ($removeExtension) {
             $commandId = $removeCommandId
@@ -298,7 +298,7 @@ function main() {
         $result = run-vmssPsCommand -resourceGroup $resourceGroup `
             -vmssName $vmssName `
             -instanceIds $instanceIds `
-            -script $scriptName `
+            -script $scriptFile `
             -parameters $parameters
 
         write-host $result
@@ -394,6 +394,7 @@ function create-tempScript([string]$script) {
         write-host "out-file -InputObject $script -filepath $tempScript -Force"
         out-file -InputObject $script -filepath $tempScript -Force
     }
+    return $tempScript
 }
 
 function generate-list([string]$strList) {
