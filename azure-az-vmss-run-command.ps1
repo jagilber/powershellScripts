@@ -194,9 +194,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [string]$resourceGroup,
-    [Parameter(Mandatory = $true)]
     [string]$vmssName,
     [string]$instanceId,
     [string]$script, # script string content or file path to script
@@ -236,6 +234,11 @@ function main() {
         return
     }
 
+    if(!$resourceGroupName -or !$vmssName) {
+        Write-Warning "resource group and vm scaleset name are required."
+        return
+    }
+
     if (!(check-module)) {
         return
     }
@@ -268,7 +271,7 @@ function main() {
             $script = node-psTestScript
         }
 
-        $scalesets = Get-azVmss -ResourceGroupName $resourceGroup
+        $scalesets = @(Get-azVmss -ResourceGroupName $resourceGroup)
 
         if ($scalesets.Count -eq 0) {
             Write-Warning "no vm scalesets found in resource group $resourceGroup"
@@ -316,6 +319,10 @@ function main() {
         if ($error) {
             return 1
         }
+    }
+    catch {
+        write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)"
+        return 1
     }
     finally {
         if ((test-path $tempScript)) {
@@ -463,7 +470,7 @@ function monitor-jobs() {
         $instances = Get-azVmssVM -ResourceGroupName $resourceGroup -vmscalesetname $vmssName -InstanceView
         write-verbose "$($instances | convertto-json -WarningAction SilentlyContinue)"
 
-        $currentJobsCount = (get-job).count
+        $currentJobsCount = @(get-job).count
         $activity = "$($commandId) $($originalJobsCount - $currentJobsCount) / $($originalJobsCount) vm jobs completed:"
         $status = "elapsed:$(((get-date) - $global:startTime).TotalMinutes.ToString("0.0")) minutes installed:$($global:extensionInstalled) not installed:$($global:extensionNotInstalled) fail:$($global:fail)" `
             + " success:$($global:success)"
