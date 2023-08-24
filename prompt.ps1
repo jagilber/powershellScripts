@@ -13,14 +13,14 @@
     code .\prompt.ps1
 #>
 $global:promptInfo = @{
-    path       = $null
-    branch     = $null
+    path         = $null
+    branch       = $null
     #branches   = @()
-    remotes    = @()
-    status     = $null
-    ps         = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
-    cacheTimer = [datetime]::MinValue
-    enableGit  = $true
+    remotes      = @()
+    status       = $null
+    ps           = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
+    cacheTimer   = [datetime]::MinValue
+    enableGit    = $true
     cacheMinutes = 1
 }
 #[console]::ForegroundColor = 'Magenta'
@@ -37,7 +37,8 @@ function prompt() {
         }
 
         $date = (get-date).ToString('HH:mm:ss')
-        write-host "$($promptInfo.ps)@$date" -ForegroundColor DarkGray -NoNewline
+        #write-host "$($promptInfo.ps) $([char]0x23F2)$date" -ForegroundColor DarkGray -NoNewline
+        write-host "$($promptInfo.ps) $date" -ForegroundColor DarkGray -NoNewline
         write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
         write-host " $path" -ForegroundColor White
         return ">"
@@ -67,11 +68,11 @@ function get-gitInfo() {
 
     $promptInfo.remotes = @(git remote)
     
-    $status = " ($($promptInfo.branch))"
+    $status = " $([char]0x2325)($($promptInfo.branch))"
     $diff = @(git status --porcelain).count
     
     if ($diff -gt 0) {
-        $status = " ($($promptInfo.branch)*$diff)"
+        $status = " $([char]0x2325)($($promptInfo.branch)*$diff)"
     }
 
     foreach ($remote in $promptInfo.remotes) {
