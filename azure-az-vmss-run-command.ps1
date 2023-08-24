@@ -386,9 +386,20 @@ function create-tempScript([string]$script) {
                 start-transcript -path $transcript;
                 ' + $script + '
                 stop-transcript;
-                foreach($chunk in (((get-content $transcript) -join "") -split "(.{16384})")) {
-                    if(!$chunk) { continue }
-                    write-eventLog -logName application -source ' + $commandId + ' -entryType information -eventId 1 -message "$chunk";
+                new-eventLog -logName application -Source ' + $commandId + ' -errorAction silentlyContinue;
+                $count = 0;
+                $maxLength = 16000;
+                $content = get-content $transcript;
+                if ($content.length -gt $maxLength) {
+                    $regexMatches = [regex]::matches((get-content $transcript), "(.{$maxLength})");
+                    foreach ($match in $regexMatches) {
+                        $chunk = $match.groups[0].value;
+                        if (!$chunk) { continue }
+                        write-eventLog -logName application -source ' + $commandId + ' -entryType information -eventId 1 -message "$(($count += 1).tostring())`r`n$chunk";
+                    }
+                }
+                else {
+                    write-eventLog -logName application -source ' + $commandId + ' -entryType information -eventId 1 -message "$content";
                 }
             '
             $script = $newScript
