@@ -381,14 +381,17 @@ function check-provisioningState() {
 function create-tempScript([string]$script) {
     if ($pscommand -and !(test-path $script)) {
         if ($eventLogOutput) {
-            $newScript = [text.stringbuilder]::new()
-            [void]$newScript.AppendLine("`$transcript = `"`$psscriptroot\run-command-transcript.log`"")
-            [void]$newScript.AppendLine("start-transcript -path `$transcript")
-            [void]$newScript.AppendLine($script)
-            [void]$newScript.AppendLine("stop-transcript")
-            [void]$newScript.AppendLine("new-eventLog -logName application -source $commandId -errorAction silentlyContinue")
-            [void]$newScript.AppendLine("write-eventLog -logName application -source $commandId -entryType information -eventId 1 -message (get-content `$transcript | out-string)")
-            $script = $newScript.ToString()
+            $newScript = '
+                $transcript = "$psscriptroot\run-command-transcript.log";
+                start-transcript -path $transcript;
+                ' + $script + '
+                stop-transcript;
+                foreach($chunk in (((get-content $transcript) -join "") -split "(.{16384})")) {
+                    if(!$chunk) { continue }
+                    write-eventLog -logName application -source ' + $commandId + ' -entryType information -eventId 1 -message "$chunk";
+                }
+            '
+            $script = $newScript
             Write-Host "script with transcript and event log output:`r`n$script"
         }
         write-host "out-file -InputObject $script -filepath $tempScript -Force"
@@ -439,7 +442,7 @@ function get-instanceIds([string]$instanceId) {
 }
 
 function monitor-jobs() {
-    $originalJobsCount = (get-job).count
+    $originalJobsCount = @(get-job).count
 
     while (get-job) {
         foreach ($job in get-job) {
@@ -592,10 +595,6 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
                 -AsJob
         }
 
-        if (!$concurrent) {
-            monitor-jobs
-        }
-
         if ($response) {
             $global:jobs.Add($response.Id, "$resourceGroup`:$vmssName`:$instanceId")
             write-host ($response | format-list * | out-string)
@@ -603,6 +602,10 @@ function run-vmssPsCommand ($resourceGroup, $vmssName, $instanceIds, [string]$sc
         else {
             write-warning "no response from command!"
             $global:fail++
+        }
+        
+        if (!$concurrent) {
+            monitor-jobs
         }
     }
 }
