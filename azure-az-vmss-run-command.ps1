@@ -389,13 +389,13 @@ function create-tempScript([string]$script) {
                 new-eventLog -logName application -Source ' + $commandId + ' -errorAction silentlyContinue;
                 $count = 0;
                 $maxLength = 16000;
-                $content = get-content $transcript;
+                $content = get-content $transcript -raw;
                 if ($content.length -gt $maxLength) {
-                    $regexMatches = [regex]::matches((get-content $transcript), "(.{$maxLength})");
+                    $regexMatches = [regex]::matches($content, "(.{$maxLength})", [text.RegularExpressions.RegexOptions]::Singleline);
                     foreach ($match in $regexMatches) {
                         $chunk = $match.groups[0].value;
                         if (!$chunk) { continue }
-                        write-eventLog -logName application -source ' + $commandId + ' -entryType information -eventId 1 -message "$(($count += 1).tostring())`r`n$chunk";
+                        write-eventLog -logName application -source ' + $commandId + ' -entryType information -eventId 1 -message "$(($count += 1).tostring()) of $($regexMatches.Count)`r`n$chunk";
                     }
                 }
                 else {
