@@ -1,15 +1,16 @@
 <#
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-get-vmImages.ps1" -outFile "$pwd/azure-az-get-vmImages.ps1";
-    ./azure-az-get-vmImages.ps1 -resourceGroupName <resource group name> -nodeTypeName <node type name>
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-get-vmssImages.ps1" -outFile "$pwd/azure-az-get-vmssImages.ps1";
+    ./azure-az-get-vmssImages.ps1 -resourceGroupName <resource group name> -nodeTypeName <node type name>
 #>
 param(
     [Parameter(Mandatory = $true)]
     $resourceGroupName = '',
     [Parameter(Mandatory = $true)]
     $nodeTypeName = '',
-    $location = ''
+    $location = '',
+    $instanceId = 0
 )
 
 Import-Module -Name Az.Compute
@@ -39,12 +40,12 @@ function main() {
 
     if (!$targetImageReference) {
         write-warning "vmssHistory not found. checking instance 0"
-        $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId 0
+        $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId
         $targetImageReference = $vmssVmInstance.StorageProfile.ImageReference
     }
     elseif (!$targetImageReference.ExactVersion) {
         write-warning "targetImageReference ExactVersion not found. checking instance 0"
-        $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId 0
+        $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId
         $targetImageReference.ExactVersion = $vmssVmInstance.StorageProfile.ImageReference.ExactVersion
     }
 
