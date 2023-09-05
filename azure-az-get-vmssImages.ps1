@@ -69,13 +69,20 @@ function main() {
 
     if ($publisherName -and $offer -and $sku) {
         write-host "Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku" -ForegroundColor Cyan
-        $images = Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku
-        write-host "available versions: " -ForegroundColor Green
-        $images | format-table -Property Version, Skus, Offer, PublisherName
+        $imageSkus = Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku
+        $orderedSkus = [collections.generic.list[version]]::new()
     
-        foreach ($image in $images) {
+        foreach ($image in $imageSkus) {
+            [void]$orderedSkus.Add([version]::new($image.Version)) 
+        }
+    
+        $orderedSkus = $orderedSkus | Sort-Object
+        write-host "available versions: " -ForegroundColor Green
+        $orderedSkus.foreach{$psitem.ToString()}
+    
+        foreach ($sku in $orderedSkus) {
             if ([version]$latestVersion -gt [version]$runningVersion) { $versionsBack++ }
-            if ([version]$latestVersion -lt [version]$image.Version) { $latestVersion = $image.Version }
+            if ([version]$latestVersion -lt [version]$sku) { $latestVersion = $sku }
         }
     
         if ($isLatest) {

@@ -28,6 +28,7 @@ if ($showDetail) {
 }
 
 write-host "checking publisher $($publisher)"
+write-host "Get-azVMImagePublisher -Location $location"
 $publishers = Get-azVMImagePublisher -Location $location 
 
 if (!($publishers | Where-Object PublisherName -Match $publisher)) {
@@ -43,6 +44,7 @@ if ($showDetail) {
 }
 
 write-host "checking vm size $($vmSize) in $($location)"
+write-host "Get-azVMSize -Location $location"
 $vmSizes = Get-azVMSize -Location $location
 
 if (!($vmSizes | Where-Object Name -Like $vmSize)) {
@@ -77,11 +79,25 @@ if ($showDetail) {
 foreach ($sku in $skus) {
     write-host "checking sku image $($publisherName) $($offer) $($imageSku) $($sku.skus)"
     write-host "Get-azVMImage -Location $location -PublisherName $publisherName -Offer $offer -skus $($sku.skus)" -ForegroundColor Cyan
-    $imageskus = Get-azVMImage -Location $location -PublisherName $publisherName -Offer $offer -skus $sku.skus
+    $imageSkus = Get-azVMImage -Location $location -PublisherName $publisherName -Offer $offer -skus $sku.skus
+    $orderedSkus = [collections.generic.list[version]]::new()
+    $orderedList = [collections.arraylist]::new()
+
+    foreach ($image in $imageSkus) {
+        [void]$orderedSkus.Add([version]::new($image.Version)) 
+    }
+
+    $orderedSkus = $orderedSkus | Sort-Object
+
+    foreach ($orderedSku in $orderedSkus) {
+        $sku = $imageSkus | where-object Version -ieq $orderedSku.ToString()
+        [void]$orderedList.Add($sku)
+    }
+
     if ($showDetail) {
-        $imageskus | Format-List *
+        $orderedList | Format-List *
     }
     else {
-        $imageskus | format-table -Property Version, Skus, Offer, PublisherName
+        $orderedList | format-table -Property Version, Skus, Offer, PublisherName
     }
 }
