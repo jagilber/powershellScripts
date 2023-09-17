@@ -59,7 +59,7 @@ function main() {
         $publisherName = $targetImageReference.Publisher
         $offer = $targetImageReference.Offer
         $sku = $targetImageReference.Sku
-        $runningVersion = $targetImageReference.Version
+        $runningVersion = ($targetImageReference.ExactVersion, $targetImageReference.Version | select-object -first 1)
         if ($runningVersion -ieq 'latest') {
             write-host "running version is 'latest'"
             $isLatest = $true
@@ -78,10 +78,10 @@ function main() {
     
         $orderedSkus = $orderedSkus | Sort-Object
         write-host "available versions: " -ForegroundColor Green
-        $orderedSkus.foreach{$psitem.ToString()}
+        $orderedSkus.foreach{ $psitem.ToString() }
     
         foreach ($sku in $orderedSkus) {
-            if ([version]$latestVersion -gt [version]$runningVersion) { $versionsBack++ }
+            if ([version]$sku -gt [version]$runningVersion) { $versionsBack++ }
             if ([version]$latestVersion -lt [version]$sku) { $latestVersion = $sku }
         }
     
@@ -92,7 +92,7 @@ function main() {
             write-host "published latest version: $latestVersion is $versionsBack versions newer than current running version: $runningVersion" -ForegroundColor Red
         }
         elseif ($versionsBack -eq 1) {
-            write-host "published latest version: $latestVersion is newer than current running version: $runningVersion" -ForegroundColor Yellow
+            write-host "published latest version: $latestVersion is one version newer than current running version: $runningVersion" -ForegroundColor Yellow
         }
         else {
             write-host "current running version: $runningVersion is same or newer than published latest version: $latestVersion" -ForegroundColor Green
