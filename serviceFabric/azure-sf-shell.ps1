@@ -56,6 +56,11 @@ function main() {
             write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$x509CertificateName"
             $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Subject -ieq "CN=$x509CertificateName"
             if (!$x509Certificate) {
+                write-host "failed to get certificate for name from local store: $x509CertificateName" -foregroundColor yellow
+            }
+            write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Thumbprint -ieq $x509CertificateName"
+            $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Thumbprint -ieq "$x509CertificateName"
+            if (!$x509Certificate) {
                 write-host "failed to get certificate for thumbprint from local store: $x509CertificateName" -foregroundColor red
             }
         }
