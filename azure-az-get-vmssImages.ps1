@@ -6,10 +6,9 @@
 #>
 param(
     [Parameter(Mandatory = $true)]
-    $resourceGroupName = '',
-    [Parameter(Mandatory = $true)]
-    $nodeTypeName = '',
-    $location = '',
+    $resourceGroupName,
+    $clusterName = $resourceGroupName,
+    $nodeTypeName,
     $instanceId = 0
 )
 
@@ -20,9 +19,22 @@ function main() {
     $targetImageReference = $latestVersion = [version]::new(0, 0, 0, 0)
     $isLatest = $false
     $versionsBack = 0
+    $location = (Get-AzResourceGroup -Name $resourceGroupName).Location
 
-    if (!$location) {
-        $location = (Get-AzResourceGroup -Name $resourceGroupName).Location
+    $cluster = Get-AzResource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -ResourceName $clusterName -ErrorAction SilentlyContinue
+
+    if (!$cluster) {
+        $cluster = Get-AzResource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/managedclusters -ResourceName $clusterName
+        $resourceGroupName = "SFC_$($cluster.Properties.clusterid)"
+    } 
+    if (!$cluster) {
+        write-error "cluster not found. specify -clusterName`r`n$($error | out-string)"
+        exit
+    }
+
+    if (!$nodeTypeName) {
+        write-host "node type name not specified. using first node type name: $($cluster.Properties.nodeTypes[0].name)" -ForegroundColor Yellow
+        $nodeTypeName = $cluster.Properties.nodeTypes[0].name
     }
 
     $vmssHistory = @(Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName -OSUpgradeHistory)[0]
@@ -39,14 +51,14 @@ function main() {
     $targetImageReference = $targetImageReference | convertto-json | convertfrom-json
 
     if (!$targetImageReference) {
-        write-warning "vmssHistory not found. checking instance 0"
+        write-warning "vmssHistory not found. checking instance $instanceId"
         $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId
         $targetImageReference = $vmssVmInstance.StorageProfile.ImageReference
     }
     elseif (!$targetImageReference.ExactVersion) {
-        write-warning "targetImageReference ExactVersion not found. checking instance 0"
+        write-warning "targetImageReference ExactVersion not found. checking instance $instanceId"
         $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId
-        $targetImageReference.ExactVersion = $vmssVmInstance.StorageProfile.ImageReference.ExactVersion
+        $targetImageReference.ExactVersion = @($vmssVmInstance.StorageProfile.ImageReference.ExactVersion)[0]
     }
 
     if (!$targetImageReference) {
@@ -66,40 +78,35 @@ function main() {
             $runningVersion = [version]::new(0, 0, 0, 0)
         }    
     }
+    
+    write-host "Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku" -ForegroundColor Cyan
+    $imageSkus = Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku
+    $orderedSkus = [collections.generic.list[version]]::new()
 
-    if ($publisherName -and $offer -and $sku) {
-        write-host "Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku" -ForegroundColor Cyan
-        $imageSkus = Get-AzVmImage -Location $location -PublisherName $publisherName -offer $offer -sku $sku
-        $orderedSkus = [collections.generic.list[version]]::new()
-    
-        foreach ($image in $imageSkus) {
-            [void]$orderedSkus.Add([version]::new($image.Version)) 
-        }
-    
-        $orderedSkus = $orderedSkus | Sort-Object
-        write-host "available versions: " -ForegroundColor Green
-        $orderedSkus.foreach{ $psitem.ToString() }
-    
-        foreach ($sku in $orderedSkus) {
-            if ([version]$sku -gt [version]$runningVersion) { $versionsBack++ }
-            if ([version]$latestVersion -lt [version]$sku) { $latestVersion = $sku }
-        }
-    
-        if ($isLatest) {
-            write-host "published latest version: $latestVersion running version: 'latest'" -ForegroundColor Cyan
-        }
-        elseif ($versionsBack -gt 1) {
-            write-host "published latest version: $latestVersion is $versionsBack versions newer than current running version: $runningVersion" -ForegroundColor Red
-        }
-        elseif ($versionsBack -eq 1) {
-            write-host "published latest version: $latestVersion is one version newer than current running version: $runningVersion" -ForegroundColor Yellow
-        }
-        else {
-            write-host "current running version: $runningVersion is same or newer than published latest version: $latestVersion" -ForegroundColor Green
-        }
+    foreach ($image in $imageSkus) {
+        [void]$orderedSkus.Add([version]::new($image.Version)) 
+    }
+
+    $orderedSkus = $orderedSkus | Sort-Object
+    write-host "available versions: " -ForegroundColor Green
+    $orderedSkus.foreach{ $psitem.ToString() }
+
+    foreach ($sku in $orderedSkus) {
+        if ([version]$sku -gt [version]$runningVersion) { $versionsBack++ }
+        if ([version]$latestVersion -lt [version]$sku) { $latestVersion = $sku }
+    }
+
+    if ($isLatest) {
+        write-host "published latest version: $latestVersion running version: 'latest'" -ForegroundColor Cyan
+    }
+    elseif ($versionsBack -gt 1) {
+        write-host "published latest version: $latestVersion is $versionsBack versions newer than current running version: $runningVersion" -ForegroundColor Red
+    }
+    elseif ($versionsBack -eq 1) {
+        write-host "published latest version: $latestVersion is one version newer than current running version: $runningVersion" -ForegroundColor Yellow
     }
     else {
-        write-warning "publisherName, offer, and sku not found. exiting"
+        write-host "current running version: $runningVersion is same or newer than published latest version: $latestVersion" -ForegroundColor Green
     }
 }
 
