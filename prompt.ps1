@@ -12,6 +12,10 @@
     code $PROFILE
     code .\prompt.ps1
 #>
+
+# autoload modules
+$PSModuleAutoLoadingPreference = 2
+
 $global:promptInfo = @{
     path         = $null
     branch       = $null
