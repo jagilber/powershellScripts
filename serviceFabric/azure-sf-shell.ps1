@@ -37,6 +37,30 @@
     ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
     example rest request to the cluster. requires -clusterHttpConnectionEndpoint 
 
+.PARAMETER
+    clusterHttpConnectionEndpoint
+        the cluster endpoint to connect to. example: https://mycluster.eastus.cloudapp.azure.com:19080
+.PARAMETER
+    keyvaultName
+        the keyvault name where the certificate is stored. example: sfclusterkeyvault
+.PARAMETER
+    certificateName
+        the certificate name stored in keyvault. example: sfclustercert
+.PARAMETER
+    keyvaultSecretVersion
+        the keyvault secret version. example: 96e530c3d22b43228eb1d...
+.PARAMETER
+    x509CertificateBase64
+        the base64 encoded certificate. example: MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp...
+.PARAMETER
+    x509Certificate
+        the certificate object. example: $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
+.PARAMETER
+    absolutePath
+        the absolute path to the rest endpoint. example: /$/GetClusterHealth
+.PARAMETER
+    apiVersion
+        the api version to use. default: 9.1
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
@@ -88,6 +112,15 @@ function main() {
     }
 
     if ($clusterHttpConnectionEndpoint) {
+        if(!($clusterHttpConnectionEndpoint -imatch '^http')) {
+            write-host "adding https to clusterHttpConnectionEndpoint: $clusterHttpConnectionEndpoint"
+            $clusterHttpConnectionEndpoint = "https://$clusterHttpConnectionEndpoint"
+        }
+        if(!($clusterHttpConnectionEndpoint -imatch ':\d+$')) {
+            write-host "adding port 19080 to clusterHttpConnectionEndpoint: $clusterHttpConnectionEndpoint"
+            $clusterHttpConnectionEndpoint = "$clusterHttpConnectionEndpoint:19080"
+        }
+
         $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
     }
     if (!$global:clusterHttpConnectionEndpoint) {
@@ -106,7 +139,6 @@ function main() {
         write-host "connect-azaccount"
         Connect-AzAccount -UseDeviceAuthentication
     }
-
 
     if (!(get-certificateInfo)) {
         return
@@ -138,9 +170,9 @@ function main() {
     $error.clear()
     if (!(Test-SFClusterConnection)) {
         Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint `
-            -ServerCertThumbprint $x509Certificate.Thumbprint `
+            -ServerCertThumbprint $global:x509Certificate.Thumbprint `
             -X509Credential `
-            -ClientCertificate $x509Certificate `
+            -ClientCertificate $global:x509Certificate `
             -verbose
         if ($error) {
             write-host "error connecting to cluster: $error"
@@ -157,7 +189,7 @@ function main() {
     write-host "current cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
     write-host "use function 'Connect-SFCluster' to reconnect to a cluster. example:" -foregroundcolor green
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
-    -ServerCertThumbprint $($x509Certificate.Thumbprint) ``
+    -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
     -X509Credential ``
     -ClientCertificate `$global:x509Certificate ``
     -verbose
@@ -201,8 +233,13 @@ function get-certificateInfo() {
     write-host "getting certificate info"
 
     if (!$x509Certificate -and !$global:x509Certificate) {
-        write-host "x509Certificate not specified. looking for certificate in keyvault: $keyvaultName"
-        if ($kevaultName) {
+        if($x509CertificateBase64) {
+            write-host "x509CertificateBase64 specified. converting to certificate object"
+            $secretByte = [System.Convert]::FromBase64String($x509CertificateBase64)
+            $x509Certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
+        }
+        elseif ($keyvaultName) {
+            write-host "x509Certificate not specified. looking for certificate in keyvault: $keyvaultName"
             if ($keyvaultName -and $certificateName -and $keyvaultSecretVersion){
                 write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion"
                 $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion
@@ -227,7 +264,7 @@ function get-certificateInfo() {
             if ($global:isCloudShell) {
                 write-host "cloud shell / unix"
                 if (!$x509CertificateBase64) {
-                    throw "x509CertificateBase64 not specified"
+                    throw "for cloudshell/linux systems not using keyvault, provide value for -x509CertificateBase64"
                 }
             }
             else {
@@ -239,11 +276,6 @@ function get-certificateInfo() {
                 }
             }
         }
-
-        if (!$x509Certificate) {
-            throw "failed to get certificate for thumbprint from keyvault: $certificateName"
-        }
-        $global:x509Certificate = $x509Certificate
     }
     elseif (!$x509Certificate) {
         $x509Certificate = $global:x509Certificate
@@ -255,6 +287,12 @@ function get-certificateInfo() {
     write-host "issue date: $($x509Certificate.NotBefore)" -foregroundColor yellow
     write-host "expiration date: $($x509Certificate.NotAfter)" -foregroundColor yellow
     write-host "thumbprint: $($x509Certificate.Thumbprint)" -foregroundColor yellow
+    if (!$x509Certificate) {
+        throw "failed to get certificate for thumbprint from keyvault: $certificateName"
+    }
+
+    $global:x509Certificate = $x509Certificate
+    return $true
 }
 
 function test-connection($tcpEndpoint) {
