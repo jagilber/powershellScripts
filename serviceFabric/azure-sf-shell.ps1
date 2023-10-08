@@ -30,7 +30,7 @@
 
 .PARAMETER absolutePath
         the absolute path to the rest endpoint. example: /$/GetClusterHealth
-        
+
 .PARAMETER apiVersion
         the api version to use. default: 9.1
 
@@ -112,11 +112,11 @@ function main() {
     }
 
     if ($clusterHttpConnectionEndpoint) {
-        if(!($clusterHttpConnectionEndpoint -imatch '^http')) {
+        if (!($clusterHttpConnectionEndpoint -imatch '^http')) {
             write-host "adding https to clusterHttpConnectionEndpoint: $clusterHttpConnectionEndpoint"
             $clusterHttpConnectionEndpoint = "https://$clusterHttpConnectionEndpoint"
         }
-        if(!($clusterHttpConnectionEndpoint -imatch ':\d+$')) {
+        if (!($clusterHttpConnectionEndpoint -imatch ':\d+$')) {
             write-host "adding port 19080 to clusterHttpConnectionEndpoint: $clusterHttpConnectionEndpoint"
             $clusterHttpConnectionEndpoint = "$clusterHttpConnectionEndpoint:19080"
         }
@@ -130,15 +130,6 @@ function main() {
 
     $publicip = @((Invoke-RestMethod https://ipinfo.io/json).ip)
     write-host "publicip: $publicip"
-
-    if (!(check-module)) {
-        return
-    }
-
-    if (!(get-azresourcegroup)) {
-        write-host "connect-azaccount"
-        Connect-AzAccount -UseDeviceAuthentication
-    }
 
     if (!(get-certificateInfo)) {
         return
@@ -189,11 +180,11 @@ function main() {
     write-host "current cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
     write-host "use function 'Connect-SFCluster' to reconnect to a cluster. example:" -foregroundcolor green
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
-    -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
-    -X509Credential ``
-    -ClientCertificate `$global:x509Certificate ``
-    -verbose
-    "  -foregroundcolor Green
+        -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
+        -X509Credential ``
+        -ClientCertificate `$global:x509Certificate ``
+        -verbose
+        "  -foregroundcolor Green
     
     #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
     write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
@@ -233,14 +224,24 @@ function get-certificateInfo() {
     write-host "getting certificate info"
 
     if (!$x509Certificate -and !$global:x509Certificate) {
-        if($x509CertificateBase64) {
+        if ($x509CertificateBase64) {
             write-host "x509CertificateBase64 specified. converting to certificate object"
             $secretByte = [System.Convert]::FromBase64String($x509CertificateBase64)
             $x509Certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
         }
         elseif ($keyvaultName) {
             write-host "x509Certificate not specified. looking for certificate in keyvault: $keyvaultName"
-            if ($keyvaultName -and $certificateName -and $keyvaultSecretVersion){
+
+            if (!(check-module)) {
+                throw "failed to import az modules"
+            }
+        
+            if (!(get-azresourcegroup)) {
+                write-host "connect-azaccount"
+                Connect-AzAccount -UseDeviceAuthentication
+            }
+
+            if ($keyvaultName -and $certificateName -and $keyvaultSecretVersion) {
                 write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion"
                 $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion
             }        
@@ -255,6 +256,7 @@ function get-certificateInfo() {
             if (!$kvCertificate) {
                 throw "Certificate not found in keyvault"
             }
+
             $secret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $kvCertificate.Name -AsPlainText;
             $secretByte = [Convert]::FromBase64String($secret)
             $x509Certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
