@@ -10,6 +10,30 @@
     Requires : PowerShell Version 5.1 or greater
         231008 - add base64 certificate support
 
+.PARAMETER clusterHttpConnectionEndpoint
+        the cluster endpoint to connect to. example: https://mycluster.eastus.cloudapp.azure.com:19080
+
+.PARAMETER keyvaultName
+        the keyvault name where the certificate is stored. example: sfclusterkeyvault
+
+.PARAMETER certificateName
+        the certificate name stored in keyvault. example: sfclustercert
+
+.PARAMETER keyvaultSecretVersion
+        the keyvault secret version. example: 96e530c3d22b43228eb1d...
+
+.PARAMETER x509CertificateBase64
+        the base64 encoded certificate. example: MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp...
+
+.PARAMETER x509Certificate
+        the certificate object. example: $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
+
+.PARAMETER absolutePath
+        the absolute path to the rest endpoint. example: /$/GetClusterHealth
+        
+.PARAMETER apiVersion
+        the api version to use. default: 9.1
+
 .EXAMPLE
     ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName
@@ -37,30 +61,6 @@
     ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
     example rest request to the cluster. requires -clusterHttpConnectionEndpoint 
 
-.PARAMETER
-    clusterHttpConnectionEndpoint
-        the cluster endpoint to connect to. example: https://mycluster.eastus.cloudapp.azure.com:19080
-.PARAMETER
-    keyvaultName
-        the keyvault name where the certificate is stored. example: sfclusterkeyvault
-.PARAMETER
-    certificateName
-        the certificate name stored in keyvault. example: sfclustercert
-.PARAMETER
-    keyvaultSecretVersion
-        the keyvault secret version. example: 96e530c3d22b43228eb1d...
-.PARAMETER
-    x509CertificateBase64
-        the base64 encoded certificate. example: MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp...
-.PARAMETER
-    x509Certificate
-        the certificate object. example: $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
-.PARAMETER
-    absolutePath
-        the absolute path to the rest endpoint. example: /$/GetClusterHealth
-.PARAMETER
-    apiVersion
-        the api version to use. default: 9.1
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
