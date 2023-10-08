@@ -3,94 +3,114 @@
     Connect to a Service Fabric cluster using Azure Cloud Shell. can use local or remote certificate in keyvault.
 .DESCRIPTION
     Connect to a Service Fabric cluster using Azure Cloud Shell local or remote.
-    requires connectivity to the cluster endpoint port 19080 from cloud shell.
+
+.NOTES
+    File Name: azure-sf-shell.ps1
+    Author   : Jason Gilbert
+    Requires : PowerShell Version 5.1 or greater
+        231008 - add base64 certificate support
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -x509CertificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -absolutePath /$/GetClusterHealth
+    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName, -keyvaultSecretVersion
 
 .EXAMPLE
-    after running script with connection arguments, you can run commands like below for direct rest api calls:
-        ./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'
+    ./azure-sf-shell.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509CertificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
+    example connection to a cluster using a base64 encoded certificate. this is useful for cloud shell since it doesn't have access to local certificate store.
+    example command to create base64 string from powershell: [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
+
+.EXAMPLE
+    ./azure-sf-shell.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509Certificate $x509Certificate
+    example connection to a cluster using a certificate object. this is useful for cloud shell since it doesn't have access to local certificate store.
+    example command to create certificate object from local cert store in powershell: 
+        $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
+
+.EXAMPLE
+    ./azure-sf-shell.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -certificateName sfclustercert
+    example connection to a cluster using a certificate stored in local certificate store on windows. requires -certificateName
+
+.EXAMPLE
+    ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
+    example rest request to the cluster. requires -clusterHttpConnectionEndpoint 
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
-help ./azure-sf-shell.ps1 -examples;
-./azure-sf-shell.ps1 -keyVaultName <key vault name> -x509CertificateName <certificate name> -clusterHttpConnectionEndpoint <cluster endpoint>
+./azure-sf-shell.ps1 -examples
 
 #>
+[CmdletBinding(DefaultParameterSetName = "default")]
 param(
+    #[Parameter(Mandatory = $true)]
+    [string]$clusterHttpConnectionEndpoint, # = $null, #'https://mycluster.eastus.cloudapp.azure.com:19080',
+    
+    [Parameter(ParameterSetName = "keyvault")]
     [string]$keyvaultName = '', #"mykeyvault",
-    [string]$x509CertificateName = '', #"myclustercert",
-    [string]$clusterHttpConnectionEndpoint = '', #'https://mycluster.eastus.cloudapp.azure.com:19080',
+    
+    [Parameter(ParameterSetName = "keyvault")]
+    [Parameter(ParameterSetName = "local")]
+    [string]$certificateName = '', #"myclustercert",
+    
+    [Parameter(ParameterSetName = "local")]
     [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
+    
+    [Parameter(ParameterSetName = "localComplete")]
+    [string]$x509CertificateBase64 = '', # [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
+    
+    [Parameter(ParameterSetName = "keyvault")]
+    [string]$keyvaultSecretVersion = $null, # 96e530c3d22b43228eb1d...
+    
+    [Parameter(ParameterSetName = "rest")]
     [string]$absolutePath = '', #'/$/GetClusterHealth',
+    
     [string]$apiVersion = '9.1',
-    [string]$timeoutSeconds = '10'
+    
+    [string]$timeoutSeconds = '10',
+
+    [switch]$examples
 )
 
 $global:sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
 $global:isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
 $global:apiVersion = $apiVersion
 $global:timeoutSeconds = $timeoutSeconds
+$scriptName = "$psscriptroot/$($MyInvocation.MyCommand.Name)"
 
 function main() {
+
+    if ($examples) {
+        get-help $scriptName -examples
+        return
+    }
+
+    if ($clusterHttpConnectionEndpoint) {
+        $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
+    }
+    if (!$global:clusterHttpConnectionEndpoint) {
+        write-error "execute script with value for -clusterHttpConnectionEndpoint"
+        return
+    }
+
     $publicip = @((Invoke-RestMethod https://ipinfo.io/json).ip)
     write-host "publicip: $publicip"
+
+    if (!(check-module)) {
+        return
+    }
 
     if (!(get-azresourcegroup)) {
         write-host "connect-azaccount"
         Connect-AzAccount -UseDeviceAuthentication
     }
 
-    if ($clusterHttpConnectionEndpoint) {
-        $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
+
+    if (!(get-certificateInfo)) {
+        return
     }
-
-    if (!$x509Certificate -and !$global:x509Certificate) {
-
-        if (!$global:isCloudShell) {
-            write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$x509CertificateName"
-            $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Subject -ieq "CN=$x509CertificateName"
-            if (!$x509Certificate) {
-                write-host "failed to get certificate for name from local store: $x509CertificateName" -foregroundColor yellow
-            }
-            write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Thumbprint -ieq $x509CertificateName"
-            $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Thumbprint -ieq "$x509CertificateName"
-            if (!$x509Certificate) {
-                write-host "failed to get certificate for thumbprint from local store: $x509CertificateName" -foregroundColor red
-            }
-        }
-
-        if (!$x509Certificate) {
-            write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $x509CertificateName"
-            $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $x509CertificateName
-            if (!$kvCertificate) {
-                throw "Certificate not found in keyvault"
-            }
-            $secret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $kvCertificate.Name -AsPlainText;
-            $secretByte = [Convert]::FromBase64String($secret)
-            $x509Certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
-        }
-
-        if (!$x509Certificate) {
-            throw "failed to get certificate for thumbprint from keyvault: $x509CertificateName"
-        }
-        $global:x509Certificate = $x509Certificate
-    }
-    elseif (!$x509Certificate) {
-        $x509Certificate = $global:x509Certificate
-    }
-
-    write-host "found certificate for: $x509CertificateName" -foregroundColor yellow
-    write-host "subject: $($x509Certificate.Subject)" -foregroundColor yellow
-    write-host "issuer: $($x509Certificate.Issuer)" -foregroundColor yellow
-    write-host "issue date: $($x509Certificate.NotBefore)" -foregroundColor yellow
-    write-host "expiration date: $($x509Certificate.NotAfter)" -foregroundColor yellow
-    write-host "thumbprint: $($x509Certificate.Thumbprint)" -foregroundColor yellow
 
     if (!(get-module $global:sfHttpModule)) {
         if (!(get-module -ListAvailable $global:sfHttpModule)) {
@@ -101,6 +121,11 @@ function main() {
     
     if (!(get-module $global:sfHttpModule)) {
         throw "$global:sfHttpModule not found"
+    }
+
+    if ($absolutePath) {
+        invoke-request -absolutePath $absolutePath
+        return
     }
 
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
@@ -139,10 +164,97 @@ function main() {
     "  -foregroundcolor Green
     
     #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
-    if($absolutePath) {
-        invoke-request -absolutePath $absolutePath
-    }
     write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
+}
+
+function check-module() {
+    $error.clear()
+    get-command Connect-AzAccount -ErrorAction SilentlyContinue
+    
+    if ($error) {
+        $error.clear()
+        write-warning "azure module for Connect-AzAccount not installed."
+
+        if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+            $error.clear()
+            install-module az.accounts
+            install-module az.resources
+            install-module az.keyvault
+
+            import-module az.accounts
+            import-module az.resources
+            import-module az.keyvault
+        }
+        else {
+            return $false
+        }
+
+        if ($error) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function get-certificateInfo() {
+    write-host "getting certificate info"
+
+    if (!$x509Certificate -and !$global:x509Certificate) {
+        write-host "x509Certificate not specified. looking for certificate in keyvault: $keyvaultName"
+        if ($kevaultName) {
+            if ($keyvaultName -and $certificateName -and $keyvaultSecretVersion){
+                write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion"
+                $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion
+            }        
+            elseif ($keyvaultName -and $certificateName) {
+                write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName"
+                $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName
+            }
+            else {
+                throw "keyvaultName and x509CertificateName not specified"
+            }
+
+            if (!$kvCertificate) {
+                throw "Certificate not found in keyvault"
+            }
+            $secret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $kvCertificate.Name -AsPlainText;
+            $secretByte = [Convert]::FromBase64String($secret)
+            $x509Certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
+
+        }
+        elseif ($certificateName) {
+            if ($global:isCloudShell) {
+                write-host "cloud shell / unix"
+                if (!$x509CertificateBase64) {
+                    throw "x509CertificateBase64 not specified"
+                }
+            }
+            else {
+                write-host "not cloud shell"
+                write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName"
+                $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Subject -ieq "CN=$certificateName"
+                if (!$x509Certificate) {
+                    write-host "failed to get certificate for thumbprint from local store: $certificateName" -foregroundColor red
+                }
+            }
+        }
+
+        if (!$x509Certificate) {
+            throw "failed to get certificate for thumbprint from keyvault: $certificateName"
+        }
+        $global:x509Certificate = $x509Certificate
+    }
+    elseif (!$x509Certificate) {
+        $x509Certificate = $global:x509Certificate
+    }
+
+    write-host "found certificate for: $certificateName" -foregroundColor yellow
+    write-host "subject: $($x509Certificate.Subject)" -foregroundColor yellow
+    write-host "issuer: $($x509Certificate.Issuer)" -foregroundColor yellow
+    write-host "issue date: $($x509Certificate.NotBefore)" -foregroundColor yellow
+    write-host "expiration date: $($x509Certificate.NotAfter)" -foregroundColor yellow
+    write-host "thumbprint: $($x509Certificate.Thumbprint)" -foregroundColor yellow
 }
 
 function test-connection($tcpEndpoint) {
