@@ -8,16 +8,17 @@
     File Name: sf-http-client.ps1
     Author   : jagilber
     Requires : PowerShell Version 5.1 or greater
+        231009 - rename to sf-http-client.ps1
         231008 - add base64 certificate support
 
 .PARAMETER clusterHttpConnectionEndpoint
         the cluster endpoint to connect to. example: https://mycluster.eastus.cloudapp.azure.com:19080
 
-.PARAMETER keyvaultName
-        the keyvault name where the certificate is stored. example: sfclusterkeyvault
-
 .PARAMETER certificateName
         the certificate name stored in keyvault. example: sfclustercert
+
+.PARAMETER keyvaultName
+        the keyvault name where the certificate is stored. example: sfclusterkeyvault
 
 .PARAMETER keyvaultSecretVersion
         the keyvault secret version. example: 96e530c3d22b43228eb1d...
@@ -70,19 +71,23 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 [CmdletBinding(DefaultParameterSetName = "default")]
 param(
     #[Parameter(Mandatory = $true)]
-    [string]$clusterHttpConnectionEndpoint, # = $null, #'https://mycluster.eastus.cloudapp.azure.com:19080',
-    
-    [Parameter(ParameterSetName = "keyvault")]
-    [string]$keyvaultName = '', #"mykeyvault",
-    
     [Parameter(ParameterSetName = "keyvault")]
     [Parameter(ParameterSetName = "local")]
+    [Parameter(ParameterSetName = "default")]
+    [string]$clusterHttpConnectionEndpoint, # = $null, #'https://mycluster.eastus.cloudapp.azure.com:19080',
+        
+    [Parameter(ParameterSetName = "keyvault")]
+    [Parameter(ParameterSetName = "local")]
+    [Parameter(ParameterSetName = "default")]
     [string]$certificateName = '', #"myclustercert",
-    
+
+    [Parameter(ParameterSetName = "keyvault")]
+    [string]$keyvaultName = '', #"mykeyvault",
+
     [Parameter(ParameterSetName = "local")]
     [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
     
-    [Parameter(ParameterSetName = "localComplete")]
+    [Parameter(ParameterSetName = "local")]
     [string]$x509CertificateBase64 = '', # [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
     
     [Parameter(ParameterSetName = "keyvault")]
@@ -90,7 +95,7 @@ param(
     
     [Parameter(ParameterSetName = "rest")]
     [string]$absolutePath = '', #'/$/GetClusterHealth',
-    
+
     [string]$apiVersion = '9.1',
     
     [string]$timeoutSeconds = '10',
@@ -118,10 +123,11 @@ function main() {
         }
         if (!($clusterHttpConnectionEndpoint -imatch ':\d+$')) {
             write-host "adding port 19080 to clusterHttpConnectionEndpoint: $clusterHttpConnectionEndpoint"
-            $clusterHttpConnectionEndpoint = "$clusterHttpConnectionEndpoint:19080"
+            $clusterHttpConnectionEndpoint = "$($clusterHttpConnectionEndpoint):19080"
         }
 
         $global:clusterHttpConnectionEndpoint = $clusterHttpConnectionEndpoint
+        write-host "clusterHttpConnectionEndpoint: $clusterHttpConnectionEndpoint"
     }
     if (!$global:clusterHttpConnectionEndpoint) {
         write-error "execute script with value for -clusterHttpConnectionEndpoint"
