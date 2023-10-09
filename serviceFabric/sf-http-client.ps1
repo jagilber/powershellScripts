@@ -223,6 +223,14 @@ function check-module() {
         }
     }
 
+    if(!(get-azResourceGroup)){
+        Connect-AzAccount
+    }
+
+    if(!@(get-azResourceGroup).Count -gt 0){
+        return $false
+    }
+
     return $true
 }
 
