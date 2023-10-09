@@ -40,7 +40,7 @@
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName
 
 .EXAMPLE
-    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName, -keyvaultSecretVersion
 
 .EXAMPLE
@@ -49,7 +49,7 @@
     example command to create base64 string from powershell: [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509Certificate $x509Certificate
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -x509Certificate $x509Certificate
     example connection to a cluster using a certificate object. this is useful for cloud shell since it doesn't have access to local certificate store.
     example command to create certificate object from local cert store in powershell: 
         $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
@@ -159,7 +159,7 @@ function main() {
 
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
     if ($error -or !$result) {
-        write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip"
+        write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip" -ForegroundColor Cyan
         write-error "error: $error"
         return
     }
@@ -334,11 +334,17 @@ function test-connection($tcpEndpoint) {
             $portTestSucceeded = $true
         }
 
-        write-host "test-connection: computer:$hostName port:$port result:$portTestSucceeded"
+        if($portTestSucceeded){
+            write-host "test-connection: computer:$hostName port:$port result:$portTestSucceeded" -ForegroundColor Green
+        }
+        else {
+            write-error "test-connection: computer:$hostName port:$port result:$portTestSucceeded"
+        }
+        
         $tcpClient.Dispose()
         return $portTestSucceeded
     }
-    catch {
+    catch [Exception] {
         write-host "test-connection:exception:$($PSItem | out-string)"
         return $false
     }
