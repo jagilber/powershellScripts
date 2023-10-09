@@ -5,8 +5,8 @@
     Connect to a Service Fabric cluster using Azure Cloud Shell local or remote.
 
 .NOTES
-    File Name: azure-sf-shell.ps1
-    Author   : Jason Gilbert
+    File Name: sf-http-client.ps1
+    Author   : jagilber
     Requires : PowerShell Version 5.1 or greater
         231008 - add base64 certificate support
 
@@ -35,36 +35,36 @@
         the api version to use. default: 9.1
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName, -keyvaultSecretVersion
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509CertificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509CertificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
     example connection to a cluster using a base64 encoded certificate. this is useful for cloud shell since it doesn't have access to local certificate store.
     example command to create base64 string from powershell: [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509Certificate $x509Certificate
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509Certificate $x509Certificate
     example connection to a cluster using a certificate object. this is useful for cloud shell since it doesn't have access to local certificate store.
     example command to create certificate object from local cert store in powershell: 
         $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -certificateName sfclustercert
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -certificateName sfclustercert
     example connection to a cluster using a certificate stored in local certificate store on windows. requires -certificateName
 
 .EXAMPLE
-    ./azure-sf-shell.ps1 -absolutePath /$/GetClusterHealth
+    ./sf-http-client.ps1 -absolutePath /$/GetClusterHealth
     example rest request to the cluster. requires -clusterHttpConnectionEndpoint 
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-sf-shell.ps1" -outFile "$pwd/azure-sf-shell.ps1";
-./azure-sf-shell.ps1 -examples
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-http-client.ps1" -outFile "$pwd/sf-http-client.ps1";
+./sf-http-client.ps1 -examples
 
 #>
 [CmdletBinding(DefaultParameterSetName = "default")]
@@ -187,7 +187,7 @@ function main() {
         "  -foregroundcolor Green
     
     #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
-    write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./azure-sf-shell.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
+    write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./sf-http-client.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
 }
 
 function check-module() {
