@@ -8,6 +8,7 @@
     File Name: sf-http-client.ps1
     Author   : jagilber
     Requires : PowerShell Version 5.1 or greater
+        231010 - rename argument -x509CertificateName to -certificateName
         231009 - rename to sf-http-client.ps1
         231008 - add base64 certificate support
 
@@ -23,7 +24,7 @@
 .PARAMETER keyvaultSecretVersion
         the keyvault secret version. example: 96e530c3d22b43228eb1d...
 
-.PARAMETER x509CertificateBase64
+.PARAMETER certificateBase64
         the base64 encoded certificate. example: MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp...
 
 .PARAMETER x509Certificate
@@ -44,7 +45,7 @@
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName, -keyvaultSecretVersion
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -x509CertificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -certificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
     example connection to a cluster using a base64 encoded certificate. this is useful for cloud shell since it doesn't have access to local certificate store.
     example command to create base64 string from powershell: [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
 
@@ -60,10 +61,11 @@
 
 .EXAMPLE
     ./sf-http-client.ps1 -absolutePath /$/GetClusterHealth
-    example rest request to the cluster. requires -clusterHttpConnectionEndpoint 
+    example rest request to the cluster. requires -clusterHttpConnectionEndpoint to be set in a previous command.
 
 .LINK
-[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+[net.servicePointManager]::Expect100Continue = $true;
+[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-http-client.ps1" -outFile "$pwd/sf-http-client.ps1";
 ./sf-http-client.ps1 -examples
 
@@ -88,7 +90,7 @@ param(
     [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
     
     [Parameter(ParameterSetName = "local")]
-    [string]$x509CertificateBase64 = '', # [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
+    [string]$certificateBase64 = '', # [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
     
     [Parameter(ParameterSetName = "keyvault")]
     [string]$keyvaultSecretVersion = $null, # 96e530c3d22b43228eb1d...
@@ -159,7 +161,7 @@ function main() {
 
     $result = test-connection -tcpEndpoint $clusterHttpConnectionEndpoint
     if ($error -or !$result) {
-        write-host "make sure this ip is allowed is able to connect to cluster endpoint: $publicip" -ForegroundColor Cyan
+        write-host "make sure this ip is allowed to connect to cluster endpoint: $publicip" -ForegroundColor Cyan
         write-error "error: $error"
         return
     }
@@ -176,14 +178,15 @@ function main() {
             return
         }
     }
-    
-    $global:sfHttpCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
-    write-host "available commands:stored in `$global:sfHttpCommands`r`n $($global:sfHttpCommands | out-string)" -foregroundcolor cyan
+
     if (!($global:SFHttpClusterConnection)) {
         $global:SFHttpClusterConnection = $SFHttpClusterConnection
     }
-    
+
+    $global:sfHttpCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
     write-host "current cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
+    write-host "available commands:stored in `$global:sfHttpCommands`r`n $($global:sfHttpCommands | out-string)" -foregroundcolor cyan
+
     write-host "use function 'Connect-SFCluster' to reconnect to a cluster. example:" -foregroundcolor green
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
         -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
@@ -238,9 +241,9 @@ function get-certificateInfo() {
     write-host "getting certificate info"
 
     if (!$x509Certificate -and !$global:x509Certificate) {
-        if ($x509CertificateBase64) {
-            write-host "x509CertificateBase64 specified. converting to certificate object"
-            $secretByte = [System.Convert]::FromBase64String($x509CertificateBase64)
+        if ($certificateBase64) {
+            write-host "certificateBase64 specified. converting to certificate object"
+            $secretByte = [System.Convert]::FromBase64String($certificateBase64)
             $x509Certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($secretByte, "", "Exportable,PersistKeySet")
         }
         elseif ($keyvaultName) {
@@ -279,8 +282,8 @@ function get-certificateInfo() {
         elseif ($certificateName) {
             if ($global:isCloudShell) {
                 write-host "cloud shell / unix"
-                if (!$x509CertificateBase64) {
-                    throw "for cloudshell/linux systems not using keyvault, provide value for -x509CertificateBase64"
+                if (!$certificateBase64) {
+                    throw "for cloudshell/linux systems not using keyvault, provide value for -certificateBase64"
                 }
             }
             else {
