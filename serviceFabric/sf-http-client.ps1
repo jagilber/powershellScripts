@@ -1,8 +1,11 @@
 <#
 .SYNOPSIS
-    Connect to a Service Fabric cluster using Azure Cloud Shell. can use local or remote certificate in keyvault.
+    Connect to a Service Fabric cluster from windows or linux powershell without Service Fabric SDK
+
 .DESCRIPTION
-    Connect to a Service Fabric cluster using Azure Cloud Shell local or remote.
+    Can be used from windows or linux powershell.
+    Can be used from Azure Cloud Shell local or remote.
+    Certificate can be stored in local certificate store, keyvault, or provided as a base64 encoded string.
 
 .NOTES
     File Name: sf-http-client.ps1
@@ -52,7 +55,7 @@
 .EXAMPLE
     ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -x509Certificate $x509Certificate
     example connection to a cluster using a certificate object. this is useful for cloud shell since it doesn't have access to local certificate store.
-    example command to create certificate object from local cert store in powershell: 
+    example command to create certificate object from local cert store in powershell:
         $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
 
 .EXAMPLE
@@ -77,7 +80,7 @@ param(
     [Parameter(ParameterSetName = "local")]
     [Parameter(ParameterSetName = "default")]
     [string]$clusterHttpConnectionEndpoint, # = $null, #'https://mycluster.eastus.cloudapp.azure.com:19080',
-        
+
     [Parameter(ParameterSetName = "keyvault")]
     [Parameter(ParameterSetName = "local")]
     [Parameter(ParameterSetName = "default")]
@@ -88,18 +91,18 @@ param(
 
     [Parameter(ParameterSetName = "local")]
     [Security.Cryptography.X509Certificates.X509Certificate2]$x509Certificate = $null,
-    
+
     [Parameter(ParameterSetName = "local")]
     [string]$certificateBase64 = '', # [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
-    
+
     [Parameter(ParameterSetName = "keyvault")]
     [string]$keyvaultSecretVersion = $null, # 96e530c3d22b43228eb1d...
-    
+
     [Parameter(ParameterSetName = "rest")]
     [string]$absolutePath = '', #'/$/GetClusterHealth',
 
     [string]$apiVersion = '9.1',
-    
+
     [string]$timeoutSeconds = '10',
 
     [switch]$examples
@@ -149,7 +152,7 @@ function main() {
         }
         Import-Module $global:sfHttpModule
     }
-    
+
     if (!(get-module $global:sfHttpModule)) {
         throw "$global:sfHttpModule not found"
     }
@@ -165,7 +168,7 @@ function main() {
         write-error "error: $error"
         return
     }
-    
+
     $error.clear()
     if (!(Test-SFClusterConnection)) {
         Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint `
@@ -194,7 +197,7 @@ function main() {
         -ClientCertificate `$global:x509Certificate ``
         -verbose
         "  -foregroundcolor Green
-    
+
     #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
     write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./sf-http-client.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
 }
@@ -202,7 +205,7 @@ function main() {
 function check-module() {
     $error.clear()
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
-    
+
     if ($error) {
         $error.clear()
         write-warning "azure module for Connect-AzAccount not installed."
@@ -226,11 +229,11 @@ function check-module() {
         }
     }
 
-    if(!(get-azResourceGroup)){
+    if (!(get-azResourceGroup)) {
         Connect-AzAccount
     }
 
-    if(!@(get-azResourceGroup).Count -gt 0){
+    if (!@(get-azResourceGroup).Count -gt 0) {
         return $false
     }
 
@@ -252,7 +255,7 @@ function get-certificateInfo() {
             if (!(check-module)) {
                 throw "failed to import az modules"
             }
-        
+
             if (!(get-azresourcegroup)) {
                 write-host "connect-azaccount"
                 Connect-AzAccount -UseDeviceAuthentication
@@ -261,7 +264,7 @@ function get-certificateInfo() {
             if ($keyvaultName -and $certificateName -and $keyvaultSecretVersion) {
                 write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion"
                 $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName -Version $keyvaultSecretVersion
-            }        
+            }
             elseif ($keyvaultName -and $certificateName) {
                 write-host "Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName"
                 $kvCertificate = Get-AzKeyVaultCertificate -VaultName $keyvaultName -Name $certificateName
@@ -337,13 +340,13 @@ function test-connection($tcpEndpoint) {
             $portTestSucceeded = $true
         }
 
-        if($portTestSucceeded){
+        if ($portTestSucceeded) {
             write-host "test-connection: computer:$hostName port:$port result:$portTestSucceeded" -ForegroundColor Green
         }
         else {
             write-error "test-connection: computer:$hostName port:$port result:$portTestSucceeded"
         }
-        
+
         $tcpClient.Dispose()
         return $portTestSucceeded
     }
@@ -358,10 +361,10 @@ function test-connection($tcpEndpoint) {
     }
 }
 
-function invoke-request($absolutePath, 
-    $endpoint = $global:clusterHttpConnectionEndpoint, 
-    $x509Certificate = $global:x509Certificate, 
-    $apiVersion = $global:apiVersion, 
+function invoke-request($absolutePath,
+    $endpoint = $global:clusterHttpConnectionEndpoint,
+    $x509Certificate = $global:x509Certificate,
+    $apiVersion = $global:apiVersion,
     $timeoutSeconds = $global:timeoutSeconds) {
 
     if (!$endpoint) {
@@ -391,9 +394,9 @@ function invoke-request($absolutePath,
         # windows seems to want both certificate and certificate thumbprint
         write-host "Invoke-WebRequest -Uri '$baseUrl' -certificate `$global:x509Certificate -CertificateThumbprint $($x509Certificate.Thumbprint) -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
         $result = Invoke-WebRequest -Uri $baseUrl -certificate $x509Certificate -CertificateThumbprint $x509Certificate.Thumbprint -SkipCertificateCheck -timeoutSec $timeoutSeconds
-    
+
     }
-    
+
     write-verbose $result | convertfrom-json | convertto-json -depth 99
     return $result
 }
