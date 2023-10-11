@@ -192,9 +192,14 @@ function main() {
     write-host "current cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
     write-host "available commands:stored in `$global:sfHttpCommands`r`n $($global:sfHttpCommands | out-string)" -foregroundcolor cyan
 
-    write-host "Get-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc' -Verbose"
-    Get-SFClusterEventList -StartTimeUtc $eventStartTimeUtc -EndTimeUtc $eventEndTimeUtc -Verbose
+    write-host "Get-SFClusterVersion | convertto-json"
+    Get-SFClusterVersion | convertto-json
 
+    write-host "example command:Get-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc'" -foregroundColor Blue
+    write-host "example command:Restart-SFNode -NodeName _nt0_0 -NodeInstanceId 0" -foregroundColor Blue
+    write-host "example command:Disable-SFNode -NodeName _nt0_0 -DeactivationIntent Restart -Force" -foregroundColor Blue
+    write-host "example command:Enable-SFNode -NodeName _nt0_0" -foregroundColor Blue
+    write-host
     write-host "successfully connected to cluster. use function 'Connect-SFCluster' to reconnect to cluster if needed. example:" -foregroundcolor White
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
         -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
@@ -202,6 +207,7 @@ function main() {
         -ClientCertificate `$global:x509Certificate ``
         -verbose
         "  -foregroundcolor Gray
+    write-host "enter 'help *-SF*' to see list of available commands" -foregroundcolor White
 }
 
 function check-module() {
