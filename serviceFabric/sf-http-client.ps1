@@ -229,7 +229,7 @@ function check-module() {
         }
     }
 
-    if (!(get-azResourceGroup)) {
+    if (!@(get-azResourceGroup).Count -gt 0) {
         Connect-AzAccount
     }
 
