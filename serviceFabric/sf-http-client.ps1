@@ -64,6 +64,9 @@
     ./sf-http-client.ps1 -absolutePath /$/GetClusterHealth
     example rest request to the cluster. requires -clusterHttpConnectionEndpoint to be set in a previous command.
 
+.EXAMPLE
+    ./sf-http-client.ps1 -absolutePath "/EventsStore/Nodes/Events" -queryParameters @{StartTimeUtc=$eventStartTime;EndTimeUtc=$eventStopTime}
+
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -98,6 +101,9 @@ param(
 
     [Parameter(ParameterSetName = "rest")]
     [string]$absolutePath = '', #'/$/GetClusterHealth',
+
+    [Parameter(ParameterSetName = "rest")]
+    [hashtable]$queryParameters = @{},
 
     [string]$apiVersion = '9.1',
 
@@ -158,7 +164,7 @@ function main() {
     }
 
     if ($absolutePath) {
-        invoke-request -absolutePath $absolutePath
+        invoke-request -absolutePath $absolutePath -queryParameters $queryParameters
         return
     }
 
@@ -196,9 +202,10 @@ function main() {
     Get-SFClusterVersion | convertto-json
 
     write-host "example command:Get-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc'" -foregroundColor Blue
-    write-host "example command:Restart-SFNode -NodeName _nt0_0 -NodeInstanceId 0" -foregroundColor Blue
-    write-host "example command:Disable-SFNode -NodeName _nt0_0 -DeactivationIntent Restart -Force" -foregroundColor Blue
-    write-host "example command:Enable-SFNode -NodeName _nt0_0" -foregroundColor Blue
+    write-host "example command:Restart-SFNode -NodeName _nt0_2 -NodeInstanceId 0 # <-always 0" -foregroundColor Blue
+    write-host "example command:Disable-SFNode -NodeName _nt0_2 -DeactivationIntent Restart -Force" -foregroundColor Blue
+    write-host "example command:Get-SFApplication | Get-SFService" -foregroundColor Blue
+    write-host "example command:.\sf-http-client.ps1 -absolutePath '/EventsStore/Nodes/Events' -queryParameters @{StartTimeUtc=$eventStartTime;EndTimeUtc=$eventStopTime}" -foregroundColor Blue
     write-host
     write-host "successfully connected to cluster. use function 'Connect-SFCluster' to reconnect to cluster if needed. example:" -foregroundcolor White
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
@@ -370,11 +377,23 @@ function test-connection($tcpEndpoint) {
 }
 
 function invoke-request($absolutePath,
+    $queryParameters = @{},
     $endpoint = $global:clusterHttpConnectionEndpoint,
     $x509Certificate = $global:x509Certificate,
     $apiVersion = $global:apiVersion,
     $timeoutSeconds = $global:timeoutSeconds) {
 
+    $queryParameterString = ''
+
+    if (!$absolutePath) {
+        write-error "absolutePath not specified"
+        return $null
+    }
+    if ($queryParameters) {
+        foreach ($queryParameter in $queryParameters.GetEnumerator()) {
+            $queryParameterString += "&$($queryParameter.Name)=$($queryParameter.Value)"
+        }
+    }
     if (!$endpoint) {
         write-error "endpoint not specified"
         return $null
@@ -390,17 +409,17 @@ function invoke-request($absolutePath,
         $global:timeoutSeconds = 60
     }
 
-    $baseUrl = "$endpoint{0}?api-version=$apiVersion&timeout=$timeoutSeconds" -f $absolutePath
+    $baseUrl = "$($endpoint)/$($absolutePath)?api-version=$($apiVersion)&timeout=$($timeoutSeconds)$($queryParameterString)"
 
-    write-host "Invoke-WebRequest -Uri '$baseUrl' -certificate `$x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
-    $result = Invoke-WebRequest -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
+    write-host "Invoke-RestMethod -Uri '$baseUrl' -certificate `$x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
+    $result = Invoke-RestMethod -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
 
     write-verbose $result | convertfrom-json | convertto-json -depth 99
     return $result
 }
 
 if ($global:clusterHttpConnectionEndpoint -and $absolutePath) {
-    invoke-request -absolutePath $absolutePath
+    invoke-request -absolutePath $absolutePath -queryParameters $queryParameters
 }
 else {
     main
