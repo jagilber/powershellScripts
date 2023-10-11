@@ -11,10 +11,8 @@
     File Name: sf-http-client.ps1
     Author   : jagilber
     Requires : PowerShell Version 5.1 or greater
-        231010 - rename argument -x509CertificateName to -certificateName
-        231009 - rename to sf-http-client.ps1
-        231008 - add base64 certificate support
-
+        231011 - fix rest query
+        
 .PARAMETER clusterHttpConnectionEndpoint
         the cluster endpoint to connect to. example: https://mycluster.eastus.cloudapp.azure.com:19080
 
@@ -384,18 +382,8 @@ function invoke-request($absolutePath,
 
     $baseUrl = "$endpoint{0}?api-version=$apiVersion&timeout=$timeoutSeconds" -f $absolutePath
 
-    if ($PSVersionTable.Platform -ieq 'Unix') {
-        # cloud shell
-        write-host "Invoke-WebRequest -Uri '$baseUrl' -certificate `$global:x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
-        $result = Invoke-WebRequest -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
-
-    }
-    else {
-        # windows seems to want both certificate and certificate thumbprint
-        write-host "Invoke-WebRequest -Uri '$baseUrl' -certificate `$global:x509Certificate -CertificateThumbprint $($x509Certificate.Thumbprint) -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
-        $result = Invoke-WebRequest -Uri $baseUrl -certificate $x509Certificate -CertificateThumbprint $x509Certificate.Thumbprint -SkipCertificateCheck -timeoutSec $timeoutSeconds
-
-    }
+    write-host "Invoke-WebRequest -Uri '$baseUrl' -certificate `$x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
+    $result = Invoke-WebRequest -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
 
     write-verbose $result | convertfrom-json | convertto-json -depth 99
     return $result
