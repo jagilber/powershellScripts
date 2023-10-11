@@ -111,6 +111,8 @@ $global:isCloudShell = $PSVersionTable.Platform -ieq 'Unix'
 $global:apiVersion = $apiVersion
 $global:timeoutSeconds = $timeoutSeconds
 $scriptName = "$psscriptroot/$($MyInvocation.MyCommand.Name)"
+$eventStartTimeUtc = (get-date).AddDays(-1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$eventEndTimeUtc = (get-date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 function main() {
 
@@ -146,7 +148,7 @@ function main() {
 
     if (!(get-module $global:sfHttpModule)) {
         if (!(get-module -ListAvailable $global:sfHttpModule)) {
-            Install-Module -Name $global:sfHttpModule -AllowPrerelease -Force
+            Install-Module -Name $global:sfHttpModule -AllowPrerelease -AllowClobber -Force
         }
         Import-Module $global:sfHttpModule
     }
@@ -174,7 +176,7 @@ function main() {
             -X509Credential `
             -ClientCertificate $global:x509Certificate `
             -verbose
-        if ($error) {
+        if ($error -or !(Test-SFClusterConnection)) {
             write-host "error connecting to cluster: $error"
             return
         }
@@ -185,19 +187,21 @@ function main() {
     }
 
     $global:sfHttpCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
+
+    write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./sf-http-client.ps1 -absolutePath '/$/GetClusterHealth'"
     write-host "current cluster connection:`$global:SFHttpClusterConnection`r`n$($global:SFHttpClusterConnection | out-string)" -foregroundcolor cyan
     write-host "available commands:stored in `$global:sfHttpCommands`r`n $($global:sfHttpCommands | out-string)" -foregroundcolor cyan
 
-    write-host "use function 'Connect-SFCluster' to reconnect to a cluster. example:" -foregroundcolor green
+    write-host "Get-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc' -Verbose"
+    Get-SFClusterEventList -StartTimeUtc $eventStartTimeUtc -EndTimeUtc $eventEndTimeUtc -Verbose
+
+    write-host "successfully connected to cluster. use function 'Connect-SFCluster' to reconnect to cluster if needed. example:" -foregroundcolor White
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
         -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
         -X509Credential ``
         -ClientCertificate `$global:x509Certificate ``
         -verbose
-        "  -foregroundcolor Green
-
-    #write-host "use function 'invoke-request' to make rest requests to the cluster. example:invoke-request -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
-    write-host "use script with -absolutePath argument to make rest requests to the cluster. example:./sf-http-client.ps1 -absolutePath '/$/GetClusterHealth'" -foregroundcolor green
+        "  -foregroundcolor Gray
 }
 
 function check-module() {
