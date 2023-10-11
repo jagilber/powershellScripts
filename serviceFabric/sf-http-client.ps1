@@ -201,11 +201,16 @@ function main() {
     write-host "Get-SFClusterVersion | convertto-json"
     Get-SFClusterVersion | convertto-json
 
-    write-host "example command:Get-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc'" -foregroundColor Blue
-    write-host "example command:Restart-SFNode -NodeName _nt0_2 -NodeInstanceId 0 # <-always 0" -foregroundColor Blue
-    write-host "example command:Disable-SFNode -NodeName _nt0_2 -DeactivationIntent Restart -Force" -foregroundColor Blue
-    write-host "example command:Get-SFApplication | Get-SFService" -foregroundColor Blue
-    write-host "example command:.\sf-http-client.ps1 -absolutePath '/EventsStore/Nodes/Events' -queryParameters @{StartTimeUtc=$eventStartTime;EndTimeUtc=$eventStopTime}" -foregroundColor Blue
+    write-host "example commands:" -ForegroundColor Blue
+    write-host "`t.\sf-http-client.ps1 -absolutePath '/EventsStore/Nodes/Events' -queryParameters @{StartTimeUtc='$eventStartTime';EndTimeUtc='$eventStopTime'}" -foregroundColor Blue
+    write-host "`tGet-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc'" -foregroundColor Blue
+    write-host "`tRestart-SFNode -NodeName _nt0_2 -NodeInstanceId 0 # <-always 0" -foregroundColor Blue
+    write-host "`tDisable-SFNode -NodeName _nt0_2 -DeactivationIntent Restart -Force" -foregroundColor Blue
+    write-host "`tGet-SFApplication | Get-SFService" -foregroundColor Blue
+    write-host "`t`$applications = Get-SFApplication" -foregroundColor Blue
+    write-host "`t`$services = @(`$applications).ForEach{Get-SFService -ApplicationId `$psitem.applicationId}" -foregroundColor Blue
+    write-host "`t`$partitions = @(`$services).ForEach{Get-SFPartition -ServiceId `$psitem.ServiceId}" -foregroundColor Blue
+    write-host "`t`$replicas = @(`$partitions).ForEach{Get-SFReplica -PartitionId `$psitem.partitionId}" -foregroundColor Blue
     write-host
     write-host "successfully connected to cluster. use function 'Connect-SFCluster' to reconnect to cluster if needed. example:" -foregroundcolor White
     write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
