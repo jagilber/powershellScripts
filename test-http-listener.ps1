@@ -8,13 +8,13 @@
  230820
 
 .EXAMPLE
-    .\test-static-client-port-http.ps1
+    .\test-http-listener.ps1
 .EXAMPLE
-    .\test-static-client-port-http.ps1 -server -asjob
+    .\test-http-listener.ps1 -server -asjob
 .EXAMPLE
-    .\test-static-client-port-http.ps1 -server -asjob -serverPort 8080
+    .\test-http-listener.ps1 -server -asjob -serverPort 8080
 .EXAMPLE
-    .\test-static-client-port-http.ps1 -server -asjob -serverPort 8080 -clientMethod POST -clientBody "test message from client"
+    .\test-http-listener.ps1 -server -asjob -serverPort 8080 -clientMethod POST -clientBody "test message from client"
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/test-http-listener.ps1" -outFile "$pwd/test-http-listener.ps1";
