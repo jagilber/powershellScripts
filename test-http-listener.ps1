@@ -35,7 +35,8 @@ param(
     [switch]$useClientProxy,
     [bool]$asJob = $true,
     [string]$key = [guid]::NewGuid().ToString(),
-    [string]$logFile
+    [string]$logFile,
+    [switch]$force
 )
 
 $uri = "http://$($hostname):$port$absolutePath"
@@ -56,7 +57,7 @@ function main() {
 
             if (!$isAdmin) {
                 Write-Error "restart script as administrator for http 'server'"
-                return
+                if (!$force) { return }
             }
             # start as job so server can exit gracefully after 2 minutes of cancellation
             write-log "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
@@ -190,6 +191,11 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     # need admin access to set urlacl. maybe use tcp instead?
     # write-log "netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes"
     # start-process -Verb runas -FilePath 'cmd.exe' -ArgumentList '/c netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes'
+
+    write-log "to add url acl: netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes" -foregroundColor Yellow
+    write-log "current url acls: netsh http show urlacl url=http://+:$serverPort/"
+    $result = netsh http show urlacl url="http://+:$serverPort/"
+    write-log ($result | convertto-json)
 
     write-log "start-server:creating listener"
     $iteration = 0
