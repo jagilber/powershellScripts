@@ -35,8 +35,7 @@ param(
     [switch]$useClientProxy,
     [bool]$asJob = $true,
     [string]$key = [guid]::NewGuid().ToString(),
-    [string]$logFile,
-    [switch]$force
+    [string]$logFile
 )
 
 $uri = "http://$($hostname):$port$absolutePath"
@@ -56,8 +55,7 @@ function main() {
             $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
             if (!$isAdmin) {
-                Write-Error "restart script as administrator for http 'server'"
-                if (!$force) { return }
+                Write-Warning "not running as admin"
             }
             # start as job so server can exit gracefully after 2 minutes of cancellation
             write-log "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
@@ -188,14 +186,23 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
     }
 
+    # need admin access to set urlacl. maybe use tcp instead?
+    # write-log "netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes"
+    # start-process -Verb runas -FilePath 'cmd.exe' -ArgumentList '/c netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes'
+
+    write-log "to add url acl: netsh http add urlacl url=http://$($hostname):$serverPort/ user=everyone listen=yes" -foregroundColor Yellow
+    write-log "current url acls: netsh http show urlacl url=http://$($hostname):$serverPort/"
+    $result = netsh http show urlacl url="http://$($hostname):$serverPort/"
+    write-log ($result | convertto-json)
+
     write-log "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
     $http.Prefixes.Add("http://$($hostname):$serverPort/")
-    
-    # removing + wildcard for security allows non-adminitrative users to listen on specific port
+    write-log "using prefixes:$(($http.Prefixes | convertto-json)))"
+    # removing + wildcard for security allows non-administrative users to listen on specific address
     # https://learn.microsoft.com/en-us/windows/win32/http/add-urlacl
-    #$http.Prefixes.Add("http://+:$serverPort/")
+    # $http.Prefixes.Add("http://+:$serverPort/")
 
     $http.Start();
     $maxBuffer = 10240
