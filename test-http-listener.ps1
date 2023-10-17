@@ -200,7 +200,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     write-log "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
-    $http.Prefixes.Add("http://$(hostname):$serverPort/")
+    $http.Prefixes.Add("http://$($hostname):$serverPort/")
     $http.Prefixes.Add("http://+:$serverPort/")
     # https://learn.microsoft.com/en-us/windows/win32/http/add-urlacl
     $http.Start();
