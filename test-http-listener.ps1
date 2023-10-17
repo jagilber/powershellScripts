@@ -5,7 +5,7 @@
 .DESCRIPTION
  powershell test http listener for troubleshooting
  do a final client connect to free up close
- 230820
+ 2301017 - fix urlacl for non-admin users by using 'localhost' instead of '+'
 
 .EXAMPLE
     .\test-http-listener.ps1
@@ -188,21 +188,15 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
     }
 
-    # need admin access to set urlacl. maybe use tcp instead?
-    # write-log "netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes"
-    # start-process -Verb runas -FilePath 'cmd.exe' -ArgumentList '/c netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes'
-
-    write-log "to add url acl: netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes" -foregroundColor Yellow
-    write-log "current url acls: netsh http show urlacl url=http://+:$serverPort/"
-    $result = netsh http show urlacl url="http://+:$serverPort/"
-    write-log ($result | convertto-json)
-
     write-log "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
     $http.Prefixes.Add("http://$($hostname):$serverPort/")
-    $http.Prefixes.Add("http://+:$serverPort/")
+    
+    # removing + wildcard for security allows non-adminitrative users to listen on specific port
     # https://learn.microsoft.com/en-us/windows/win32/http/add-urlacl
+    #$http.Prefixes.Add("http://+:$serverPort/")
+
     $http.Start();
     $maxBuffer = 10240
 
