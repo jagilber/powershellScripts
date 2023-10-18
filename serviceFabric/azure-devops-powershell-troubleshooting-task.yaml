@@ -5,6 +5,10 @@
     write-host "current public ip:$publicIp" -ForegroundColor Green
     [environment]::getenvironmentvariables().getenumerator()|sort Name
     (dir ([environment]::getenvironmentvariable('PIPELINE_WORKSPACE')) -re).fullName;
+    foreach($tcpPort in $env:tcpPorts.split(',')){
+      write-host "test-netConnection -computerName $env:clusterEndpoint -port $tcpPort" -ForegroundColor Green
+      test-netConnection -computerName $env:clusterEndpoint -port $tcpPort
+    }
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-connect.ps1" -outFile "$pwd/sf-connect.ps1";
     ./sf-connect.ps1 -clusterEndpoint $env:clusterEndpoint -thumbprint $env:thumbprint
@@ -15,3 +19,4 @@
   env:  
     thumbprint: xxxxxxxxxxxxxxxxxxx
     clusterEndpoint: xxxxxx.xxxxx.cloudapp.azure.com
+    tcpPorts: 19000 #,19080,443
