@@ -191,6 +191,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     # start-process -Verb runas -FilePath 'cmd.exe' -ArgumentList '/c netsh http add urlacl url=http://+:$serverPort/ user=everyone listen=yes'
 
     write-log "to add url acl: netsh http add urlacl url=http://$($hostname):$serverPort/ user=everyone listen=yes" -foregroundColor Yellow
+    write-log "to remove url acl: netsh http delete urlacl url=http://$($hostname):$serverPort/" -foregroundColor Yellow
     write-log "current url acls: netsh http show urlacl url=http://$($hostname):$serverPort/"
     $result = netsh http show urlacl url="http://$($hostname):$serverPort/"
     write-log ($result | convertto-json)
