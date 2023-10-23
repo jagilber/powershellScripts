@@ -1,0 +1,212 @@
+// 20210228175136
+// https://raw.githubusercontent.com/Azure-Samples/service-fabric-dotnet-quickstart/master/ARM/UserApp.json
+
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "applicationName": {
+            "type": "string",
+            "defaultValue": "Application1",
+            "metadata": {
+                "description": "The name of the application resource."
+            }
+        },
+        "applicationTypeName": {
+            "type": "string",
+            "defaultValue": "ApplicationType",
+            "metadata": {
+                "description": "The application type name."
+            }
+        },
+        "applicationTypeVersion": {
+            "type": "string",
+            "defaultValue": "1",
+            "metadata": {
+                "description": "The application type version."
+            }
+        },
+        "appPackageUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "The URL to the application package sfpkg file."
+            }
+        },
+        "clusterName": {
+            "type": "string",
+            "defaultValue": "[resourcegroup().name]",
+            "metadata": {
+                "description": "Name of your cluster - Between 3 and 23 characters. Letters and numbers only."
+            }
+        },
+        "serviceName": {
+            "type": "string",
+            "defaultValue": "Service1",
+            "metadata": {
+                "description": "The name of the service resource in the format of {applicationName}~{serviceName}."
+            }
+        },
+        "serviceName2": {
+            "type": "string",
+            "defaultValue": "Service2",
+            "metadata": {
+                "description": "The name of the service resource in the format of {applicationName}~{serviceName}."
+            }
+        },
+        "serviceTypeName": {
+            "type": "string",
+            "defaultValue": "Service1Type",
+            "metadata": {
+                "description": "The name of the service type."
+            }
+        },
+        "serviceTypeName2": {
+            "type": "string",
+            "defaultValue": "Service2Type",
+            "metadata": {
+                "description": "The name of the service type."
+            }
+        },
+        "upgradeReplicaSetCheckTimeoutSeconds": {
+            "type": "int",
+            "defaultValue": 3600,
+            "metadata": {
+                "description": "upgrade replica set check timeout in seconds"
+            }
+
+        }
+    },
+    "variables": {
+        "clusterLocation": "[resourcegroup().location]",
+        "applicationTypeVersionResourceId": "[concat(resourceId('Microsoft.ServiceFabric/managedClusters', parameters('clusterName')),'/applicationTypes/', parameters('applicationTypeName'), '/versions/', parameters('applicationTypeVersion'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2022-01-01",
+            "type": "Microsoft.ServiceFabric/managedClusters/applicationTypes",
+            "name": "[concat(parameters('clusterName'), '/', parameters('applicationTypeName'))]",
+            "location": "[variables('clusterLocation')]",
+            "dependsOn": [
+            ],
+            "properties": {
+            }
+        },
+        {
+            "apiVersion": "2022-01-01",
+            "type": "Microsoft.ServiceFabric/managedClusters/applicationTypes/versions",
+            "name": "[concat(parameters('clusterName'), '/', parameters('applicationTypeName'), '/', parameters('applicationTypeVersion'))]",
+            "location": "[variables('clusterLocation')]",
+            "dependsOn": [
+                "[concat('Microsoft.ServiceFabric/managedClusters/', parameters('clusterName'), '/applicationTypes/', parameters('applicationTypeName'))]"
+            ],
+            "properties": {
+                "appPackageUrl": "[parameters('appPackageUrl')]"
+            }
+        },
+        {
+            "apiVersion": "2022-01-01",
+            "type": "Microsoft.ServiceFabric/managedClusters/applications",
+            "name": "[concat(parameters('clusterName'), '/', parameters('applicationName'))]",
+            "location": "[variables('clusterLocation')]",
+            "identity": {
+                "type": "none",
+                "userAssignedIdentities": {}
+            },
+            "dependsOn": [
+                "[concat('Microsoft.ServiceFabric/managedClusters/', parameters('clusterName'), '/applicationTypes/', parameters('applicationTypeName'), '/versions/', parameters('applicationTypeVersion'))]"
+            ],
+            "properties": {
+                "managedIdentities": [],
+                "version": "[variables('applicationTypeVersionResourceId')]",
+                "parameters": {
+                },
+                "upgradePolicy": {
+                    "upgradeReplicaSetCheckTimeout": "[parameters('upgradeReplicaSetCheckTimeoutSeconds')]",
+                    "forceRestart": "false",
+                    "rollingUpgradeMonitoringPolicy": {
+                        "failureAction": "Rollback",
+                        "healthCheckWaitDuration": "00:02:00.0",
+                        "healthCheckStableDuration": "00:05:00.0",
+                        "healthCheckRetryTimeout": "00:10:00.0",
+                        "upgradeTimeout": "01:00:00.0",
+                        "upgradeDomainTimeout": "00:20:00.0"
+                    },
+                    "applicationHealthPolicy": {
+                        "considerWarningAsError": "false",
+                        "maxPercentUnhealthyDeployedApplications": "50",
+                        "defaultServiceTypeHealthPolicy": {
+                            "maxPercentUnhealthyServices": "50",
+                            "maxPercentUnhealthyPartitionsPerService": "50",
+                            "maxPercentUnhealthyReplicasPerPartition": "50"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2022-01-01",
+            "type": "Microsoft.ServiceFabric/managedClusters/applications/services",
+            "name": "[concat(parameters('clusterName'), '/', parameters('applicationName'), '/', parameters('serviceName'))]",
+            "location": "[variables('clusterLocation')]",
+            "dependsOn": [
+                "[concat('Microsoft.ServiceFabric/managedClusters/', parameters('clusterName'), '/applications/', parameters('applicationName'))]"
+            ],
+            "properties": {
+                "serviceKind": "Stateless",
+                "serviceTypeName": "[parameters('serviceTypeName')]",
+                "instanceCount": "-1",
+                "partitionDescription": {
+                    "partitionScheme": "Singleton"
+                },
+                "serviceLoadMetrics": [
+
+                ],
+                "servicePlacementPolicies": [
+
+                ],
+                "defaultMoveCost": ""
+            }
+        },
+        {
+            "apiVersion": "2022-01-01",
+            "type": "Microsoft.ServiceFabric/managedClusters/applications/services",
+            "name": "[concat(parameters('clusterName'), '/', parameters('applicationName'), '/', parameters('serviceName2'))]",
+            "location": "[variables('clusterLocation')]",
+            "dependsOn": [
+                "[concat('Microsoft.ServiceFabric/managedClusters/', parameters('clusterName'), '/applications/', parameters('applicationName'))]"
+            ],
+            "properties": {
+                "serviceKind": "Stateful",
+                "serviceTypeName": "[parameters('serviceTypeName2')]",
+                "targetReplicaSetSize": "3",
+                "minReplicaSetSize": "2",
+                "replicaRestartWaitDuration": "00:01:00.0",
+                "quorumLossWaitDuration": "00:02:00.0",
+                "standByReplicaKeepDuration": "00:00:30.0",
+                "partitionDescription": {
+                    "partitionScheme": "UniformInt64Range",
+                    "count": "5",
+                    "lowKey": "1",
+                    "highKey": "5"
+                },
+                "hasPersistedState": "true",
+                "correlationScheme": [
+
+                ],
+                "serviceLoadMetrics": [
+
+                ],
+                "servicePlacementPolicies": [
+
+                ],
+                "defaultMoveCost": "Low"
+            }
+        }
+    ],
+    "outputs": {
+        "applicationTypeVersionResourceId": {
+            "type": "string",
+            "value": "[variables('applicationTypeVersionResourceId')]"
+        }
+    }
+}

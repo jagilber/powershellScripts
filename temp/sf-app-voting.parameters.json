@@ -1,0 +1,33 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "applicationName": {
+            "value": "Voting"
+        },
+        "applicationTypeName": {
+            "value": "VotingType"
+        },
+        "applicationTypeVersion": {
+            "value": "1.0.0"
+        },
+        "appPackageUrl": {
+            "value": "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sfpackages/Voting.1.0.0.sfpkg"
+        },
+        "clusterName": {
+            "value": "sfjagilber1nt3"
+        },
+        "serviceName": {
+            "value": "Voting~VotingWeb"
+        },
+        "serviceName2": {
+            "value": "Voting~VotingData"
+        },
+        "serviceTypeName": {
+            "value": "VotingWebType"
+        },
+        "serviceTypeName2": {
+            "value": "VotingDataType"
+        }
+    }
+}
