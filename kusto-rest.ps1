@@ -15,8 +15,8 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 210322
-History    : add linux ps core support
+Version    : 231030
+History    : migrate from netcoreapp2.1 to net6.0
 
 .EXAMPLE
 .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
@@ -248,7 +248,11 @@ function get-msalLibrary() {
 
     if ($global:PSVersionTable.PSEdition -eq "Core") {
         write-host "setting up microsoft.identity.client for .net core"
-        if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "netcoreapp2.1")) {
+        if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net6.0")) {
+            write-error "unable to add package"
+            return $false
+        }
+        if (!(AddIdentityPackageType -packageName "Microsoft.IdentityModel.Abstractions" -edition "net6.0")) {
             write-error "unable to add package"
             return $false
         }
@@ -256,6 +260,10 @@ function get-msalLibrary() {
     else {
         write-host "setting up microsoft.identity.client for .net framework"
         if (!(AddIdentityPackageType -packageName "Microsoft.Identity.Client" -edition "net461")) {
+            write-error "unable to add package"
+            return $false
+        }
+        if (!(AddIdentityPackageType -packageName "Microsoft.IdentityModel.Abstractions" -edition "net6.0")) {
             write-error "unable to add package"
             return $false
         }
