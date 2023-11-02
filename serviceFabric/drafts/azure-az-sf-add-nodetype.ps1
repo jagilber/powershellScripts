@@ -161,36 +161,36 @@ function check-module() {
   get-command Add-AzServiceFabricNodeType -ErrorAction SilentlyContinue
   
   if ($error) {
+    $error.clear()
+    write-warning "azure module for Connect-AzAccount not installed."
+
+    if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
       $error.clear()
-      write-warning "azure module for Connect-AzAccount not installed."
+      install-module az.accounts
+      install-module az.compute
+      install-module az.servicefabric
+      install-module az.resources
 
-      if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
-          $error.clear()
-          install-module az.accounts
-          install-module az.compute
-          install-module az.servicefabric
-          install-module az.resources
-
-          import-module az.accounts
-          import-module az.compute
-          import-module az.servicefabric
-          import-module az.resources
-      }
-      else {
-          return $false
-      }
-
-      if ($error) {
-          return $false
-      }
-  }
-
-  if(!(get-azResourceGroup)){
-      Connect-AzAccount
-  }
-
-  if(!@(get-azResourceGroup).Count -gt 0){
+      import-module az.accounts
+      import-module az.compute
+      import-module az.servicefabric
+      import-module az.resources
+    }
+    else {
       return $false
+    }
+
+    if ($error) {
+      return $false
+    }
+  }
+
+  if (!(get-azResourceGroup)) {
+    Connect-AzAccount
+  }
+
+  if (!@(get-azResourceGroup).Count -gt 0) {
+    return $false
   }
 
   return $true
@@ -295,9 +295,10 @@ function get-deployedServices() {
     foreach ($node in $global:nodes) {
       write-console "Getting deployed applications for $($node.NodeName)"
       $deployedApplications = @(Get-ServiceFabricDeployedApplication -NodeName $node.NodeName)
-      if(!($deployedApplications.ApplicationName -contains $application.ApplicationName)) {
+      if (!($deployedApplications.ApplicationName -contains $application.ApplicationName)) {
         continue
       }
+      
       write-console "Getting deployed service types for $($node.NodeName)"
       $deployedServiceTypes = @(Get-ServiceFabricDeployedServiceType -ApplicationName $application.ApplicationName -NodeName $node.NodeName)
 
@@ -364,10 +365,10 @@ function set-referenceNodeTypeInformation() {
 }
 
 function set-value($paramValue, $referenceValue) {
-  if($paramValue -eq $null) {
+  if ($paramValue -eq $null) {
     return $referenceValue
   }
-  if($paramValue -eq 0) {
+  if ($paramValue -eq 0) {
     return $referenceValue
   }
 }
@@ -384,9 +385,33 @@ function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
 
 function write-results() {
   write-console ($global:deployedServices | convertto-json -depth 5) -Verbose
+  write-console "current node type placement properties: $($global:nodeTypePlbNames | convertto-json -depth 5)" -ForegroundColor Green
+  write-console "current deployed services: $($global:deployedServices | convertto-json -depth 5)" -ForegroundColor Cyan
 
+  if ($global:servicesWithPlacementConstraints) {
+    write-console "services with placement constraints: $($global:servicesWithPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Green
+  }
+  else {
+    write-console "no services with placement constraints" -ForegroundColor Green
+  }
+
+  if ($global:servicesWithoutPlacementConstraints) {
+    write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Yellow
+  }
+  else {
+    write-console "no services without placement constraints" -ForegroundColor Green
+  }
+  
+  if ($global:servicesOnNewNodeType) {
+    write-console "services on new nodetype: $($global:servicesOnNewNodeType | convertto-json -depth 5)" -ForegroundColor Red
+  }
+  else {
+    write-console "no services on new nodetype" -ForegroundColor Green
+  }
+
+  write-console ""
   write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, 
-    execute the following after all services have placement constraints configured:" -ForegroundColor Yellow
+  execute the following 'Add-AzServiceFabricNodeType' command after all services have placement constraints configured:" -ForegroundColor Yellow
   $global:addNodeTypeCommand = "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
     -Name '$clusterName' ``
     -Capacity $global:vmInstanceCount ``
@@ -404,36 +429,13 @@ function write-results() {
   "
   write-host $global:addNodeTypeCommand -ForegroundColor Magenta
 
-  write-console "current node type placement properties: $($global:nodeTypePlbNames | convertto-json -depth 5)" -ForegroundColor Green
-  write-console "current deployed services: $($global:deployedServices | convertto-json -depth 5)" -ForegroundColor Cyan
-
-  if($global:servicesWithPlacementConstraints) {
-    write-console "services with placement constraints: $($global:servicesWithPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Green
-  }
-  else {
-    write-console "no services with placement constraints" -ForegroundColor Green
-  }
-
-  if($global:servicesWithoutPlacementConstraints) {
-    write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Yellow
-  }
-  else {
-    write-console "no services without placement constraints" -ForegroundColor Green
-  }
-  
-  if($global:servicesOnNewNodeType) {
-    write-console "services on new nodetype: $($global:servicesOnNewNodeType | convertto-json -depth 5)" -ForegroundColor Red
-  }
-  else {
-    write-console "no services on new nodetype" -ForegroundColor Green
-  }
 
   $plbCommands = $global:deployedServices.Values `
   | where-object temporaryPlacementConstraints `
   | select-object temporaryPlacementConstraints, revertPlacementConstraints `
   | convertto-json -depth 5
 
-  if($plbCommands) {
+  if ($plbCommands) {
     write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $plbCommands"
   }
   else {
