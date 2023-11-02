@@ -5,7 +5,7 @@
 
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
-    version 0.2
+    version 231102
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
@@ -62,16 +62,16 @@ param(
   #[Parameter(Mandatory = $true)]
   $newNodeTypeName = 'nt1', #'nt1',
   $referenceNodeTypeName = 'nt0', #'nt0',
-  $isPrimaryNodeType = $false,
-  $vmImagePublisher = 'MicrosoftWindowsServer',
-  $vmImageOffer = 'WindowsServer',
-  $vmImageSku = '2022-Datacenter',
-  $vmImageVersion = 'latest',
-  $vmInstanceCount = 5,
-  $vmSku = 'Standard_D2_v2',
+  $isPrimaryNodeType, # = $false,
+  $vmImagePublisher, # = 'MicrosoftWindowsServer',
+  $vmImageOffer, # = 'WindowsServer',
+  $vmImageSku, # = '2022-Datacenter',
+  $vmImageVersion, # = 'latest',
+  $vmInstanceCount, # = 5,
+  $vmSku, # = 'Standard_D2_v2',
   [ValidateSet('Bronze', 'Silver', 'Gold')]
-  $durabilityLevel = 'Silver',
-  $adminUserName = 'cloudadmin',
+  $durabilityLevel, # = 'Silver',
+  $adminUserName, # = 'cloudadmin',
   $adminPassword = 'P@ssw0rd!'
 )
 
@@ -91,12 +91,8 @@ function main() {
     }
   }
 
-  if (!(Get-Module az)) {
-    Import-Module az
-  }
-
-  if (!(get-azresourceGroup)) {
-    Connect-AzAccount
+  if (!(check-module)) {
+    return
   }
 
   if (!(get-clusterConnection)) {
@@ -112,7 +108,7 @@ function main() {
 }
 
 function add-placementConstraints() {
-  $plbNodeTypePattern = "($($global:nodeTypePlbNames.name -join '|'))\s?(=|!|<|>){1,2}+\s?($($global:nodeTypePlbNames.value -join '|'))"
+  $plbNodeTypePattern = "($($global:nodeTypePlbNames.name -join '|'))\s?(=|!|<|>){1,2}\s?($($global:nodeTypePlbNames.value -join '|'))"
   $temporaryNodeTypeExclusion = "(NodeType != $newNodeTypeName)"
   $deployedServices = get-deployedServices
 
@@ -157,6 +153,47 @@ function add-placementConstraints() {
       $global:deployedServices[$service.serviceTypeName].revertPlacementConstraints = "Update-ServiceFabricService -$($service.ServiceKind) -ServiceName $($service.ServiceName) -PlacementConstraints '$($currentPlacementConstraints.replace($temporaryNodeTypeExclusion,''))' -force;"
     }
   }
+}
+
+function check-module() {
+  $error.clear()
+  get-command Connect-AzAccount -ErrorAction SilentlyContinue
+  get-command Add-AzServiceFabricNodeType -ErrorAction SilentlyContinue
+  
+  if ($error) {
+      $error.clear()
+      write-warning "azure module for Connect-AzAccount not installed."
+
+      if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+          $error.clear()
+          install-module az.accounts
+          install-module az.compute
+          install-module az.servicefabric
+          install-module az.resources
+
+          import-module az.accounts
+          import-module az.compute
+          import-module az.servicefabric
+          import-module az.resources
+      }
+      else {
+          return $false
+      }
+
+      if ($error) {
+          return $false
+      }
+  }
+
+  if(!(get-azResourceGroup)){
+      Connect-AzAccount
+  }
+
+  if(!@(get-azResourceGroup).Count -gt 0){
+      return $false
+  }
+
+  return $true
 }
 
 function get-clusterConnection() {
@@ -305,21 +342,31 @@ function set-referenceNodeTypeInformation() {
       return $error
     }
     write-console "using reference node type $referenceNodeTypeName"
-    $sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
-    $durabilityLevel = $sfExtension.Settings.durabilityLevel.Value
-    #$isPrimaryNodeType = $referenceNodeType.IsPrimary,
-    $vmImageSku = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
-    $vmSku = $referenceVmss.Sku.Name
-    $adminUserName = $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
-    $vmInstanceCount = $referenceVmss.Sku.Capacity
-    $vmImagePublisher = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
-    $vmImageOffer = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
-    $vmImageVersion = $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
+    $global:sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
+    $global:durabilityLevel = set-value $durabilityLevel $sfExtension.Settings.durabilityLevel.Value
+    #$global:isPrimaryNodeType = set-value $isPrimaryNodeType $referenceNodeType.IsPrimary
+    $global:vmImageSku = set-value $vmImageSku $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
+    $global:vmSku = set-value $vmSku $referenceVmss.Sku.Name
+    $global:adminUserName = set-value $adminUserName $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
+    $global:vmInstanceCount = set-value $vmInstanceCount $referenceVmss.Sku.Capacity
+    $global:vmImagePublisher = set-value $vmImagePublisher $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
+    $global:vmImageOffer = set-value $vmImageOffer $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
+    $global:vmImageVersion = set-value $vmImageVersion $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
   }
   else {
     write-console "using default values for reference node type"
   }
 }
+
+function set-value($paramValue, $referenceValue) {
+  if($paramValue -eq $null) {
+    return $referenceValue
+  }
+  if($paramValue -eq 0) {
+    return $referenceValue
+  }
+}
+
 function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
   if (!$message) { return }
   if ($verbose) {
@@ -337,16 +384,16 @@ function write-results() {
     execute the following after all services have placement constraints configured:" -ForegroundColor Yellow
   $global:addNodeTypeCommand = "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
     -Name '$clusterName' ``
-    -Capacity $vmInstanceCount ``
-    -VmUserName '$adminUserName' ``
+    -Capacity $global:vmInstanceCount ``
+    -VmUserName '$global:adminUserName' ``
     -VmPassword (ConvertTo-SecureString -String '$adminPassword' -Force -AsPlainText) ``
-    -VmSku '$vmSku' ``
-    -DurabilityLevel '$durabilityLevel' ``
+    -VmSku '$global:vmSku' ``
+    -DurabilityLevel '$global:durabilityLevel' ``
     -IsPrimaryNodeType `$$isPrimaryNodeType ``
-    -VMImagePublisher '$vmImagePublisher' ``
-    -VMImageOffer '$vmImageOffer' ``
-    -VMImageSku '$vmImageSku' ``
-    -VMImageVersion '$vmImageVersion' ``
+    -VMImagePublisher '$global:vmImagePublisher' ``
+    -VMImageOffer '$global:vmImageOffer' ``
+    -VMImageSku '$global:vmImageSku' ``
+    -VMImageVersion '$global:vmImageVersion' ``
     -NodeType '$newNodeTypeName' ``
     -Verbose
   "
@@ -355,16 +402,39 @@ function write-results() {
   write-console "current node type placement properties: $($global:nodeTypePlbNames | convertto-json -depth 5)" -ForegroundColor Green
   write-console "current deployed services: $($global:deployedServices | convertto-json -depth 5)" -ForegroundColor Cyan
 
-  write-console "services with placement constraints: $($global:servicesWithPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Green
-  write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Yellow
-  write-console "services on new nodetype: $($global:servicesOnNewNodeType | convertto-json -depth 5)" -ForegroundColor Red
+  if($global:servicesWithPlacementConstraints) {
+    write-console "services with placement constraints: $($global:servicesWithPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Green
+  }
+  else {
+    write-console "no services with placement constraints" -ForegroundColor Green
+  }
+
+  if($global:servicesWithoutPlacementConstraints) {
+    write-console "services without placement constraints: $($global:servicesWithoutPlacementConstraints | convertto-json -depth 5)" -ForegroundColor Yellow
+  }
+  else {
+    write-console "no services without placement constraints" -ForegroundColor Green
+  }
+  
+  if($global:servicesOnNewNodeType) {
+    write-console "services on new nodetype: $($global:servicesOnNewNodeType | convertto-json -depth 5)" -ForegroundColor Red
+  }
+  else {
+    write-console "no services on new nodetype" -ForegroundColor Green
+  }
 
   $plbCommands = $global:deployedServices.Values `
   | where-object temporaryPlacementConstraints `
   | select-object temporaryPlacementConstraints, revertPlacementConstraints `
   | convertto-json -depth 5
 
-  write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $plbCommands"
+  if($plbCommands) {
+    write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $plbCommands"
+  }
+  else {
+    write-console "no potential plb update commands" -ForegroundColor Green
+  }
+
   write-console "values stored in `$global:addNodeTypeCommand and `$global:deployedServices" -ForegroundColor gray
 }
 
