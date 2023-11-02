@@ -411,7 +411,7 @@ function write-results() {
 
   write-console ""
   write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, 
-  execute the following 'Add-AzServiceFabricNodeType' command after all services have placement constraints configured:" -ForegroundColor Yellow
+  execute the following 'Add-AzServiceFabricNodeType' command after all services have placement constraints configured to prevent movement of applications to provisioning nodetype:" -ForegroundColor Yellow
   $global:addNodeTypeCommand = "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
     -Name '$clusterName' ``
     -Capacity $global:vmInstanceCount ``
@@ -430,19 +430,18 @@ function write-results() {
   write-host $global:addNodeTypeCommand -ForegroundColor Magenta
 
 
-  $plbCommands = $global:deployedServices.Values `
+  $global:plbCommands = $global:deployedServices.Values `
   | where-object temporaryPlacementConstraints `
-  | select-object temporaryPlacementConstraints, revertPlacementConstraints `
-  | convertto-json -depth 5
+  | select-object serviceName, temporaryPlacementConstraints, revertPlacementConstraints
 
-  if ($plbCommands) {
-    write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $plbCommands"
+  if ($global:plbCommands) {
+    write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $($global:plbCommands | fl * | out-string)"
   }
   else {
     write-console "no potential plb update commands" -ForegroundColor Green
   }
 
-  write-console "values stored in `$global:addNodeTypeCommand and `$global:deployedServices" -ForegroundColor gray
+  write-console "values stored in `$global:addNodeTypeCommand `$global:plbCommands, and `$global:deployedServices" -ForegroundColor gray
 }
 
 main
