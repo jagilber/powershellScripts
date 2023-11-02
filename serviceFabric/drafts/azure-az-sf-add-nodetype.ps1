@@ -293,6 +293,11 @@ function get-deployedServices() {
     write-console "Adding deployed service types for $($application.ApplicationName)"
 
     foreach ($node in $global:nodes) {
+      write-console "Getting deployed applications for $($node.NodeName)"
+      $deployedApplications = @(Get-ServiceFabricDeployedApplication -NodeName $node.NodeName)
+      if(!($deployedApplications.ApplicationName -contains $application.ApplicationName)) {
+        continue
+      }
       write-console "Getting deployed service types for $($node.NodeName)"
       $deployedServiceTypes = @(Get-ServiceFabricDeployedServiceType -ApplicationName $application.ApplicationName -NodeName $node.NodeName)
 
