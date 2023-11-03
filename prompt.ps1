@@ -20,12 +20,13 @@ $global:promptInfo = @{
     path         = $null
     branch       = $null
     #branches   = @()
-    remotes      = @()
+    remotes      = [collections.arraylist]::new()
     status       = $null
     ps           = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
     cacheTimer   = [datetime]::MinValue
     enableGit    = $true
     cacheMinutes = 1
+    fetchedRepos = [collections.arraylist]::new()
 }
 #[console]::ForegroundColor = 'Magenta'
 
@@ -70,8 +71,25 @@ function get-gitInfo() {
         return $status
     }
 
-    $promptInfo.remotes = @(git remote)
-    
+    # only do this once per repo
+    $pattern = "(?<remote>\S+?)\s+(?<repo>.+?)\s+?\(\w+?\)"
+    $remotes = @(git remote -v)
+    $remoteMatches = [regex]::Matches($remotes, $pattern)
+    $promptInfo.remotes.clear()
+
+    foreach ($remoteMatch in $remoteMatches) {
+        $repo = $remoteMatch.groups['repo'].value
+        $remote = $remoteMatch.groups['remote'].value
+        $repoRemote = "$repo/$remote"
+        
+        if (!($promptInfo.fetchedRepos.contains($repoRemote))) {
+            [void]$promptInfo.remotes.add($remote)
+            [void]$promptInfo.fetchedRepos.add($repoRemote)
+            write-host "fetching $repoRemote"
+            git fetch $remote
+        }
+    }
+        
     $status = " $([char]0x2325)($($promptInfo.branch))"
     $diff = @(git status --porcelain).count
     
