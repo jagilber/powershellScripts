@@ -35,7 +35,8 @@ function prompt() {
     try {
         if ($path -ne $promptInfo.path `
                 -or (((get-date) - $promptInfo.cacheTimer).TotalMinutes) -gt $promptInfo.cacheMinutes `
-                -or ($promptInfo.branch -and ($^ -and $^.startswith('git')))) {
+                -or ($^.startswith('git'))) {
+                #-or ($promptInfo.branch -and ($^ -and $^.startswith('git')))) {
             $promptInfo.cacheTimer = get-date
             $promptInfo.path = $path
             $promptInfo.status = get-gitInfo
@@ -66,7 +67,14 @@ function get-gitInfo() {
     # }
 
     # $promptInfo.branch = (($promptInfo.branches) -imatch '\*').TrimStart('*').Trim()
-    $promptInfo.branch = @(git branch --show-current)
+    $currentBranch = @(git branch --show-current)
+    if ($currentBranch -ne $promptInfo.branch) {
+        $promptInfo.branch = $currentBranch
+    }
+    else {
+        #return $status
+    }
+    
     if (!$promptInfo.branch) {
         return $status
     }
@@ -80,10 +88,13 @@ function get-gitInfo() {
     foreach ($remoteMatch in $remoteMatches) {
         $repo = $remoteMatch.groups['repo'].value
         $remote = $remoteMatch.groups['remote'].value
-        $repoRemote = "$repo/$remote"
+        $repoRemote = "$repo/$remote/$($promptInfo.branch)"
         
-        if (!($promptInfo.fetchedRepos.contains($repoRemote))) {
+        if(!($promptInfo.remotes.contains($remote))) {
             [void]$promptInfo.remotes.add($remote)
+        }
+
+        if (!($promptInfo.fetchedRepos.contains($repoRemote))) {
             [void]$promptInfo.fetchedRepos.add($repoRemote)
             write-host "fetching $repoRemote"
             git fetch $remote
