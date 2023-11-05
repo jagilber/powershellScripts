@@ -99,8 +99,13 @@ function main() {
     return
   }
 
-  get-clusterInformation
-  set-referenceNodeTypeInformation
+  if(!(get-clusterInformation)) {
+    return
+  }
+
+  if(!(set-referenceNodeTypeInformation)) {
+    return
+  }
   add-placementConstraints
   write-results
 
@@ -247,6 +252,11 @@ function get-clusterConnection() {
 }
 
 function get-clusterInformation() {
+  $azCluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
+  if(!$azCluster) {
+    write-error("cluster $clusterName not found in resource group $resourceGroupName")
+    return $false
+  }
   $manifest = Get-ServiceFabricClusterManifest
   write-console ($manifest) -Verbose
 
@@ -286,6 +296,7 @@ function get-clusterInformation() {
       }
     )
   }
+  return $true
 }
 
 function get-deployedServices() {
@@ -345,7 +356,7 @@ function set-referenceNodeTypeInformation() {
     $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
     if (!$referenceVmss) {
       write-error("reference node type $referenceNodeTypeName not found")
-      return $error
+      return $false
     }
     write-console "using reference node type $referenceNodeTypeName"
     $global:sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
@@ -362,6 +373,7 @@ function set-referenceNodeTypeInformation() {
   else {
     write-console "using default values for reference node type"
   }
+  return $true
 }
 
 function set-value($paramValue, $referenceValue) {
@@ -410,7 +422,7 @@ function write-results() {
   }
 
   write-console ""
-  write-console "To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, 
+  write-console "--> To add new node type $newNodeTypeName to cluster $clusterName in resource group $resourceGroupName, 
   execute the following 'Add-AzServiceFabricNodeType' command after all services have placement constraints configured to prevent movement of applications to provisioning nodetype:" -ForegroundColor Yellow
   $global:addNodeTypeCommand = "Add-AzServiceFabricNodeType -ResourceGroupName $resourceGroupName ``
     -Name '$clusterName' ``
@@ -435,7 +447,7 @@ function write-results() {
   | select-object serviceName, temporaryPlacementConstraints, revertPlacementConstraints
 
   if ($global:plbCommands) {
-    write-console "potential plb update commands. verify '-PlacementConstraints' string before executing commands: $($global:plbCommands | fl * | out-string)"
+    write-console "--> Potential plb update commands to prevent movement of applications to provisioning nodetype:. verify '-PlacementConstraints' string before executing commands: $($global:plbCommands | format-list * | out-string)"
   }
   else {
     write-console "no potential plb update commands" -ForegroundColor Green
