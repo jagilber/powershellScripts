@@ -3,7 +3,7 @@
 #>
 param(
   $resourceGroupName = 'sfjagilber1nt3',
-  $oldPublicIPName = 'PublicIP-LB-FE-0',
+  $existingPublicIPName = 'PublicIP-LB-FE-0',
   $newPublicIPName = 'LBIP-sfjagilber1nt3-nt1',
   $swap = $true,
   [switch]$execute
@@ -11,92 +11,96 @@ param(
 
 $errorActionPreference = 'Stop'
 $startTime = get-date
-$publicIps = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName | Select-Object Name, ResourceGroupName, IpAddress, DnsSettings
-
-write-host "current public IPs:"
-foreach ($publicIp in $publicIps) {
-  write-host "Public IP: $($publicIp.Name) $($publicIp | convertto-json)" -ForegroundColor Cyan
+$newPublicIps = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName | Select-Object Name, ResourceGroupName, IpAddress, DnsSettings
+$action = "To set"
+if ($execute) {
+  $action = "Setting and executing"
 }
 
-$oldPublicIP = Get-AzPublicIpAddress -Name $oldPublicIpName -ResourceGroupName $resourceGroupName
-$publicIP = Get-AzPublicIpAddress -Name $newPublicIpName -ResourceGroupName $resourceGroupName
+write-host "`nCurrent public IPs:`n" -ForegroundColor Yellow
+foreach ($newPublicIp in $newPublicIps) {
+  write-host "Public IP: $($newPublicIp.Name) $($newPublicIp | convertto-json)" -ForegroundColor Cyan
+}
 
-$dnsName = $oldPublicIP.DnsSettings.DomainNameLabel
-$fqdn = $oldPublicIP.DnsSettings.Fqdn
+$existingPublicIP = Get-AzPublicIpAddress -Name $existingPublicIpName -ResourceGroupName $resourceGroupName
+$newPublicIP = Get-AzPublicIpAddress -Name $newPublicIpName -ResourceGroupName $resourceGroupName
 
-$newDnsName = $publicIP.DnsSettings.DomainNameLabel
-$newFqdn = $publicIP.DnsSettings.Fqdn
+$dnsName = $existingPublicIP.DnsSettings.DomainNameLabel
+$fqdn = $existingPublicIP.DnsSettings.Fqdn
+
+$newDnsName = $newPublicIP.DnsSettings.DomainNameLabel
+$newFqdn = $newPublicIP.DnsSettings.Fqdn
 
 $tempDnsName = "temp-$dnsName"
 $tempFqdn = "temp-$fqdn"
 
-write-host "setting $($oldPublicIp.IpAddress) to $newDnsName and $newfqdn" -ForegroundColor Yellow
-$oldPublicIP.DnsSettings.DomainNameLabel = $tempDnsName
-$oldPublicIP.DnsSettings.Fqdn = $tempFqdn
-write-host "Set-AzPublicIpAddress -PublicIpAddress $($oldPublicIP | convertto-json)"
+write-host "`n$action existing public ip: $($existingPublicIp.IpAddress) to new dns name: $newDnsName and new dns fqdn: $newfqdn`n" -ForegroundColor Yellow
+$existingPublicIP.DnsSettings.DomainNameLabel = $tempDnsName
+$existingPublicIP.DnsSettings.Fqdn = $tempFqdn
+write-host "Set-AzPublicIpAddress -PublicIpAddress $($existingPublicIP | convertto-json)"
 if ($execute) { 
-  Set-AzPublicIpAddress -PublicIpAddress $oldPublicIP 
+  Set-AzPublicIpAddress -PublicIpAddress $existingPublicIP 
 }
 
-write-host "setting $($publicIP.IpAddress) to $dnsName and $fqdn" -ForegroundColor Yellow
-$publicIP.DnsSettings.DomainNameLabel = $dnsName
-$publicIP.DnsSettings.Fqdn = $fqdn
-write-host "Set-AzPublicIpAddress -PublicIpAddress $($publicIP | convertto-json)"
+write-host "`n$action new public ip: $($newPublicIP.IpAddress) to existing dns name: $dnsName and existing dns fqdn: $fqdn`n" -ForegroundColor Yellow
+$newPublicIP.DnsSettings.DomainNameLabel = $dnsName
+$newPublicIP.DnsSettings.Fqdn = $fqdn
+write-host "Set-AzPublicIpAddress -PublicIpAddress $($newPublicIP | convertto-json)"
 if ($execute) { 
   Set-AzPublicIpAddress -PublicIpAddress $PublicIP
 }
 
 if ($swap) {
-  write-host "setting $($oldPublicIp.IpAddress) to $newDnsName and $newfqdn" -ForegroundColor Yellow
-  $oldPublicIP.DnsSettings.DomainNameLabel = $newDnsName
-  $oldPublicIP.DnsSettings.Fqdn = $newFqdn
-  write-host "Set-AzPublicIpAddress -PublicIpAddress $($oldPublicIP | convertto-json)"
+  write-host "`n$action existing public ip: $($existingPublicIp.IpAddress) to new dns name: $newDnsName and new dns fqdn: $newfqdn`n" -ForegroundColor Yellow
+  $existingPublicIP.DnsSettings.DomainNameLabel = $newDnsName
+  $existingPublicIP.DnsSettings.Fqdn = $newFqdn
+  write-host "Set-AzPublicIpAddress -PublicIpAddress $($existingPublicIP | convertto-json)"
   if ($execute) {
-    Set-AzPublicIpAddress -PublicIpAddress $oldPublicIP
+    Set-AzPublicIpAddress -PublicIpAddress $existingPublicIP
   }
 }
 
-write-host "to execute (or rerun with -execute)):
+write-host "`nTo execute dns swap (or rerun script with -execute switch):`n
   `$resourceGroupName = '$resourceGroupName'
-  `$oldPublicIPName = '$oldPublicIPName'
+  `$existingPublicIPName = '$existingPublicIPName'
   `$newPublicIPName = '$newPublicIPName'
   `$swap = `$$swap
-  `$oldPublicIP = Get-AzPublicIpAddress -Name `$oldPublicIpName -ResourceGroupName '$resourceGroupName'
-  `$publicIP = Get-AzPublicIpAddress -Name '$newPublicIpName' -ResourceGroupName '$resourceGroupName'
+  `$existingPublicIP = Get-AzPublicIpAddress -Name `$existingPublicIpName -ResourceGroupName '$resourceGroupName'
+  `$newPublicIP = Get-AzPublicIpAddress -Name '$newPublicIpName' -ResourceGroupName '$resourceGroupName'
   
-  `$oldPublicIP.DnsSettings.DomainNameLabel = '$tempDnsName'
-  `$oldPublicIP.DnsSettings.Fqdn = '$tempFqdn'
-  Set-AzPublicIpAddress -PublicIpAddress `$oldPublicIP
+  `$existingPublicIP.DnsSettings.DomainNameLabel = '$tempDnsName'
+  `$existingPublicIP.DnsSettings.Fqdn = '$tempFqdn'
+  Set-AzPublicIpAddress -PublicIpAddress `$existingPublicIP
 
-  `$publicIP.DnsSettings.DomainNameLabel = '$dnsName'
-  `$publicIP.DnsSettings.Fqdn = '$fqdn'
-  Set-AzPublicIpAddress -PublicIpAddress `$publicIP
+  `$newPublicIP.DnsSettings.DomainNameLabel = '$dnsName'
+  `$newPublicIP.DnsSettings.Fqdn = '$fqdn'
+  Set-AzPublicIpAddress -PublicIpAddress `$newPublicIP
 
   if(`$swap) {
-    `$oldPublicIP.DnsSettings.DomainNameLabel = '$newDnsName'
-    `$oldPublicIP.DnsSettings.Fqdn = '$newFqdn'
-    Set-AzPublicIpAddress -PublicIpAddress `$oldPublicIP
+    `$existingPublicIP.DnsSettings.DomainNameLabel = '$newDnsName'
+    `$existingPublicIP.DnsSettings.Fqdn = '$newFqdn'
+    Set-AzPublicIpAddress -PublicIpAddress `$existingPublicIP
   }
 " -ForegroundColor Green
 
-write-host "to revert:
+write-host "`nTo revert dns swap:`n
   `$resourceGroupName = '$resourceGroupName'
-  `$oldPublicIPName = '$oldPublicIPName'
+  `$existingPublicIPName = '$existingPublicIPName'
   `$newPublicIPName = '$newPublicIPName'
-  `$oldPublicIP = Get-AzPublicIpAddress -Name '$oldPublicIpName' -ResourceGroupName '$resourceGroupName'
-  `$publicIP = Get-AzPublicIpAddress -Name '$newPublicIpName' -ResourceGroupName '$resourceGroupName'
+  `$existingPublicIP = Get-AzPublicIpAddress -Name '$existingPublicIpName' -ResourceGroupName '$resourceGroupName'
+  `$newPublicIP = Get-AzPublicIpAddress -Name '$newPublicIpName' -ResourceGroupName '$resourceGroupName'
   
-  `$oldPublicIP.DnsSettings.DomainNameLabel = '$tempDnsName'
-  `$oldPublicIP.DnsSettings.Fqdn = '$tempFqdn'
-  Set-AzPublicIpAddress -PublicIpAddress `$oldPublicIP
+  `$existingPublicIP.DnsSettings.DomainNameLabel = '$tempDnsName'
+  `$existingPublicIP.DnsSettings.Fqdn = '$tempFqdn'
+  Set-AzPublicIpAddress -PublicIpAddress `$existingPublicIP
 
-  `$publicIP.DnsSettings.DomainNameLabel = '$newDnsName'
-  `$publicIP.DnsSettings.Fqdn = '$newFqdn'
-  Set-AzPublicIpAddress -PublicIpAddress `$publicIP
+  `$newPublicIP.DnsSettings.DomainNameLabel = '$newDnsName'
+  `$newPublicIP.DnsSettings.Fqdn = '$newFqdn'
+  Set-AzPublicIpAddress -PublicIpAddress `$newPublicIP
 
-  `$oldPublicIP.DnsSettings.DomainNameLabel = '$dnsName'
-  `$oldPublicIP.DnsSettings.Fqdn = '$fqdn'
-  Set-AzPublicIpAddress -PublicIpAddress `$publicIP
+  `$existingPublicIP.DnsSettings.DomainNameLabel = '$dnsName'
+  `$existingPublicIP.DnsSettings.Fqdn = '$fqdn'
+  Set-AzPublicIpAddress -PublicIpAddress `$newPublicIP
 " -ForegroundColor Yellow
 
 write-host "Done: $(get-date -format 'HH:mm:ss') - $(get-date $startTime -format 'HH:mm:ss')"
