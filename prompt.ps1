@@ -33,10 +33,9 @@ $global:promptInfo = @{
 function prompt() {
     $path = "'$pwd'".ToLower()
     try {
-        if ($path -ne $promptInfo.path `
+        if (($promptInfo.path -and $path -ne $promptInfo.path) `
                 -or (((get-date) - $promptInfo.cacheTimer).TotalMinutes) -gt $promptInfo.cacheMinutes `
-                -or ($^.startswith('git'))) {
-                #-or ($promptInfo.branch -and ($^ -and $^.startswith('git')))) {
+                -or ($^ -and $^.startswith('git'))) {
             $promptInfo.cacheTimer = get-date
             $promptInfo.path = $path
             $promptInfo.status = get-gitInfo
