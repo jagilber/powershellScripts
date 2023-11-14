@@ -13,10 +13,15 @@
     the entire risk arising out of the use or performance of the sample scripts and documentation remains with you
     in no event shall Microsoft, its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation, even if Microsoft has been advised of the possibility of such damages 
 
+    version:
+        231114 # convert-fromjson -ashashtable requires ps version 6+ (core)
+    todo:
+        private ip?
+
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-copy-nodetype.ps1" -outFile "$pwd/azure-az-sf-copy-nodetype.ps1";
-    ./azure-az-sf-copy-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
+    ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name> -clusterName <cluster name> -referenceNodeTypeName <nt1> -newNodeTypeName <nt2>
 .PARAMETER resourceGroupName
     the resource group name of the service fabric cluster
 .PARAMETER clusterName
@@ -56,15 +61,13 @@
 .PARAMETER deploy
     whether to perform a deploy deployment. default creates template for modification and deployment
 .EXAMPLE
-    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
+    ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name>
 .EXAMPLE
-    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -deploy
+    ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name> -deploy
 .EXAMPLE
-    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -referenceNodeTypeName nt0 -newNodeTypeName nt1
+    ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name> -referenceNodeTypeName nt0 -newNodeTypeName nt1
 .EXAMPLE
-    ./azure-az-sf-copy-nodetype.ps1.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
-todo:
-private ip?
+    ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
 #>
 
 [cmdletbinding()]
@@ -82,8 +85,8 @@ param(
     $vmSku = 'Standard_D2_v2',
     [ValidateSet('Bronze', 'Silver', 'Gold')]
     $durabilityLevel = 'Silver',
-    $adminUserName = 'cloudadmin',
-    $adminPassword = 'P@ssw0rd!',
+    $adminUserName, # = 'cloudadmin', # required for platform image
+    $adminPassword, # = 'P@ssw0rd!', # required for platform image
     $newIpAddress = $null,
     $newIpAddressName = 'pip-' + $newNodeTypeName,
     $newLoadBalancerName = 'lb-' + $newNodeTypeName,
@@ -116,6 +119,12 @@ $templateJson = @{
 function main() {
     write-console "main() started"
     $error.Clear()
+
+    # convert-fromjson -ashashtable requires ps version 6+
+    if(!$PSEdition.psversion.Major -ge 6) {
+        write-console "powershell version 6+ required. use pwsh.exe" -foregroundColor 'Red'
+        return
+    }
 
     if (!(Get-Module az)) {
         Import-Module az
@@ -217,6 +226,9 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     # set credentials
     # custom images may hot have OsProfile
     if ($vmss.properties.VirtualMachineProfile.OsProfile) {
+        if(!$adminUserName -or !$adminPassword) {
+            write-console "-adminUserName and -adminPassword required" -err
+        }
         $vmss.properties.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
         $vmss = add-property -resource $vmss -name 'properties.VirtualMachineProfile.OsProfile.adminPassword' -value ''
         $vmss.properties.VirtualMachineProfile.OsProfile.AdminPassword = $adminPassword    
