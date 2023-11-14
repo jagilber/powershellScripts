@@ -40,7 +40,10 @@ param(
   [string]$newPublicIPName = 'LBIP-sfjagilber1nt3-nt1',
   [bool]$swap = $true,
   [switch]$execute,
-  [int]$openTcpPort = 19000
+  [int]$openTcpPort = 19000,
+  [string]$tempDnsPrefix = 'temp-',
+  [string]$oldDnsNameOverride = $null,
+  [string]$oldFqdnOverride = $null
 )
 
 $errorActionPreference = 'Stop'
@@ -64,14 +67,32 @@ function main() {
   $newPublicIP = Get-AzPublicIpAddress -Name $newPublicIpName -ResourceGroupName $resourceGroupName
   validate-connection $newPublicIP.IpAddress $newPublicIP.DnsSettings.Fqdn
 
-  $dnsName = $oldPublicIP.DnsSettings.DomainNameLabel
+  $oldDnsName = $oldPublicIP.DnsSettings.DomainNameLabel
+  if ($oldDnsNameOverride) {
+    $oldDnsName = $oldDnsNameOverride
+  }
+
   $oldFqdn = $oldPublicIP.DnsSettings.Fqdn
+  if ($oldFqdnOverride) {
+    $oldFqdn = $oldFqdnOverride
+  }
 
-  $newDnsName = $newPublicIP.DnsSettings.DomainNameLabel
+  $newDnsName = $newPublicIP.DnsSettings.DomainNameLabel  
+  $newPublicIP.DnsSettings.DomainNameLabel = $newDnsName
+
   $newFqdn = $newPublicIP.DnsSettings.Fqdn
+  $newPublicIP.DnsSettings.Fqdn = $newFqdn
 
-  $tempDnsName = "temp-$dnsName"
-  $tempFqdn = "temp-$oldFqdn"
+  $tempDnsName = "$tempDnsPrefix$oldDnsName"
+  $tempFqdn = "$tempDnsPrefix$oldFqdn"
+
+  if ($tempDnsName -eq $newDnsName -or $tempDnsName -eq $oldDnsName -or $oldDnsName -eq $newDnsName) {
+    write-host "tempDnsName: $tempDnsName" -ForegroundColor Red
+    write-host "newDnsName: $newDnsName" -ForegroundColor Red
+    write-host "oldDnsName: $oldDnsName" -ForegroundColor Red
+    write-host "`nError: dns name collision. check above. use -tempPrefix and/or -old*Override" -ForegroundColor Red
+    return
+  }
 
   write-host "`n$action old public ip: $($oldPublicIp.IpAddress) to new dns name: $newDnsName and new dns fqdn: $newfqdn`n" -ForegroundColor Yellow
   $oldPublicIP.DnsSettings.DomainNameLabel = $tempDnsName
@@ -82,8 +103,8 @@ function main() {
     validate-connection $oldPublicIP.IpAddress $newfqdn
   }
 
-  write-host "`n$action new public ip: $($newPublicIP.IpAddress) to old dns name: $dnsName and old dns fqdn: $oldFqdn`n" -ForegroundColor Yellow
-  $newPublicIP.DnsSettings.DomainNameLabel = $dnsName
+  write-host "`n$action new public ip: $($newPublicIP.IpAddress) to old dns name: $oldDnsName and old dns fqdn: $oldFqdn`n" -ForegroundColor Yellow
+  $newPublicIP.DnsSettings.DomainNameLabel = $oldDnsName
   $newPublicIP.DnsSettings.Fqdn = $oldFqdn
   write-host "Set-AzPublicIpAddress -PublicIpAddress $($newPublicIP | convertto-json)"
   if ($execute) { 
@@ -114,7 +135,7 @@ function main() {
   `$oldPublicIP.DnsSettings.Fqdn = '$tempFqdn'
   Set-AzPublicIpAddress -PublicIpAddress `$oldPublicIP
 
-  `$newPublicIP.DnsSettings.DomainNameLabel = '$dnsName'
+  `$newPublicIP.DnsSettings.DomainNameLabel = '$oldDnsName'
   `$newPublicIP.DnsSettings.Fqdn = '$oldFqdn'
   Set-AzPublicIpAddress -PublicIpAddress `$newPublicIP
 
@@ -140,7 +161,7 @@ function main() {
   `$newPublicIP.DnsSettings.Fqdn = '$newFqdn'
   Set-AzPublicIpAddress -PublicIpAddress `$newPublicIP
 
-  `$oldPublicIP.DnsSettings.DomainNameLabel = '$dnsName'
+  `$oldPublicIP.DnsSettings.DomainNameLabel = '$oldDnsName'
   `$oldPublicIP.DnsSettings.Fqdn = '$oldFqdn'
   Set-AzPublicIpAddress -PublicIpAddress `$newPublicIP
 " -ForegroundColor Yellow
