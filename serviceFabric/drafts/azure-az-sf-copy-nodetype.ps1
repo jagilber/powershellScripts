@@ -121,7 +121,7 @@ function main() {
     $error.Clear()
 
     # convert-fromjson -ashashtable requires ps version 6+
-    if(!$PSEdition.psversion.Major -ge 6) {
+    if($psversiontable.psversion.major -lt 6) {
         write-console "powershell version 6+ required. use pwsh.exe" -foregroundColor 'Red'
         return
     }
