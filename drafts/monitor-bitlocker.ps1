@@ -7,7 +7,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 
 if (!$isAdmin) {
     write-error "not administrator"
-    returning:$result
+    return $result
 }
 
 $currentSettings = $null
