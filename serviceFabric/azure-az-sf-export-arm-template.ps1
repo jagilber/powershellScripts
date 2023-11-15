@@ -2,12 +2,12 @@
 .SYNOPSIS
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
     works with cloudshell https://shell.azure.com/
-    >help .\azure-az-export-arm-template.ps1 -full
+    >help .\azure-az-sf-export-arm-template.ps1 -full
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-export-arm-template.ps1" -outFile "$pwd/azure-az-export-arm-template.ps1";
-    ./azure-az-export-arm-template.ps1 -resourceGroupName <resource group name>
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1" -outFile "$pwd/azure-az-sf-export-arm-template.ps1";
+    ./azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name>
 
 .DESCRIPTION
     powershell script to export existing azure arm template resource settings similar for portal deployed service fabric cluster
@@ -24,7 +24,7 @@
         cluster depends on storage account sflogs
 
 .NOTES
-    File Name  : azure-az-export-arm-template.ps1
+    File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
     Version    : 231115 fix nsg resource dependency error
     todo       :
@@ -32,11 +32,11 @@
     History    : add support for private ip address and clusters with no diagnostics extension v2
 
 .EXAMPLE
-    .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup
     export sf resources in resource group 'clusteresourcegroup' and generate template.json
 
 .EXAMPLE
-    .\azure-az-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
+    .\azure-az-sf-export-arm-template.ps1 -resourceGroupName clusterresourcegroup -useExportedJsonFile .\template.export.json
     export sf resources in resource group 'clusteresourcegroup' and generate template.json using existing raw export file .\template.export.json
 #>
 
@@ -181,7 +181,7 @@ class SFTemplate {
     [switch]$updateScript = $updateScript
 
     [string]$parametersSchema = 'http://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json'
-    [string]$updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-export-arm-template.ps1'
+    [string]$updateUrl = 'https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/azure-az-sf-export-arm-template.ps1'
 
     [ClusterModel]$clusterModel = [ClusterModel]::new($this)
     [collections.arraylist]$errors = [collections.arraylist]::new()
@@ -3639,7 +3639,7 @@ required: to update deployment with new primary node type:
 2. deploy: New-AzResourceGroupDeployment -ResourceGroupName <resource group name> -DeploymentDebugLogLevel All -Mode Incremental -TemplateFile .\template.addprimarynodetype.json -TemplateParameterFile .\template.addprimarynodetype.parameters.json
 
 required: after successful template update, change *old* primary nodetype 'isPrimary' to 'false':
-1. export cluster again: .\azure-az-export-arm-template.ps1 -resourceGroupName <resource group name> -templatePath c:\temp
+1. export cluster again: .\azure-az-sf-export-arm-template.ps1 -resourceGroupName <resource group name> -templatePath c:\temp
 2. open template.current.parameters.json for modification
 3. set *old* isPrimary value 'virtualMachineScaleSets_nt0_isPrimary' to 'false'
 4. set node admin password value 'virtualMachineScaleSets_x_adminPassword'
