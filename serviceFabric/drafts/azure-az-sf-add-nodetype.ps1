@@ -99,11 +99,11 @@ function main() {
     return
   }
 
-  if(!(get-clusterInformation)) {
+  if (!(get-clusterInformation)) {
     return
   }
 
-  if(!(set-referenceNodeTypeInformation)) {
+  if (!(set-referenceNodeTypeInformation)) {
     return
   }
   add-placementConstraints
@@ -212,7 +212,7 @@ function get-clusterConnection() {
     }
   }
   catch [NullReferenceException] {
-    write-verbose("Get-AzServiceFabricConnection not found. attempting to connect to cluster using Connect-ServiceFabricCluster")
+    write-verbose "Get-AzServiceFabricConnection not found. attempting to connect to cluster using Connect-ServiceFabricCluster"
     $error.Clear()
   }
 
@@ -221,28 +221,28 @@ function get-clusterConnection() {
     $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
 
     if (!$cert) {
-      write-error("certificate with thumbprint $thumbprint not found")
+      write-error "certificate with thumbprint $thumbprint not found"
       return $null
     }
 
-    if(!$cert.HasPrivateKey) {
-      write-warning("certificate with thumbprint $thumbprint does not have a private key")
+    if (!$cert.HasPrivateKey) {
+      write-warning "certificate with thumbprint $thumbprint does not have a private key"
       #return $null
     }
 
-    if($cert.NotAfter -lt (get-date)) {
-      write-error("certificate with thumbprint $thumbprint has expired")
+    if ($cert.NotAfter -lt (get-date)) {
+      write-error "certificate with thumbprint $thumbprint has expired"
       return $null
     }
 
-    if($cert.NotBefore -gt (get-date)) {
-      write-error("certificate with thumbprint $thumbprint is not yet valid")
+    if ($cert.NotBefore -gt (get-date)) {
+      write-error "certificate with thumbprint $thumbprint is not yet valid"
       return $null
     }
 
     $storeLocation = 'CurrentUser'
 
-    if($cert.PSParentPath -imatch 'LocalMachine') {
+    if ($cert.PSParentPath -imatch 'LocalMachine') {
       $storeLocation = 'LocalMachine'
     }
 
@@ -253,9 +253,15 @@ function get-clusterConnection() {
     $port = ($connectionEndpoint.split(':')[1], 19000) | select-object -first 1
     $result = test-netConnection -ComputerName $hostname -Port $port
 
-    If(!$result.TcpTestSucceeded) {
-      write-error("error connecting to service fabric cluster $connectionEndpoint")
+    # set in case port is not specified
+    $connectionEndpoint = "$($hostname):$port"
+
+    If (!$result.TcpTestSucceeded) {
+      write-error "error connecting to service fabric cluster $connectionEndpoint"                             
       return $null
+    }
+    else {
+      write-console "able to connect to service fabric cluster $connectionEndpoint"
     }
 
     write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
@@ -269,6 +275,7 @@ function get-clusterConnection() {
       -Verbose
     " -foregroundColor Cyan
 
+    $error.Clear()
     Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
       -KeepAliveIntervalInSec 10 `
       -X509Credential `
@@ -283,15 +290,15 @@ function get-clusterConnection() {
   }
 
   if ($error -or !(Get-ServiceFabricClusterConnection)) {
-    write-error("error connecting to service fabric cluster")
-    return $null
+    write-error "error connecting to service fabric cluster"
+    throw
   }
   return $true
 }
 
 function get-clusterInformation() {
   $azCluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
-  if(!$azCluster) {
+  if (!$azCluster) {
     write-error("cluster $clusterName not found in resource group $resourceGroupName")
     return $false
   }
