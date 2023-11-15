@@ -5,7 +5,7 @@
 
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
-    version 231102
+    version 231115 add connectivity check and cert validation
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
@@ -218,18 +218,56 @@ function get-clusterConnection() {
 
   if (!$connected) {
     $error.Clear()
-    $message = "Connecting to Service Fabric cluster $connectionEndpoint"
-    write-console $message
+    $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
+
+    if (!$cert) {
+      write-error("certificate with thumbprint $thumbprint not found")
+      return $null
+    }
+
+    if(!$cert.HasPrivateKey) {
+      write-warning("certificate with thumbprint $thumbprint does not have a private key")
+      #return $null
+    }
+
+    if($cert.NotAfter -lt (get-date)) {
+      write-error("certificate with thumbprint $thumbprint has expired")
+      return $null
+    }
+
+    if($cert.NotBefore -gt (get-date)) {
+      write-error("certificate with thumbprint $thumbprint is not yet valid")
+      return $null
+    }
+
+    $storeLocation = 'CurrentUser'
+
+    if($cert.PSParentPath -imatch 'LocalMachine') {
+      $storeLocation = 'LocalMachine'
+    }
+
+    write-console "using cert: $($cert | out-string)"
+    write-console "Connecting to Service Fabric cluster $connectionEndpoint"
+
+    $hostname = $connectionEndpoint.split(':')[0]
+    $port = ($connectionEndpoint.split(':')[1], 19000) | select-object -first 1
+    $result = test-netConnection -ComputerName $hostname -Port $port
+
+    If(!$result.TcpTestSucceeded) {
+      write-error("error connecting to service fabric cluster $connectionEndpoint")
+      return $null
+    }
+
     write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
-    -KeepAliveIntervalInSec 10 ``
-    -X509Credential ``
-    -ServerCertThumbprint $thumbprint ``
-    -FindType FindByThumbprint ``
-    -FindValue $thumbprint ``
-    -StoreLocation CurrentUser ``
-    -StoreName My ``
-    -Verbose
-    "
+      -KeepAliveIntervalInSec 10 ``
+      -X509Credential ``
+      -ServerCertThumbprint $thumbprint ``
+      -FindType FindByThumbprint ``
+      -FindValue $thumbprint ``
+      -StoreLocation $storeLocation ``
+      -StoreName My ``
+      -Verbose
+    " -foregroundColor Cyan
 
     Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
       -KeepAliveIntervalInSec 10 `
@@ -237,7 +275,7 @@ function get-clusterConnection() {
       -ServerCertThumbprint $thumbprint `
       -FindType FindByThumbprint `
       -FindValue $thumbprint `
-      -StoreLocation CurrentUser `
+      -StoreLocation $storeLocation `
       -StoreName My `
       -Verbose
     # for 5.1 compatibility 
