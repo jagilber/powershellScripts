@@ -1,9 +1,27 @@
 <#
-script to create a secure service fabric standalone development cluster
-devclustersetup.ps1 currently requires admin privileges and .net framework 4.7.2 so powershell.exe is used
-devclustersetup.ps1 calls certsetup.ps1 to create a self signed certificate named 'ServiceFabricDevClusterCert'
-this cert is created in the current user's personal certificate store with an exportable private key and expiration of 1 year
-https://slproweb.com/download/Win64OpenSSL_Light-3_1_1.exe
+.SYNOPSIS
+    create a secure service fabric standalone development cluster
+.DESCRIPTION
+    script to create a secure service fabric standalone development cluster
+    devclustersetup.ps1 currently requires admin privileges and .net framework 4.7.2 so powershell.exe is used
+    devclustersetup.ps1 calls certsetup.ps1 to create a self signed certificate named 'ServiceFabricDevClusterCert'
+    this cert is created in the current user's personal certificate store with an exportable private key and expiration of 1 year
+.PARAMETER asSecureCluster
+    create a secure cluster
+.PARAMETER createOneNodeCluster
+    create a one node cluster
+.PARAMETER devClusterScriptDir
+    directory containing dev cluster setup and clean scripts
+.EXAMPLE
+    .\sf-dev-cluster-secure.ps1 -asSecureCluster -createOneNodeCluster
+.EXAMPLE
+    .\sf-dev-cluster-secure.ps1 -asSecureCluster
+.EXAMPLE
+    .\sf-dev-cluster-secure.ps1
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-dev-cluster-secure.ps1" -outFile "$pwd/sf-dev-cluster-secure.ps1";
+    ./sf-dev-cluster-secure.ps1 -resourceGroupName <resource group name>
 
 #>
 param(
@@ -21,7 +39,10 @@ function main() {
 
         if (!(test-path $devClusterScriptDir)) {
             Write-Warning "dev cluster script directory not found"
-            return
+            if(!(install-sdk)){
+                Write-Warning "sdk not installed."
+                return
+            }
         }
 
         if (!(test-path "$devClusterScriptDir\$clusterSetupScript")) {
@@ -79,6 +100,20 @@ function main() {
         Write-Error $_.Exception.Message
     }
     finally {
+    }
+}
+
+function install-sdk(){
+    if(winget){
+        if((read-host "install sdk using command 'winget install Microsoft.AzureServiceFabricSDK'? (y/n)") -ieq 'y') {
+            winget install Microsoft.AzureServiceFabricSDK
+            return $true
+        }
+        return $false
+    }
+    else {
+        Write-Warning "winget not found. install from https://learn.microsoft.com/azure/service-fabric/service-fabric-get-started#install-the-sdk-and-tools and restart script."
+        return $false
     }
 }
 
