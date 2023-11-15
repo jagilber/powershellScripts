@@ -104,14 +104,19 @@ function main() {
 }
 
 function install-sdk(){
-    if(winget){
-        if((read-host "install sdk using command 'winget install Microsoft.AzureServiceFabricSDK'? (y/n)") -ieq 'y') {
-            winget install Microsoft.AzureServiceFabricSDK
-            return $true
+    try {
+        if(winget){
+            if((read-host "install sdk using command 'winget install Microsoft.AzureServiceFabricSDK'? (y/n)") -ieq 'y') {
+                winget install Microsoft.AzureServiceFabricSDK
+                return $true
+            }
+            return $false
         }
-        return $false
+        else {
+            throw
+        }    
     }
-    else {
+    catch {
         Write-Warning "winget not found. install from https://learn.microsoft.com/azure/service-fabric/service-fabric-get-started#install-the-sdk-and-tools and restart script."
         return $false
     }
