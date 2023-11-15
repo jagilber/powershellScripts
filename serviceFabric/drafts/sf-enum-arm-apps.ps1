@@ -6,7 +6,7 @@
 .PARAMETER resourceGroupName
     resource group name
 .PARAMETER clusterName
-    cluster name    
+    cluster name
 .EXAMPLE
     .\sf-enum-arm-apps.ps1 -resourceGroupName <resource group name> -clusterName <cluster name>
 .EXAMPLE
@@ -56,7 +56,7 @@ function main() {
             write-host "adding application type version: $($typeVersion.Name) to $($applicationType.Name)" -ForegroundColor Green
             $resourceId = "$($sfResource.ResourceId)/applications"
             write-host "`$applications = Get-AzResource -ResourceId $resourceId" -ForegroundColor Cyan
-            $applications = Get-AzResource -ResourceId $resourceId 
+            $applications = Get-AzResource -ResourceId $resourceId
 
             foreach ($application in $applications) {
                 write-host "adding application: $($application.Name) to $($typeVersion.Name)" -ForegroundColor Green
@@ -84,37 +84,37 @@ function main() {
 function check-module() {
     $error.clear()
     get-command Connect-AzAccount -ErrorAction SilentlyContinue
-    
+
     if ($error) {
-      $error.clear()
-      write-warning "azure module for Connect-AzAccount not installed."
-  
-      if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
         $error.clear()
-        install-module az.accounts
-        install-module az.resources
-  
-        import-module az.accounts
-        import-module az.resources
-      }
-      else {
-        return $false
-      }
-  
-      if ($error) {
-        return $false
-      }
+        write-warning "azure module for Connect-AzAccount not installed."
+
+        if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+            $error.clear()
+            install-module az.accounts
+            install-module az.resources
+
+            import-module az.accounts
+            import-module az.resources
+        }
+        else {
+            return $false
+        }
+
+        if ($error) {
+            return $false
+        }
     }
-  
+
     if (!(get-azResourceGroup)) {
-      Connect-AzAccount
+        Connect-AzAccount
     }
-  
+
     if (!@(get-azResourceGroup).Count -gt 0) {
-      return $false
+        return $false
     }
-  
+
     return $true
-  }  
+}
 
 main
