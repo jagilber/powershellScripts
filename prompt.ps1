@@ -16,36 +16,17 @@
 
 # autoload modules
 $PSModuleAutoLoadingPreference = 2
-
+#$DebugPreference = "Continue"
 $global:promptInfo = $null
-
-function new-promptInfo() {
-    if (!$global:promptInfo) {
-        $global:promptInfo = @{
-            path               = $null
-            branch             = $null
-            defaultBranchCount = 20
-            branches           = @()
-            remoteBranches     = @()
-            remotes            = [collections.arraylist]::new()
-            repo               = $null
-            status             = $null
-            ps                 = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
-            cacheTimer         = [datetime]::MinValue
-            enableGit          = $true
-            cacheMinutes       = 1
-            fetchedRepos       = [collections.arraylist]::new()
-        }
-    }
-}
 
 function prompt() {
     $path = "'$pwd'"#.ToLower()
+    write-debug "prompt() path: $path command: $LastHistoryEntry"
     new-promptInfo
 
     try {
         $newPath = (!($promptInfo.path) -or ($path -ine $promptInfo.path))
-        $isGitCommand = $^ -and $^.startswith('git') # sometimes this is not current
+        $isGitCommand = $LastHistoryEntry -and $LastHistoryEntry.tostring().startswith('git')
         $cacheTimeout = ((get-date) - $promptInfo.cacheTimer).TotalMinutes -gt $promptInfo.cacheMinutes
 
         if ($newPath -or $cacheTimeout -or $isGitCommand) {
@@ -55,7 +36,6 @@ function prompt() {
         }
 
         $date = (get-date).ToString('HH:mm:ss')
-        #write-host "$($promptInfo.ps) $([char]0x23F2)$date" -ForegroundColor DarkGray -NoNewline
         write-host "$($promptInfo.ps) $date" -ForegroundColor DarkGray -NoNewline
         write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
         write-host " $path" -ForegroundColor White
@@ -67,11 +47,30 @@ function prompt() {
     }
 }
 
-function get-branches() {
-    $branches = @(git branch)
-    $remoteBranches = @(git branch -r)
+function add-status($status = "", [switch]$reset) {
+    write-debug "add-status($status) reset: $reset current status: $($promptInfo.status)"
+    if ($reset) {
+        write-debug "resetting status"
+        $promptInfo.status = $status
+    }
+    else {
+        $promptInfo.status += $status
+    }
 
-    if ($branches -ne $promptInfo.branches -or $remoteBranches -ne $promptInfo.remoteBranches) {
+    write-debug "new status: $($promptInfo.status)"
+}
+
+
+function get-branches() {
+    write-debug "get-branches()"
+    $branches = @(git branch)
+    $branchesChanged = compare-object $branches $promptInfo.branches
+
+    $remoteBranches = @(git branch -r)
+    $remoteBranchesChanged = compare-object $remoteBranches $promptInfo.remoteBranches
+
+    if ($branchesChanged) {
+        write-debug "branches changed. $($branches) -ne $($promptInfo.branches)"
         $promptInfo.branches = @(git branch)
         $promptInfo.remoteBranches = @(git branch -r)
         
@@ -81,7 +80,13 @@ function get-branches() {
             $additionalBranchInfo = "(+$additionalBranches) additional branches. all branches in `$promptInfo.branches"
         }
         write-host "local branches:`n$($promptInfo.branches | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalBranchInfo" -ForegroundColor DarkYellow
+    }
+    else {
+        write-debug "branches are the same"
+    }
 
+    if ($remoteBranchesChanged) {
+        write-debug "remote branches changed. $($remoteBranches) -ne $($promptInfo.remoteBranches)"
         $additionalBranches = $promptInfo.remoteBranches.count - $promptInfo.defaultBranchCount
         $additionalBranchInfo = ""
         if ($additionalBranches -gt 0) {
@@ -89,56 +94,64 @@ function get-branches() {
         }
         write-host "remote branches:`n$($promptInfo.remoteBranches | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalBranchInfo" -ForegroundColor DarkCyan
     }    
+    else {
+        write-debug "remote branches are the same"
+    }
 
     return $promptInfo.branches
 }
 
 function get-currentBranch() {
+    write-debug "get-currentBranch()"
     $currentBranch = @(git branch --show-current)
-    if ($currentBranch -ne $promptInfo.branch) {
+    $currentBranchChanged = compare-object $currentBranch $promptInfo.branch
+
+    if ($currentBranchChanged) {
         write-debug "branch changed. continuing"
         $promptInfo.branch = $currentBranch
     }
     else {
-        write-debug "branch is the same"
+        write-debug "current branch is the same"
     }
 
     if (!$promptInfo.branch) {
         $promptInfo.repo = $null
-        $promptInfo.status = ""
+        add-status -reset
         write-debug "no branch found. returning"
         return $null
     }
 
+    add-status " $([char]0x2325)($($promptInfo.branch))"
     return $promptInfo.branch
 }
 
 function get-diffs() {
+    write-debug "get-diffs()"
     $diff = @(git status --porcelain).count
     
     if ($diff -gt 0) {
-        $promptInfo.status = " $([char]0x2325)($($promptInfo.branch)*$diff)"
+        add-status " $([char]0x2325)($($promptInfo.branch)*$diff)" -reset
     }
 }
 
-function get-remotes() {
-    # only do this once per repo
+function get-remotes($gitCommand = $false) {
+    write-debug "get-remotes($gitCommand)"
     $pattern = "(?<remote>\S+?)\s+(?<repo>.+?)\s+?\(\w+?\)"
     $remotes = @(git remote -v)
     $remoteMatches = [regex]::Matches($remotes, $pattern)
-    $promptInfo.remotes.clear()
+    [void]$promptInfo.remotes.clear()
     
     if (!$remoteMatches) {
         write-debug "no remotes found. returning"
         $promptInfo.repo = $null
-        return $promptInfo.status = ""
+        return $null
     }
 
     $repo = $remoteMatches[0].groups['repo'].value
     $sameRepo = $repo -and $repo -eq $promptInfo.repo
     if (!$sameRepo -or $gitCommand) {
         $promptInfo.repo = $repo
-        get-branches
+        $null = get-branches
     }
     else {
         write-debug "repo is the same"
@@ -152,6 +165,7 @@ function get-remotes() {
             [void]$promptInfo.remotes.add($remote)
         }
 
+        # only do this once per repo
         if (!($promptInfo.fetchedRepos.contains($repoRemote))) {
             [void]$promptInfo.fetchedRepos.add($repoRemote)
             write-host "fetching $repoRemote" -ForegroundColor DarkMagenta
@@ -163,6 +177,7 @@ function get-remotes() {
 }
 
 function get-revisions() {
+    write-debug "get-revisions()"
     foreach ($remote in $promptInfo.remotes) {
         try {
             $aheadBehind = git rev-list --left-right --count "$($remote)/$($promptInfo.branch)...$($promptInfo.branch)"
@@ -172,32 +187,59 @@ function get-revisions() {
         }
         if ($aheadBehind) {
             $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', "$([char]0x2193)`$1/$([char]0x2191)`$2")
-            $promptInfo.status += "[$($remote):$($aheadBehind)]"
+            add-status "[$($remote):$($aheadBehind)]"
         }
+    }
+}
+
+function get-stashes() {
+    write-debug "get-stashes()"
+    $stashes = @(git stash list)
+    if ($stashes) {
+        write-debug "stashes found. adding to status"
+        add-status "{$([char]0x21B2)$($stashes.count)}"
     }
 }
 
 function get-gitInfo([bool]$newPath = $false, [bool]$gitCommand = $false, [bool]$cacheTimeout = $false) {
     write-debug "get-gitInfo([bool]newPath = $newPath, [bool]gitCommand = $gitCommand, [bool]cacheTimeout = $cacheTimeout)"
+    add-status -reset
 
     if (!$promptInfo.enableGit) {
         write-debug "git disabled. returning"
-        return $promptInfo.status = ""
+        return (add-status -reset)
     }
 
     if (!(get-currentBranch)) {
-        return $promptInfo.status = ""
+        return (add-status -reset)
     }
 
-    if (!(get-remotes)) {
-        return $promptInfo.status = ""
-    }
-
-    $promptInfo.status = " $([char]0x2325)($($promptInfo.branch))"
-
+    $null = get-remotes -gitCommand $gitCommand
     get-diffs
+    get-stashes
     get-revisions
 
     write-debug "returning status: $status"
     return $promptInfo.status
+}
+
+function new-promptInfo() {
+    if (!$global:promptInfo) {
+        write-debug "new-promptInfo()"
+        $global:promptInfo = @{
+            path               = ""
+            branch             = ""
+            defaultBranchCount = 20
+            branches           = @()
+            remoteBranches     = @()
+            remotes            = [collections.arraylist]::new()
+            repo               = ""
+            status             = ""
+            ps                 = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
+            cacheTimer         = [datetime]::MinValue
+            enableGit          = $true
+            cacheMinutes       = 1
+            fetchedRepos       = [collections.arraylist]::new()
+        }
+    }
 }
