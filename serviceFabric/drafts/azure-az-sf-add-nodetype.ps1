@@ -52,26 +52,45 @@
 
 [cmdletbinding()]
 param(
-  [Parameter(Mandatory = $true)]
+  [Parameter(ParameterSetName = 'tp', Mandatory = $true)]
+  [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
   $connectionEndpoint = '', #'sfcluster.eastus.cloudapp.azure.com:19000',
-  [Parameter(Mandatory = $true)]
+
+  [Parameter(ParameterSetName = 'tp', Mandatory = $true)]
   $thumbprint = '',
+
+  [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
+  $commonName = '',
+
   [Parameter(Mandatory = $true)]
   $resourceGroupName = '', #'sfcluster',
+
   $clusterName = $resourceGroupName,
+
   #[Parameter(Mandatory = $true)]
   $newNodeTypeName = 'nt1', #'nt1',
+
   $referenceNodeTypeName = 'nt0', #'nt0',
+
   $isPrimaryNodeType, # = $false,
+
   $vmImagePublisher, # = 'MicrosoftWindowsServer',
+
   $vmImageOffer, # = 'WindowsServer',
+
   $vmImageSku, # = '2022-Datacenter',
+
   $vmImageVersion, # = 'latest',
+
   $vmInstanceCount, # = 5,
+
   $vmSku, # = 'Standard_D2_v2',
+
   [ValidateSet('Bronze', 'Silver', 'Gold')]
   $durabilityLevel, # = 'Silver',
+
   $adminUserName, # = 'cloudadmin',
+
   $adminPassword = 'P@ssw0rd!'
 )
 
@@ -218,8 +237,15 @@ function get-clusterConnection() {
 
   if (!$connected) {
     $error.Clear()
-    $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
-
+    $cert = $null
+    
+    if($thumbprint){
+      $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
+    }
+    else {
+      $cert = Get-ChildItem cert:\ -recurse | where-object Subject -ieq "CN=$commonName"
+    }
+    
     if (!$cert) {
       write-error "certificate with thumbprint $thumbprint not found"
       return $null
@@ -264,7 +290,8 @@ function get-clusterConnection() {
       write-console "able to connect to service fabric cluster $connectionEndpoint"
     }
 
-    write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
+    if ($thumbprint) {
+      write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
       -KeepAliveIntervalInSec 10 ``
       -X509Credential ``
       -ServerCertThumbprint $thumbprint ``
@@ -275,16 +302,42 @@ function get-clusterConnection() {
       -Verbose
     " -foregroundColor Cyan
 
-    $error.Clear()
-    Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
-      -KeepAliveIntervalInSec 10 `
-      -X509Credential `
-      -ServerCertThumbprint $thumbprint `
-      -FindType FindByThumbprint `
-      -FindValue $thumbprint `
-      -StoreLocation $storeLocation `
-      -StoreName My `
-      -Verbose
+      $error.Clear()
+      Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
+        -KeepAliveIntervalInSec 10 `
+        -X509Credential `
+        -ServerCertThumbprint $thumbprint `
+        -FindType FindByThumbprint `
+        -FindValue $thumbprint `
+        -StoreLocation $storeLocation `
+        -StoreName My `
+        -Verbose
+    }
+    else {
+      # common name
+      write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
+        -KeepAliveIntervalInSec 10 ``
+        -X509Credential ``
+        -ServerCommonName $commonName ``
+        -FindType FindBySubjectName ``
+        -FindValue $commonName ``
+        -StoreLocation $storeLocation ``
+        -StoreName My ``
+        -Verbose
+      " -foregroundColor Cyan
+  
+      $error.Clear()
+      Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
+        -KeepAliveIntervalInSec 10 `
+        -X509Credential `
+        -ServerCommonName $commonName `
+        -FindType FindBySubjectName `
+        -FindValue $commonName `
+        -StoreLocation $storeLocation `
+        -StoreName My `
+        -Verbose
+  
+    }
     # for 5.1 compatibility 
     $global:ClusterConnection = $ClusterConnection
   }
@@ -297,17 +350,18 @@ function get-clusterConnection() {
 }
 
 function get-clusterInformation() {
+  write-console "Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName"
   $azCluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
   if (!$azCluster) {
-    write-error("cluster $clusterName not found in resource group $resourceGroupName")
+    write-error "cluster $clusterName not found in resource group $resourceGroupName"
     return $false
   }
   $manifest = Get-ServiceFabricClusterManifest
-  write-console ($manifest) -Verbose
+  write-console $manifest -Verbose
 
   $xmlManifest = [xml]::new()
   $xmlManifest.LoadXml($manifest)
-  write-console ($xmlManifest) -Verbose
+  write-console $xmlManifest -Verbose
 
   $global:nodeTypePlbNames = ($xmlManifest.ClusterManifest.NodeTypes.NodeType.PlacementProperties.Property | Select-Object Name, Value)
   write-console ($global:nodeTypePlbNames | convertto-json -depth 5) -Verbose
