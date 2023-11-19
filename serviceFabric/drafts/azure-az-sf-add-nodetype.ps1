@@ -239,7 +239,7 @@ function get-clusterConnection() {
     $error.Clear()
     $cert = $null
     
-    if($thumbprint){
+    if ($thumbprint) {
       $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
     }
     else {
@@ -354,6 +354,10 @@ function get-clusterInformation() {
   $azCluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
   if (!$azCluster) {
     write-error "cluster $clusterName not found in resource group $resourceGroupName"
+    if (!(get-azResourceGroup -Name $resourceGroupName)) {
+      write-error "resource group $resourceGroupName not found in tenant: $((get-azContext).tenantId)"
+      write-host "to change tenant, run 'Connect-AzAccount -TenantId <tenantId>'"
+    }
     return $false
   }
   $manifest = Get-ServiceFabricClusterManifest
