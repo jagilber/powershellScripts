@@ -5,7 +5,9 @@
 
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
-    version 231115 add connectivity check and cert validation
+    version 
+      231122 add check for az modules and version. older versions of az modules have issues with Add-AzServiceFabricNodeType
+      231115 add connectivity check and cert validation
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
@@ -110,7 +112,7 @@ function main() {
     }
   }
 
-  if (!(check-module)) {
+  if (!(check-modules)) {
     return
   }
 
@@ -179,26 +181,27 @@ function add-placementConstraints() {
   }
 }
 
-function check-module() {
+function check-module($name, $version = $null) {
+  write-host "checking module: $name version: $version" -ForegroundColor Cyan
   $error.clear()
-  get-command Connect-AzAccount -ErrorAction SilentlyContinue
-  get-command Add-AzServiceFabricNodeType -ErrorAction SilentlyContinue
-  
-  if ($error) {
+  $module = get-module $name -ListAvailable
+  if ($module) {
+    if ($version) {
+      if ($module.Version -lt $version) {
+        write-warning "module $name version $($module.Version) is less than required version $version"
+        $module = $null
+      }
+    }
+  }
+
+  if (!$module -or $error) {
     $error.clear()
-    write-warning "azure module for Connect-AzAccount not installed."
+    write-warning "azure module $name not installed."
 
     if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
       $error.clear()
-      install-module az.accounts
-      install-module az.compute
-      install-module az.servicefabric
-      install-module az.resources
-
-      import-module az.accounts
-      import-module az.compute
-      import-module az.servicefabric
-      import-module az.resources
+      install-module $name -allowclobber -force
+      import-module $name
     }
     else {
       return $false
@@ -209,6 +212,23 @@ function check-module() {
     }
   }
 
+  return $true
+}
+
+function check-modules() {
+  $retval = $true
+
+  $modules = [ordered]@{
+    'az.accounts'      = $null 
+    'az.compute'       = $null
+    'az.servicefabric' = [version]('3.2.0') # older versions have issues with Add-AzServiceFabricNodeType
+    'az.resources'     = $null
+  }
+
+  foreach ($module in $modules.GetEnumerator()) {
+    $retval = $retval -and (check-module $module.Name $module.Value)
+  }
+
   if (!(get-azResourceGroup)) {
     Connect-AzAccount
   }
@@ -216,8 +236,7 @@ function check-module() {
   if (!@(get-azResourceGroup).Count -gt 0) {
     return $false
   }
-
-  return $true
+  return $retval
 }
 
 function get-clusterConnection() {
