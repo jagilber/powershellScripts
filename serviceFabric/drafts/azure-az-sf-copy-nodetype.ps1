@@ -14,6 +14,7 @@
     in no event shall Microsoft, its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation, even if Microsoft has been advised of the possibility of such damages 
 
     version:
+        231121 # add fix for space in template path. require admin username and password for platform image
         231114 # convert-fromjson -ashashtable requires ps version 6+ (core)
     todo:
         private ip?
@@ -70,28 +71,75 @@
     ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
 #>
 
-[cmdletbinding()]
+[CmdletBinding(DefaultParameterSetName="Platform")]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Custom', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
     $resourceGroupName = '', #'sfcluster',
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $clusterName = $resourceGroupName,
-    [Parameter(Mandatory = $true)]
+    
+    [Parameter(ParameterSetName = 'Custom', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
     $newNodeTypeName = 'nt1', #'nt1'
-    [Parameter(Mandatory = $true)]
+    
+    [Parameter(ParameterSetName = 'Custom', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
     $referenceNodeTypeName = 'nt0', #'nt0',
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $isPrimaryNodeType = $false,
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $vmImageSku = '2022-Datacenter',
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $vmInstanceCount = 3,
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $vmSku = 'Standard_D2_v2',
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     [ValidateSet('Bronze', 'Silver', 'Gold')]
     $durabilityLevel = 'Silver',
+    
+    #[Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
     $adminUserName, # = 'cloudadmin', # required for platform image
+    
+    #[Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
     $adminPassword, # = 'P@ssw0rd!', # required for platform image
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $newIpAddress = $null,
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $newIpAddressName = 'pip-' + $newNodeTypeName,
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
     $newLoadBalancerName = 'lb-' + $newNodeTypeName,
-    $template = "$psscriptroot\azure-az-sf-copy-nodetype.json",
-    [switch]$deploy
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    $template = "'$psscriptroot\azure-az-sf-copy-nodetype.json'",
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    [switch]$deploy,
+        
+    [Parameter(ParameterSetName = 'Custom')]
+    [switch]$customOsImage
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
@@ -361,9 +409,14 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
 function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     write-console "deploying new node type $newNodeTypeName"
     write-console $template -foregroundColor 'Cyan'
+    $tempDir = [io.path]::GetDirectoryName($template)
+    if(!(test-path $tempDir)) {
+        write-console "creating temp directory $tempDir"
+        new-item -Path $tempDir -ItemType Directory
+    }
 
     convert-toJson $templateJson | Out-File $template -Force
-    write-console "template saved to $template" -foregroundColor 'Green'
+    write-console "template saved to path: '$template'" -foregroundColor 'Green'
     write-console "Test-AzResourceGroupDeployment -resourceGroupName $resourceGroupName ``
         -TemplateFile $template ``
         -Verbose" -foregroundColor 'Cyan'
