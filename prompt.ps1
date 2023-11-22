@@ -5,7 +5,7 @@
     Custom prompt for powershell
     in ps open $PROFILE and add the following:
     code $PROFILE
-    version 231116
+    version 231121 add stashes list
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -97,8 +97,6 @@ function get-branches() {
     else {
         write-debug "remote branches are the same"
     }
-
-    return $promptInfo.branches
 }
 
 function get-currentBranch() {
@@ -172,8 +170,6 @@ function get-remotes($gitCommand = $false) {
             git fetch $remote
         }
     }
-
-    return $promptInfo.remotes
 }
 
 function get-revisions() {
@@ -195,9 +191,26 @@ function get-revisions() {
 function get-stashes() {
     write-debug "get-stashes()"
     $stashes = @(git stash list)
-    if ($stashes) {
+    $stashesChanged = compare-object $stashes $promptInfo.stashes
+    
+    if ($stashesChanged) {
+        write-debug "stashes changed. $($stashes) -ne $($promptInfo.stashes)"
+        $promptInfo.stashes = $stashes
+        
+        $additionalStashes = $promptInfo.stashes.count - $promptInfo.defaultBranchCount
+        $additionalStashInfo = ""
+        if ($additionalStashes -gt 0) {
+            $additionalStashInfo = "(+$additionalStashes) additional stashes. all stashes in `$promptInfo.stashes"
+        }
+        write-host "stashes:`n$($promptInfo.stashes | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalStashInfo" -ForegroundColor Yellow
+    }
+    else {
+        write-debug "stashes are the same"
+    }
+
+    if ($promptInfo.stashes) {
         write-debug "stashes found. adding to status"
-        add-status "{$([char]0x21B2)$($stashes.count)}"
+        add-status "{$([char]0x21B2)$($promptInfo.stashes.count)}"
     }
 }
 
@@ -214,9 +227,9 @@ function get-gitInfo([bool]$newPath = $false, [bool]$gitCommand = $false, [bool]
         return (add-status -reset)
     }
 
-    $null = get-remotes -gitCommand $gitCommand
     get-diffs
     get-stashes
+    get-remotes -gitCommand $gitCommand
     get-revisions
 
     write-debug "returning status: $status"
@@ -233,6 +246,7 @@ function new-promptInfo() {
             branches           = @()
             remoteBranches     = @()
             remotes            = [collections.arraylist]::new()
+            stashes            = [collections.arraylist]::new()
             repo               = ""
             status             = ""
             ps                 = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
