@@ -499,12 +499,17 @@ function set-referenceNodeTypeInformation() {
 }
 
 function set-value($paramValue, $referenceValue) {
+  write-console "comparing values '$paramValue' and '$referenceValue'"
+  $returnValue = $paramValue
   if ($paramValue -eq $null) {
-    return $referenceValue
+      $returnValue = $referenceValue
   }
-  if ($paramValue -eq 0) {
-    return $referenceValue
+  elseif ($paramValue -eq 0) {
+      $returnValue = $referenceValue
   }
+
+  write-console "returning value: '$returnValue'"
+  return $returnValue
 }
 
 function write-console($message, $foregroundColor = 'White', [switch]$verbose) {

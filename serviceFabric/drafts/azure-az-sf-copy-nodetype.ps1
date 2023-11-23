@@ -14,6 +14,7 @@
     in no event shall Microsoft, its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation, even if Microsoft has been advised of the possibility of such damages 
 
     version:
+        231122 # add set-value to set default values if null
         231121 # add fix for space in template path. require admin username and password for platform image
         231114 # convert-fromjson -ashashtable requires ps version 6+ (core)
     todo:
@@ -61,6 +62,9 @@
     the path to the template file to use for deployment
 .PARAMETER deploy
     whether to perform a deploy deployment. default creates template for modification and deployment
+.PARAMETER customOsImage
+    whether to use a custom os image for the new node type
+
 .EXAMPLE
     ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name>
 .EXAMPLE
@@ -71,7 +75,7 @@
     ./azure-az-sf-copy-nodetype.ps1 -resourceGroupName <resource group name> -newNodeTypeName nt1 -referenceNodeTypeName nt0 -isPrimaryNodeType $false -vmImagePublisher MicrosoftWindowsServer -vmImageOffer WindowsServer -vmImageSku 2022-Datacenter -vmImageVersion latest -vmInstanceCount 5 -vmSku Standard_D2_v2 -durabilityLevel Silver -adminUserName cloudadmin -adminPassword P@ssw0rd!
 #>
 
-[CmdletBinding(DefaultParameterSetName="Platform")]
+[CmdletBinding(DefaultParameterSetName = "Platform")]
 param(
     [Parameter(ParameterSetName = 'Custom', Mandatory = $true)]
     [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
@@ -99,16 +103,28 @@ param(
 
     [Parameter(ParameterSetName = 'Custom')]
     [Parameter(ParameterSetName = 'Platform')]
-    $vmInstanceCount = 3,
+    $vmImagePublisher, # = 'MicrosoftWindowsServer'
     
     [Parameter(ParameterSetName = 'Custom')]
     [Parameter(ParameterSetName = 'Platform')]
-    $vmSku = 'Standard_D2_v2',
+    $vmImageOffer, # = 'WindowsServer'
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    $vmImageVersion, # = 'latest'
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    $vmInstanceCount, # = 3,
+    
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    $vmSku, # = 'Standard_D2_v2',
     
     [Parameter(ParameterSetName = 'Custom')]
     [Parameter(ParameterSetName = 'Platform')]
     [ValidateSet('Bronze', 'Silver', 'Gold')]
-    $durabilityLevel = 'Silver',
+    $durabilityLevel, #'Silver',
     
     #[Parameter(ParameterSetName = 'Custom')]
     [Parameter(ParameterSetName = 'Platform', Mandatory = $true)]
@@ -145,9 +161,6 @@ param(
 $PSModuleAutoLoadingPreference = 'auto'
 $deployedServices = @{}
 $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
-$vmImagePublisher = 'MicrosoftWindowsServer'
-$vmImageOffer = 'WindowsServer'
-$vmImageVersion = 'latest'
 $nameFindPattern = '(?<initiator>/|"|_|,|\\){0}(?<terminator>/|$|"|_|,|\\)'
 $nameReplacePattern = '${{initiator}}{0}${{terminator}}'
 #$nameReplacePattern = "`${initiator}{0}`${terminator}"
@@ -169,7 +182,7 @@ function main() {
     $error.Clear()
 
     # convert-fromjson -ashashtable requires ps version 6+
-    if($psversiontable.psversion.major -lt 6) {
+    if ($psversiontable.psversion.major -lt 6) {
         write-console "powershell version 6+ required. use pwsh.exe" -foregroundColor 'Red'
         return
     }
@@ -274,7 +287,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     # set credentials
     # custom images may hot have OsProfile
     if ($vmss.properties.VirtualMachineProfile.OsProfile) {
-        if(!$adminUserName -or !$adminPassword) {
+        if (!$adminUserName -or !$adminPassword) {
             write-console "-adminUserName and -adminPassword required" -err
         }
         $vmss.properties.VirtualMachineProfile.OsProfile.AdminUsername = $adminUserName
@@ -302,7 +315,12 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $extensions.Remove($mmsExtension)
 
     # set durabilty level
-    $sfExtension.properties.settings.durabilityLevel = $durabilityLevel
+    $sfExtension.properties.settings.durabilityLevel = set-value $durabilityLevel $sfExtension.properties.settings.durabilityLevel
+
+    # set storage profile information
+    $vmss.properties.VirtualMachineProfile.StorageProfile.ImageReference.Publisher = set-value $vmImagePublisher $vmss.properties.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
+    $vmss.properties.VirtualMachineProfile.StorageProfile.ImageReference.Offer = set-value $vmImageOffer $vmss.properties.VirtualMachineProfile.StorageProfile.ImageReference.Offer
+    $vmss.properties.VirtualMachineProfile.StorageProfile.ImageReference.Version = set-value $vmImageVersion $vmss.properties.VirtualMachineProfile.StorageProfile.ImageReference.Version
 
     # set extensions
     $vmss.properties.VirtualMachineProfile.ExtensionProfile.Extensions = $extensions
@@ -310,8 +328,9 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     # todo parameterize cluster id ?
     #$clusterEndpoint = $serviceFabricResource.Properties.ClusterEndpoint
 
-    # set capacity
-    $vmss.Sku.Capacity = if ($vmInstanceCount) { $vmInstanceCount } else { $vmss.Sku.Capacity }
+    # set sku information
+    $vmss.Sku.Capacity = set-value $vmInstanceCount $vmss.Sku.Capacity
+    $vmss.Sku.Name = set-value $vmSku $vmss.Sku.Name
 
     $vmssName = $nameFindPattern -f $vmss.Name
     $newVmssName = $nameReplacePattern -f $newNodeTypeName
@@ -381,7 +400,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
     $vmss = convert-fromJson $vmssJson
     # remove user assigned managed identity principal id and client id
-    if($vmss.Identity -and $vmss.Identity.UserAssignedIdentities) {
+    if ($vmss.Identity -and $vmss.Identity.UserAssignedIdentities) {
         write-console 'removing user assigned managed identity principal id and client id'
         $userIdentitiesJson = convert-toJson $vmss.Identity.UserAssignedIdentities
         $userIdentitiesJson = remove-property -name 'principalId' -json $userIdentitiesJson
@@ -410,7 +429,7 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     write-console "deploying new node type $newNodeTypeName"
     write-console $template -foregroundColor 'Cyan'
     $tempDir = [io.path]::GetDirectoryName($template)
-    if(!(test-path $tempDir)) {
+    if (!(test-path $tempDir)) {
         write-console "creating temp directory $tempDir"
         new-item -Path $tempDir -ItemType Directory
     }
@@ -438,7 +457,7 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     if ($deploy) {
         $error.clear()
         $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
-        if($result -or $error) {
+        if ($result -or $error) {
             write-console "error: new-azResourceGroupDeployment failed:$($result | out-string)`r`n$($error | out-string)" -err
             return $result
         }
@@ -689,6 +708,20 @@ function remove-property($name, $json) {
     return $json
 }
 
+function set-value($paramValue, $referenceValue) {
+    write-console "comparing values '$paramValue' and '$referenceValue'"
+    $returnValue = $paramValue
+    if ($paramValue -eq $null) {
+        $returnValue = $referenceValue
+    }
+    elseif ($paramValue -eq 0) {
+        $returnValue = $referenceValue
+    }
+
+    write-console "returning value: '$returnValue'"
+    return $returnValue
+}
+
 function set-resourceName($referenceName, $newName, $json) {
     if (!$json) {
         write-console "error: json is null" -err
@@ -738,7 +771,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     # check cluster provisioning state
     if ($serviceFabricResource.Properties.clusterState -ine 'Ready') {
         write-console "cluster provisioning state is $($serviceFabricResource.Properties.clusterState)"
-        if($deploy){
+        if ($deploy) {
             write-console "error: cluster must be in 'Ready' state to add node type" -err
             return $serviceFabricResource
         }
@@ -774,8 +807,8 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
 
     $nodeTypeTemplate.isPrimary = $isPrimaryNodeType
     $nodeTypeTemplate.name = $newNodeTypeName
-    $nodeTypeTemplate.vmInstanceCount = $vmInstanceCount
-    $nodeTypeTemplate.durabilityLevel = $durabilityLevel
+    $nodeTypeTemplate.vmInstanceCount = set-value $vmInstanceCount $nodeTypeTemplate.vmInstanceCount
+    $nodeTypeTemplate.durabilityLevel = set-value $durabilityLevel $nodeTypeTemplate.durabilityLevel
 
     [void]$newList.Add($nodeTypeTemplate)
     $serviceFabricResource.Properties.nodeTypes = $newList
