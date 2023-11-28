@@ -64,6 +64,11 @@ param(
   [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
   $commonName = '',
 
+  [Parameter(ParameterSetName = 'tp')]
+  [Parameter(ParameterSetName = 'cn')]
+  [validateSet('CurrentUser', 'LocalMachine')]
+  $storeLocation = 'CurrentUser',
+
   [Parameter(Mandatory = $true)]
   $resourceGroupName = '', #'sfcluster',
 
@@ -259,10 +264,10 @@ function get-clusterConnection() {
     $cert = $null
     
     if ($thumbprint) {
-      $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
+      $cert = Get-ChildItem cert:\$storeLocation\My -recurse | where-object Thumbprint -ieq $thumbprint
     }
     else {
-      $cert = Get-ChildItem cert:\ -recurse | where-object Subject -ieq "CN=$commonName"
+      $cert = Get-ChildItem cert:\$storeLocation\My -recurse | where-object Subject -ieq "CN=$commonName"
     }
     
     if (!$cert) {
@@ -283,12 +288,6 @@ function get-clusterConnection() {
     if ($cert.NotBefore -gt (get-date)) {
       write-error "certificate with thumbprint $thumbprint is not yet valid"
       return $null
-    }
-
-    $storeLocation = 'CurrentUser'
-
-    if ($cert.PSParentPath -imatch 'LocalMachine') {
-      $storeLocation = 'LocalMachine'
     }
 
     write-console "using cert: $($cert | out-string)"
@@ -477,7 +476,8 @@ function set-referenceNodeTypeInformation() {
   if ($referenceNodeTypeName) {
     $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
     if (!$referenceVmss) {
-      write-error("reference node type $referenceNodeTypeName not found")
+      write-error "reference node type $referenceNodeTypeName not found"
+      write-host "available node types: $(Get-AzVmss -ResourceGroupName $resourceGroupName | select-object Name | format-list * | out-string)"
       return $false
     }
     write-console "using reference node type $referenceNodeTypeName"
