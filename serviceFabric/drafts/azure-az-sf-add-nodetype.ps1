@@ -46,6 +46,8 @@
     the admin username of the new node type
 .PARAMETER adminPassword
     the admin password of the new node type
+.PARAMETER logFile
+    the log file to write to
 .EXAMPLE
     ./azure-az-sf-add-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
 .EXAMPLE
@@ -100,44 +102,64 @@ param(
 
   $adminUserName, # = 'cloudadmin',
 
-  $adminPassword = 'P@ssw0rd!'
+  $adminPassword = 'P@ssw0rd!',
+
+  $logFile = "$pwd\azure-az-sf-add-nodetype.log"
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
 $global:deployedServices = @{}
 
 function main() {
-  write-verbose ("main() started")
-  $error.Clear()
+  try {
+    if ($logFile) {
+      Start-Transcript -path $logFile -Force | Out-Null
+    }
 
-  if (!(Get-Module servicefabric)) {
-    Import-Module servicefabric
-    if ($error) {
-      write-error("error importing servicefabric module")
-      write-error("run from developer machine with service fabric sdk installed from from service fabric cluster node locally.")
-      return $error
+    write-verbose ("starting")
+    $error.Clear()
+  
+    if (!(Get-Module servicefabric)) {
+      Import-Module servicefabric
+      if ($error) {
+        write-error("error importing servicefabric module")
+        write-error("run from developer machine with service fabric sdk installed from from service fabric cluster node locally.")
+        return $error
+      }
+    }
+  
+    if (!(check-modules)) {
+      return
+    }
+  
+    if (!(get-clusterConnection)) {
+      return
+    }
+  
+    if (!(get-clusterInformation)) {
+      return
+    }
+  
+    if (!(set-referenceNodeTypeInformation)) {
+      return
+    }
+    add-placementConstraints
+    write-results
+  
+    if($logFile) {
+      write-console "log file: $logFile"
+    }
+    write-console "finished"
+  
+  }
+  catch [Exception] {
+    write-console $psitem -ForegroundColor Red
+  }
+  finally {
+    if ($logFile) {
+      Stop-Transcript | Out-Null
     }
   }
-
-  if (!(check-modules)) {
-    return
-  }
-
-  if (!(get-clusterConnection)) {
-    return
-  }
-
-  if (!(get-clusterInformation)) {
-    return
-  }
-
-  if (!(set-referenceNodeTypeInformation)) {
-    return
-  }
-  add-placementConstraints
-  write-results
-
-  write-console "finished"
 }
 
 function add-placementConstraints() {
@@ -389,19 +411,32 @@ function get-clusterInformation() {
 
   $global:nodeTypePlbNames = ($xmlManifest.ClusterManifest.NodeTypes.NodeType.PlacementProperties.Property | Select-Object Name, Value)
   write-console ($global:nodeTypePlbNames | convertto-json -depth 5) -Verbose
-
+  
+  write-console "`$global:applications = Get-ServiceFabricApplication" -foregroundColor magenta
   $global:applications = Get-ServiceFabricApplication
   write-console ($global:applications | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:applicationTypes = `$global:applications | Get-ServiceFabricApplicationType" -foregroundColor magenta
+  $global:applicationTypes = $global:applications | Get-ServiceFabricApplicationType
+  write-console ($global:applicationTypes | convertto-json -depth 5) -Verbose
+
+  write-console "`$global:services = $global:applications | Get-ServiceFabricService" -foregroundColor magenta
   $global:services = $global:applications | Get-ServiceFabricService
   write-console ($global:services | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:serviceDescriptions = `$global:services | Get-ServiceFabricServiceDescription" -foregroundColor magenta
   $global:serviceDescriptions = $global:services | Get-ServiceFabricServiceDescription
   write-console ($global:serviceDescriptions | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:serviceTypes = `$global:services | Get-ServiceFabricServiceType" -foregroundColor magenta
+  $global:serviceTypes = $global:applicationTypes | Get-ServiceFabricServiceType
+  write-console ($global:serviceTypes | convertto-json -depth 5) -Verbose
+
+  write-console "`$global:placementConstraints = `$global:serviceDescriptions | Select-Object PlacementConstraints" -foregroundColor magenta
   $global:placementConstraints = $global:serviceDescriptions | Select-Object PlacementConstraints
   write-console ($global:placementConstraints | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:nodes = Get-ServiceFabricNode" -foregroundColor magenta
   $global:nodes = Get-ServiceFabricNode
   write-console ($global:nodes | convertto-json -depth 5) -Verbose
 
@@ -436,8 +471,10 @@ function get-deployedServices() {
 
     foreach ($node in $global:nodes) {
       write-console "Getting deployed applications for $($node.NodeName)"
+      write-console "$deployedApplications = @(Get-ServiceFabricDeployedApplication -NodeName $node.NodeName)"
       $deployedApplications = @(Get-ServiceFabricDeployedApplication -NodeName $node.NodeName)
       if (!($deployedApplications.ApplicationName -contains $application.ApplicationName)) {
+        write-console "Application $($application.ApplicationName) not deployed on node $($node.NodeName)"
         continue
       }
       
