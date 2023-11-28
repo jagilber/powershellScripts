@@ -6,6 +6,8 @@
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
     version 
+      231128 check for servicetype before adding to deployedServices and increment instances
+        display nodetype names in resource group if nodetype not found
       231122 add check for az modules and version. older versions of az modules have issues with Add-AzServiceFabricNodeType
       231115 add connectivity check and cert validation
 .LINK
@@ -404,18 +406,26 @@ function get-clusterInformation() {
   write-console ($global:nodes | convertto-json -depth 5) -Verbose
 
   foreach ($service in $global:serviceDescriptions) {
-    write-console "Creating deployed service for service type $($service.ServiceTypeName)"
-    $global:deployedServices.Add($service.ServiceTypeName , @{
-        serviceTypeName               = $service.ServiceTypeName
-        deployedNodeTypes             = @()
-        deployedNodes                 = @()
-        placementConstraints          = $service.PlacementConstraints
-        serviceKind                   = $service.ServiceKind.ToString()
-        serviceName                   = $service.ServiceName
-        temporaryPlacementConstraints = ""
-        revertPlacementConstraints    = ""
-      }
-    )
+
+    if (!($global:deployedServices.ContainsKey($service.ServiceTypeName))) {
+      write-console "Creating deployed service for service type $($service.ServiceTypeName)"
+      $global:deployedServices.Add($service.ServiceTypeName , @{
+          serviceTypeName               = $service.ServiceTypeName
+          deployedNodeTypes             = @()
+          deployedNodes                 = @()
+          placementConstraints          = $service.PlacementConstraints
+          serviceKind                   = $service.ServiceKind.ToString()
+          serviceName                   = $service.ServiceName
+          temporaryPlacementConstraints = ""
+          revertPlacementConstraints    = ""
+          instances                     = 0
+        }
+      )
+    }
+    else {
+      write-console "Adding deployed service instance for service type $($service.ServiceTypeName)"
+      $global:deployedServices[$service.ServiceTypeName].instances++
+    }
   }
   return $true
 }
@@ -502,10 +512,10 @@ function set-value($paramValue, $referenceValue) {
   write-console "comparing values '$paramValue' and '$referenceValue'"
   $returnValue = $paramValue
   if ($paramValue -eq $null) {
-      $returnValue = $referenceValue
+    $returnValue = $referenceValue
   }
   elseif ($paramValue -eq 0) {
-      $returnValue = $referenceValue
+    $returnValue = $referenceValue
   }
 
   write-console "returning value: '$returnValue'"
