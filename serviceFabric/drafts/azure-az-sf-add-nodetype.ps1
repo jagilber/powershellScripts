@@ -146,7 +146,7 @@ function main() {
     add-placementConstraints
     write-results
   
-    if($logFile) {
+    if ($logFile) {
       write-console "log file: $logFile"
     }
     write-console "finished"
@@ -496,6 +496,48 @@ function get-deployedServices() {
   return $global:deployedServices
 }
 
+function get-referenceNodeTypeVMSS($referenceNodeTypeName) {
+  # nodetype name should match vmss name but not always the case
+  $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName -ErrorAction SilentlyContinue
+  
+  if (!$referenceVmss) {
+    write-warning "vmss for reference node type: $referenceNodeTypeName not found"
+    $availableNodeTypes = @(Get-AzVmss -ResourceGroupName $resourceGroupName)
+
+    foreach ($availableNodeType in $availableNodeTypes) {
+      write-host "node type: $($availableNodeType.Name)"
+      #check extension
+      $sfExtension = $availableNodeType.VirtualMachineProfile.ExtensionProfile.Extensions `
+      | where-object Publisher -imatch 'Microsoft.*ServiceFabric'
+      # returning jobject
+      $settings = ($sfExtension | select-object Settings | convertto-json | convertfrom-json).Settings
+      if (!$settings) {
+        write-warning "service fabric extension not found for node type: $($availableNodeType.Name)"
+        continue
+      }
+
+      $nodeTypeRef = $settings.NodeTypeRef
+
+      if (!$nodeTypeRef) {
+        write-warning "node type ref not found for node type $($availableNodeType.Name)"
+        continue
+      }
+      if ($nodeTypeRef -ieq $referenceNodeTypeName) {
+        write-host "found vmss: $($availableNodeType.Name) for node type: $referenceNodeTypeName" -ForegroundColor Green
+        $referenceVmss = $availableNodeType
+        break
+      }
+    }
+  }
+
+  if (!$referenceVmss) {
+    write-error "reference node type $referenceNodeTypeName not found"
+    write-host "available node types: $($availableNodeTypes.Name)" -ForegroundColor DarkGreen
+    return $false
+  }
+  return $referenceVmss
+}
+
 function modify-placementConstraints($placementConstraints, $plbNodeTypePattern, $temporaryNodeTypeExclusion) {
   if (!$placementConstraints) {
     return $temporaryNodeTypeExclusion
@@ -521,10 +563,8 @@ function modify-placementConstraints($placementConstraints, $plbNodeTypePattern,
 
 function set-referenceNodeTypeInformation() {
   if ($referenceNodeTypeName) {
-    $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
+    $referenceVmss = get-referenceNodeTypeVMSS $referenceNodeTypeName
     if (!$referenceVmss) {
-      write-error "reference node type $referenceNodeTypeName not found"
-      write-host "available node types: $(Get-AzVmss -ResourceGroupName $resourceGroupName | select-object Name | format-list * | out-string)"
       return $false
     }
     write-console "using reference node type $referenceNodeTypeName"
