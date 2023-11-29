@@ -178,7 +178,7 @@ $templateJson = @{
 
 
 function main() {
-    write-console "main() started"
+    write-console "starting..."
     $error.Clear()
 
     # convert-fromjson -ashashtable requires ps version 6+
@@ -195,16 +195,19 @@ function main() {
         Connect-AzAccount
     }
 
+    write-console "get-azvmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName" -foregroundColor cyan
     if ((get-azvmss -ResourceGroupName $resourceGroupName -Name $newNodeTypeName -errorAction SilentlyContinue)) {
         write-console "node type $newNodeTypeName already exists" -err
         return $error
     }
 
+    write-console "get-azpublicipaddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName" -foregroundColor cyan
     if ((Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName -ErrorAction SilentlyContinue)) {
         write-console "ip address $newIpAddressName already exists" -err
         return $error
     }
 
+    write-console "get-azloadbalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName" -foregroundColor cyan
     if ((Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName -ErrorAction SilentlyContinue)) {
         write-console "load balancer $newLoadBalancerName already exists" -err
         return $error
@@ -505,6 +508,7 @@ function get-sfProtectedSettings($storageAccountName, $templateJson) {
 }
 
 function get-sfResource($resourceGroupName, $clusterName) {
+    write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties"
     $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
   
     if (!$serviceFabricResource) {
@@ -518,7 +522,7 @@ function get-sfResource($resourceGroupName, $clusterName) {
 
 function get-vmssCollection($nodeTypeName) {
     write-console "using node type $nodeTypeName"
-
+    write-console "get-azvmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName" -foregroundColor cyan
     $Vmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName
     if (!$Vmss) {
         write-console "node type $nodeTypeName not found" -err
@@ -531,6 +535,7 @@ function get-vmssCollection($nodeTypeName) {
         return $error
     }
 
+    write-console "get-azloadbalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName" -foregroundColor cyan
     $loadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName
     if (!$loadBalancer) {
         write-console "load balancer not found" -err
@@ -545,6 +550,7 @@ function get-vmssCollection($nodeTypeName) {
     if ($vmssCollection.isPublicIp) {
         write-console "public ip found"
         #$ipName = $loadBalancer.FrontendIpConfigurations.PublicIpAddress.Id.Split('/')[8]
+        write-console "get-azpublicipaddress -ResourceGroupName $resourceGroupName -Name $ipName" -foregroundColor cyan
         $ip = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $ipName
         $vmssCollection.ipAddress = $ip.IpAddress
         $vmssCollection.ipType = $ip.PublicIpAllocationMethod
@@ -569,6 +575,8 @@ function get-vmssCollection($nodeTypeName) {
 }
 
 function get-vmssResources($resourceGroupName, $nodeTypeName) {
+    write-console "get-vmssResources -resourceGroupName $resourceGroupName -nodeTypeName $nodeTypeName"
+    write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $nodeTypeName -ExpandProperties" -foregroundColor cyan
     $vmssResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $nodeTypeName -ExpandProperties
   
     if (!$vmssResource) {
@@ -582,6 +590,7 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
     #$subnetName = $ipProperties.subnet.id.Split('/')[10]
 
     $lbName = $ipProperties.loadBalancerBackendAddressPools.id.Split('/')[8]
+    write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties" -foregroundColor cyan
     $lbResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties
     $lbResource = add-property -resource $lbResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $lbResource.Type)
 
@@ -590,6 +599,7 @@ function get-vmssResources($resourceGroupName, $nodeTypeName) {
 
     if ($vmssCollection.isPublicIp) {
         $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
+        write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties" -foregroundColor cyan
         $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
         $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
         $vmssCollection.ipConfig = $ipResource
@@ -605,6 +615,7 @@ function get-wadProtectedSettings($storageAccountName, $templateJson) {
     $storageAccountEndPoint = "https://core.windows.net/"
 
     write-console "get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName"
+    write-console "get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName" -foregroundColor cyan
     $storageAccountKeys = get-azStorageAccountKey -ResourceGroupName $resourceGroupName -Name $storageAccountName
 
     if (!$storageAccountKeys) {
