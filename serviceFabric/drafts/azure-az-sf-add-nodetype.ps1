@@ -6,6 +6,7 @@
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
     version 
+      231128 add function get-referenceNodeTypeVMSS($referenceNodeTypeName) to get vmss for reference node type
       231128 check for servicetype before adding to deployedServices and increment instances
         display nodetype names in resource group if nodetype not found
       231122 add check for az modules and version. older versions of az modules have issues with Add-AzServiceFabricNodeType
