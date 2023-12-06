@@ -13,7 +13,7 @@
     .\sf-enum-arm-apps.ps1 -resourceGroupName <resource group name>
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/sf-enum-arm-apps.ps1" -outFile "$pwd/sf-enum-arm-apps.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-enum-arm-apps.ps1" -outFile "$pwd/sf-enum-arm-apps.ps1";
     ./sf-enum-arm-apps.ps1
 #>
 [cmdletbinding()]
