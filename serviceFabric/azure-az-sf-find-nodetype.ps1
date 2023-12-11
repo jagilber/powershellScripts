@@ -53,53 +53,8 @@ function main() {
             Connect-AzAccount
         }
 
-        $serviceFabricResource = get-sfClusterResource -resourceGroupName $resourceGroupName -clusterName $clusterName
-        if (!$serviceFabricResource) {
-            write-console "service fabric cluster $clusterName not found" -err
-            return $error
-        }
+        $currentVmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $nodeTypeName
 
-        $nodeType = get-referenceNodeType $nodeTypeName $serviceFabricResource
-        if (!$nodeType) {
-            write-console "reference node type $nodeTypeName does not exist" -err
-            return $error
-        }
-
-        write-console $serviceFabricResource.ResourceId
-
-        # get vmss for reference node type by name from resource group first
-        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
-            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
-            -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName -vmssName $nodeTypeName)
-
-        # get vmss for reference node type by name from all resource groups
-        if (!$currentVmss) {
-            $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
-                -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
-                -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName)
-        }
-
-        # get vmss for reference node type by name from all resource groups
-        if (!$currentVmss) {
-            $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
-                -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
-                -vmssResources @(get-vmssResources -vmssName $nodeTypeName)
-        }
-
-        # get vmss for reference node type by name from all resource groups
-        if (!$currentVmss) {
-            $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
-                -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
-                -vmssResources @(get-vmssResources)
-        }
-
-        if (!$currentVmss) {
-            write-console "vmss for reference node type: $nodeTypeName not found" -foregroundColor 'Red'
-            $global:referenceNodeType = $null
-            return $null
-        }
-
-        write-console $currentVmss.ResourceId -foregroundColor 'Cyan'
         $global:referenceNodeType = $currentVmss
         write-console "reference node type stored in global variable: `$global:referenceNodeType"
         return $global:referenceNodeType
@@ -142,6 +97,58 @@ function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEnd
         write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -foregroundColor 'Yellow'
         return $false
     }
+}
+
+function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string]$nodeTypeName) {
+    write-console "find-nodeType:$resourceGroupName,$clusterName,$nodeTypeName"
+    $serviceFabricResource = get-sfClusterResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+    if (!$serviceFabricResource) {
+        write-console "service fabric cluster $clusterName not found" -err
+        return $error
+    }
+
+    $nodeType = get-referenceNodeType $nodeTypeName $serviceFabricResource
+    if (!$nodeType) {
+        write-console "reference node type $nodeTypeName does not exist" -err
+        return $error
+    }
+
+    write-console $serviceFabricResource.ResourceId
+
+    # get vmss for reference node type by name from resource group first
+    $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+        -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+        -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName -vmssName $nodeTypeName)
+
+    # get vmss for reference node type by name from all resource groups
+    if (!$currentVmss) {
+        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+            -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName)
+    }
+
+    # get vmss for reference node type by name from all resource groups
+    if (!$currentVmss) {
+        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+            -vmssResources @(get-vmssResources -vmssName $nodeTypeName)
+    }
+
+    # get vmss for reference node type by name from all resource groups
+    if (!$currentVmss) {
+        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+            -vmssResources @(get-vmssResources)
+    }
+
+    if (!$currentVmss) {
+        write-console "vmss for reference node type: $nodeTypeName not found" -foregroundColor 'Red'
+        $global:referenceNodeType = $null
+        return $null
+    }
+
+    write-console $currentVmss.ResourceId -foregroundColor 'Cyan'
+    return $currentVmss
 }
 
 function get-referenceNodeType($nodeTypeName, $clusterResource) {
