@@ -44,7 +44,7 @@ function main() {
     write-host "starting:$startTime"
     set-callback
     $error.Clear()
-    if (!(get-command Connect-ServiceFabricCluster)) {
+    if (!(get-command Connect-ServiceFabricCluster -errorAction SilentlyContinue)) {
         import-module servicefabric
         if (!(get-command Connect-ServiceFabricCluster)) {
             write-error "unable to import servicefabric powershell module. try executing script from a working node."
