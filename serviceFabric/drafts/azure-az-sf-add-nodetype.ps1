@@ -6,6 +6,7 @@
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
     version 
+      231210 add find-nodeType function to find vmss for reference node type
       231128 add function get-referenceNodeTypeVMSS($referenceNodeTypeName) to get vmss for reference node type
       231128 check for servicetype before adding to deployedServices and increment instances
         display nodetype names in resource group if nodetype not found
@@ -392,6 +393,92 @@ function get-clusterConnection() {
   return $true
 }
 
+function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
+  write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
+  if (!$sfExtSettings) {
+      write-console "settings not found" -foregroundColor 'Yellow'
+      return $null
+  }
+
+  $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
+  if (!$clusterEndpointRef) {
+      write-console "cluster endpoint not found" -foregroundColor 'Yellow'
+      return $null
+  }
+
+  $nodeRef = $sfExtSettings.NodeTypeRef
+  if (!$nodeRef) {
+      write-console "node type ref not found in cluster settings" -foregroundColor 'Yellow'
+      return $null
+  }
+
+  if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
+      write-console "node type ref: $nodeTypeRef matches reference node type: $nodeRef" -foregroundColor 'Green'
+      write-console "cluster endpoint ref: $clusterEndpointRef matches cluster endpoint: $clusterEndpoint" -foregroundColor 'Green'
+      return $true
+  }
+  elseif ($nodeRef -ine $nodeTypeRef) {
+      write-console "node type ref: $nodeTypeRef does not match reference node type: $nodeRef" -foregroundColor 'Yellow'
+      return $false
+  }
+  else {
+      write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -foregroundColor 'Yellow'
+      return $false
+  }
+}
+
+function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string]$nodeTypeName) {
+  write-console "find-nodeType:$resourceGroupName,$clusterName,$nodeTypeName"
+  $serviceFabricResource = get-sfClusterResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+  if (!$serviceFabricResource) {
+      write-console "service fabric cluster $clusterName not found" -err
+      return $error
+  }
+
+  $nodeType = get-referenceNodeType $nodeTypeName $serviceFabricResource
+  if (!$nodeType) {
+      write-console "reference node type $nodeTypeName does not exist" -err
+      return $error
+  }
+
+  write-console $serviceFabricResource.ResourceId
+
+  # get vmss for reference node type by name from resource group first
+  $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+      -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+      -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName -vmssName $nodeTypeName)
+
+  # get vmss for reference node type by name from all resource groups
+  if (!$currentVmss) {
+      $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+          -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+          -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName)
+  }
+
+  # get vmss for reference node type by name from all resource groups
+  if (!$currentVmss) {
+      $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+          -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+          -vmssResources @(get-vmssResources -vmssName $nodeTypeName)
+  }
+
+  # get vmss for reference node type by name from all resource groups
+  if (!$currentVmss) {
+      $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+          -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+          -vmssResources @(get-vmssResources)
+  }
+
+  if (!$currentVmss) {
+      write-console "vmss for reference node type: $nodeTypeName not found" -foregroundColor 'Red'
+      $global:referenceNodeType = $null
+      return $null
+  }
+
+  write-console $currentVmss.ResourceId -foregroundColor 'Cyan'
+  return $currentVmss
+}
+
 function get-clusterInformation() {
   write-console "Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName"
   $azCluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
@@ -497,46 +584,104 @@ function get-deployedServices() {
   return $global:deployedServices
 }
 
-function get-referenceNodeTypeVMSS($referenceNodeTypeName) {
+function get-referenceNodeType([string]$nodeTypeName, $clusterResource) {
+  write-console "get-referenceNodeType:$nodeTypeName,$clusterResource"
+
+  $nodetypes = @($clusterResource.Properties.NodeTypes)
+  $nodeType = $nodetypes | where-object name -ieq $nodeTypeName
+
+  write-console "returning: $($nodeType.Name)"
+  return $nodeType
+}
+
+function get-referenceNodeTypeVMSS([string]$nodetypeName, [string]$clusterEndpoint, $vmssResources) {
   # nodetype name should match vmss name but not always the case
-  $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName -ErrorAction SilentlyContinue
+  # get-azvmss returning jobject 23-11-29 mitigation to use get-azresource
+  #$referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -ErrorAction SilentlyContinue
+  $referenceVmss = $null
+
+  if (!$vmssResources) {
+      write-console "vmss for reference node type: $nodetypeName not found" -warn
+      return $null
+  }
+
+  foreach ($vmss in $vmssResources) {
+      $sfExtSettings = get-sfExtensionSettings $vmss
+      $isNodeTypeRef = compare-sfExtensionSettings -sfExtSettings $sfExtSettings -clusterEndpoint $clusterEndpoint -nodeTypeRef $nodeTypeName
   
-  if (!$referenceVmss) {
-    write-warning "vmss for reference node type: $referenceNodeTypeName not found"
-    $availableNodeTypes = @(Get-AzVmss -ResourceGroupName $resourceGroupName)
-
-    foreach ($availableNodeType in $availableNodeTypes) {
-      write-host "node type: $($availableNodeType.Name)"
-      #check extension
-      $sfExtension = $availableNodeType.VirtualMachineProfile.ExtensionProfile.Extensions `
-      | where-object Publisher -imatch 'Microsoft.*ServiceFabric'
-      # returning jobject
-      $settings = ($sfExtension | select-object Settings | convertto-json | convertfrom-json).Settings
-      if (!$settings) {
-        write-warning "service fabric extension not found for node type: $($availableNodeType.Name)"
-        continue
+      if ($isNodeTypeRef) {
+          write-console "found vmss: $($vmss.Name) for node type: $nodetypeName" -ForegroundColor Green
+          $referenceVmss = $vmss
+          break
       }
-
-      $nodeTypeRef = $settings.NodeTypeRef
-
-      if (!$nodeTypeRef) {
-        write-warning "node type ref not found for node type $($availableNodeType.Name)"
-        continue
-      }
-      if ($nodeTypeRef -ieq $referenceNodeTypeName) {
-        write-host "found vmss: $($availableNodeType.Name) for node type: $referenceNodeTypeName" -ForegroundColor Green
-        $referenceVmss = $availableNodeType
-        break
-      }
-    }
   }
 
   if (!$referenceVmss) {
-    write-error "reference node type $referenceNodeTypeName not found"
-    write-host "available node types: $($availableNodeTypes.Name)" -ForegroundColor DarkGreen
-    return $false
+      write-console "vmss for reference node type: $nodetypeName not found" -warn
+      return $null
   }
+
+  write-console "returning $($referenceVmss.ResourceId)"
   return $referenceVmss
+}
+
+function get-sfClusterResource([string]$resourceGroupName, [string]$clusterName) {
+  write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties"
+  $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
+  if (!$serviceFabricResource) {
+      write-console "service fabric cluster $clusterName not found" -warn
+  }
+  else {
+      write-console "cluster endpoint: $($serviceFabricResource.Properties.ClusterEndpoint)"
+  }
+
+  return $serviceFabricResource
+}
+
+function  get-sfExtensionSettings($vmss) {
+  write-console "get-sfExtensionSettings $($vmss.Name)"
+  #check extension
+  $sfExtension = $vmss.properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object publisher -imatch 'ServiceFabric'
+  $settings = $sfExtension.settings
+  if (!$settings) {
+      write-console "service fabric extension not found for node type: $($vmss.Name)" -warn
+  }
+  else {
+      write-console "service fabric extension found for node type: $($vmss.Name)"
+  }
+  return $settings
+}
+
+function get-vmssResources([string]$resourceGroupName, [string]$vmssName) {
+  write-console "get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName"
+  $paramValues = @{
+      resourceType     = 'Microsoft.Compute/virtualMachineScaleSets'
+      expandProperties = $true
+  }
+
+  if ($resourceGroupName) { [void]$paramValues.Add('resourceGroupName', $resourceGroupName) }
+  if ($vmssName) { [void]$paramValues.Add('name', $vmssName) }
+
+  write-console "get-azresource $($paramValues | convertto-json)" -foregroundColor cyan
+  try {
+      $vmssResources = @(get-azresource @paramValues -ErrorAction SilentlyContinue)
+  }
+  catch {
+      write-console "exception:vmss $vmssName $($error | out-string)" -err
+      return $null
+  }
+
+  if (!$vmssResources) {
+      write-console "vmss $vmssName not found"
+      return $null
+  }
+  elseif ($vmssResources.Count -gt 1) {
+      write-console "returning: $($vmssResources.Count) vmss resource(s)"
+  }
+  else {
+      write-console "returning: $(@($vmssResources)[0].ResourceId)"
+  }
+  return $vmssResources
 }
 
 function modify-placementConstraints($placementConstraints, $plbNodeTypePattern, $temporaryNodeTypeExclusion) {
@@ -564,21 +709,22 @@ function modify-placementConstraints($placementConstraints, $plbNodeTypePattern,
 
 function set-referenceNodeTypeInformation() {
   if ($referenceNodeTypeName) {
-    $referenceVmss = get-referenceNodeTypeVMSS $referenceNodeTypeName
+    $referenceVmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $referenceNodeTypeName
+    $global:referenceVmss = $referenceVmss
     if (!$referenceVmss) {
       return $false
     }
     write-console "using reference node type $referenceNodeTypeName"
-    $global:sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
-    $global:durabilityLevel = set-value $durabilityLevel $sfExtension.Settings.durabilityLevel.Value
+    $global:sfExtension = ($referenceVmss.Properties.virtualMachineProfile.ExtensionProfile.Extensions.properties | where-object publisher -imatch 'ServiceFabric')
+    $global:durabilityLevel = set-value $durabilityLevel $sfExtension.Settings.durabilityLevel
     #$global:isPrimaryNodeType = set-value $isPrimaryNodeType $referenceNodeType.IsPrimary
-    $global:vmImageSku = set-value $vmImageSku $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
+    $global:vmImageSku = set-value $vmImageSku $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Sku
     $global:vmSku = set-value $vmSku $referenceVmss.Sku.Name
-    $global:adminUserName = set-value $adminUserName $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
+    $global:adminUserName = set-value $adminUserName $referenceVmss.Properties.VirtualMachineProfile.OsProfile.AdminUsername
     $global:vmInstanceCount = set-value $vmInstanceCount $referenceVmss.Sku.Capacity
-    $global:vmImagePublisher = set-value $vmImagePublisher $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
-    $global:vmImageOffer = set-value $vmImageOffer $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
-    $global:vmImageVersion = set-value $vmImageVersion $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
+    $global:vmImagePublisher = set-value $vmImagePublisher $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
+    $global:vmImageOffer = set-value $vmImageOffer $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Offer
+    $global:vmImageVersion = set-value $vmImageVersion $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Version
   }
   else {
     write-console "using default values for reference node type"
@@ -600,13 +746,25 @@ function set-value($paramValue, $referenceValue) {
   return $returnValue
 }
 
-function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
+function write-console($message, $foregroundColor = 'White', [switch]$verbose, [switch]$err, [switch]$warn) {
   if (!$message) { return }
+  if ($message.gettype().name -ine 'string') {
+      $message = $message | convertto-json -Depth 10
+  }
+
   if ($verbose) {
-    write-verbose($message)
+      write-verbose($message)
   }
   else {
-    write-host($message) -ForegroundColor $foregroundColor
+      write-host($message) -ForegroundColor $foregroundColor
+  }
+
+  if ($warn) {
+      write-warning($message)
+  }
+  elseif ($err) {
+      write-error($message)
+      throw
   }
 }
 
@@ -672,3 +830,4 @@ function write-results() {
 }
 
 main
+
