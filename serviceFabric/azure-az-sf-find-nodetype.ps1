@@ -151,7 +151,7 @@ function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string
     return $currentVmss
 }
 
-function get-referenceNodeType($nodeTypeName, $clusterResource) {
+function get-referenceNodeType([string]$nodeTypeName, $clusterResource) {
     write-console "get-referenceNodeType:$nodeTypeName,$clusterResource"
 
     $nodetypes = @($clusterResource.Properties.NodeTypes)
@@ -192,7 +192,7 @@ function get-referenceNodeTypeVMSS([string]$nodetypeName, [string]$clusterEndpoi
     return $referenceVmss
 }
 
-function get-sfClusterResource($resourceGroupName, $clusterName) {
+function get-sfClusterResource([string]$resourceGroupName, [string]$clusterName) {
     write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties"
     $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
     if (!$serviceFabricResource) {
@@ -219,7 +219,7 @@ function  get-sfExtensionSettings($vmss) {
     return $settings
 }
 
-function get-vmssResources($resourceGroupName, $vmssName) {
+function get-vmssResources([string]$resourceGroupName, [string]$vmssName) {
     write-console "get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName"
     $paramValues = @{
         resourceType     = 'Microsoft.Compute/virtualMachineScaleSets'
