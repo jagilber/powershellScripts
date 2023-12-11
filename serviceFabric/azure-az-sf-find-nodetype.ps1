@@ -119,18 +119,19 @@ function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEnd
 
     $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
     if (!$clusterEndpointRef) {
-        write-console "cluster endpoint not found" -err
+        write-console "cluster endpoint not found" -foregroundColor 'Yellow'
         return $null
     }
 
     $nodeRef = $sfExtSettings.NodeTypeRef
     if (!$nodeRef) {
-        write-console "node type ref not found in cluster settings" -err
+        write-console "node type ref not found in cluster settings" -foregroundColor 'Yellow'
         return $null
     }
 
     if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
         write-console "node type ref: $nodeTypeRef matches reference node type: $nodeRef" -foregroundColor 'Green'
+        write-console "cluster endpoint ref: $clusterEndpointRef matches cluster endpoint: $clusterEndpoint" -foregroundColor 'Green'
         return $true
     }
     elseif ($nodeRef -ine $nodeTypeRef) {
