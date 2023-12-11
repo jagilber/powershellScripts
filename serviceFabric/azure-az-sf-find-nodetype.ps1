@@ -111,22 +111,22 @@ function main() {
 }
 
 function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
-    write-console "compare-sfExtensionSettings:`$settings,$clusterEndpoint,$nodeTypeRef"
+    write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
     if (!$sfExtSettings) {
         write-console "settings not found" -foregroundColor 'Yellow'
-        return $error
+        return $null
     }
 
     $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
     if (!$clusterEndpointRef) {
         write-console "cluster endpoint not found" -err
-        return $error
+        return $null
     }
 
     $nodeRef = $sfExtSettings.NodeTypeRef
     if (!$nodeRef) {
         write-console "node type ref not found in cluster settings" -err
-        return $error
+        return $null
     }
 
     if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
