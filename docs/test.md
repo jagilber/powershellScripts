@@ -1,4 +1,5 @@
 # test
+<!-- note: currently github md icons in blockquotes are not rendering correctly if indented and do not render in vscode preview -->
 
 > [!NOTE]  
 > Note test...
