@@ -14,6 +14,8 @@
     in no event shall Microsoft, its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation, even if Microsoft has been advised of the possibility of such damages 
 
     version:
+        231219 # add function find-nodeType to find vmss by nodetype name and cluster endpoint
+            using get-azresource instead of get-azvmss to get vmss by name
         231122 # add set-value to set default values if null
         231121 # add fix for space in template path. require admin username and password for platform image
         231114 # convert-fromjson -ashashtable requires ps version 6+ (core)
@@ -168,7 +170,7 @@ $vmssName = $referenceNodeTypeName
 
 
 $error.clear()
-$templateJson = @{
+$templateJson = [ordered]@{
     "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
     "contentVersion" = "1.0.0.0"
     "parameters"     = @{}
@@ -181,57 +183,56 @@ $templateJson = @{
 function main() {
     write-console "starting..."
     $error.Clear()
-
-    # convert-fromjson -ashashtable requires ps version 6+
-    if ($psversiontable.psversion.major -lt 6) {
-        write-console "powershell version 6+ required. use pwsh.exe" -foregroundColor 'Red'
-        return
-    }
-
-    if (!(Get-Module az)) {
-        Import-Module az
-    }
-
-    if (!(get-azresourceGroup)) {
-        Connect-AzAccount
-    }
-
-    $clusterEndpoint = get-sfClusterEndpoint $resourceGroupName $clusterName
-    if (!$clusterEndpoint) {
-        write-console "service fabric cluster $clusterName not found" -err
-        return $error
-    }
-
-    $vmss = get-referenceNodeTypeVMSS $newNodeTypeName $clusterEndpoint
-    if ($vmss) {
-        write-console "new node type $newNodeTypeName already exists" -err
-        return $error
-    }
-
-    $vmss = get-referenceNodeTypeVMSS $referenceNodeTypeName $clusterEndpoint
-    if (!$vmss) {
-        write-console "reference node type $referenceNodeTypeName does not exist" -err
-        return $error
-    }
-
-    if ($vmssName -ine $vmss.Name) {
-        write-console "reference node type $referenceNodeTypeName does not match vmss name $($vmss.Name)" -warn
-        $vmssName = $vmss.Name
-    }
-
-    write-console "get-azpublicipaddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName" -foregroundColor cyan
-    if ((Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName -ErrorAction SilentlyContinue)) {
-        write-console "ip address $newIpAddressName already exists" -err
-        return $error
-    }
-
-    write-console "get-azloadbalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName" -foregroundColor cyan
-    if ((Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName -ErrorAction SilentlyContinue)) {
-        write-console "load balancer $newLoadBalancerName already exists" -err
-        return $error
-    }
-
     try {
+        # convert-fromjson -ashashtable requires ps version 6+
+        if ($psversiontable.psversion.major -lt 6) {
+            write-console "powershell version 6+ required. use pwsh.exe" -foregroundColor 'Red'
+            return
+        }
+
+        if (!(Get-Module az)) {
+            Import-Module az
+        }
+
+        if (!(get-azresourceGroup)) {
+            Connect-AzAccount
+        }
+
+        $clusterEndpoint = get-sfClusterEndpoint $resourceGroupName $clusterName
+        if (!$clusterEndpoint) {
+            write-console "service fabric cluster $clusterName not found" -err
+            return $error
+        }
+
+        $vmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $newNodeTypeName
+        if ($vmss) {
+            write-console "new node type $newNodeTypeName already exists" -err
+            return $error
+        }
+
+        $vmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $referenceNodeTypeName
+        if (!$vmss) {
+            write-console "reference node type $referenceNodeTypeName does not exist" -err
+            return $error
+        }
+
+        if ($vmssName -ine $vmss.Name) {
+            write-console "reference node type $referenceNodeTypeName does not match vmss name $($vmss.Name)" -warn
+            $vmssName = $vmss.Name
+        }
+
+        write-console "get-azpublicipaddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName" -foregroundColor cyan
+        if ((Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $newIpAddressName -ErrorAction SilentlyContinue)) {
+            write-console "ip address $newIpAddressName already exists" -err
+            return $error
+        }
+
+        write-console "get-azloadbalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName" -foregroundColor cyan
+        if ((Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $newLoadBalancerName -ErrorAction SilentlyContinue)) {
+            write-console "load balancer $newLoadBalancerName already exists" -err
+            return $error
+        }
+
         $error.Clear()
         $referenceVmssCollection = new-vmssCollection
         $serviceFabricResource = get-sfResource -resourceGroupName $resourceGroupName -clusterName $clusterName
@@ -242,7 +243,8 @@ function main() {
         }
         write-console $serviceFabricResource
 
-        $referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName
+        #$referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName
+        $referenceVmssCollection = get-vmssCollection -nodeTypeName $referenceNodeTypeName
         write-console $referenceVmssCollection
 
         $templateJson = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
@@ -286,31 +288,35 @@ function add-property($resource, $name, $value = $null, $overwrite = $false) {
     return $resource
 }
 
-function compare-sfExtensionSettings($settings, $clusterEndpoint, $nodeTypeRef) {
-    write-console "compare-sfExtensionSettings:`$settings,$clusterEndpoint,$nodeTypeRef"
-    if (!$settings) {
+function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
+    write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
+    if (!$sfExtSettings) {
         write-console "settings not found" -foregroundColor 'Yellow'
-        return $error
+        return $null
     }
 
-    $clusterEndpointRef = $settings.ClusterEndpoint
+    $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
     if (!$clusterEndpointRef) {
-        write-console "cluster endpoint not found" -err
-        return $error
+        write-console "cluster endpoint not found" -foregroundColor 'Yellow'
+        return $null
     }
 
-    $nodeRef = $settings.NodeTypeRef
+    $nodeRef = $sfExtSettings.NodeTypeRef
     if (!$nodeRef) {
-        write-console "node type ref not found" -err
-        return $error
+        write-console "node type ref not found in cluster settings" -foregroundColor 'Yellow'
+        return $null
     }
 
     if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
-        write-console "node type ref: $nodeTypeRef matches reference node type: $referenceNodeTypeName" -foregroundColor 'Green'
+        write-console "node type ref: $nodeTypeRef matches reference node type: $nodeRef" -foregroundColor 'Green'
+        write-console "cluster endpoint ref: $clusterEndpointRef matches cluster endpoint: $clusterEndpoint" -foregroundColor 'Green'
         return $true
     }
+    elseif ($nodeRef -ine $nodeTypeRef) {
+        write-console "node type ref: $nodeTypeRef does not match reference node type: $nodeRef" -foregroundColor 'Yellow'
+        return $false
+    }
     else {
-        write-console "node type ref: $nodeTypeRef does not match reference node type: $referenceNodeTypeName" -foregroundColor 'Yellow'
         write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -foregroundColor 'Yellow'
         return $false
     }
@@ -334,6 +340,15 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $vmss = $vmssCollection.vmssConfig
     $ip = $null
     $lb = $vmssCollection.loadBalancerConfig
+
+    # set api versions get-azresource does not return version
+    $vmss = add-property -resource $vmss `
+        -name 'apiVersion' `
+        -value (get-latestApiVersion -resourceType $vmss.Type)
+
+    $lb = add-property -resource $lb `
+        -name 'apiVersion' `
+        -value (get-latestApiVersion -resourceType $lb.Type)
 
     # set credentials
     # custom images may hot have OsProfile
@@ -396,6 +411,10 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     if ($vmssCollection.isPublicIp) {
         write-console "setting public ip address to $newIpAddress"
         $ip = $vmssCollection.ipConfig
+        $ip = add-property -resource $ip `
+            -name 'apiVersion' `
+            -value (get-latestApiVersion -resourceType $ip.Type)
+
         $ipName = $nameFindPattern -f $ip.Name
         $newIpName = $nameReplacePattern -f $newIpAddressName
   
@@ -466,7 +485,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $lb.Properties.inboundNatRules = @()
     $lb.Properties.frontendIPConfigurations.properties.inboundNatRules = @()
 
-    if ($ip) {
+    if ($vmssCollection.isPublicIp) {
         $templateJson.resources += $ip
     }
   
@@ -520,6 +539,58 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
     return $result
 }
 
+function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string]$nodeTypeName) {
+    write-console "find-nodeType:$resourceGroupName,$clusterName,$nodeTypeName"
+    $serviceFabricResource = get-sfClusterResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+    if (!$serviceFabricResource) {
+        write-console "service fabric cluster $clusterName not found" -err
+        return $error
+    }
+
+    $nodeType = get-referenceNodeType $nodeTypeName $serviceFabricResource
+    if (!$nodeType) {
+        write-console "reference node type $nodeTypeName does not exist"
+        #return $error
+    }
+
+    write-console $serviceFabricResource.ResourceId
+
+    # get vmss for reference node type by name from resource group first
+    $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+        -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+        -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName -vmssName $nodeTypeName)
+
+    # get vmss for reference node type by name from all resource groups
+    if (!$currentVmss) {
+        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+            -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName)
+    }
+
+    # get vmss for reference node type by name from all resource groups
+    if (!$currentVmss) {
+        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+            -vmssResources @(get-vmssResources -vmssName $nodeTypeName)
+    }
+
+    # get vmss for reference node type by name from all resource groups
+    if (!$currentVmss) {
+        $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+            -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+            -vmssResources @(get-vmssResources)
+    }
+
+    if (!$currentVmss) {
+        write-console "vmss for reference node type: $nodeTypeName not found" -foregroundColor 'Red'
+        $global:referenceNodeType = $null
+        return $null
+    }
+
+    write-console $currentVmss.ResourceId -foregroundColor 'Cyan'
+    return $currentVmss
+}
+
 function get-latestApiVersion($resourceType) {
     $provider = get-azresourceProvider -ProviderNamespace $resourceType.Split('/')[0]
     $resource = $provider.ResourceTypes | where-object ResourceTypeName -eq $resourceType.Split('/')[1]
@@ -530,44 +601,81 @@ function get-latestApiVersion($resourceType) {
     return $apiVersion
 }
 
-function get-referenceNodeTypeVMSS($referenceNodeTypeName, $clusterEndpoint) {
+function get-loadBalancer($vmss){
+    $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+    $ipConfig = $nicConfig.ipconfigurations.properties
+    $natPools = @($ipConfig.loadbalancerinboundnatpools)
+    $loadBalancerName = $natPools[0].Id.Split('/')[8]
+    
+    if (!$loadBalancerName) {
+        write-console "load balancer name not found" -err
+        return $error
+    }
+    else {
+        write-console "load balancer: $loadBalancerName"
+    }
+
+    write-console "get-azloadbalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName" -foregroundColor cyan
+    #$loadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName -ExpandResource
+    $loadBalancer = Get-AzResource -ResourceGroupName $resourceGroupName -ResourceType 'Microsoft.Network/loadBalancers' -Name $loadBalancerName -ExpandProperties
+    if (!$loadBalancer) {
+        write-console "load balancer $loadBalancerName not found" -err
+        return $error
+    }
+    return $loadBalancer
+}
+
+function get-publicIp($loadBalancer) {
+    $frontendIpConfigurations = @($loadBalancer.properties.frontendIPConfigurations)
+    $publicIpId = $frontendIpConfigurations[0].properties.publicIPAddress.id
+    $publicIpName = $publicIpId.Split('/')[8]
+    write-console "get-azpublicipaddress -ResourceGroupName $resourceGroupName -Name $publicIpName" -foregroundColor cyan
+    $publicIp = get-azresource -ResourceGroupName $resourceGroupName -ResourceType 'Microsoft.Network/publicIPAddresses' -Name $publicIpName -ExpandProperties
+    if (!$publicIp) {
+        write-console "public ip $publicIpName not found" -err
+        return $error
+    }
+    return $publicIp
+}
+
+function get-referenceNodeType([string]$nodeTypeName, $clusterResource) {
+    write-console "get-referenceNodeType:$nodeTypeName,$clusterResource"
+
+    $nodetypes = @($clusterResource.Properties.NodeTypes)
+    $nodeType = $nodetypes | where-object name -ieq $nodeTypeName
+
+    write-console "returning: $($nodeType.Name)"
+    return $nodeType
+}
+
+function get-referenceNodeTypeVMSS([string]$nodetypeName, [string]$clusterEndpoint, $vmssResources) {
     # nodetype name should match vmss name but not always the case
     # get-azvmss returning jobject 23-11-29 mitigation to use get-azresource
-    #$referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $referenceNodeTypeName -ErrorAction SilentlyContinue
-    $referenceVmss = Get-AzResource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $referenceNodeTypeName -ExpandProperties -ErrorAction SilentlyContinue
-    $sfSettings = get-sfExtensionSettings $referenceVmss
-    $isNodeTypeRef = compare-sfExtensionSettings -settings $sfSettings -clusterEndpoint $clusterEndpoint -nodeTypeRef $referenceNodeTypeName
+    #$referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -ErrorAction SilentlyContinue
+    $referenceVmss = $null
 
-    if (!$referenceVmss -or !$isNodeTypeRef) {
-        write-warning "vmss for reference node type: $referenceNodeTypeName not found"
-        #$availableNodeTypes = @(Get-AzVmss -ResourceGroupName $resourceGroupName)
-        $availableNodeTypes = @(Get-AzResource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -ExpandProperties)
-  
-        foreach ($availableNodeType in $availableNodeTypes) {
-            write-console "node type: $($availableNodeType.Name)"
-            
-            $settings = get-sfExtensionSettings $availableNodeType
-            $isNodeTypeRef = compare-sfExtensionSettings -settings $settings -clusterEndpoint $clusterEndpoint -nodeTypeRef $referenceNodeTypeName
+    if (!$vmssResources) {
+        write-console "vmss for reference node type: $referenceNodeTypeName not found" -warn
+        return $null
+    }
 
-            if ($isNodeTypeRef) {
-                write-console "found vmss: $($availableNodeType.Name) for node type: $referenceNodeTypeName" -ForegroundColor Green
-                #$referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $availableNodeType.Name -ErrorAction SilentlyContinue
-                $referenceVmss = $availableNodeType
-                break
-            }
-            else {
-                write-console "node type ref: $nodeTypeRef does not match reference node type: $referenceNodeTypeName" -ForegroundColor Yellow
-                write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -ForegroundColor Yellow
-            }
+    foreach ($vmss in $vmssResources) {
+        $sfExtSettings = get-sfExtensionSettings $vmss
+        $isNodeTypeRef = compare-sfExtensionSettings -sfExtSettings $sfExtSettings -clusterEndpoint $clusterEndpoint -nodeTypeRef $nodeTypeName
+    
+        if ($isNodeTypeRef) {
+            write-console "found vmss: $($vmss.Name) for node type: $nodetypeName" -ForegroundColor Green
+            $referenceVmss = $vmss
+            break
         }
     }
-  
+
     if (!$referenceVmss) {
-        write-error "reference node type $referenceNodeTypeName not found"
-        write-console "available node types: $($availableNodeTypes.Name)" -ForegroundColor DarkGreen
-        return $false
+        write-console "vmss for reference node type: $nodetypeName not found" -warn
+        return $null
     }
 
+    write-console "returning $($referenceVmss.ResourceId)"
     return $referenceVmss
 }
 
@@ -589,13 +697,29 @@ function get-sfClusterEndpoint($resourceGroupName, $clusterName) {
     return $clusterEndpoint
 }
 
+function get-sfClusterResource([string]$resourceGroupName, [string]$clusterName) {
+    write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties"
+    $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
+    if (!$serviceFabricResource) {
+        write-console "service fabric cluster $clusterName not found" -warn
+    }
+    else {
+        write-console "cluster endpoint: $($serviceFabricResource.Properties.ClusterEndpoint)"
+    }
+
+    return $serviceFabricResource
+}
+
 function  get-sfExtensionSettings($vmss) {
     write-console "get-sfExtensionSettings $($vmss.Name)"
     #check extension
     $sfExtension = $vmss.properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object publisher -imatch 'ServiceFabric'
     $settings = $sfExtension.settings
     if (!$settings) {
-        write-console "service fabric extension not found for node type: $($availableNodeType.Name)" -warn
+        write-console "service fabric extension not found for node type: $($vmss.Name)" -warn
+    }
+    else {
+        write-console "service fabric extension found for node type: $($vmss.Name)"
     }
     return $settings
 }
@@ -640,49 +764,40 @@ function get-sfResource($resourceGroupName, $clusterName) {
 
 function get-vmssCollection($nodeTypeName) {
     write-console "using node type $nodeTypeName"
-    $Vmss = get-referenceNodeTypeVMSS $nodeTypeName
-    if (!$Vmss) {
+    $vmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $nodeTypeName
+    if (!$vmss) {
         write-console "node type $nodeTypeName not found" -err
         return $error
     }
 
-    $loadBalancerName = $Vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].IpConfigurations[0].LoadBalancerInboundNatPools[0].Id.Split('/')[8]
-    if (!$loadBalancerName) {
-        write-console "load balancer not found" -err
-        return $error
-    }
-
-    write-console "get-azloadbalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName" -foregroundColor cyan
-    $loadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $loadBalancerName
+    $loadBalancer = get-loadBalancer -vmss $vmss
     if (!$loadBalancer) {
         write-console "load balancer not found" -err
         return $error
     }
 
-    $vmssCollection = new-vmssCollection -vmss $Vmss -loadBalancer $loadBalancer
+    $vmssCollection = new-vmssCollection -vmss $vmss -loadBalancer $loadBalancer
 
     # private ip check
-    $vmssCollection.isPublicIp = if ($loadBalancer.FrontendIpConfigurations.PublicIpAddress) { $true } else { $false }
+    $publicIp = get-publicIp -loadBalancer $loadBalancer
+    $vmssCollection.isPublicIp = if ($publicIp) { $true } else { $false }
 
     if ($vmssCollection.isPublicIp) {
         write-console "public ip found"
-        #$ipName = $loadBalancer.FrontendIpConfigurations.PublicIpAddress.Id.Split('/')[8]
-        write-console "get-azpublicipaddress -ResourceGroupName $resourceGroupName -Name $ipName" -foregroundColor cyan
-        $ip = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $ipName
-        $vmssCollection.ipAddress = $ip.IpAddress
-        $vmssCollection.ipType = $ip.PublicIpAllocationMethod
+        $vmssCollection.ipAddress = $publicIp.properties.ipAddress
+        $vmssCollection.ipType = $publicIp.properties.publicIpAllocationMethod
     }
     else {
         write-console "private ip found"
-        $vmssCollection.ipAddress = $loadBalancer.FrontendIpConfigurations.PrivateIpAddress
-        $vmssCollection.ipType = $loadBalancer.FrontendIpConfigurations.PrivateIpAllocationMethod
+        $vmssCollection.ipAddress = $loadBalancer.properties.frontendIpConfigurations.PrivateIpAddress
+        $vmssCollection.ipType = $loadBalancer.properties.frontendIpConfigurations.PrivateIpAllocationMethod
     }
 
-    if (!$ip) {
+    if (!$publicIp) {
         write-console "public ip not found" -foregroundColor 'Yellow'
     }
     else {
-        $vmssCollection.ipConfig = $ip
+        $vmssCollection.ipConfig = $publicIp
     }
 
     write-console "current ip address is type:$($vmssCollection.ipType) public:$($vmssCollection.isPublicIp) address:$($vmssCollection.ipAddress)" -foregroundColor 'Cyan'
@@ -691,39 +806,36 @@ function get-vmssCollection($nodeTypeName) {
     return $vmssCollection
 }
 
-function get-vmssResources($resourceGroupName, $vmssName) {
+function get-vmssResources([string]$resourceGroupName, [string]$vmssName) {
     write-console "get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName"
-    write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $vmssName -ExpandProperties" -foregroundColor cyan
-    $vmssResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Compute/virtualMachineScaleSets -Name $vmssName -ExpandProperties
-  
-    if (!$vmssResource) {
-        write-console "vmss $vmssName not found" -err
-        return $error
-    }
-    $vmssResource = add-property -resource $vmssResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $vmssResource.Type)
-
-    $ipProperties = $vmssResource.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties.ipConfigurations.properties
-    # todo modify subnet?
-    #$subnetName = $ipProperties.subnet.id.Split('/')[10]
-
-    $lbName = $ipProperties.loadBalancerBackendAddressPools.id.Split('/')[8]
-    write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties" -foregroundColor cyan
-    $lbResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/loadBalancers -Name $lbName -ExpandProperties
-    $lbResource = add-property -resource $lbResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $lbResource.Type)
-
-    $vmssCollection = new-vmssCollection -vmss $vmssResource -loadBalancer $lbResource
-    $vmssCollection.isPublicIp = if ($lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress) { $true } else { $false }
-
-    if ($vmssCollection.isPublicIp) {
-        $ipName = $lbResource.Properties.frontendIPConfigurations.properties.publicIPAddress.id.Split('/')[8]
-        write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties" -foregroundColor cyan
-        $ipResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.Network/publicIPAddresses -Name $ipName -ExpandProperties
-        $ipResource = add-property -resource $ipResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $ipResource.Type)
-        $vmssCollection.ipConfig = $ipResource
+    $paramValues = @{
+        resourceType     = 'Microsoft.Compute/virtualMachineScaleSets'
+        expandProperties = $true
     }
 
-    write-console $vmssCollection
-    return $vmssCollection
+    if ($resourceGroupName) { [void]$paramValues.Add('resourceGroupName', $resourceGroupName) }
+    if ($vmssName) { [void]$paramValues.Add('name', $vmssName) }
+
+    write-console "get-azresource $($paramValues | convertto-json)" -foregroundColor cyan
+    try {
+        $vmssResources = @(get-azresource @paramValues -ErrorAction SilentlyContinue)
+    }
+    catch {
+        write-console "exception:vmss $vmssName $($error | out-string)" -err
+        return $null
+    }
+
+    if (!$vmssResources) {
+        write-console "vmss $vmssName not found"
+        return $null
+    }
+    elseif ($vmssResources.Count -gt 1) {
+        write-console "returning: $($vmssResources.Count) vmss resource(s)"
+    }
+    else {
+        write-console "returning: $(@($vmssResources)[0].ResourceId)"
+    }
+    return $vmssResources
 }
 
 function get-wadProtectedSettings($storageAccountName, $templateJson) {
@@ -876,7 +988,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
 
     if (!$serviceFabricResource) {
         write-console "service fabric cluster $clusterName not found" -err
-        return $error
+        return $null #$error
     }
 
     $sfJson = convert-toJson $serviceFabricResource
@@ -893,7 +1005,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     # remove version if upgradeMode is Automatic
     if ($serviceFabricResource.Properties.upgradeMode -ieq 'Automatic') {
         write-console "removing cluster code version since upgrade mode is Automatic" -foregroundColor 'Yellow'
-        $serviceFabricResource.Properties.ClusterCodeVersion = $null
+        $serviceFabricResource.Properties.clusterCodeVersion = $null
     }
 
     # check cluster provisioning state
@@ -901,7 +1013,7 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
         write-console "cluster provisioning state is $($serviceFabricResource.Properties.clusterState)"
         if ($deploy) {
             write-console "error: cluster must be in 'Ready' state to add node type" -err
-            return $serviceFabricResource
+            return $null #$serviceFabricResource
         }
         else {
             write-console "cluster must be in 'Ready' state to add node type" -foregroundColor 'Yellow'
@@ -912,36 +1024,35 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
 
     if (!$nodeTypes) {
         write-console "node types not found" -err
-        return $serviceFabricResource
+        return $null #$serviceFabricResource
     }
 
-    $serviceFabricResource = add-property -resource $serviceFabricResource -name 'apiVersion' -value (get-latestApiVersion -resourceType $serviceFabricResource.Type)
+    $serviceFabricResource = add-property -resource $serviceFabricResource `
+        -name 'apiVersion' `
+        -value (get-latestApiVersion -resourceType $serviceFabricResource.Type)
     $referenceNodeTypeJson = convert-toJson ($nodeTypes | where-object name -ieq $referenceNodeTypeName)
 
     if (!$referenceNodeTypeJson) {
         write-console "node type $referenceNodeTypeName not found" -err
-        return $serviceFabricResource
+        return $null #$serviceFabricResource
     }
 
     $nodeType = $nodeTypes | where-object Name -ieq $newNodeTypeName
     if ($nodeType) {
         write-console "node type $referenceNodeTypeName already exists" -err
-        return $serviceFabricResource
+        return $null #$serviceFabricResource
     }
 
     $newList = [collections.arrayList]::new()
     [void]$newList.AddRange($nodeTypes)
     $nodeTypeTemplate = convert-fromJson $referenceNodeTypeJson
-    #test
-    $nodeTypeTemplate | convertto-Json -depth 99
-    #end test
     $nodeTypeTemplate.isPrimary = $isPrimaryNodeType
     $nodeTypeTemplate.name = $newNodeTypeName
     $nodeTypeTemplate.vmInstanceCount = set-value $vmInstanceCount $nodeTypeTemplate.vmInstanceCount
     $nodeTypeTemplate.durabilityLevel = set-value $durabilityLevel $nodeTypeTemplate.durabilityLevel
 
     [void]$newList.Add($nodeTypeTemplate)
-    $serviceFabricResource.Properties.nodeTypes = $newList
+    $serviceFabricResource.Properties.nodeTypes = $newList.ToArray()
 
     write-console $serviceFabricResource
     $templateJson.resources += $serviceFabricResource
@@ -971,3 +1082,4 @@ function write-console($message, $foregroundColor = 'White', [switch]$verbose, [
 }
 
 main
+
