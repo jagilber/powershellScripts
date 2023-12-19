@@ -184,9 +184,9 @@ function main() {
     write-console "starting..."
     $error.Clear()
     try {
-        # convert-fromjson -ashashtable requires ps version 6+
+        # convert-fromjson requires ps version 6+ to handle comments, trailing commas and ashashtable
         if ($psversiontable.psversion.major -lt 6) {
-            write-console "powershell version 6+ required. use pwsh.exe" -foregroundColor 'Red'
+            write-console "powershell version 6+ required. use pwsh.exe. https://aka.ms/pwsh" -foregroundColor 'Red'
             return
         }
 
@@ -324,8 +324,8 @@ function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEnd
 
 function convert-fromJson($json, $display = $false) {
     write-console "convert-fromJson:$json" -verbose:$display
-    $object = $json | convertfrom-json -asHashTable
-  
+
+    $object = $json | convertfrom-json -asHashTable  
     return $object
 }
 
