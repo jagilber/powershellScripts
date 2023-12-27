@@ -58,6 +58,7 @@ param (
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental',
     [switch]$useLatestApiVersion,
+    [switch]$pre,
     [switch]$detail
 )
 
@@ -333,7 +334,7 @@ function export-template($configuredResources) {
     $azResourceGroupLocation = @($configuredResources)[0].Location
     
     write-host "getting latest api versions" -ForegroundColor yellow
-    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
+    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation -Pre:$pre
 
     write-host "getting configured api versions" -ForegroundColor green
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
