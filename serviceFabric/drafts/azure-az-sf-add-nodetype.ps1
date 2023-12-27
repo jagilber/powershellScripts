@@ -63,51 +63,53 @@
 param(
   [Parameter(ParameterSetName = 'tp', Mandatory = $true)]
   [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
-  $connectionEndpoint = '', #'sfcluster.eastus.cloudapp.azure.com:19000',
+  [string]$connectionEndpoint = '', #'sfcluster.eastus.cloudapp.azure.com:19000',
 
   [Parameter(ParameterSetName = 'tp', Mandatory = $true)]
-  $thumbprint = '',
+  [string]$thumbprint = '',
 
   [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
-  $commonName = '',
+  [string]$commonName = '',
 
   [Parameter(ParameterSetName = 'tp')]
   [Parameter(ParameterSetName = 'cn')]
   [validateSet('CurrentUser', 'LocalMachine')]
-  $storeLocation = 'CurrentUser',
+  [string]$storeLocation = 'CurrentUser',
 
   [Parameter(Mandatory = $true)]
-  $resourceGroupName = '', #'sfcluster',
+  [string]$resourceGroupName = '', #'sfcluster',
 
-  $clusterName = $resourceGroupName,
+  [string]$clusterName = $resourceGroupName,
 
   #[Parameter(Mandatory = $true)]
-  $newNodeTypeName = 'nt1', #'nt1',
+  [string]$newNodeTypeName = 'nt1', #'nt1',
 
-  $referenceNodeTypeName = 'nt0', #'nt0',
+  [string]$referenceNodeTypeName = 'nt0', #'nt0',
 
-  $isPrimaryNodeType, # = $false,
+  [bool]$isPrimaryNodeType, # = $false,
 
-  $vmImagePublisher, # = 'MicrosoftWindowsServer',
+  [string]$vmImagePublisher, # = 'MicrosoftWindowsServer',
 
-  $vmImageOffer, # = 'WindowsServer',
+  [string]$vmImageOffer, # = 'WindowsServer',
 
-  $vmImageSku, # = '2022-Datacenter',
+  [string]$vmImageSku, # = '2022-Datacenter',
 
-  $vmImageVersion, # = 'latest',
+  [string]$vmImageVersion, # = 'latest',
 
-  $vmInstanceCount, # = 5,
+  [int]$vmInstanceCount, # = 5,
 
-  $vmSku, # = 'Standard_D2_v2',
+  [string]$vmSku, # = 'Standard_D2_v2',
 
   [ValidateSet('Bronze', 'Silver', 'Gold')]
-  $durabilityLevel, # = 'Silver',
+  [string]$durabilityLevel, # = 'Silver',
 
-  $adminUserName, # = 'cloudadmin',
+  [string]$adminUserName, # = 'cloudadmin',
 
-  $adminPassword = 'P@ssw0rd!',
+  [string]$adminPassword = 'P@ssw0rd!',
 
-  $logFile = "$pwd\azure-az-sf-add-nodetype.log"
+  [string]$logFile = "$pwd\azure-az-sf-add-nodetype.log",
+
+  [switch]$force
 )
 
 $PSModuleAutoLoadingPreference = 'auto'
@@ -230,7 +232,8 @@ function check-module($name, $version = $null) {
     $error.clear()
     write-warning "azure module $name not installed."
 
-    if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+    if ($force -or (read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+      if (!(get-psRepository -name PSGallery)) { register-psRepository -Default }
       $error.clear()
       install-module $name -allowclobber -force
       import-module $name
@@ -269,6 +272,40 @@ function check-modules() {
     return $false
   }
   return $retval
+}
+
+function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
+  write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
+  if (!$sfExtSettings) {
+    write-console "settings not found" -foregroundColor 'Yellow'
+    return $null
+  }
+
+  $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
+  if (!$clusterEndpointRef) {
+    write-console "cluster endpoint not found" -foregroundColor 'Yellow'
+    return $null
+  }
+
+  $nodeRef = $sfExtSettings.NodeTypeRef
+  if (!$nodeRef) {
+    write-console "node type ref not found in cluster settings" -foregroundColor 'Yellow'
+    return $null
+  }
+
+  if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
+    write-console "node type ref: $nodeTypeRef matches reference node type: $nodeRef" -foregroundColor 'Green'
+    write-console "cluster endpoint ref: $clusterEndpointRef matches cluster endpoint: $clusterEndpoint" -foregroundColor 'Green'
+    return $true
+  }
+  elseif ($nodeRef -ine $nodeTypeRef) {
+    write-console "node type ref: $nodeTypeRef does not match reference node type: $nodeRef" -foregroundColor 'Yellow'
+    return $false
+  }
+  else {
+    write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -foregroundColor 'Yellow'
+    return $false
+  }
 }
 
 function get-certificateFromStore($store, $thumbprint, $commonName) {
@@ -345,6 +382,8 @@ function get-clusterConnection() {
 
     $hostname = $connectionEndpoint.split(':')[0]
     $port = ($connectionEndpoint.split(':')[1], 19000) | select-object -first 1
+    
+    write-console "test-netConnection -ComputerName $hostname -Port $port"
     $result = test-netConnection -ComputerName $hostname -Port $port
 
     # set in case port is not specified
@@ -417,40 +456,6 @@ function get-clusterConnection() {
   return $true
 }
 
-function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
-  write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
-  if (!$sfExtSettings) {
-    write-console "settings not found" -foregroundColor 'Yellow'
-    return $null
-  }
-
-  $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
-  if (!$clusterEndpointRef) {
-    write-console "cluster endpoint not found" -foregroundColor 'Yellow'
-    return $null
-  }
-
-  $nodeRef = $sfExtSettings.NodeTypeRef
-  if (!$nodeRef) {
-    write-console "node type ref not found in cluster settings" -foregroundColor 'Yellow'
-    return $null
-  }
-
-  if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
-    write-console "node type ref: $nodeTypeRef matches reference node type: $nodeRef" -foregroundColor 'Green'
-    write-console "cluster endpoint ref: $clusterEndpointRef matches cluster endpoint: $clusterEndpoint" -foregroundColor 'Green'
-    return $true
-  }
-  elseif ($nodeRef -ine $nodeTypeRef) {
-    write-console "node type ref: $nodeTypeRef does not match reference node type: $nodeRef" -foregroundColor 'Yellow'
-    return $false
-  }
-  else {
-    write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -foregroundColor 'Yellow'
-    return $false
-  }
-}
-
 function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string]$nodeTypeName) {
   write-console "find-nodeType:$resourceGroupName,$clusterName,$nodeTypeName"
   $serviceFabricResource = get-sfClusterResource -resourceGroupName $resourceGroupName -clusterName $clusterName
@@ -461,7 +466,7 @@ function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string
 
   $nodeType = get-referenceNodeType $nodeTypeName $serviceFabricResource
   if (!$nodeType) {
-    write-console "reference node type $nodeTypeName does not exist" -err
+    write-console "reference node type $nodeTypeName does not exist"  -err
     return $error
   }
 
@@ -472,7 +477,7 @@ function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string
     -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
     -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName -vmssName $nodeTypeName)
 
-  # get vmss for reference node type by name from all resource groups
+  # get vmss for reference node type by name from resource groups
   if (!$currentVmss) {
     $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
       -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
@@ -486,7 +491,7 @@ function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string
       -vmssResources @(get-vmssResources -vmssName $nodeTypeName)
   }
 
-  # get vmss for reference node type by name from all resource groups
+  # get all vmss for reference node type by name from all resource groups
   if (!$currentVmss) {
     $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
       -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
@@ -762,6 +767,9 @@ function set-value($paramValue, $referenceValue) {
   if ($paramValue -eq $null) {
     $returnValue = $referenceValue
   }
+  elseif ([string]::IsNullOrEmpty($paramValue) -and ![string]::IsNullOrEmpty($referenceValue)) {
+    $returnValue = $referenceValue
+  }
   elseif ($paramValue -eq 0) {
     $returnValue = $referenceValue
   }
@@ -775,6 +783,8 @@ function write-console($message, $foregroundColor = 'White', [switch]$verbose, [
   if ($message.gettype().name -ine 'string') {
     $message = $message | convertto-json -Depth 10
   }
+
+  $message = "$(get-date -format 'yyyy-MM-ddTHH:mm:ss.fff')::$message"
 
   if ($verbose) {
     write-verbose($message)
