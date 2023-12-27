@@ -1065,6 +1065,8 @@ function write-console($message, $foregroundColor = 'White', [switch]$verbose, [
         $message = $message | convertto-json -Depth 10
     }
 
+    $message = "$(get-date -format 'yyyy-MM-ddTHH:mm:ss.fff')::$message"
+
     if ($verbose) {
         write-verbose($message)
     }
