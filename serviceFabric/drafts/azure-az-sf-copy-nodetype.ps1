@@ -157,9 +157,22 @@ param(
     [switch]$deploy,
         
     [Parameter(ParameterSetName = 'Custom')]
-    [switch]$customOsImage
+    [switch]$customOsImage,
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    [switch]$upgradeLoadBalancer,
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    [switch]$addNsg,
+
+    [Parameter(ParameterSetName = 'Custom')]
+    [Parameter(ParameterSetName = 'Platform')]
+    [switch]$loadFunctionsOnly
 )
 
+Set-StrictMode -Version Latest
 $PSModuleAutoLoadingPreference = 'auto'
 $deployedServices = @{}
 $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
@@ -170,15 +183,6 @@ $vmssName = $referenceNodeTypeName
 
 
 $error.clear()
-$templateJson = [ordered]@{
-    "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
-    "contentVersion" = "1.0.0.0"
-    "parameters"     = @{}
-    "variables"      = @{}
-    "resources"      = @()
-    "outputs"        = @{}
-}
-
 
 function main() {
     write-console "starting..."
@@ -197,6 +201,8 @@ function main() {
         if (!(get-azresourceGroup)) {
             Connect-AzAccount
         }
+
+        $location = (get-azresourceGroup -Name $resourceGroupName).Location
 
         $clusterEndpoint = get-sfClusterEndpoint $resourceGroupName $clusterName
         if (!$clusterEndpoint) {
@@ -235,7 +241,7 @@ function main() {
 
         $error.Clear()
         $referenceVmssCollection = new-vmssCollection
-        $serviceFabricResource = get-sfResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+        $serviceFabricResource = get-sfResource -vmssCollection $referenceVmssCollection -resourceGroupName $resourceGroupName -clusterName $clusterName
 
         if (!$serviceFabricResource) {
             write-console "service fabric cluster $clusterName not found" -err
@@ -244,17 +250,31 @@ function main() {
         write-console $serviceFabricResource
 
         #$referenceVmssCollection = get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName
-        $referenceVmssCollection = get-vmssCollection -nodeTypeName $referenceNodeTypeName
+        $referenceVmssCollection = get-vmssCollection -nodeTypeName $referenceNodeTypeName -vmssCollection $referenceVmssCollection
         write-console $referenceVmssCollection
-
+        
+        $templateJson = new-TemplateJson
         $templateJson = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
-        $templateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $templateJson
-        $result = deploy-vmssCollection -templateJson $templateJson
+        $templateJson = upgrade-loadBalancer -vmssCollection $referenceVmssCollection -templateJson $templateJson
+
+        $sfTemplateJson = new-TemplateJson
+        $sfTemplateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $sfTemplateJson
+
+        # deployments
+        $resourceGroup = $vmssCollection.vmssConfig.ResourceGroupName
+        $templateFile = $template.replace('.json', '-vmss.json')    
+        $result = deploy-template -templateJson $templateJson -vmssCollection $referenceVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
+        
+        #todo: make sf resource update separate template and deployment due to upgrade process and potential different resource groups
+        $resourceGroup = $vmssCollection.sfResourceConfig.ResourceGroupName
+        $templateFile = $template.replace('.json', '-sf.json')    
+        $result = deploy-template -templateJson $sfTemplateJson -vmssCollection $referenceVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
+        
         $global:templateJson = $templateJson
         write-console "deploy result: $result template also stored in `$global:templateJson" -foregroundColor 'Green'
     }
     catch [Exception] {
-        $errorString = "exception: $($psitem.Exception.Response.StatusCode.value__)`r`nexception:`r`n$($psitem.Exception.Message)`r`n$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
+        $errorString = "exception: $($psitem.Exception)`r`nexception:`r`n$($psitem.Exception.Message)`r`n$($error | out-string)`r`n$($psitem.ScriptStackTrace)"
         write-console $errorString -foregroundColor 'Red'
     }
     finally {
@@ -288,14 +308,21 @@ function add-property($resource, $name, $value = $null, $overwrite = $false) {
     return $resource
 }
 
+function add-templateJsonResource($templateJson, $resource) {
+    write-console "add-templateJsonResource:$resource"
+    $templateJson = remove-templateJsonResource -templateJson $templateJson -resource $resource
+    $templateJson.resources += $resource
+    return $templateJson
+}
+
 function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
     write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
-    if (!$sfExtSettings) {
+    if (!$sfExtSettings -or !$sfExtSettings.clusterEndpoint -or !$sfExtSettings.NodeTypeRef) {
         write-console "settings not found" -foregroundColor 'Yellow'
         return $null
     }
 
-    $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
+    $clusterEndpointRef = $sfExtSettings.clusterEndpoint
     if (!$clusterEndpointRef) {
         write-console "cluster endpoint not found" -foregroundColor 'Yellow'
         return $null
@@ -340,6 +367,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $vmss = $vmssCollection.vmssConfig
     $ip = $null
     $lb = $vmssCollection.loadBalancerConfig
+    $sf = $vmssCollection.sfResourceConfig
 
     # set api versions get-azresource does not return version
     $vmss = add-property -resource $vmss `
@@ -371,7 +399,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $wadExtension = add-property -resource $wadExtension -name 'properties.protectedSettings' -value $protectedSettings
 
     $sfExtension = $extensions | where-object { $psitem.properties.publisher -ieq 'Microsoft.Azure.ServiceFabric' }
-    $sfStorageAccount = $serviceFabricResource.Properties.DiagnosticsStorageAccountConfig.StorageAccountName
+    $sfStorageAccount = $sf.Properties.DiagnosticsStorageAccountConfig.StorageAccountName
     $protectedSettings = get-sfProtectedSettings -storageAccountName $sfStorageAccount -templateJson $templateJson
     $sfExtension = add-property -resource $sfExtension -name 'properties.protectedSettings' -value $protectedSettings
 
@@ -470,7 +498,7 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $vmssJson = set-resourceName -referenceName $lbName -newName $newLBName -json $vmssJson
     $vmss = convert-fromJson $vmssJson
     # remove user assigned managed identity principal id and client id
-    if ($vmss.Identity -and $vmss.Identity.UserAssignedIdentities) {
+    if ((get-psPropertyValue $vmss 'Identity') -and (get-psPropertyValue $vmss.Identity 'UserAssignedIdentities')) {
         write-console 'removing user assigned managed identity principal id and client id'
         $userIdentitiesJson = convert-toJson $vmss.Identity.UserAssignedIdentities
         $userIdentitiesJson = remove-property -name 'principalId' -json $userIdentitiesJson
@@ -486,17 +514,17 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $lb.Properties.frontendIPConfigurations.properties.inboundNatRules = @()
 
     if ($vmssCollection.isPublicIp) {
-        $templateJson.resources += $ip
+        $templateJson = add-templateJsonResource -templateJson $templateJson -resource $ip
     }
   
-    $templateJson.resources += $lb
-    $templateJson.resources += $vmss
-    write-console $newVmssCollection  -foregroundColor 'Green'
+    $templateJson = add-templateJsonResource -templateJson $templateJson -resource $lb
+    $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmss
+    write-console $vmssCollection  -foregroundColor 'Green'
     return $templateJson
 }
 
-function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
-    write-console "deploying new node type $newNodeTypeName"
+function deploy-template($templateJson, $vmssCollection, $resourceGroup, $templateFile) {
+    write-console "deploy-template:$templateFile"
     write-console $template -foregroundColor 'Cyan'
     $tempDir = [io.path]::GetDirectoryName($template)
     if (!(test-path $tempDir)) {
@@ -504,13 +532,12 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
         new-item -Path $tempDir -ItemType Directory
     }
 
-    convert-toJson $templateJson | Out-File $template -Force
-    write-console "template saved to path: '$template'" -foregroundColor 'Green'
-    write-console "Test-AzResourceGroupDeployment -resourceGroupName $resourceGroupName ``
+    save-template -templateJson $templateJson -templateFile $templateFile
+    write-console "Test-AzResourceGroupDeployment -resourceGroupName $resourceGroup ``
         -TemplateFile $template ``
         -Verbose" -foregroundColor 'Cyan'
     
-    $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroupName -Verbose
+    $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroup -Verbose
 
     if ($result) {
         write-console "error: test-azResourceGroupDeployment failed:$($result | out-string)" -err
@@ -519,14 +546,14 @@ function deploy-vmssCollection($vmssCollection, $serviceFabricResource) {
   
     $deploymentName = "$($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')"
     write-console "New-AzResourceGroupDeployment -Name $deploymentName ``
-        -ResourceGroupName $resourceGroupName ``
+        -ResourceGroupName $resourceGroup ``
         -TemplateFile $template ``
         -DeploymentDebugLogLevel All ``
         -Verbose" -foregroundColor 'Magenta'
   
     if ($deploy) {
         $error.clear()
-        $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
+        $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroup -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
         if ($result -or $error) {
             write-console "error: new-azResourceGroupDeployment failed:$($result | out-string)`r`n$($error | out-string)" -err
             return $result
@@ -601,7 +628,7 @@ function get-latestApiVersion($resourceType) {
     return $apiVersion
 }
 
-function get-loadBalancer($vmss){
+function get-loadBalancer($vmss) {
     $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
     $ipConfig = $nicConfig.ipconfigurations.properties
     $natPools = @($ipConfig.loadbalancerinboundnatpools)
@@ -625,6 +652,147 @@ function get-loadBalancer($vmss){
     return $loadBalancer
 }
 
+function get-nsg($vmssCollection) {
+    $nsgId = get-nsgId $vmssCollection
+    if (!$nsgId) {
+        write-console "nsg not found" -foregroundColor 'Yellow'
+        return $null
+    }
+
+    $nsgName = $nsgId.Split('/')[8]
+    write-console "get-aznetworksecuritygroup -ResourceGroupName $resourceGroupName -Name $nsgName" -foregroundColor cyan
+    $nsg = get-azresource -ResourceGroupName $resourceGroupName -ResourceType 'Microsoft.Network/networkSecurityGroups' -Name $nsgName -ExpandProperties
+    if (!$nsg) {
+        write-console "network security group $nsgName not found" -err
+        return $null
+    }
+
+    $vmssCollection.nsgConfig = $nsg
+    write-console "returning: $($nsg.Name)"
+    return $nsg
+}
+
+function get-nsgId($vmssCollection) {
+    write-console "get-nsgId:$vmssCollection"
+    $nsgId = $null
+    $vmss = $vmssCollection.vmssConfig
+    $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+    $ipConfig = $nicConfig.ipconfigurations.properties
+    
+    if ((get-psPropertyValue $ipConfig 'networkSecurityGroup.id')) {
+        $nsgId = $ipConfig.networkSecurityGroup.id
+    }
+
+    # if (!$nsgId) {
+    #     write-console "nsg not found in nic, checking load balancer front end"
+    #     $lb = $vmssCollection.loadBalancerConfig
+    #     $frontendIpConfigurations = @($lb.properties.frontendIPConfigurations)
+
+    #     if ((get-psPropertyValue $frontendIpConfigurations[0].properties 'networkSecurityGroup.id')) {
+    #         $nsgId = $frontendIpConfigurations[0].properties.networkSecurityGroup.id
+    #     }
+    # }
+
+    if (!$nsgId) {
+        write-console "nsg not found in load balancer, checking subnet"
+        $subnet = get-subnet -vmssCollection $vmssCollection
+        $nsgId = $subnet.properties.networkSecurityGroup.id
+    }
+
+    if ($nsgId) {
+        write-console "network security group found: $nsgId" -foregroundColor 'Green'
+    }
+    else {
+        write-console "network security group not found" -foregroundColor 'Yellow'
+    }
+
+    write-console "get-nsgId:$nsgId"
+    return $nsgId
+}
+
+function get-psPropertyValue([object]$baseObject, [string]$property) {
+    <#
+    .SYNOPSIS
+        enumerate powershell object property value
+        [object]$baseObject powershell object
+        outputs: object
+    .OUTPUTS
+        [object]
+    #>
+    write-console "get-psPropertyValue([object]$baseObject,[string]$property)"
+    $retvals = @(get-psPropertyValues $baseObject $property)
+
+    if ($retvals.Count -gt 1) {
+        write-console "GetPSPropertyValue:error more than one item found. returning first value." -err
+    }
+    elseif ($retvals.Count -lt 1) {
+        write-console "GetPSPropertyValue:no items found"
+        $retvals = @($null)
+    }
+
+    write-console "get-psPropertyValue returning:$($retvals[0])"
+    return $retvals[0]
+}
+
+function get-psPropertyValues([object]$baseObject, [string]$property) {
+    <#
+    .SYNOPSIS
+        enumerate powershell object property values
+        [object]$baseObject powershell object
+        outputs: object[]
+    .OUTPUTS
+        [object[]]
+    #>
+
+    write-console "get-psPropertyValues([object]$baseObject,[string]$property)"
+    $retval = [collections.arraylist]::new()
+    $properties = @($property.Split('.'))
+    $childProperties = $property
+
+    if ($properties.Count -lt 1) {
+        $this.WriteWarning("property string empty:$property")
+    }
+    elseif ($null -ne $baseObject) {
+        $propertyObject = $baseObject
+        if ($propertyObject.GetType().isarray) {
+            foreach ($propertyItem in $propertyObject) {
+                [void]$retval.AddRange((get-psPropertyValue $propertyItem $property))
+            }
+        }
+        else {
+            $subItem = $properties[0]
+            $childProperties = $childProperties.trimStart($subItem).trimStart('.')
+            write-console "checking property:$($subItem) childProperties:$childProperties"
+
+            if ($propertyObject.GetType().isarray) {
+                foreach ($propertyItem in $propertyObject) {
+                    [void]$retval.AddRange((get-psPropertyValue $propertyItem $subItem))
+                }
+            }
+            elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
+                foreach ($match in $propertyObject.psobject.Properties.match($subItem)) {
+                    write-console "found property:$($match.Name)"
+                    $propertyObject = $propertyObject.($match.Name)
+                    write-console "property value:$($propertyObject | convertto-json)"
+
+                    if ($childProperties) {
+                        [void]$retval.AddRange((get-psPropertyValue $propertyObject $childProperties))
+                    }
+                    else {
+                        [void]$retval.Add($propertyObject)
+                    }
+                }
+            }
+            else {
+                write-console "property not found:$($subItem)"
+            }
+        }
+    }
+
+    write-console "get-psPropertyValues returning:$($retval)"
+    return $retval.ToArray()
+}
+
 function get-publicIp($loadBalancer) {
     $frontendIpConfigurations = @($loadBalancer.properties.frontendIPConfigurations)
     $publicIpId = $frontendIpConfigurations[0].properties.publicIPAddress.id
@@ -644,6 +812,10 @@ function get-referenceNodeType([string]$nodeTypeName, $clusterResource) {
     $nodetypes = @($clusterResource.Properties.NodeTypes)
     $nodeType = $nodetypes | where-object name -ieq $nodeTypeName
 
+    if (!$nodeType) {
+        write-console "node type $nodeTypeName not found"
+        return $null
+    }
     write-console "returning: $($nodeType.Name)"
     return $nodeType
 }
@@ -713,15 +885,17 @@ function get-sfClusterResource([string]$resourceGroupName, [string]$clusterName)
 function  get-sfExtensionSettings($vmss) {
     write-console "get-sfExtensionSettings $($vmss.Name)"
     #check extension
-    $sfExtension = $vmss.properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object publisher -imatch 'ServiceFabric'
-    $settings = $sfExtension.settings
-    if (!$settings) {
+    $sfExtension = $vmss.properties.virtualMachineProfile.extensionProfile.extensions.properties `
+    | where-object publisher -ieq 'Microsoft.Azure.ServiceFabric'
+    
+    if (!$sfExtension -or !(get-psPropertyValue $sfExtension 'settings')) {
         write-console "service fabric extension not found for node type: $($vmss.Name)" -warn
+        return $null
     }
     else {
-        write-console "service fabric extension found for node type: $($vmss.Name)"
+        write-console "service fabric extension found for node type: $($vmss.Name) $(convert-toJson $sfExtension.settings)"
     }
-    return $settings
+    return $sfExtension.settings
 }
 
 function get-sfProtectedSettings($storageAccountName, $templateJson) {
@@ -749,20 +923,58 @@ function get-sfProtectedSettings($storageAccountName, $templateJson) {
     return $storageAccountProtectedSettings
 }
 
-function get-sfResource($resourceGroupName, $clusterName) {
+function get-sfResource($vmssCollection, $resourceGroupName, $clusterName) {
     write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties"
     $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
   
     if (!$serviceFabricResource) {
         write-console "service fabric cluster $clusterName not found" -err
-        return $error
+        return $null
     }
 
+    $vmssCollection.sfResourceConfig = $serviceFabricResource
     write-console $serviceFabricResource
     return $serviceFabricResource
 }
 
-function get-vmssCollection($nodeTypeName) {
+function get-subnet($vmssCollection) {
+    $subnetId = get-subnetId $vmssCollection
+    if (!$subnetId) {
+        write-console "subnet not found" -foregroundColor 'Yellow'
+        return $null
+    }
+
+    write-console "get-azresource -ResourceId $subnetId -ExpandProperties"
+    $subnet = get-azresource -ResourceId $subnetId -ExpandProperties
+    if (!$subnet) {
+        write-console "subnet $subnetId not found" -err
+        return $null
+    }
+
+    $vmssCollection.subnetConfig = $subnet
+    write-console "returning: $($subnet.Name)"
+    return $subnet
+}
+
+function get-subnetId($vmssCollection) {
+    write-console "get-subnetId:$vmssCollection"
+
+    $vmss = $vmssCollection.vmssConfig
+    $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+    $ipConfig = $nicConfig.ipconfigurations.properties
+    
+    $subnetId = $ipConfig.subnet.id
+    if (!$subnetId) {
+        write-console "subnet not found" -foregroundColor 'Yellow'
+        return $null
+    }
+
+    write-console "subnet found: $subnetId" -foregroundColor 'Green'
+    write-console "get-subnetId:$subnetId"
+    return $subnetId
+}
+
+function get-vmssCollection($nodeTypeName, $vmssCollection) {
     write-console "using node type $nodeTypeName"
     $vmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $nodeTypeName
     if (!$vmss) {
@@ -770,13 +982,15 @@ function get-vmssCollection($nodeTypeName) {
         return $error
     }
 
+    $vmssCollection.vmssConfig = $vmss
+
     $loadBalancer = get-loadBalancer -vmss $vmss
     if (!$loadBalancer) {
         write-console "load balancer not found" -err
         return $error
     }
 
-    $vmssCollection = new-vmssCollection -vmss $vmss -loadBalancer $loadBalancer
+    $vmssCollection.loadBalancerConfig = $loadBalancer
 
     # private ip check
     $publicIp = get-publicIp -loadBalancer $loadBalancer
@@ -866,14 +1080,175 @@ function get-wadProtectedSettings($storageAccountName, $templateJson) {
     return $storageAccountProtectedSettings
 }
 
-function new-vmssCollection($vmss = $null, $ip = $null, $loadBalancer = $null) {
+# function new-nsg($vmssCollection, $nsgName, $nsgRules = $null, $subnetId = $null) {
+#     write-console "new-nsg:$vmssCollection,$nsgName,$nsgRules,$subnetId"
+#     $nsg = $null
+
+#     if (!$nsgName) {
+#         write-console "nsg name not found" -err
+#         return $nsg
+#     }
+
+#     $resourceGroup = $vmssCollection.vmssConfig.ResourceGroupName
+#     $location = $vmssCollection.vmssConfig.Location
+#     write-console "new-aznetworksecuritygroup -ResourceGroupName $resourceGroup -Name $nsgName -Location $location -Verbose"
+#     $nsg = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroup -Name $nsgName -Location $location -Verbose
+
+#     if ($nsgRules) {
+#         write-console "set-aznetworksecurityrule -NetworkSecurityGroup $nsg -SecurityRule $nsgRules -Verbose"
+#         $nsg = Set-AzNetworkSecurityRule -NetworkSecurityGroup $nsg -SecurityRule $nsgRules -Verbose
+#     }
+
+#     if ($subnetId) {
+#         write-console "set-aznetworksecuritygroup -NetworkSecurityGroup $nsg -SubnetId $subnetId -Verbose"
+#         $nsg = Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg -SubnetId $subnetId -Verbose
+#     }
+    
+#     $vmssCollection.nsgConfig = $nsg
+#     write-console "returning: $($nsg.Name)"
+#     return $nsg
+# }
+
+
+# function new-genericResource(){
+
+# }
+
+function new-nsgResource($name, $location, $securityRules = $null) {
+    $type = 'Microsoft.Network/networkSecurityGroups'
+    $nsgResource = [ordered]@{
+        Name       = $name
+        Type       = $type
+        ApiVersion = (get-latestApiVersion $type)
+        Location   = $location
+        Properties = [ordered]@{
+            SecurityRules = @($securityRules)
+        }
+    }
+    return $nsgResource
+}
+
+# function new-resource($resourceType, $resourceName, $resourceLocation, $resourceId = $null) {
+#     write-console "new-resource:$resourceType,$resourceName,$resourceLocation,$resourceId"
+
+#     $resource = [Microsoft.Azure.Management.ResourceManager.Models.Resource]::new($resourceId, $resourceName, $resourceType, $resourceLocation)
+#     return $resource
+# }
+
+function new-securityRule($name, 
+    [int]$priority,
+    [ValidateSet('Inbound', 'Outbound')]
+    $direction,
+    [ValidateSet('Allow', 'Deny')]
+    $access, 
+    [ValidateSet('Tcp', 'Udp', '*')]
+    $protocol, 
+    $sourceAddressPrefix, 
+    $sourcePortRange, 
+    $destinationAddressPrefix, 
+    $destinationPortRange) {
+    write-console "new-securityRule:$name,$priority,$direction,$access,$protocol,$sourceAddressPrefix,$sourcePortRange,$destinationAddressPrefix,$destinationPortRange"
+    $nsgRule = @{
+        name       = $name
+        type       = 'Microsoft.Network/networkSecurityGroups/securityRules'
+        properties = [ordered]@{
+            description              = $name
+            priority                 = $priority
+            direction                = $direction
+            access                   = $access
+            protocol                 = $protocol
+            sourceAddressPrefix      = $sourceAddressPrefix
+            sourcePortRange          = $sourcePortRange
+            destinationAddressPrefix = $destinationAddressPrefix
+            destinationPortRange     = $destinationPortRange
+        }
+    }
+
+    write-console "returning: $(convert-toJson $nsgRule)"
+    return $nsgRule
+}
+
+function new-securityRules() {
+    $securityRules = @()
+
+    # todo: needed?
+    # $securityRules += new-securityRule -name 'AllowSFRPToServiceFabricGateway' `
+    #     -priority 500 `
+    #     -direction 'Inbound' `
+    #     -access 'Allow' `
+    #     -protocol 'Tcp' `
+    #     -sourceAddressPrefix 'ServiceFabric' `
+    #     -sourcePortRange '*' `
+    #     -destinationAddressPrefix 'VirtualNetwork' `
+    #     -destinationPortRange '19000, 19079, 19080'
+
+
+    $securityRules += new-securityRule -name 'AllowServiceFabricGatewayPorts' `
+        -priority 501 `
+        -direction 'Inbound' `
+        -access 'Allow' `
+        -protocol 'Tcp' `
+        -sourceAddressPrefix '*' `
+        -sourcePortRange '*' `
+        -destinationAddressPrefix 'VirtualNetwork' `
+        -destinationPortRange '19000, 19079, 19080'
+
+    # $securityRules += new-securityRule -name 'AllowServiceFabricGatewayReverseProxyPort' `
+    #     -priority 502 `
+    #     -direction 'Inbound' `
+    #     -access 'Allow' `
+    #     -protocol 'Tcp' `
+    #     -sourceAddressPrefix '*' `
+    #     -sourcePortRange '*' `
+    #     -destinationAddressPrefix 'VirtualNetwork' `
+    #     -destinationPortRange '19081'
+
+    # todo: is this needed?
+    $securityRules += new-securityRule -name 'AllowSFExtensionToDLC' `
+        -priority 500 `
+        -direction 'Outbound' `
+        -access 'Allow' `
+        -protocol '*' `
+        -sourceAddressPrefix '*' `
+        -sourcePortRange '*' `
+        -destinationAddressPrefix 'AzureFrontDoor.FirstParty' `
+        -destinationPortRange '*'
+        
+    write-console "returning: $($securityRules.Count) security rule(s)"
+    write-console $securityRules -verbose
+    return $securityRules
+}
+
+function new-TemplateJson() {
+    $templateJson = [ordered]@{
+        "`$schema"       = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
+        "contentVersion" = "1.0.0.0"
+        "parameters"     = @{}
+        "variables"      = @{}
+        "resources"      = @()
+        "outputs"        = @{}
+    }
+    return $templateJson    
+}
+
+function new-vmssCollection(
+    [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSResource]$vmss = $null, 
+    [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSResource]$ip = $null, 
+    [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSResource]$loadBalancer = $null, 
+    [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSResource]$nsg = $null, 
+    [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSResource]$sfResource = $null) {
     $vmssCollection = @{
-        #[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSetList]
+        #[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]
         vmssConfig         = $vmss
-        #[Microsoft.Azure.Commands.Network.Automation.Models.PSPublicIPAddress]
+        #[Microsoft.Azure.Commands.Network.Models.PSPublicIPAddress]
         ipConfig           = $ip
-        #[Microsoft.Azure.Commands.Network.Automation.Models.PSLoadBalancer]
+        #[Microsoft.Azure.Commands.Network.Models.PSLoadBalancer]
         loadBalancerConfig = $loadBalancer
+        #[Microsoft.Azure.Commands.Network.Models.PSNetworkSecurityGroup]
+        nsgConfig          = $nsg
+        #$c = [Microsoft.Azure.Management.ServiceFabric.Models.Cluster]::new()
+        #[Microsoft.Azure.Commands.ServiceFabric.Models.PSCluster]::($c)
+        sfResourceConfig   = $sfResource
         isPublicIp         = $false
         ipAddress          = ''
         ipType             = ''
@@ -946,6 +1321,32 @@ function remove-property($name, $json) {
         write-console "$findName not found" #-err
     }
     return $json
+}
+
+function remove-templateJsonResource($templateJson, $resource) {
+    write-console "remove-templateJsonResource: $(convert-toJson $resource)"
+    $templateResources = @($templateJson.resources | where-object { $psitem.Name -ieq $resource.Name -and $psitem.Type -ieq $resource.Type })
+    if ($templateResources -and $templateResources.Count -eq 1) {
+        $templateJson.resources.Remove($templateResources[0])
+    }
+    elseif($templateResources -and $templateResources.Count -gt 1) {
+        write-console "multiple resources found with name: $($resource.Name) and type: $($resource.Type)" -err
+    }
+    else {
+        write-console "resource not found: $(convert-toJson $resource)"
+    }
+    return $templateJson
+}
+
+function save-template($templateJson, $templateFile) {
+    $tempDir = [io.path]::GetDirectoryName($templateFile)
+    if (!(test-path $tempDir)) {
+        write-console "creating temp directory $tempDir"
+        new-item -Path $tempDir -ItemType Directory
+    }
+
+    convert-toJson $templateJson | Out-File $templateFile -Force
+    write-console "template saved to path: '$templateFile'" -foregroundColor 'Green'
 }
 
 function set-value($paramValue, $referenceValue) {
@@ -1055,7 +1456,74 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     $serviceFabricResource.Properties.nodeTypes = $newList.ToArray()
 
     write-console $serviceFabricResource
-    $templateJson.resources += $serviceFabricResource
+    $templateJson = add-templateJsonResource -templateJson $templateJson -resource $serviceFabricResource
+    return $templateJson
+}
+
+function upgrade-loadBalancer($vmssCollection, $templateJson) {
+    if (!$upgradeLoadBalancer) {
+        write-console "upgradeLoadBalancer is false"
+        return $templateJson
+    }
+
+    # verity load balancer sku is basic
+    $loadBalancer = $vmssCollection.loadBalancerConfig
+    if (!$loadBalancer) {
+        write-console "load balancer not found" -err
+        return $templateJson
+    }
+
+    $loadBalancerJson = convert-toJson $loadBalancer
+
+    $loadBalancerSku = $loadbalancer.Sku.Name
+    if ($loadBalancerSku -ine 'Basic') {
+        write-console "load balancer sku is $loadBalancerSku" -foregroundColor 'Yellow'
+        return $templateJson
+    }
+    
+    $templateFile = $template.replace('.json', '-basic.json')
+    save-template -templateJson $templateJson -templateFile $templateFile
+
+    # todo: confirm nsg configuration
+    # todo: add nsg?
+    # todo: add nsg to subnet?
+    # todo: outbound rules? 
+
+    # test
+    #$nsg = get-nsg -vmssCollection $vmssCollection
+    $nsg = $null
+    # end test
+    if (!$nsg) {
+        write-console "nsg not found. creating new nsg"
+        # $nsg = new-nsg -vmssCollection $vmssCollection `
+        #     -nsgName $vmssCollection.sfResourceConfig.Name + '-nsg' `
+        #     -nsgRules @(new-securityRules) `
+        #     -subnetId (get-subnetId -vmssCollection $vmssCollection)
+        $nsg = new-nsgResource -name ($vmssCollection.sfResourceConfig.Name + '-nsg') `
+            -location $vmssCollection.vmssConfig.Location `
+            -securityRules @(new-securityRules)
+
+        $templateJson = add-templateJsonResource -templateJson $templateJson -resource $nsg
+        $vmss = $vmssCollection.vmssConfig
+        $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+        $ipConfig = $nicConfig.ipconfigurations.properties
+        
+        $ipConfig = add-property -resource $ipConfig -name 'networkSecurityGroup' -value @{}
+        $ipConfig = add-property -resource $ipConfig.networkSecurityGroup -name 'id' -value "[resourceId('Microsoft.Network/networkSecurityGroups', '$($nsg.Name)')]"
+
+        $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmss
+    }
+
+    # todo: add nsg to subnet
+
+    # todo: set public ip address to standard
+
+    # todo: set public ip address to static
+
+    # todo: set load balancer sku to standard
+
+    # todo: set disableOutboundSnat to true
+
     return $templateJson
 }
 
@@ -1083,5 +1551,17 @@ function write-console($message, $foregroundColor = 'White', [switch]$verbose, [
     }
 }
 
-main
+if (!$loadFunctionsOnly) {
+    main
+}
+else {    
+    if (!($MyInvocation.InvocationName -ieq '.')) {
+        $scriptName = $MyInvocation.InvocationName
+        write-console "to load functions from this script file, dot source the script file:. $scriptName"
+    }
+    else {
+        write-console "loading script functions: $($MyInvocation.InvocationName)"
+        write-console ((get-item function:) | Where-Object { $psitem.version -eq $null -and $psitem.module -eq $null } | out-string)
+    }
+}
 
