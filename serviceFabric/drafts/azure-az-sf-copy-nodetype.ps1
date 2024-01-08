@@ -261,15 +261,16 @@ function main() {
         $sfTemplateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $sfTemplateJson
 
         # deployments
-        $resourceGroup = $vmssCollection.vmssConfig.ResourceGroupName
+        $resourceGroup = $referenceVmssCollection.vmssConfig.ResourceGroupName
         $templateFile = $template.replace('.json', '-vmss.json')    
         $result = deploy-template -templateJson $templateJson -vmssCollection $referenceVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
         
         #todo: make sf resource update separate template and deployment due to upgrade process and potential different resource groups
-        $resourceGroup = $vmssCollection.sfResourceConfig.ResourceGroupName
+        $resourceGroup = $referenceVmssCollection.sfResourceConfig.ResourceGroupName
         $templateFile = $template.replace('.json', '-sf.json')    
         $result = deploy-template -templateJson $sfTemplateJson -vmssCollection $referenceVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
         
+        $global:vmssCollection = $referenceVmssCollection
         $global:templateJson = $templateJson
         write-console "deploy result: $result template also stored in `$global:templateJson" -foregroundColor 'Green'
     }
@@ -525,8 +526,8 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
 
 function deploy-template($templateJson, $vmssCollection, $resourceGroup, $templateFile) {
     write-console "deploy-template:$templateFile"
-    write-console $template -foregroundColor 'Cyan'
-    $tempDir = [io.path]::GetDirectoryName($template)
+    write-console $templateJson -foregroundColor 'Cyan'
+    $tempDir = [io.path]::GetDirectoryName($templateFile)
     if (!(test-path $tempDir)) {
         write-console "creating temp directory $tempDir"
         new-item -Path $tempDir -ItemType Directory
@@ -534,10 +535,10 @@ function deploy-template($templateJson, $vmssCollection, $resourceGroup, $templa
 
     save-template -templateJson $templateJson -templateFile $templateFile
     write-console "Test-AzResourceGroupDeployment -resourceGroupName $resourceGroup ``
-        -TemplateFile $template ``
+        -TemplateFile $templateFile ``
         -Verbose" -foregroundColor 'Cyan'
     
-    $result = test-azResourceGroupDeployment -templateFile $template -resourceGroupName $resourceGroup -Verbose
+    $result = test-azResourceGroupDeployment -templateFile $templateFile -resourceGroupName $resourceGroup -Verbose
 
     if ($result) {
         write-console "error: test-azResourceGroupDeployment failed:$($result | out-string)" -err
@@ -547,20 +548,20 @@ function deploy-template($templateJson, $vmssCollection, $resourceGroup, $templa
     $deploymentName = "$($MyInvocation.MyCommand.Name)-$(get-date -Format 'yyMMddHHmmss')"
     write-console "New-AzResourceGroupDeployment -Name $deploymentName ``
         -ResourceGroupName $resourceGroup ``
-        -TemplateFile $template ``
+        -TemplateFile $templateFile ``
         -DeploymentDebugLogLevel All ``
         -Verbose" -foregroundColor 'Magenta'
   
     if ($deploy) {
         $error.clear()
-        $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroup -TemplateFile $template -Verbose -DeploymentDebugLogLevel All
+        $result = new-azResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroup -TemplateFile $templateFile -Verbose -DeploymentDebugLogLevel All
         if ($result -or $error) {
             write-console "error: new-azResourceGroupDeployment failed:$($result | out-string)`r`n$($error | out-string)" -err
             return $result
         }
     }
     else {
-        write-console "after verifying / modifying $template`r`nrun the above 'new-azresourcegroupdeployment' command to deploy the template" -foregroundColor 'Yellow'
+        write-console "after verifying / modifying $templateFile`r`nrun the above 'new-azresourcegroupdeployment' command to deploy the template" -foregroundColor 'Yellow'
     }
 
     return $result
@@ -882,7 +883,7 @@ function get-sfClusterResource([string]$resourceGroupName, [string]$clusterName)
     return $serviceFabricResource
 }
 
-function  get-sfExtensionSettings($vmss) {
+function get-sfExtensionSettings($vmss) {
     write-console "get-sfExtensionSettings $($vmss.Name)"
     #check extension
     $sfExtension = $vmss.properties.virtualMachineProfile.extensionProfile.extensions.properties `
@@ -1385,6 +1386,36 @@ function set-resourceName($referenceName, $newName, $json) {
     return $json
 }
 
+function update-publicIp($vmssCollection) {
+    write-console "update-publicIp:$vmssCollection"
+    $publicIp = $vmssCollection.ipConfig
+    if (!$publicIp) {
+        write-console "public ip not found" -err
+        return $null
+    }
+
+    if(!(get-psPropertyValues $publicIp.properties 'publicIpAllocationMethod')) {
+        write-console "public ip not configured" -err
+        return $null
+    }
+    $publicIpAllocationMethod = $publicIp.properties.publicIpAllocationMethod
+    if ($publicIpAllocationMethod -ine 'Static') {
+        write-console "public ip allocation method is $publicIpAllocationMethod" -foregroundColor 'Yellow'
+        $publicIp.properties.publicIpAllocationMethod = 'Static'
+    }
+
+    $sku = $publicIp.sku.name
+    if($sku -ine 'Standard') {
+        write-console "sku currently: $sku. updating public ip sku to Standard"
+        $publicIp.sku.name = 'Standard'
+    }
+    else {
+        write-console "public ip sku is 'Standard'"
+    }
+
+    return $true
+}
+
 function update-serviceFabricResource($serviceFabricResource, $templateJson) {
 
     if (!$serviceFabricResource) {
@@ -1460,6 +1491,28 @@ function update-serviceFabricResource($serviceFabricResource, $templateJson) {
     return $templateJson
 }
 
+function update-subnet($vmssCollection, $nsg) {
+    write-console "update-subnet:$vmssCollection,$nsg"
+    $subnet = get-subnet $vmssCollection
+    if (!$subnet) {
+        write-console "subnet not found" -err
+        return $null
+    }
+
+    if(get-psPropertyValues $subnet 'networkSecurityGroup.id') {
+        write-console "subnet already has network security group" -err
+        return $null
+    }
+
+    $subnetNsg = add-property -resource $subnet.Properties -name 'networkSecurityGroup' -value @{}
+    $subnetNsg  = add-property -resource $subnet.Properties.networkSecurityGroup -name 'id' -value $nsg.Id
+    
+    $templateJson = convert-toJson $subnetNsg
+    $templateFile = $template.replace('.json', '-network.json')
+    save-template -templateJson $templateJson -templateFile $templateFile
+    return $templateJson -ne $null
+}
+
 function upgrade-loadBalancer($vmssCollection, $templateJson) {
     if (!$upgradeLoadBalancer) {
         write-console "upgradeLoadBalancer is false"
@@ -1481,18 +1534,15 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
         return $templateJson
     }
     
+    # save template with basic load balancer for backup
     $templateFile = $template.replace('.json', '-basic.json')
     save-template -templateJson $templateJson -templateFile $templateFile
 
-    # todo: confirm nsg configuration
-    # todo: add nsg?
-    # todo: add nsg to subnet?
-    # todo: outbound rules? 
-
-    # test
+    # todo: remove test
     #$nsg = get-nsg -vmssCollection $vmssCollection
     $nsg = $null
     # end test
+
     if (!$nsg) {
         write-console "nsg not found. creating new nsg"
         # $nsg = new-nsg -vmssCollection $vmssCollection `
@@ -1514,16 +1564,26 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
         $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmss
     }
 
-    # todo: add nsg to subnet
+    # add nsg to subnet
+    if(!(update-subnet -vmssCollection $vmssCollection -nsg $nsg)) {
+        write-console "error: failed to update subnet" -err
+        return $templateJson
+    }
 
-    # todo: set public ip address to standard
+    # set public ip address to standard
+    # set public ip address to static
+    if(!(update-publicIp -vmssCollection $vmssCollection)) {
+        write-console "error: failed to update public ip" -err
+        return $templateJson
+    }
 
-    # todo: set public ip address to static
-
-    # todo: set load balancer sku to standard
-
-    # todo: set disableOutboundSnat to true
-
+    # set load balancer sku to standard
+    # set disableOutboundSnat to true
+    $loadBalancer.Sku.Name = 'Standard'
+    $loadBalancer.Properties.disableOutboundSnat = $true
+    
+    $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmssCollection.vmssConfig
+    $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmssCollection.loadBalancerConfig
     return $templateJson
 }
 
