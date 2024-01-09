@@ -684,8 +684,8 @@ function get-nsgId($vmssCollection) {
     write-console "get-nsgId:$vmssCollection"
     $nsgId = $null
     $vmss = $vmssCollection.vmssConfig
-    $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
-    $ipConfig = $nicConfig.ipconfigurations.properties
+    $nicConfig = $vmss.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+    $ipConfig = $nicConfig.ipConfigurations.properties
     
     if ((get-psPropertyValue $ipConfig 'networkSecurityGroup.id')) {
         $nsgId = $ipConfig.networkSecurityGroup.id
@@ -758,43 +758,75 @@ function get-psPropertyValues([object]$baseObject, [string]$property) {
     $childProperties = $property
 
     if ($properties.Count -lt 1) {
-        $this.WriteWarning("property string empty:$property")
+        write-console "property string empty:$property" -warn
+        return $retval.ToArray()
     }
-    elseif ($null -ne $baseObject) {
-        $propertyObject = $baseObject
+
+    if (!$baseObject) {
+        write-console "baseobject null" -warn
+        return $retval.ToArray()
+    }
+
+    $propertyObject = $baseObject
+    # enumerate property path based on type
+    if ($propertyObject.GetType().isarray) {
+        foreach ($propertyItem in $propertyObject) {
+            $result = get-psPropertyValue $propertyItem $property
+            if ($result) {
+                [void]$retval.Add($result)
+            }
+        }
+    }
+    elseif ($propertyObject.GetType().Name -ieq 'OrderedHashtable') {
+        # foreach ($propertyItem in $propertyObject.Keys) {
+        #     $result = get-psPropertyValue $propertyItem $property
+        #     if ($result) {
+        #         [void]$retval.Add($result)
+        #     }
+        # }
+
+        if ($propertyObject.ContainsKey($property)) {
+            $result = $propertyObject.Keys.IndexOf($property)
+            [void]$retval.Add($propertyObject.Keys[$result])
+        }
+    }
+    else {
+        #foreach ($subItem in $properties) {
+        $subItem = $properties[0]
+        $childProperties = $childProperties.trimStart($subItem).trimStart('.')
+        write-console "checking property:$($subItem) childProperties:$childProperties"
+        #write-console "checking property:$($subItem)"
+
         if ($propertyObject.GetType().isarray) {
             foreach ($propertyItem in $propertyObject) {
-                [void]$retval.AddRange((get-psPropertyValue $propertyItem $property))
+                $result = get-psPropertyValue $propertyItem $subItem
+                if ($result) {
+                    [void]$retval.Add($result)
+                }        
+            }
+        }
+        elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
+            foreach ($match in $propertyObject.psobject.Properties.match($subItem)) {
+                write-console "found property:$($match.Name)"
+                $propertyObject = $propertyObject.($match.Name)
+                write-console "property value:$($propertyObject | convertto-json)"
+                
+                #[void]$retval.Add($propertyObject)
+                if ($childProperties) {
+                    $result = get-psPropertyValue $propertyObject $childProperties
+                    if ($result) {
+                        [void]$retval.Add($result)
+                    }            
+                }
+                else {
+                    [void]$retval.Add($propertyObject)
+                }
             }
         }
         else {
-            $subItem = $properties[0]
-            $childProperties = $childProperties.trimStart($subItem).trimStart('.')
-            write-console "checking property:$($subItem) childProperties:$childProperties"
-
-            if ($propertyObject.GetType().isarray) {
-                foreach ($propertyItem in $propertyObject) {
-                    [void]$retval.AddRange((get-psPropertyValue $propertyItem $subItem))
-                }
-            }
-            elseif ($propertyObject.psobject.Properties.match($subItem).count -gt 0) {
-                foreach ($match in $propertyObject.psobject.Properties.match($subItem)) {
-                    write-console "found property:$($match.Name)"
-                    $propertyObject = $propertyObject.($match.Name)
-                    write-console "property value:$($propertyObject | convertto-json)"
-
-                    if ($childProperties) {
-                        [void]$retval.AddRange((get-psPropertyValue $propertyObject $childProperties))
-                    }
-                    else {
-                        [void]$retval.Add($propertyObject)
-                    }
-                }
-            }
-            else {
-                write-console "property not found:$($subItem)"
-            }
+            write-console "property not found:$($subItem)"
         }
+        #}
     }
 
     write-console "get-psPropertyValues returning:$($retval)"
@@ -1007,7 +1039,7 @@ function get-vmssCollection($nodeTypeName, $vmssCollection) {
     if ($vmssCollection.isPublicIp) {
         write-console "public ip found"
         $vmssCollection.ipAddress = $publicIp.properties.ipAddress
-        $vmssCollection.ipType = $publicIp.properties.publicIpAllocationMethod
+        $vmssCollection.ipType = $publicIp.properties.publicIPAllocationMethod
     }
     else {
         write-console "private ip found"
@@ -1339,7 +1371,7 @@ function remove-templateJsonResource($templateJson, $resource) {
         [void]$resources.Remove($templateResources[0])
         $templateJson.resources = $resources
     }
-    elseif($templateResources -and $templateResources.Count -gt 1) {
+    elseif ($templateResources -and $templateResources.Count -gt 1) {
         write-console "multiple resources found with name: $($resource.Name) and type: $($resource.Type)" -err
     }
     else {
@@ -1403,20 +1435,20 @@ function update-publicIp($vmssCollection) {
         return $null
     }
 
-    if(!(get-psPropertyValues $publicIp.Properties 'publicIpAllocationMethod')) {
+    if (!(get-psPropertyValue $publicIp.Properties 'publicIPAllocationMethod')) {
         write-console "public ip not configured" -err
         return $null
     }
-    $publicIpAllocationMethod = $publicIp.Properties.publicIpAllocationMethod
+    $publicIpAllocationMethod = $publicIp.Properties.publicIPAllocationMethod
     if ($publicIpAllocationMethod -ine 'Static') {
         write-console "public ip allocation method is $publicIpAllocationMethod" -foregroundColor 'Yellow'
-        $publicIp.Properties.publicIpAllocationMethod = 'Static'
+        $publicIp.Properties.publicIPAllocationMethod = 'Static'
     }
 
-    $sku = $publicIp.sku.name
-    if($sku -ine 'Standard') {
+    $sku = $publicIp.Sku.Name
+    if ($sku -ine 'Standard') {
         write-console "sku currently: $sku. updating public ip sku to Standard"
-        $publicIp.sku.name = 'Standard'
+        $publicIp.Sku.Name = 'Standard'
     }
     else {
         write-console "public ip sku is 'Standard'"
@@ -1508,7 +1540,7 @@ function update-subnet($vmssCollection, $nsg) {
         return $null
     }
 
-    if(get-psPropertyValues $subnet 'networkSecurityGroup.id') {
+    if (get-psPropertyValue $subnet.Properties 'networkSecurityGroup.id') {
         write-console "subnet already has network security group" -err
         return $null
     }
@@ -1549,8 +1581,8 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
     save-template -templateJson $templateJson -templateFile $templateFile
 
     # todo: remove test
-    #$nsg = get-nsg -vmssCollection $vmssCollection
-    $nsg = $null
+    $nsg = get-nsg -vmssCollection $vmssCollection
+    #$nsg = $null
     # end test
 
     if (!$nsg) {
@@ -1572,17 +1604,17 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
         $ipConfig = add-property -resource $ipConfig.networkSecurityGroup -name 'id' -value "[resourceId('Microsoft.Network/networkSecurityGroups', '$($nsg.Name)')]"
 
         $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmss
-    }
 
-    # add nsg to subnet
-    if(!(update-subnet -vmssCollection $vmssCollection -nsg $nsg)) {
-        write-console "error: failed to update subnet" -err
-        return $templateJson
+        # add nsg to subnet
+        if (!(update-subnet -vmssCollection $vmssCollection -nsg $nsg)) {
+            write-console "error: failed to update subnet" -err
+            return $templateJson
+        }
     }
 
     # set public ip address to standard
     # set public ip address to static
-    if(!(update-publicIp -vmssCollection $vmssCollection)) {
+    if (!(update-publicIp -vmssCollection $vmssCollection)) {
         write-console "error: failed to update public ip" -err
         return $templateJson
     }
