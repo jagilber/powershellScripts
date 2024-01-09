@@ -254,8 +254,8 @@ function main() {
         write-console $referenceVmssCollection
         
         $templateJson = new-TemplateJson
-        $templateJson = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
-        $templateJson = upgrade-loadBalancer -vmssCollection $referenceVmssCollection -templateJson $templateJson
+        $newVmssCollection = copy-vmssCollection -vmssCollection $referenceVmssCollection -templateJson $templateJson
+        $templateJson = upgrade-loadBalancer -vmssCollection $newVmssCollection -templateJson $templateJson
 
         $sfTemplateJson = new-TemplateJson
         $sfTemplateJson = update-serviceFabricResource -serviceFabricResource $serviceFabricResource -templateJson $sfTemplateJson
@@ -263,14 +263,14 @@ function main() {
         # deployments
         $resourceGroup = $referenceVmssCollection.vmssConfig.ResourceGroupName
         $templateFile = $template.replace('.json', '-vmss.json')    
-        $result = deploy-template -templateJson $templateJson -vmssCollection $referenceVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
+        $result = deploy-template -templateJson $templateJson -vmssCollection $newVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
         
         #todo: make sf resource update separate template and deployment due to upgrade process and potential different resource groups
         $resourceGroup = $referenceVmssCollection.sfResourceConfig.ResourceGroupName
         $templateFile = $template.replace('.json', '-sf.json')    
-        $result = deploy-template -templateJson $sfTemplateJson -vmssCollection $referenceVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
+        $result = deploy-template -templateJson $sfTemplateJson -vmssCollection $newVmssCollection -resourceGroup $resourceGroup -templateFile $templateFile
         
-        $global:vmssCollection = $referenceVmssCollection
+        $global:vmssCollection = $newVmssCollection
         $global:templateJson = $templateJson
         write-console "deploy result: $result template also stored in `$global:templateJson" -foregroundColor 'Green'
     }
@@ -521,7 +521,14 @@ function copy-vmssCollection($vmssCollection, $templateJson) {
     $templateJson = add-templateJsonResource -templateJson $templateJson -resource $lb
     $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmss
     write-console $vmssCollection  -foregroundColor 'Green'
-    return $templateJson
+    
+    $newVmssCollection = $vmssCollection.clone()
+    $newVmssCollection.vmssConfig = $vmss
+    $newVmssCollection.loadBalancerConfig = $lb
+    $newVmssCollection.sfResourceConfig = $sf
+    $newVmssCollection.ipConfig = $ip
+    
+    return $newVmssCollection
 }
 
 function deploy-template($templateJson, $vmssCollection, $resourceGroup, $templateFile) {
@@ -961,8 +968,8 @@ function get-subnetId($vmssCollection) {
     write-console "get-subnetId:$vmssCollection"
 
     $vmss = $vmssCollection.vmssConfig
-    $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
-    $ipConfig = $nicConfig.ipconfigurations.properties
+    $nicConfig = $vmss.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+    $ipConfig = $nicConfig.ipConfigurations.properties
     
     $subnetId = $ipConfig.subnet.id
     if (!$subnetId) {
@@ -1328,7 +1335,9 @@ function remove-templateJsonResource($templateJson, $resource) {
     write-console "remove-templateJsonResource: $(convert-toJson $resource)"
     $templateResources = @($templateJson.resources | where-object { $psitem.Name -ieq $resource.Name -and $psitem.Type -ieq $resource.Type })
     if ($templateResources -and $templateResources.Count -eq 1) {
-        $templateJson.resources.Remove($templateResources[0])
+        $resources = [collections.arraylist]::new($templateJson.resources)
+        [void]$resources.Remove($templateResources[0])
+        $templateJson.resources = $resources
     }
     elseif($templateResources -and $templateResources.Count -gt 1) {
         write-console "multiple resources found with name: $($resource.Name) and type: $($resource.Type)" -err
@@ -1394,14 +1403,14 @@ function update-publicIp($vmssCollection) {
         return $null
     }
 
-    if(!(get-psPropertyValues $publicIp.properties 'publicIpAllocationMethod')) {
+    if(!(get-psPropertyValues $publicIp.Properties 'publicIpAllocationMethod')) {
         write-console "public ip not configured" -err
         return $null
     }
-    $publicIpAllocationMethod = $publicIp.properties.publicIpAllocationMethod
+    $publicIpAllocationMethod = $publicIp.Properties.publicIpAllocationMethod
     if ($publicIpAllocationMethod -ine 'Static') {
         write-console "public ip allocation method is $publicIpAllocationMethod" -foregroundColor 'Yellow'
-        $publicIp.properties.publicIpAllocationMethod = 'Static'
+        $publicIp.Properties.publicIpAllocationMethod = 'Static'
     }
 
     $sku = $publicIp.sku.name
@@ -1504,10 +1513,11 @@ function update-subnet($vmssCollection, $nsg) {
         return $null
     }
 
-    $subnetNsg = add-property -resource $subnet.Properties -name 'networkSecurityGroup' -value @{}
-    $subnetNsg  = add-property -resource $subnet.Properties.networkSecurityGroup -name 'id' -value $nsg.Id
+    $null = add-property -resource $subnet.Properties -name 'networkSecurityGroup' -value @{}
+    #$subnetNsg = add-property -resource $subnet.Properties.networkSecurityGroup -name 'id' -value $nsg.Id
+    $null = add-property -resource $subnet.Properties.networkSecurityGroup -name 'id' -value "[resourceId('Microsoft.Network/networkSecurityGroups', '$($nsg.Name)')]"
     
-    $templateJson = convert-toJson $subnetNsg
+    $templateJson = convert-toJson $subnet
     $templateFile = $template.replace('.json', '-network.json')
     save-template -templateJson $templateJson -templateFile $templateFile
     return $templateJson -ne $null
@@ -1526,7 +1536,7 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
         return $templateJson
     }
 
-    $loadBalancerJson = convert-toJson $loadBalancer
+    #$loadBalancerJson = convert-toJson $loadBalancer
 
     $loadBalancerSku = $loadbalancer.Sku.Name
     if ($loadBalancerSku -ine 'Basic') {
@@ -1555,8 +1565,8 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
 
         $templateJson = add-templateJsonResource -templateJson $templateJson -resource $nsg
         $vmss = $vmssCollection.vmssConfig
-        $nicConfig = $vmss.properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
-        $ipConfig = $nicConfig.ipconfigurations.properties
+        $nicConfig = $vmss.Properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations.properties
+        $ipConfig = $nicConfig.ipConfigurations.properties
         
         $ipConfig = add-property -resource $ipConfig -name 'networkSecurityGroup' -value @{}
         $ipConfig = add-property -resource $ipConfig.networkSecurityGroup -name 'id' -value "[resourceId('Microsoft.Network/networkSecurityGroups', '$($nsg.Name)')]"
@@ -1580,6 +1590,7 @@ function upgrade-loadBalancer($vmssCollection, $templateJson) {
     # set load balancer sku to standard
     # set disableOutboundSnat to true
     $loadBalancer.Sku.Name = 'Standard'
+    $null = add-property -resource $loadBalancer.Properties -name 'disableOutboundSnat' -value $true
     $loadBalancer.Properties.disableOutboundSnat = $true
     
     $templateJson = add-templateJsonResource -templateJson $templateJson -resource $vmssCollection.vmssConfig
