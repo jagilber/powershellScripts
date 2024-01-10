@@ -704,7 +704,9 @@ function get-nsgId($vmssCollection) {
     if (!$nsgId) {
         write-console "nsg not found in load balancer, checking subnet"
         $subnet = get-subnet -vmssCollection $vmssCollection
-        $nsgId = $subnet.properties.networkSecurityGroup.id
+        if((get-psPropertyValue $subnet 'properties.networkSecurityGroup.id')) {
+            $nsgId = $subnet.properties.networkSecurityGroup.id
+        }
     }
 
     if ($nsgId) {
@@ -1231,7 +1233,17 @@ function new-securityRules() {
         -sourceAddressPrefix '*' `
         -sourcePortRange '*' `
         -destinationAddressPrefix 'VirtualNetwork' `
-        -destinationPortRange '19000, 19079, 19080'
+        -destinationPortRange '19000'
+    
+    $securityRules += new-securityRule -name 'AllowServiceFabricGatewayPorts' `
+        -priority 502 `
+        -direction 'Inbound' `
+        -access 'Allow' `
+        -protocol 'Tcp' `
+        -sourceAddressPrefix '*' `
+        -sourcePortRange '*' `
+        -destinationAddressPrefix 'VirtualNetwork' `
+        -destinationPortRange '19080'
 
     # $securityRules += new-securityRule -name 'AllowServiceFabricGatewayReverseProxyPort' `
     #     -priority 502 `
