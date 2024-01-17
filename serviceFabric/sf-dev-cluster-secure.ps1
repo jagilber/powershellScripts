@@ -106,8 +106,8 @@ function main() {
 function install-sdk(){
     try {
         if(winget){
-            if((read-host "install sdk using command 'winget install Microsoft.AzureServiceFabricSDK'? (y/n)") -ieq 'y') {
-                winget install Microsoft.AzureServiceFabricSDK
+            if((read-host "install sdk using command 'winget install Microsoft.ServiceFabricSDK'? (y/n)") -ieq 'y') {
+                winget install Microsoft.ServiceFabricSDK
                 return $true
             }
             return $false
