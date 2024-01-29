@@ -34,7 +34,7 @@ param(
     [string]$location = "westus",
     [string]$publisher = "MicrosoftWindowsServer", #"Canonical"
     [string]$offerName = "WindowsServer", #"UbuntuServer"
-    [string]$imagesku = "2019-Datacenter-with-containers" #"2016-Datacenter-with-containers" #"18.04-LTS"
+    [string]$imagesku = "2022-Datacenter" #"2016-Datacenter-with-containers" #"18.04-LTS"
 )
 
 $error.Clear()
@@ -67,7 +67,7 @@ function main() {
         write-host "filtered skus:" -ForegroundColor Yellow
 
         foreach ($sku in $skus) {
-            if ($sku.Id -match "(^|\D)$build(\D|$)") {
+            if ($sku.Id -match "(^|\D)$build(\D|$)" -or $sku.Id -imatch $imagesku) {
                 Write-Verbose ($sku | fl * | out-string)
                 $image = Get-AzVMImage -Location $location -PublisherName $publisher -Offer $offer -Skus $sku.Skus -ErrorAction SilentlyContinue
                 
@@ -75,6 +75,12 @@ function main() {
                     write-host "Get-AzVMImage -Location $location -PublisherName $publisher -Offer $offer -Skus $($sku.Skus)"
                     write-host "image: $($image | fl * | out-string)" -ForegroundColor Magenta
                 }
+                else {
+                    Write-Verbose "no image"
+                }    
+            }
+            else {
+                Write-Verbose "$($sku | convertto-json) does not match $build. skipping"
             }
         }
     }
