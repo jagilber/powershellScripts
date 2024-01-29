@@ -1,0 +1,12 @@
+<Configuration>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>c:\sandbox</HostFolder>
+      <SandboxFolder>C:\sandbox</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -ExecutionPolicy Bypass -Command "&amp;{iwr https://aka.ms/git-vscode.ps1 | iex}"</Command>
+  </LogonCommand>
+</Configuration>
