@@ -72,8 +72,8 @@ function main() {
   $message = read-messageResponse($response)
 
   write-host "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
-  write-host $global:openaiResponse.content -ForegroundColor Magenta
-  return $global:openaiResponse.content
+  write-host $message.content -ForegroundColor Magenta
+  return $message.content
 }
 
 function read-messageResponse($response) {
