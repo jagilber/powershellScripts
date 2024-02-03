@@ -27,15 +27,18 @@ response:
 [cmdletbinding()]
 param(
   [string[]]$messages = @(),
-  [string]$apiKey = $global:openapikey, # Replace 'YOUR_API_KEY_HERE' with your OpenAI API key
+  [string]$apiKey = $env:OPENAI_API_KEY, # Replace 'YOUR_API_KEY_HERE' with your OpenAI API key
   [ValidateSet('system', 'user')]
   [string]$messageRole = 'system', # system or user
   [string]$endpoint = 'https://api.openai.com/v1/chat/completions',
-  [ValidateSet('gpt-3.5-turbo', 'gpt-3.5-turbo-0613','gpt-4-turbo-preview','gpt-4')]
-  [string]$model = 'gpt-3.5-turbo'
+  [ValidateSet('gpt-3.5-turbo', 'gpt-3.5-turbo-0613', 'gpt-4-turbo-preview', 'gpt-4')]
+  [string]$model = 'gpt-3.5-turbo',
+  [string]$logFile = 'c:\temp\openai.log'
 )
 
 function main() {
+  write-log "===================================="
+  write-log ">>>>starting openAI chat request<<<<"
   # Define the API endpoint you want to query
 
   # Optional: Set headers or other parameters if required
@@ -60,26 +63,47 @@ function main() {
 
   # Convert the request body to JSON
   $jsonBody = $requestBody | convertto-json -depth 5
-  write-verbose $jsonBody
-
+  
   # Make the API request using Invoke-RestMethod
-  $response = Invoke-RestMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
+  write-log "$response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
+  $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
   #$response = Invoke-RestMethod -Uri $endpoint -Headers $headers -Method Get
 
   # Output the response
-  write-verbose ($response | convertto-json -depth 5)
+  write-log ($response | convertto-json -depth 5) -color Magenta
   $global:openaiResponse = $response
   $message = read-messageResponse($response)
 
-  write-host "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
-  write-host $message.content -ForegroundColor Magenta
+  write-log "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
+  if ($logFile) {
+    write-log "result appended to logfile: $logFile"
+  }
+
+  write-log "response:$($message.content)" -color Green
+  write-log ">>>>ending openAI chat request<<<<"
+  write-log "===================================="
   return $message.content
 }
 
 function read-messageResponse($response) {
   # Extract the response from the API request
-  write-verbose $response
+  write-log $response
   return $response.choices.message
+}
+
+function write-log($message, [switch]$verbose,[ConsoleColor]$color = 'White') {
+  $message = "$(get-date) $message"
+  if ($logFile) {
+    # Write the message to a log file
+    $message | out-file -FilePath $logFile -Append
+  }
+
+  if ($verbose) {
+    write-verbose $message
+  }
+  else {
+    write-host $message -ForegroundColor $color
+  }
 }
 
 main
