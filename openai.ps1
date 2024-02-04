@@ -77,8 +77,9 @@ param(
 )
 
 function main() {
+  $startTime = Get-Date
   write-log "===================================="
-  write-log ">>>>starting openAI chat request<<<<"
+  write-log ">>>>starting openAI chat request $startTime<<<<"
   
   if(!$apiKey) {
     write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
@@ -123,7 +124,7 @@ function main() {
   }
 
   write-log "response:$($message.content)" -color Green
-  write-log ">>>>ending openAI chat request<<<<"
+  write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<"
   write-log "===================================="
   return $message.content
 }
