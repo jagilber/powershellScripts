@@ -67,9 +67,9 @@
 [cmdletbinding()]
 param(
   [string[]]$messages = @(),
-  [string]$apiKey = $env:OPENAI_API_KEY, # Replace 'YOUR_API_KEY_HERE' with your OpenAI API key
+  [string]$apiKey = "$env:OPENAI_API_KEY", # Replace 'YOUR_API_KEY_HERE' with your OpenAI API key
   [ValidateSet('system', 'user')]
-  [string]$messageRole = 'system', # system or user
+  [string]$messageRole = 'user', # system or user
   [string]$endpoint = 'https://api.openai.com/v1/chat/completions',
   [ValidateSet('gpt-3.5-turbo', 'gpt-3.5-turbo-0613', 'gpt-4-turbo-preview', 'gpt-4')]
   [string]$model = 'gpt-3.5-turbo',
@@ -79,9 +79,12 @@ param(
 function main() {
   write-log "===================================="
   write-log ">>>>starting openAI chat request<<<<"
-  # Define the API endpoint you want to query
-
-  # Optional: Set headers or other parameters if required
+  
+  if(!$apiKey) {
+    write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
+    return
+  }
+  
   $headers = @{
     'Authorization' = "Bearer $apiKey"
     'Content-Type'  = 'application/json'
