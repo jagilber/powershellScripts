@@ -106,7 +106,7 @@ param(
   [bool]$logProbabilities = $false,
   [string[]]$systemBaseMessages = @(
     'always reply in json format with the response containing complete details',
-    'prefer accurate and complete responses',
+    'prefer accurate and complete responses including references and citations',
     'use github stackoverflow microsoft and other reliable sources for the response'
   )
 )
