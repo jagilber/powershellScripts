@@ -14,8 +14,35 @@
     version: 240102
 
     https://platform.openai.com/docs/api-reference/models
+    https://platform.openai.com/docs/guides/prompt-engineering
+      Tactics:
 
+      Include details in your query to get more relevant answers
+      Ask the model to adopt a persona
+      Use delimiters to clearly indicate distinct parts of the input
+      Specify the steps required to complete a task
+      Provide examples
+      Specify the desired length of the output
 
+      Instruct the model to answer using a reference text
+      Instruct the model to answer with citations from a reference text
+
+      Instruct the model to work out its own solution before rushing to a conclusion
+      Use inner monologue or a sequence of queries to hide the model's reasoning process
+      Ask the model if it missed anything on previous passes
+
+      When using the OpenAI API chat completion, you can use various message roles to structure the conversation. The choice of roles depends on the context and your specific use case. However, here are ten commonly used message roles:
+
+      1. system: Used for initial instructions or guidance for the assistant.
+      2. user: Represents user input, questions, or instructions.
+      3. assistant: Represents the assistant's responses or actions.
+      4. developer: Used for presenting high-level instructions to the assistant.
+      5. customer: Represents a customer or end-user in a customer support scenario.
+      6. support: Represents a support agent in a customer support scenario.
+      7. manager: Represents a manager or team lead providing instructions or guidance.
+      8. reviewer: Used for providing feedback on the assistant's responses or behavior.
+      9. colleague: Represents a colleague or team member in a collaboration scenario.
+      10. expert: Represents a subject matter expert providing specific domain knowledge.
     response:
     {
       "id": "chatcmpl-....",
@@ -68,32 +95,56 @@
 param(
   [string[]]$messages = @(),
   [string]$apiKey = "$env:OPENAI_API_KEY", # Replace 'YOUR_API_KEY_HERE' with your OpenAI API key
-  [ValidateSet('system', 'user')]
+  [ValidateSet('system', 'user', 'assistant', 'developer', 'customer', 'support', 'manager', 'reviewer', 'colleague', 'expert')]
   [string]$messageRole = 'user', # system or user
   [string]$endpoint = 'https://api.openai.com/v1/chat/completions',
-  [ValidateSet('gpt-3.5-turbo', 'gpt-3.5-turbo-0613', 'gpt-4-turbo-preview', 'gpt-4')]
-  [string]$model = 'gpt-3.5-turbo',
-  [string]$logFile = 'c:\temp\openai.log'
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'gpt-4','gpt-3.5-turbo')]
+  [string]$model = 'gpt-3.5-turbo-1106',
+  [string]$logFile = 'c:\temp\openai.log',
+  [int]$seed = $pid,
+  [switch]$resetContext,
+  [bool]$logProbabilities = $false,
+  [string[]]$systemBaseMessages = @(
+    'always reply in json format with the response containing complete details',
+    'prefer accurate and complete responses',
+    'use github stackoverflow microsoft and other reliable sources for the response'
+  )
 )
 
 function main() {
   $startTime = Get-Date
+  $messageRequests = @()
   write-log "===================================="
-  write-log ">>>>starting openAI chat request $startTime<<<<"
+  write-log ">>>>starting openAI chat request $startTime<<<<" -color White
   
-  if(!$apiKey) {
+  if (!$apiKey) {
     write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
     return
   }
   
+  if ($resetContext) {
+    write-log "resetting context" -color Yellow
+    $global:openaiMessages = @()
+  }
+  else {
+    write-log "using existing context" -color Yellow
+  }
+
+  foreach ($message in $systemBaseMessages) {
+    $messageRequests += @{
+      role    = 'system'
+      content = $message
+    }
+  }
+
+  $global:openaiMessages += $messages
+
   $headers = @{
     'Authorization' = "Bearer $apiKey"
     'Content-Type'  = 'application/json'
   }
-  
-  $messageRequests = @()
 
-  foreach ($message in $messages) {
+  foreach ($message in $global:openaiMessages) {
     $messageRequests += @{
       role    = $messageRole
       content = $message
@@ -101,7 +152,12 @@ function main() {
   }
 
   $requestBody = @{
+    response_format = @{ 
+      type = "json_object"
+    }
     model    = $model
+    seed     = $seed
+    logprobs = $logProbabilities
     messages = $messageRequests
   }
 
@@ -124,7 +180,7 @@ function main() {
   }
 
   write-log "response:$($message.content)" -color Green
-  write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<"
+  write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
   write-log "===================================="
   return $message.content
 }
