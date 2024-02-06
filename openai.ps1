@@ -11,7 +11,7 @@
 .NOTES
     File Name      : openai.ps1
     Author         : Jagilber
-    version: 240102
+    version: 240205
 
     https://platform.openai.com/docs/api-reference/models
     https://platform.openai.com/docs/guides/prompt-engineering
@@ -98,22 +98,24 @@ param(
   [ValidateSet('system', 'user', 'assistant', 'developer', 'customer', 'support', 'manager', 'reviewer', 'colleague', 'expert')]
   [string]$messageRole = 'user', # system or user
   [string]$endpoint = 'https://api.openai.com/v1/chat/completions',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'gpt-4','gpt-3.5-turbo')]
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview')]
   [string]$model = 'gpt-3.5-turbo-1106',
   [string]$logFile = 'c:\temp\openai.log',
+  [string]$messagesFile = 'c:\temp\openaiMessages.json',
   [int]$seed = $pid,
-  [switch]$resetContext,
+  [switch]$newContext,
   [bool]$logProbabilities = $false,
   [string[]]$systemBaseMessages = @(
     'always reply in json format with the response containing complete details',
     'prefer accurate and complete responses including references and citations',
-    'use github stackoverflow microsoft and other reliable sources for the response'
+    'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'#,
+    #'always finish response with a closing message containing something sarcastic like an IT joke or a funny quote'
   )
 )
 
 function main() {
   $startTime = Get-Date
-  $messageRequests = @()
+  $messageRequests = [collections.arraylist]::new()
   write-log "===================================="
   write-log ">>>>starting openAI chat request $startTime<<<<" -color White
   
@@ -122,43 +124,51 @@ function main() {
     return
   }
   
-  if ($resetContext) {
+  if ($newContext) {
     write-log "resetting context" -color Yellow
+    if (Test-Path $messagesFile) {
+      write-log "deleting messages file: $messagesFile" -color Yellow
+      Remove-Item $messagesFile
+    }
+
     $global:openaiMessages = @()
+    foreach ($message in $systemBaseMessages) {
+      [void]$messageRequests.Add(@{
+          role    = 'system'
+          content = $message
+        })
+    }
   }
   else {
     write-log "using existing context" -color Yellow
-  }
-
-  foreach ($message in $systemBaseMessages) {
-    $messageRequests += @{
-      role    = 'system'
-      content = $message
+    if (Test-Path $messagesFile) {
+      write-log "reading messages from file: $messagesFile" -color Yellow
+      [void]$messageRequests.AddRange(@(Get-Content $messagesFile | ConvertFrom-Json))
     }
   }
 
-  $global:openaiMessages += $messages
+  #$global:openaiMessages += $messages
 
   $headers = @{
     'Authorization' = "Bearer $apiKey"
     'Content-Type'  = 'application/json'
   }
 
-  foreach ($message in $global:openaiMessages) {
-    $messageRequests += @{
-      role    = $messageRole
-      content = $message
-    }
+  foreach ($message in $messages) {
+    [void]$messageRequests.Add(@{
+        role    = $messageRole
+        content = $message
+      })
   }
 
   $requestBody = @{
     response_format = @{ 
       type = "json_object"
     }
-    model    = $model
-    seed     = $seed
-    logprobs = $logProbabilities
-    messages = $messageRequests
+    model           = $model
+    seed            = $seed
+    logprobs        = $logProbabilities
+    messages        = $messageRequests.toArray()
   }
 
   # Convert the request body to JSON
@@ -167,17 +177,21 @@ function main() {
   # Make the API request using Invoke-RestMethod
   write-log "$response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
   $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
-  #$response = Invoke-RestMethod -Uri $endpoint -Headers $headers -Method Get
 
-  # Output the response
   write-log ($response | convertto-json -depth 5) -color Magenta
-  $global:openaiResponse = $response
   $message = read-messageResponse($response)
-
+  $global:openaiResponse = $response
   write-log "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
+
   if ($logFile) {
     write-log "result appended to logfile: $logFile"
   }
+
+  # Write the assistant response to the log file for future reference
+  $global:openaiMessages = $messageRequests
+  $global:openaiMessages += $message
+  $global:openaiMessages | ConvertTo-Json | Out-File $messagesFile
+  write-log "messages stored in: $messagesFile" -ForegroundColor Cyan
 
   write-log "response:$($message.content)" -color Green
   write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
@@ -188,7 +202,17 @@ function main() {
 function read-messageResponse($response) {
   # Extract the response from the API request
   write-log $response
-  return $response.choices.message
+  $message = $response.choices.message
+
+  if ($message.content) {
+    $error.Clear()
+    if (($messageObject = convertfrom-json $message.content) -and !$error) {
+      write-log "converting message content from json to compressed json" -color Yellow
+      $message.content = ($messageObject | convertto-json -depth 99 -Compress)
+    }
+  }
+
+  return $message
 }
 
 function write-log($message, [switch]$verbose, [ConsoleColor]$color = 'White') {
