@@ -66,23 +66,35 @@
     }
 
 .EXAMPLE
-    .\openai.ps1 -messages 'can you help me with a question?'
+    .\openai.ps1 -prompts 'can you help me with a question?'
 .EXAMPLE
-    .\openai.ps1 -messages 'can you help me with a question?' -apiKey '<your-api-key>'
+    .\openai.ps1 -prompts 'can you help me with a question?' -apiKey '<your-api-key>'
 .EXAMPLE
-    .\openai.ps1 -messages 'can you help me with a question?' -apiKey '<your-api-key>' -messageRole 'user'
+    .\openai.ps1 -prompts 'can you help me with a question?' -apiKey '<your-api-key>' -promptRole 'user'
 .EXAMPLE
-    .\openai.ps1 -messages 'can you help me with a question?' -apiKey '<your-api-key>' -messageRole 'user' -model 'gpt-4'
-.PARAMETER messages
+    .\openai.ps1 -prompts 'can you help me with a question?' -apiKey '<your-api-key>' -promptRole 'user' -model 'gpt-4'
+.PARAMETER prompts
     The message to send to the OpenAI API.
 .PARAMETER apiKey
     The API key to use for the OpenAI API. If not specified, the script will attempt to use the environment variable OPENAI_API_KEY.
-.PARAMETER messageRole
+.PARAMETER promptRole
     The role of the message to send to the OpenAI API. This can be either 'system' or 'user'. The default is 'system'.
 .PARAMETER model
     The model to use for the OpenAI API. This can be either 'gpt-3.5-turbo', 'gpt-3.5-turbo-0613', 'gpt-4-turbo-preview', or 'gpt-4'. The default is 'gpt-3.5-turbo'.
 .PARAMETER logFile
     The log file to write the response from the OpenAI API to. If not specified, the response will not be logged.
+.PARAMETER promptsFile
+    The file to store the conversation history. If not specified, the conversation history will not be stored.  
+.PARAMETER seed
+    The seed to use for the OpenAI API. The default is the process ID of the script.
+.PARAMETER newConversation
+    If specified, the conversation history will be reset.
+.PARAMETER completeConversation
+    If specified, the conversation history will not be saved.
+.PARAMETER logProbabilities
+    If specified, the log probabilities will be included in the response.
+.PARAMETER systemPrompts
+    The system prompts to use for the OpenAI API. If not specified, the default system prompts will be used.
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -93,29 +105,30 @@
 #>
 [cmdletbinding()]
 param(
-  [string[]]$messages = @(),
-  [string]$apiKey = "$env:OPENAI_API_KEY", # Replace 'YOUR_API_KEY_HERE' with your OpenAI API key
-  [ValidateSet('system', 'user', 'assistant', 'developer', 'customer', 'support', 'manager', 'reviewer', 'colleague', 'expert')]
-  [string]$messageRole = 'user', # system or user
+  [string[]]$prompts = @(),
+  [string]$apiKey = "$env:OPENAI_API_KEY", 
+  [ValidateSet('user', 'system', 'assistant', 'developer', 'customer', 'support', 'manager', 'reviewer', 'colleague', 'expert')]
+  [string]$promptRole = 'user', 
   [string]$endpoint = 'https://api.openai.com/v1/chat/completions',
   [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview')]
   [string]$model = 'gpt-3.5-turbo-1106',
-  [string]$logFile = 'c:\temp\openai.log',
-  [string]$messagesFile = 'c:\temp\openaiMessages.json',
+  [string]$logFile = "$psscriptroot\openai.log",
+  [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
-  [switch]$newContext,
+  [switch]$newConversation,
+  [switch]$completeConversation,
   [bool]$logProbabilities = $false,
-  [string[]]$systemBaseMessages = @(
+  [string[]]$systemPrompts = @(
     'always reply in json format with the response containing complete details',
     'prefer accurate and complete responses including references and citations',
-    'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'#,
-    #'always finish response with a closing message containing something sarcastic like an IT joke or a funny quote'
+    'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
   )
 )
 
 function main() {
   $startTime = Get-Date
   $messageRequests = [collections.arraylist]::new()
+  $messages = @()
   write-log "===================================="
   write-log ">>>>starting openAI chat request $startTime<<<<" -color White
   
@@ -124,39 +137,34 @@ function main() {
     return
   }
   
-  if ($newContext) {
+  if ($newConversation -and (Test-Path $promptsFile)) {
     write-log "resetting context" -color Yellow
-    if (Test-Path $messagesFile) {
-      write-log "deleting messages file: $messagesFile" -color Yellow
-      Remove-Item $messagesFile
-    }
+    write-log "deleting messages file: $promptsFile" -color Yellow
+    Remove-Item $promptsFile
+  }
+  
+  if (Test-Path $promptsFile) {
+    write-log "reading messages from file: $promptsFile" -color Yellow
+    [void]$messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
+  }
 
-    $global:openaiMessages = @()
-    foreach ($message in $systemBaseMessages) {
+  if (!$messageRequests) {
+    foreach ($message in $systemPrompts) {
       [void]$messageRequests.Add(@{
           role    = 'system'
           content = $message
         })
     }
   }
-  else {
-    write-log "using existing context" -color Yellow
-    if (Test-Path $messagesFile) {
-      write-log "reading messages from file: $messagesFile" -color Yellow
-      [void]$messageRequests.AddRange(@(Get-Content $messagesFile | ConvertFrom-Json))
-    }
-  }
-
-  #$global:openaiMessages += $messages
 
   $headers = @{
     'Authorization' = "Bearer $apiKey"
     'Content-Type'  = 'application/json'
   }
 
-  foreach ($message in $messages) {
+  foreach ($message in $prompts) {
     [void]$messageRequests.Add(@{
-        role    = $messageRole
+        role    = $promptRole
         content = $message
       })
   }
@@ -188,10 +196,12 @@ function main() {
   }
 
   # Write the assistant response to the log file for future reference
-  $global:openaiMessages = $messageRequests
-  $global:openaiMessages += $message
-  $global:openaiMessages | ConvertTo-Json | Out-File $messagesFile
-  write-log "messages stored in: $messagesFile" -ForegroundColor Cyan
+
+  if (!$completeConversation -and $promptsFile) {
+    $messageRequests += $message
+    $messageRequests | ConvertTo-Json | Out-File $promptsFile
+    write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
+  }
 
   write-log "response:$($message.content)" -color Green
   write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
