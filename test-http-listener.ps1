@@ -35,10 +35,11 @@ param(
     [switch]$useClientProxy,
     [bool]$asJob = $true,
     [string]$key = [guid]::NewGuid().ToString(),
-    [string]$logFile
+    [string]$logFile,
+    [hashtable]$urlParams = @{}
 )
 
-$uri = "http://$($hostname):$port$absolutePath"
+$uri = "http://$($hostname):$($port)$($absolutePath)"
 $http = $null
 $scriptParams = $PSBoundParameters
 $httpClient = $null
@@ -58,8 +59,8 @@ function main() {
                 Write-Warning "not running as admin"
             }
             # start as job so server can exit gracefully after 2 minutes of cancellation
-            write-log "main:server:host: $($host |convertto-json -depth 2) asjob:$asjob"
-            write-log "main:server:myinvocation: $($myinvocation |convertto-json -depth 2) asjob:$asjob"
+            write-log "main:server:host: $(convert-toJson $host -depth 2) asjob:$asjob"
+            write-log "main:server:myinvocation: $(convert-toJson $myInvocation -depth 2) asjob:$asjob"
             if ($host.Name -ieq "ServerRemoteHost") {
                 #if ($false) {
                 # called on foreground thread only
@@ -88,7 +89,10 @@ function main() {
     }
 }
 
-function start-client([hashtable]$header = $clientHeaders, [string]$body = $clientBody, [net.http.httpMethod]$method = [net.http.httpmethod]::new($clientMethod), [string]$clientUri = $uri) {
+function start-client([hashtable]$header = $clientHeaders, 
+    [string]$body = $clientBody, 
+    [net.http.httpMethod]$method = [net.http.httpmethod]::new($clientMethod),
+    [string]$clientUri = $uri) {
     $iteration = 0
     $httpClientHandler = [net.http.httpClientHandler]::new()
     $httpClientHandler.AllowAutoRedirect = $true
@@ -98,6 +102,19 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
     $httpClientHandler.UseProxy = $false
     $clientUri = [uri]::EscapeUriString($clientUri)
     $result = $null
+
+    if ($key) {
+        $urlParams.Add('key', $key)
+    }
+
+    if ($urlParams.Count -gt 0 -and $clientUri -inotmatch "\?") {
+        $clientUri += "?"
+    }
+
+    foreach ($param in $urlParams.GetEnumerator()) {
+        $clientUri += "&$($param.Name)=$($param.Value)"
+    }
+
 
     if ($useClientProxy) {
         $proxyPort = $port++
@@ -113,10 +130,11 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
             $requestId = [guid]::NewGuid().ToString()
             write-log "request id: $requestId"
             $requestMessage = [net.http.httpRequestMessage]::new($method, $clientUri )
+            write-log "request message: $(convert-toJson($requestMessage))" -ForegroundColor Cyan
             $responseMessage = $null; #[net.http.httpResponseMessage]::new()
 
             if ($method -ine [net.http.httpMethod]::Get) {
-                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::ascii, 'text/html')
+                $httpContent = [net.http.stringContent]::new($body, [text.encoding]::ascii, 'text/html')
                 $requestMessage.Content = $httpContent
                 $responseMessage = $httpClient.SendAsync($requestMessage)
             }
@@ -135,15 +153,22 @@ function start-client([hashtable]$header = $clientHeaders, [string]$body = $clie
             }
 
             $result = $responseMessage.Result
-            $resultContent = $result.Content.ReadAsStringAsync().Result
+            if ($result.IsSuccessStatusCode) {
+                write-log "success status code: $($result.StatusCode)"
+                $resultContent = $result.Content.ReadAsStringAsync().Result
 
-            write-log "result content: $resultContent" -ForegroundColor Cyan
-
-            write-verbose "result: $($result | convertto-json)"
+                write-log "result content: $resultContent" -ForegroundColor Cyan
+    
+                write-verbose "result: $(convert-toJson $result -depth 1)"
+    
+            }
+            else {
+                write-log "error status code: $($result.StatusCode)"
+            }
             #write-log ($httpClient | fl * | convertto-json -Depth 99)
-            write-verbose ($responseMessage | convertto-json)
+            write-verbose (convert-toJson $responseMessage -depth 2 -display $false)
             #$requestMessage.
-            Write-Verbose ($httpClient | convertto-json)
+            Write-Verbose (convert-toJson $httpClient -depth 2 -display $false)
             #pause
         
             if ($error) {
@@ -171,8 +196,8 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
         while (get-job) {
             foreach ($job in get-job) {
-                $jobInfo = Receive-Job -Job $job | convertto-json -Depth 5
-                if ($jobInfo) { 
+                $jobInfo = (convert-toJson (Receive-Job -Job $job) -depth 5 -display $false)
+                if ($null -ne $jobInfo -and $jobInfo -ine "") { 
                     write-log $job.State
                     write-verbose $jobInfo 
                 }
@@ -194,13 +219,13 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     write-log "to remove url acl: netsh http delete urlacl url=http://$($hostname):$serverPort/" -foregroundColor Yellow
     write-log "current url acls: netsh http show urlacl url=http://$($hostname):$serverPort/"
     $result = netsh http show urlacl url="http://$($hostname):$serverPort/"
-    write-log ($result | convertto-json)
+    write-log (convert-toJson($result))
 
     write-log "start-server:creating listener"
     $iteration = 0
     $http = [net.httpListener]::new();
     $http.Prefixes.Add("http://$($hostname):$serverPort/")
-    write-log "using prefixes:$(($http.Prefixes | convertto-json)))"
+    write-log "using prefixes:$(convert-toJson($http.Prefixes))"
     # removing + wildcard for security allows non-administrative users to listen on specific address
     # https://learn.microsoft.com/en-us/windows/win32/http/add-urlacl
     # $http.Prefixes.Add("http://+:$serverPort/")
@@ -227,10 +252,11 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     while ($iteration -lt $count -or $count -eq 0) {
         try {
             $context = $http.GetContext()
+            convert-tojson $context -display $true
             if ($key) {
                 $clientKey = $context.Request.QueryString.GetValues('key')
                 if ($clientKey -ine $key) {
-                    write-log "invalid key: $clientKey"
+                    write-log "invalid client key: '$clientKey' expected: '$key'"
                     $context.Response.StatusCode = 401
                     $context.Response.Close()
                     continue
@@ -247,17 +273,17 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 
             [string]$html = $null
             write-log "$(get-date) http server $($context.Request.UserHostAddress) received $($context.Request.HttpMethod) request:`r`n"
-            write-verbose "request: $($context.Request | ConvertTo-Json)"
+            write-verbose "request: $(convert-toJson($context.Request))"
 
-            if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -eq '/') {
+            if ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.split('?')[0] -eq '/') {
                 write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 $html += "`r`nREQUEST HEADERS:`r`n$($requestHeaders | out-string)`r`n"
-                $html += $context | ConvertTo-Json -depth 99
+                $html += convert-toJson($context)
             }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.StartsWith('/health')) {
                 write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
-                $html = @{"ApplicationHealthState" = "Healthy" } | convertto-json
+                $html = convert-toJson(@{"ApplicationHealthState" = "Healthy" })
             }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl.StartsWith('/min')) {
                 write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
@@ -270,21 +296,21 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 #$html += $context | ConvertTo-Json # -depth 99
                 $cmd = $context.Request.QueryString.GetValues('cmd') -join ' '
                 write-log "invoke-expression $cmd"
-                $result = convertto-json (invoke-expression $cmd); # -depth 99;
+                $result = convert-toJson(invoke-expression $cmd); # -depth 99;
                 write-log "result: $result"
                 $html += $result
             }
             elseif ($context.Request.HttpMethod -eq 'GET' -and $context.Request.RawUrl -ieq $absolutePath) {
                 write-log "$(get-date) $($context.Request.UserHostAddress)  =>  $($context.Request.Url)" -ForegroundColor Magenta
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
-                $html += $context | ConvertTo-Json -depth 99
+                $html += convert-toJson($context)
             }
-            elseif ($context.Request.HttpMethod -eq 'POST' -and $context.Request.RawUrl -ieq '/') {
+            elseif ($context.Request.HttpMethod -eq 'POST' -and $context.Request.RawUrl.split('?')[0] -ieq '/') {
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 [byte[]]$inputBuffer = @(0) * $maxBuffer
                 $context.Request.InputStream.Read($inputBuffer, 0, $maxBuffer)# $context.Request.InputStream.Length)
                 $html += "INPUT STREAM: $(([text.encoding]::ASCII.GetString($inputBuffer)).Trim())`r`n"
-                $html += $context | ConvertTo-Json -depth 99
+                $html += convert-toJson($context)
             }
             else {
                 #$html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
@@ -317,6 +343,24 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
             }
         }
     }
+}
+
+function convert-fromJson($json, $display = $false) {
+    write-console "convert-fromJson:$json" -verbose:$display
+
+    $object = $json | convertfrom-json -asHashTable  
+    return $object
+}
+
+function convert-toJson($object, $depth = 2, $display = $false) {
+    if ($object) {
+        $json = convertto-json $object -Depth $depth
+        if ($display) {
+            write-log "convert-toJson:$json" -ForegroundColor Cyan
+        }
+    }
+
+    return $json
 }
 
 function write-log([string]$message, [consoleColor]$foregroundColor = [consoleColor]::White) {
