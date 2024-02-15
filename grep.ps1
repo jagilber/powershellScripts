@@ -84,12 +84,21 @@ function main() {
 
                     foreach ($match in $matches) {
                         if ($match.Length -lt 1) { continue }
+                        $groupsArray = [object[]]::new($match.groups.count)
+                        $groupsTable = @{}
+                        foreach ($g in $match.groups) {
+                            $groupsTable[$g.name] = $g.value
+                        }
+
                         $matchCount++
                         $matchObj = @{
+                            file   = $file
                             line   = $line
                             index  = $match.index
                             length = $match.Length
                             value  = $match.value
+                            #captures = $match.captures
+                            groups = $groupsTable
                         }
                         
                         [void]$global:matchedFiles.$file.add($matchObj)
