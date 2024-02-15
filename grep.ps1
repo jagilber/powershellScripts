@@ -84,14 +84,14 @@ function main() {
 
                     foreach ($match in $matches) {
                         if ($match.Length -lt 1) { continue }
-                        $groupsArray = [object[]]::new($match.groups.count)
+                        
                         $groupsTable = @{}
                         foreach ($g in $match.groups) {
-                            $groupsTable[$g.name] = $g.value
+                            [void]$groupsTable.add($g.name, $g.value)
                         }
 
                         $matchCount++
-                        $matchObj = @{
+                        $matchObj = [ordered]@{
                             file   = $file
                             line   = $line
                             index  = $match.index
