@@ -3,12 +3,12 @@
     powershell script to search (grep) files in given path for regex pattern and optionally replace with new string.
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/grep.ps1" -outFile "$pwd\grep.ps1";
-    .\grep.ps1 [-path] [-pattern]
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/ps-grep.ps1" -outFile "$pwd\ps-grep.ps1";
+    .\ps-grep.ps1 [-path] [-pattern]
 
 .EXAMPLE
     example to search clustermanifest.xml files for old thumbprint and replace with new thumbprint
-    .\grep.ps1 -pattern '%old thumbprint%' `
+    .\ps-grep.ps1 -pattern '%old thumbprint%' `
         -path 'd:\svcfab' `
         -filePattern 'clustermanifest.*.xml' `
         -includeSubDirs `
