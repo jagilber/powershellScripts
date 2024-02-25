@@ -13,12 +13,11 @@ param(
   $path = $pwd
 )
 
-write-host "
-$WebResponse = Invoke-WebRequest `
-  -Method 'POST' `
-  -Uri 'https://store.rg-adguard.net/api/GetFiles' `
-  -Body `"type=PackageFamilyName&url=$PackageFamilyName&ring=Retail`" `
-  -ContentType 'application/x-www-form-urlencoded' `
+write-host "Invoke-WebRequest ``
+  -Method 'POST' ``
+  -Uri 'https://store.rg-adguard.net/api/GetFiles' ``
+  -Body `"type=PackageFamilyName&url=$PackageFamilyName&ring=Retail`" ``
+  -ContentType 'application/x-www-form-urlencoded' ``
   -UseBasicParsing
 " -ForegroundColor Cyan
 
