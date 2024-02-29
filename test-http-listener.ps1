@@ -28,15 +28,16 @@ param(
     [string]$hostName = 'localhost',
     [switch]$server,
     [hashtable]$clientHeaders = @{ },
-    [string]$clientBody = 'test message from client',
+    [object]$clientBody = 'test message from client',
     [ValidateSet('GET', 'POST', 'HEAD')]
     [string]$clientMethod = "GET",
     [string]$absolutePath = '/',
     [switch]$useClientProxy,
     [bool]$asJob = $true,
     [string]$key = [guid]::NewGuid().ToString(),
-    [string]$logFile,
-    [hashtable]$urlParams = @{}
+    [string]$logFile = "$pwd\test-http-listener.log",
+    [hashtable]$urlParams = @{},
+    [int]$maxBuffer = 1024 * 1024 * 10
 )
 
 $uri = "http://$($hostname):$($port)$($absolutePath)"
@@ -59,8 +60,8 @@ function main() {
                 Write-Warning "not running as admin"
             }
             # start as job so server can exit gracefully after 2 minutes of cancellation
-            write-log "main:server:host: $(convert-toJson $host -depth 2) asjob:$asjob"
-            write-log "main:server:myinvocation: $(convert-toJson $myInvocation -depth 2) asjob:$asjob"
+            write-log "main:server:host: $(convert-toJson $host -depth 2) asjob:$asjob" -verbose
+            write-log "main:server:myinvocation: $(convert-toJson $myInvocation -depth 2) asjob:$asjob" -verbose
             if ($host.Name -ieq "ServerRemoteHost") {
                 #if ($false) {
                 # called on foreground thread only
@@ -90,7 +91,7 @@ function main() {
 }
 
 function start-client([hashtable]$header = $clientHeaders, 
-    [string]$body = $clientBody, 
+    [object]$body = $clientBody, 
     [net.http.httpMethod]$method = [net.http.httpmethod]::new($clientMethod),
     [string]$clientUri = $uri) {
     $iteration = 0
@@ -132,14 +133,20 @@ function start-client([hashtable]$header = $clientHeaders,
             $requestMessage = [net.http.httpRequestMessage]::new($method, $clientUri )
             write-log "request message: $(convert-toJson($requestMessage))" -ForegroundColor Cyan
             $responseMessage = $null; #[net.http.httpResponseMessage]::new()
+            
+            if (!(convert-fromJson($body))) {
+                $body = convert-toJson($body)
+            }
+
+            write-log "body: $body" -ForegroundColor Cyan
 
             if ($method -ine [net.http.httpMethod]::Get) {
-                $httpContent = [net.http.stringContent]::new($body, [text.encoding]::ascii, 'text/html')
+                $httpContent = [net.http.stringContent]::new($body, [text.encoding]::UTF8, 'text/html')
                 $requestMessage.Content = $httpContent
                 $responseMessage = $httpClient.SendAsync($requestMessage)
             }
             else {
-                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::ascii, 'text/html')
+                $httpContent = [net.http.stringContent]::new([string]::Empty, [text.encoding]::UTF8, 'text/html')
                 $responseMessage = $httpClient.GetAsync($requestMessage.RequestUri, 0)
             }
 
@@ -158,17 +165,16 @@ function start-client([hashtable]$header = $clientHeaders,
                 $resultContent = $result.Content.ReadAsStringAsync().Result
 
                 write-log "result content: $resultContent" -ForegroundColor Cyan
-    
-                write-verbose "result: $(convert-toJson $result -depth 1)"
+                write-log "result: $(convert-toJson $result -depth 1)" -verbose
     
             }
             else {
                 write-log "error status code: $($result.StatusCode)"
             }
             #write-log ($httpClient | fl * | convertto-json -Depth 99)
-            write-verbose (convert-toJson $responseMessage -depth 2 -display $false)
+            write-log (convert-toJson $responseMessage -depth 2 -display $false) -verbose
             #$requestMessage.
-            Write-Verbose (convert-toJson $httpClient -depth 2 -display $false)
+            write-log (convert-toJson $httpClient -depth 2 -display $false) -Verbose
             #pause
         
             if ($error) {
@@ -199,7 +205,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $jobInfo = (convert-toJson (Receive-Job -Job $job) -depth 5 -display $false)
                 if ($null -ne $jobInfo -and $jobInfo -ine "") { 
                     write-log $job.State
-                    write-verbose $jobInfo 
+                    write-log $jobInfo -verbose
                 }
                 #if ($job.State -ine "running") {
                 if ($job.State -imatch "complete" -or $job.State -imatch "fail") {
@@ -219,7 +225,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     write-log "to remove url acl: netsh http delete urlacl url=http://$($hostname):$serverPort/" -foregroundColor Yellow
     write-log "current url acls: netsh http show urlacl url=http://$($hostname):$serverPort/"
     $result = netsh http show urlacl url="http://$($hostname):$serverPort/"
-    write-log (convert-toJson($result))
+    write-log (convert-toJson $result) -verbose
 
     write-log "start-server:creating listener"
     $iteration = 0
@@ -231,7 +237,6 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     # $http.Prefixes.Add("http://+:$serverPort/")
 
     $http.Start();
-    $maxBuffer = 10240
 
     if ($http.IsListening) {
         write-log "http server listening. max buffer $maxBuffer"
@@ -252,7 +257,7 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
     while ($iteration -lt $count -or $count -eq 0) {
         try {
             $context = $http.GetContext()
-            convert-tojson $context -display $true
+            write-log (convert-tojson $context -display $true) -verbose
             if ($key) {
                 $clientKey = $context.Request.QueryString.GetValues('key')
                 if ($clientKey -ine $key) {
@@ -309,7 +314,11 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
                 $html = "$(get-date) http server $($env:computername) received $($context.Request.HttpMethod) request:`r`n"
                 [byte[]]$inputBuffer = @(0) * $maxBuffer
                 $context.Request.InputStream.Read($inputBuffer, 0, $maxBuffer)# $context.Request.InputStream.Length)
-                $html += "INPUT STREAM: $(([text.encoding]::ASCII.GetString($inputBuffer)).Trim())`r`n"
+                $inputStream = ([text.encoding]::UTF8.GetString($inputBuffer)).trim()
+                #$inputStream = $inputStream -replace "\s?U\+0000\s?", ""
+                $inputStream = $inputStream -replace "`0", ""
+                write-log "input stream:`n$inputStream" -foregroundColor Green
+                $html += "INPUT STREAM ($($inputStream.length)): $($inputStream)`r`n"
                 $html += convert-toJson($context)
             }
             else {
@@ -318,9 +327,9 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
             }
 
             if ($html) {
-                write-log $html
+                write-log $html -verbose
                 #respond to the request
-                $buffer = [Text.Encoding]::ASCII.GetBytes($html)
+                $buffer = [Text.Encoding]::UTF8.GetBytes($html)
                 $context.Response.ContentLength64 = $buffer.Length
                 write-log "sending $($context.Response.ContentLength64) bytes"
                 $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
@@ -346,15 +355,18 @@ function start-server([bool]$asjob, [int]$serverPort = $port) {
 }
 
 function convert-fromJson($json, $display = $false) {
-    write-console "convert-fromJson:$json" -verbose:$display
+    write-log "convert-fromJson:$json" -verbose
 
-    $object = $json | convertfrom-json -asHashTable  
-    return $object
+    if ($json.trim().StartsWith('{[')) {
+        $object = convertfrom-json $json -asHashTable  
+        return $object
+    }
+    return $json
 }
 
 function convert-toJson($object, $depth = 2, $display = $false) {
     if ($object) {
-        $json = convertto-json $object -Depth $depth
+        $json = convertto-json $object -Depth $depth -WarningAction SilentlyContinue
         if ($display) {
             write-log "convert-toJson:$json" -ForegroundColor Cyan
         }
@@ -363,10 +375,18 @@ function convert-toJson($object, $depth = 2, $display = $false) {
     return $json
 }
 
-function write-log([string]$message, [consoleColor]$foregroundColor = [consoleColor]::White) {
-    write-host "$(get-date) $message" -ForegroundColor $foregroundColor
+function write-log([string]$message, [consoleColor]$foregroundColor = [consoleColor]::White, [switch]$verbose = $false) {
+    $message = "$(get-date) $message"
+
+    if (!$verbose) {
+        write-host $message -ForegroundColor $foregroundColor
+    }
+    else {
+        write-verbose $message
+    }
+
     if ($logFile) {
-        $message | out-file $logFile -append
+        $message | out-file $logFile -append -Encoding utf8
     }
 }
 
