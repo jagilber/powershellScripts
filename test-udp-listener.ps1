@@ -79,12 +79,21 @@ function startClient() {
 
 function startServer() {
     try {
-        if (!(Get-NetFirewallPortFilter -Protocol udp | Where-Object localPort -eq $port)) {
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+        if ($isAdmin -and !((Get-NetFirewallPortFilter -Protocol udp) | Where-Object localPort -eq $port)) {
             write-warning "firewall port $port not open. use -force to open it."
             if ($force) {
                 write-host "opening firewall port $port"
+                write-host "New-NetFirewallRule -DisplayName 'UDP $port' -Direction Inbound -LocalPort $port -Protocol UDP -Action Allow"
                 New-NetFirewallRule -DisplayName "UDP $port" -Direction Inbound -LocalPort $port -Protocol UDP -Action Allow
+                write-host "to remove the firewall rule: Remove-NetFirewallRule -DisplayName 'UDP $port' -Force" -ForegroundColor Cyan
             }
+        }
+        elseif(!$isAdmin) {
+            write-warning "unable to check if firewall port $port is open. run as administrator to check and open it."
+        }
+        else{
+            write-host "firewall port $port is open" -ForegroundColor Green
         }
         $localIpEndPoint = [net.ipEndPoint]::new((get-localAddress), 0)
         $server = [net.sockets.udpClient]::new($port)
