@@ -16,7 +16,8 @@ param(
     [string]$remoteAddress = $env:computername, 
     [string]$localAddress,
     [switch]$server,
-    [string]$message = "Hello World"
+    [string]$message = "Hello World",
+    [switch]$force
 )
 
 function main() {
@@ -78,6 +79,13 @@ function startClient() {
 
 function startServer() {
     try {
+        if (!(Get-NetFirewallPortFilter -Protocol udp | Where-Object localPort -eq $port)) {
+            write-warning "firewall port $port not open. use -force to open it."
+            if ($force) {
+                write-host "opening firewall port $port"
+                New-NetFirewallRule -DisplayName "UDP $port" -Direction Inbound -LocalPort $port -Protocol UDP -Action Allow
+            }
+        }
         $localIpEndPoint = [net.ipEndPoint]::new((get-localAddress), 0)
         $server = [net.sockets.udpClient]::new($port)
         write-host "server started on port $port"
