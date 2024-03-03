@@ -97,7 +97,7 @@ function startServer() {
                 #   continue
             }
 
-            [byte[]]$buffer = @(0) * 65536
+            [byte[]]$buffer = @(0) * 1024 * 10;
 
             $client = $server.AcceptTcpClient();
             $stream = $client.GetStream();
@@ -114,7 +114,7 @@ function startServer() {
             $sb.AppendLine("waiting for client send bytes to be sent...")
 
 
-            #$bytes = $reader.Read($buffer, 0, $buffer.Length);
+            $bytes = $reader.Read($buffer, 0, $buffer.Length);
             $requestString = $reader.ReadLine()
             write-host "requestString: $requestString"
             $sb.AppendLine("$(get-date) received $bytes bytes from client")
