@@ -255,3 +255,4 @@ ModelManifest.xml
 **/Configuration
 #.vscode
 secrets.ps1
+openaiMessages.json
