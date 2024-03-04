@@ -10,22 +10,25 @@ download windbg appx package
 
 param(
   $packageFamilyName = 'Microsoft.WinDbg_8wekyb3d8bbwe', #'windbg-preview'
-  $path = $pwd
+  $path = $pwd,
+  $lang = 'en-US'
 )
 
 write-host "Invoke-WebRequest ``
   -Method 'POST' ``
   -Uri 'https://store.rg-adguard.net/api/GetFiles' ``
-  -Body `"type=PackageFamilyName&url=$PackageFamilyName&ring=Retail`" ``
+  -Body `"type=PackageFamilyName&url=$PackageFamilyName&ring=Retail&lang=$lang`" ``
   -ContentType 'application/x-www-form-urlencoded' ``
+  -UserAgent 'ps' ``
   -UseBasicParsing
 " -ForegroundColor Cyan
 
 $WebResponse = Invoke-WebRequest `
   -Method 'POST' `
   -Uri 'https://store.rg-adguard.net/api/GetFiles' `
-  -Body "type=PackageFamilyName&url=$PackageFamilyName&ring=Retail" `
+  -Body "type=PackageFamilyName&url=$PackageFamilyName&ring=Retail&lang=$lang" `
   -ContentType 'application/x-www-form-urlencoded' `
+  -UserAgent 'ps' `
   -UseBasicParsing
 
 $global:WebResponse = $WebResponse
