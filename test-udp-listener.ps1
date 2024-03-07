@@ -105,7 +105,7 @@ function startServer() {
             Write-Verbose "$(get-date) received message on port $port";
 
             $received = [text.encoding]::ASCII.GetString($receiveBytes)
-            write-host "received: $received"
+            write-host $received -NoNewline
         }
     }
     catch [Exception] {
