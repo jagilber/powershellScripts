@@ -220,3 +220,14 @@ https://supportaction-prod.northeurope.cloudapp.azure.com/swagger/index.html HTT
 https://supportaction-prod.northeurope.cloudapp.azure.com/swagger/index.html
 
 ###
+
+
+###
+POST https://store.rg-adguard.net/api/GetFiles HTTP/1.1
+content-type: application/x-www-form-urlencoded
+
+type=PackageFamilyName
+&url=Microsoft.WinDbg_8wekyb3d8bbwe
+&ring=Retail
+
+###
