@@ -125,10 +125,10 @@ function get-currentBranch() {
 
 function get-diffs() {
     write-debug "get-diffs()"
-    $diff = @(git status --porcelain).count
-    
-    if ($diff -gt 0) {
-        add-status " $([char]0x2325)($($promptInfo.branch)*$diff)" -reset
+    $diff = @(git status --porcelain)
+    write-host "diffs:`r`n$($diff | out-string)" -ForegroundColor DarkGreen
+    if ($diff.Count -gt 0) {
+        add-status " $([char]0x2325)($($promptInfo.branch)*$($diff.Count))" -reset
     }
 }
 
@@ -157,7 +157,7 @@ function get-remotes($gitCommand = $false) {
 
     foreach ($remoteMatch in $remoteMatches) {
         $remote = $remoteMatch.groups['remote'].value
-        $repoRemote = "$repo/$remote/$($promptInfo.branch)"
+        $repoRemote = "($remote/$($promptInfo.branch)) $repo"
         
         if (!($promptInfo.remotes.contains($remote))) {
             [void]$promptInfo.remotes.add($remote)
@@ -166,7 +166,7 @@ function get-remotes($gitCommand = $false) {
         # only do this once per repo
         if (!($promptInfo.fetchedRepos.contains($repoRemote))) {
             [void]$promptInfo.fetchedRepos.add($repoRemote)
-            write-host "fetching $repoRemote" -ForegroundColor DarkMagenta
+            write-host "fetching:$repoRemote" -ForegroundColor DarkMagenta
             git fetch $remote
         }
     }
