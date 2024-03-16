@@ -125,10 +125,9 @@ function get-currentBranch() {
 
 function get-diffs() {
     write-debug "get-diffs()"
-    $diff = @(git status --porcelain)
-    write-host "diffs:`r`n$($diff | out-string)" -ForegroundColor DarkGreen
-    if ($diff.Count -gt 0) {
-        add-status " $([char]0x2325)($($promptInfo.branch)*$($diff.Count))" -reset
+    $diff = @(git status --porcelain).Count
+    if ($diff -gt 0) {
+        add-status " $([char]0x2325)($($promptInfo.branch)*$($diff))" -reset
     }
 }
 
