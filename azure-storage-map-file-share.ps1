@@ -29,7 +29,11 @@ param(
 
     [Parameter(ParameterSetName = 'pass')]
     [Parameter(ParameterSetName = 'cred')]
-    [string]$drive = "Z"
+    [string]$drive = "Z",
+
+    [Parameter(ParameterSetName = 'pass')]
+    [Parameter(ParameterSetName = 'cred')]
+    [bool]$persist = $false
 )
 
 #$ErrorActionPreference = "continue"
@@ -53,8 +57,8 @@ function main () {
     write-host ($connectTestResult | out-string)
 
     if ($connectTestResult.TcpTestSucceeded) {
-        write-host "New-PSDrive -Name $drive -PSProvider FileSystem -Root "\\$storageAccount\$fileShare" -Persist -Scope Global -Credential $credentials" -ForegroundColor Cyan
-        New-PSDrive -Name $drive -PSProvider FileSystem -Root "\\$storageAccount\$fileShare" -Scope Global -Credential $credentials
+        write-host "New-PSDrive -Name $drive -PSProvider FileSystem  -Persist:$persist -Root "\\$storageAccount\$fileShare" -Scope Global -Credential $credentials" -ForegroundColor Cyan
+        New-PSDrive -Name $drive -PSProvider FileSystem -Persist:$persist -Root "\\$storageAccount\$fileShare" -Scope Global -Credential $credentials
     }
     else {
         Write-Error -Message "Unable to reach the Azure storage account via port 445. Check to make sure your organization or ISP is not blocking port 445, or use Azure P2S VPN, Azure S2S VPN, or Express Route to tunnel SMB traffic over a different port."
