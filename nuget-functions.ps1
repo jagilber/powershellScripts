@@ -144,7 +144,7 @@ class NugetObj {
         return $this.locals
     }
 
-    [hashtable] EnumLocalsPath([string]$localName) {
+    [string] EnumLocalsPath([string]$localName) {
         if (!$this.locals) { $this.EnumLocals() }
         $outputDirectory = ($this.locals.GetEnumerator() | Where-Object Name -ieq $localName).Value
         return $outputDirectory
