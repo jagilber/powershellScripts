@@ -25,8 +25,7 @@ The password for the PFX file
 #>
 param(
     $pfxFile = '',
-    $password = $null,
-    [switch]$useFile
+    $password = $null
 )
 
 $ErrorActionPreference = "stop"
