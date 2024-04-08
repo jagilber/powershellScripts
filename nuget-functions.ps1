@@ -156,7 +156,7 @@ class NugetObj {
             foreach ($result in $this.EnumPackages($packageName, $localSource.Key, $null).GetEnumerator()) {
                 if (!$results.ContainsKey($result.Key)) {
                     $results.Add($result.Key, $result.Value)
-                }
+                } 
                 else {
                     write-warning "$($result.key) already added"
                 }
@@ -336,7 +336,7 @@ class NugetObj {
         if (!(test-path $sourcePath)) {
             $sourcePath = $this.EnumLocalsPath($sourcePath)
         }
-
+        if(!$sourcePath) { return @() }
         $results = @([io.directory]::GetDirectories("$sourcePath", $sourcePattern, [io.searchOption]::AllDirectories))
         write-host "returning directory list: $($results | out-string)"
         return $results
@@ -401,8 +401,8 @@ class NugetObj {
         if ($prerelease) { $pre = " -prerelease" }
         if ($packageSource) { $source = " -source $packageSource" }
 
-        write-host "nuget install $packageName$source$outputDirectory -nocache -verbosity $($this.verbose)$pre" -ForegroundColor magenta
-        $this.ExecuteNuget("install $packageName$source$outputDirectory -nocache -verbosity $($this.verbose)$pre")
+        write-host "nuget install $packageName$source$outputDirectory -noHttpCache -verbosity $($this.verbose)$pre" -ForegroundColor magenta
+        $this.ExecuteNuget("install $packageName$source$outputDirectory -noHttpCache -verbosity $($this.verbose)$pre")
 
         if ($packagesDirectory) {
             write-host "install finished. checking $packagesDirectory" -ForegroundColor darkmagenta    
