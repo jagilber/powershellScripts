@@ -80,6 +80,7 @@ function get-branches() {
             $additionalBranchInfo = "(+$additionalBranches) additional branches. all branches in `$promptInfo.branches"
         }
         write-host "local branches:`n$($promptInfo.branches | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalBranchInfo" -ForegroundColor DarkYellow
+        write-debug "changed branches:`n$($branchesChanged | out-string)"
     }
     else {
         write-debug "branches are the same"
@@ -93,6 +94,7 @@ function get-branches() {
             $additionalBranchInfo = "(+$additionalBranches) additional remote branches. all remote branches in `$promptInfo.remoteBranches"
         }
         write-host "remote branches:`n$($promptInfo.remoteBranches | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalBranchInfo" -ForegroundColor DarkCyan
+        write-debug "changed branches:`n$($remoteBranchesChanged | out-string)"
     }    
     else {
         write-debug "remote branches are the same"
