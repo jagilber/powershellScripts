@@ -109,8 +109,11 @@ param(
   [string]$apiKey = "$env:OPENAI_API_KEY", 
   [ValidateSet('user', 'system', 'assistant', 'developer', 'customer', 'support', 'manager', 'reviewer', 'colleague', 'expert')]
   [string]$promptRole = 'user', 
-  [string]$endpoint = 'https://api.openai.com/v1/chat/completions',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview')]
+  [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
+  [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
+  # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
+  # [string]$script:endpointType = 'chat',
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'dall-e-3', 'davinci-codex-003')]
   [string]$model = 'gpt-3.5-turbo-1106',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
@@ -118,16 +121,29 @@ param(
   [switch]$newConversation,
   [switch]$completeConversation,
   [bool]$logProbabilities = $false,
+  [string]$imageQuality = 'hd',
+  [int]$imageCount = 1, # n
+  [ValidateSet('256x256', '512x512', '1024x1024', '1792x1024', '1024x1792')]
+  [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
+  [ValidateSet('vivid', 'natural')]
+  [string]$imageStyle = 'vivid',
+  [string]$user = 'default',
+  [ValidateSet('url', 'b64_json')]
+  [string]$imageResponseFormat = 'url',
   [string[]]$systemPrompts = @(
     'always reply in json format with the response containing complete details',
     'prefer accurate and complete responses including references and citations',
     'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
-  )
+  ),
+  [switch]$whatIf
 )
+
+[ValidateSet('chat', 'images', 'davinci-codex', 'custom')]
+[string]$script:endpointType = 'chat'
+$script:messageRequests = [collections.arraylist]::new()
 
 function main() {
   $startTime = Get-Date
-  $messageRequests = [collections.arraylist]::new()
   $messages = @()
   write-log "===================================="
   write-log ">>>>starting openAI chat request $startTime<<<<" -color White
@@ -136,6 +152,8 @@ function main() {
     write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
     return
   }
+
+  $endpoint = get-endpoint #$script:endpointType $endpoint
   
   if ($newConversation -and (Test-Path $promptsFile)) {
     write-log "resetting context" -color Yellow
@@ -145,9 +163,65 @@ function main() {
   
   if (Test-Path $promptsFile) {
     write-log "reading messages from file: $promptsFile" -color Yellow
-    [void]$messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
+    [void]$script:messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
   }
 
+  $headers = @{
+    'Authorization' = "Bearer $apiKey"
+    'Content-Type'  = 'application/json'
+  }
+
+  $requestBody = build-requestBody $script:messageRequests
+
+  # Convert the request body to JSON
+  $jsonBody = $requestBody | convertto-json -depth 5
+  
+  # Make the API request using Invoke-RestMethod
+  write-log "$response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
+  if (!$whatIf) {
+    $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
+  }
+
+  write-log ($response | convertto-json -depth 5) -color Magenta
+  $message = read-messageResponse $response $script:messageRequests
+  $global:openaiResponse = $response
+  write-log "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
+
+  if ($logFile) {
+    write-log "result appended to logfile: $logFile"
+  }
+
+  # Write the assistant response to the log file for future reference
+
+  if (!$completeConversation -and $promptsFile) {
+    # $script:messageRequests += $message
+    $script:messageRequests | ConvertTo-Json | Out-File $promptsFile
+    write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
+  }
+
+  write-log "response:$($message.content)" -color Green
+  write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
+  write-log "===================================="
+  return $message.content
+}
+
+function build-requestBody($messageRequests) {
+  switch -Wildcard ($model) {
+    'gpt-*' {
+      $requestBody = build-chatRequestBody $messageRequests
+    }
+    'dall-e-*' {
+      $requestBody = build-imageRequestBody $messageRequests
+    }
+    'codex-*' {
+      $requestBody = build-codexRequestBody $messageRequests
+    }
+  }
+  write-log "request body: $($requestBody | convertto-json -depth 5)" -color Yellow
+  return $requestBody
+}
+
+function build-chatRequestBody($messageRequests) {
   if (!$messageRequests) {
     foreach ($message in $systemPrompts) {
       [void]$messageRequests.Add(@{
@@ -155,11 +229,6 @@ function main() {
           content = $message
         })
     }
-  }
-
-  $headers = @{
-    'Authorization' = "Bearer $apiKey"
-    'Content-Type'  = 'application/json'
   }
 
   foreach ($message in $prompts) {
@@ -177,51 +246,77 @@ function main() {
     seed            = $seed
     logprobs        = $logProbabilities
     messages        = $messageRequests.toArray()
+    user            = $user
   }
 
-  # Convert the request body to JSON
-  $jsonBody = $requestBody | convertto-json -depth 5
-  
-  # Make the API request using Invoke-RestMethod
-  write-log "$response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
-  $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
-
-  write-log ($response | convertto-json -depth 5) -color Magenta
-  $message = read-messageResponse($response)
-  $global:openaiResponse = $response
-  write-log "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
-
-  if ($logFile) {
-    write-log "result appended to logfile: $logFile"
-  }
-
-  # Write the assistant response to the log file for future reference
-
-  if (!$completeConversation -and $promptsFile) {
-    $messageRequests += $message
-    $messageRequests | ConvertTo-Json | Out-File $promptsFile
-    write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
-  }
-
-  write-log "response:$($message.content)" -color Green
-  write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
-  write-log "===================================="
-  return $message.content
+  return $requestBody
 }
 
-function read-messageResponse($response) {
+function build-codexRequestBody($messageRequests) {
+  throw "model $model not supported"
+  $requestBody = @{
+    model    = $model
+    seed     = $seed
+    logprobs = $logProbabilities
+    messages = $script:messageRequests.toArray()
+    user     = $user
+  }
+
+  return $requestBody
+}
+
+function build-imageRequestBody($messageRequests) {
+  $messageRequests.AddRange($prompts)
+
+  $requestBody = @{
+    model           = $model
+    prompt          = [string]::join('. ', $messageRequests.ToArray())
+    quality         = $imageQuality
+    n               = $imageCount
+    response_format = $imageResponseFormat
+    size            = $imageSize
+    style           = $imageStyle
+    user            = $user
+  }
+
+  return $requestBody
+}
+
+function read-messageResponse($response, [collections.arraylist]$messageRequests) {
   # Extract the response from the API request
   write-log $response
-  $message = $response.choices.message
 
-  if ($message.content) {
-    $error.Clear()
-    if (($messageObject = convertfrom-json $message.content) -and !$error) {
-      write-log "converting message content from json to compressed json" -color Yellow
-      $message.content = ($messageObject | convertto-json -depth 99 -Compress)
+  switch ($script:endpointType) {
+    'chat' {
+      $message = $response.choices.message
+      $messageRequests += $message
+      if ($message.content) {
+        $error.Clear()
+        if (($messageObject = convertfrom-json $message.content) -and !$error) {
+          write-log "converting message content from json to compressed json" -color Yellow
+          $message.content = ($messageObject | convertto-json -depth 99 -Compress)
+        }
+      }
+    }
+    'images' {
+      $message = $response.data
+      if($response.data.revised_prompt){
+        write-log "revised prompt: $($response.data.revised_prompt)" -color Yellow
+        $messageRequests.Clear()
+        $messageRequests.Add($response.data.revised_prompt)
+      }
+
+      $message | add-member -MemberType NoteProperty -Name 'content' -Value $message.url
+    }
+    'davinci-codex' {
+      throw "model $model not supported"
+    }
+    default {
+      write-log "unknown endpoint type: $script:endpointType" -color Red
     }
   }
 
+  write-log "message: $($message | convertto-json -depth 5)" -color Yellow  
   return $message
 }
 
@@ -238,6 +333,30 @@ function write-log($message, [switch]$verbose, [ConsoleColor]$color = 'White') {
   else {
     write-host $message -ForegroundColor $color
   }
+}
+
+function get-endpoint() {
+  #($script:endpointType, $endpoint) {
+  switch -Wildcard ($model) {
+    'gpt-*' {
+      $endpoint = 'https://api.openai.com/v1/chat/completions'
+      $script:endpointType = 'chat'
+    }
+    'dall-e-*' {
+      $endpoint = 'https://api.openai.com/v1/images/generations'
+      $script:endpointType = 'images'
+    }
+    'codex-*' {
+      $endpoint = 'https://api.openai.com/v1/davinci-codex/completions'
+      $script:endpointType = 'davinci-codex'
+    }
+    default {
+      #$endpoint = 'https://api.openai.com/v1/chat/completions'
+      $script:endpointType = 'custom'
+    }
+  }
+  write-log "using endpoint: $endpoint" -color Yellow
+  return $endpoint
 }
 
 main
