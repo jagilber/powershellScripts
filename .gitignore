@@ -256,3 +256,4 @@ ModelManifest.xml
 #.vscode
 secrets.ps1
 openaiMessages.json
+**/Downloads

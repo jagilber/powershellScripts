@@ -113,7 +113,7 @@ param(
   [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'dall-e-3', 'davinci-codex-003')]
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'dall-e-2', 'dall-e-3', 'davinci-codex-003')]
   [string]$model = 'gpt-3.5-turbo-1106',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
@@ -123,6 +123,8 @@ param(
   [bool]$logProbabilities = $false,
   [string]$imageQuality = 'hd',
   [int]$imageCount = 1, # n
+  [switch]$imageEdit, # edit image
+  [string]$imageFilePng = "$psscriptroot\downloads\openai.png", #"$pwd\openai-$((get-date).tostring('yyMMdd-HHmmss')).png)", # png file to upload and edit . 4mb max with transparency layer and square aspect ratio
   [ValidateSet('256x256', '512x512', '1024x1024', '1792x1024', '1024x1792')]
   [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
@@ -153,6 +155,11 @@ function main() {
     return
   }
 
+  if($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
+    write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
+    mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
+  }
+
   $endpoint = get-endpoint #$script:endpointType $endpoint
   
   if ($newConversation -and (Test-Path $promptsFile)) {
@@ -169,6 +176,10 @@ function main() {
   $headers = @{
     'Authorization' = "Bearer $apiKey"
     'Content-Type'  = 'application/json'
+  }
+  if($endpointType -eq 'images') {
+    $headers.'Content-Type' = 'multipart/form-data'
+    #$headers.Add('Accept', 'image/png')
   }
 
   $requestBody = build-requestBody $script:messageRequests
@@ -206,14 +217,14 @@ function main() {
 }
 
 function build-requestBody($messageRequests) {
-  switch -Wildcard ($model) {
-    'gpt-*' {
+  switch -Wildcard ($script:endpointType) {
+    'chat' {
       $requestBody = build-chatRequestBody $messageRequests
     }
-    'dall-e-*' {
+    'images' {
       $requestBody = build-imageRequestBody $messageRequests
     }
-    'codex-*' {
+    'davinci-codex' {
       $requestBody = build-codexRequestBody $messageRequests
     }
   }
@@ -267,18 +278,32 @@ function build-codexRequestBody($messageRequests) {
 
 function build-imageRequestBody($messageRequests) {
   $messageRequests.AddRange($prompts)
-
-  $requestBody = @{
-    model           = $model
-    prompt          = [string]::join('. ', $messageRequests.ToArray())
-    quality         = $imageQuality
-    n               = $imageCount
-    response_format = $imageResponseFormat
-    size            = $imageSize
-    style           = $imageStyle
-    user            = $user
+  if ($imageEdit) {
+    if (!(Test-Path $imageFilePng)) {
+      throw "image file not found: $imageFilePng"
+    }
+    $requestBody = @{
+      model           = $model
+      prompt          = [string]::join('. ', $messageRequests.ToArray())
+      n               = $imageCount
+      response_format = $imageResponseFormat
+      size            = $imageSize
+      user            = $user
+      image           = $imageFilePng # to-base64StringFromFile $imageFilePng
+    }
   }
-
+  else {
+    $requestBody = @{
+      model           = $model
+      prompt          = [string]::join('. ', $messageRequests.ToArray())
+      quality         = $imageQuality
+      n               = $imageCount
+      response_format = $imageResponseFormat
+      size            = $imageSize
+      style           = $imageStyle
+      user            = $user
+    }
+  }
   return $requestBody
 }
 
@@ -300,10 +325,20 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
     }
     'images' {
       $message = $response.data
-      if($response.data.revised_prompt){
+      if ($response.data.revised_prompt) {
         write-log "revised prompt: $($response.data.revised_prompt)" -color Yellow
         $messageRequests.Clear()
         $messageRequests.Add($response.data.revised_prompt)
+      }
+      if($response.data.url) {
+        write-log "downloading image: $($response.data.url)" -color Yellow
+        write-host "invoke-webRequest -Uri $($response.data.url) -OutFile $imageFilePng"
+        invoke-webRequest -Uri $response.data.url -OutFile $imageFilePng
+        
+        $tempImageFile = $imageFilePng.replace(".png", "$(get-date -f 'yyMMdd-HHmmss').png")
+        writ-log "copying image to $tempImageFile" -color Yellow
+        copy $imageFilePng $tempImageFile
+        code $tempImageFile
       }
 
       $message | add-member -MemberType NoteProperty -Name 'content' -Value $message.url
@@ -318,6 +353,19 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 
   write-log "message: $($message | convertto-json -depth 5)" -color Yellow  
   return $message
+}
+
+function to-FileFromBase64String($base64) {
+  $bytes = [convert]::FromBase64String($base64)
+  $file = [io.path]::GetTempFileName()
+  [io.file]::WriteAllBytes($file, $bytes)
+  return $file
+}
+
+function to-base64StringFromFile($file) {
+  $bytes = [io.file]::ReadAllBytes($file)
+  $base64 = [convert]::ToBase64String($bytes)
+  return $base64 # convertto-json $base64
 }
 
 function write-log($message, [switch]$verbose, [ConsoleColor]$color = 'White') {
@@ -345,6 +393,9 @@ function get-endpoint() {
     'dall-e-*' {
       $endpoint = 'https://api.openai.com/v1/images/generations'
       $script:endpointType = 'images'
+      if ($imageEdit) {
+        $endpoint = 'https://api.openai.com/v1/images/edits'
+      }
     }
     'codex-*' {
       $endpoint = 'https://api.openai.com/v1/davinci-codex/completions'
