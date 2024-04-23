@@ -18,7 +18,7 @@ param(
     $markdownFolder = $pwd,
     $mediaFolder = $markdownFolder,
     $repoRootPath = '',
-    # [switch]$useRelativePaths,
+    [bool]$useRelativePaths = $true,
     [switch]$repair, # = $true,
     [switch]$whatIf, #= $true
     [switch]$checkImagesWithoutArticles
@@ -42,6 +42,10 @@ function main() {
         write-error "$markdownFolder does not exist"
         return
     }
+
+    $markdownFolder = forward-slash $markdownFolder
+    $mediaFolder = forward-slash $mediaFolder
+    $repoRootPath = forward-slash $repoRootPath
 
     $global:images = Get-ChildItem -Recurse -File -Path $mediaFolder | Where-Object Name -imatch "\.gif|\.jpg|\.png"
     write-host "images:`r`n$($global:images | out-string)"
@@ -90,9 +94,9 @@ function get-imagePathsFromArticle($articles, $images) {
                     $imageRootPath = $articlePath
                 }
                 write-host "checking path `"$($imageRootPath)/$($imagePath)`" `"$repoRootPath`"" -ForegroundColor Darkgreen
-                $imagePathInfo = get-path "$($imageRootPath)/$($imagePath)" "$repoRootPath"
+                $imagePathInfo = get-path -path "$($imageRootPath)/$($imagePath)" -pathinMd $imagePath -repoRootPath "$repoRootPath"
                 $imageFullPath = $imagePathInfo.fullFilePath
-                #$imageFullPath = resolve-path ("$([io.path]::GetDirectoryName($article.FullName))\$imagePath".replace('\', '/')) -ErrorAction SilentlyContinue
+                #$imageFullPath = resolve-path ("$([io.path]::GetDirectoryName($article.FullName))\$imagePath") -ErrorAction SilentlyContinue
                 write-host "`tchecking path:$imageFullPath" -ForegroundColor darkgreen
                 $imageFound = $true
                 if ($error) {
@@ -106,11 +110,11 @@ function get-imagePathsFromArticle($articles, $images) {
                 #if (!$imageFullPath -or !(test-path $imageFullPath)) {
                 if (!$imageFullPath -or !($imagePathInfo.pathType -eq 'File')) {
                     Write-Warning "bad path: $imagePath"
-                    Write-Warning "adding bad image path:`r`n`t$($imagePath)`r`n`tfor article:`r`n`tfile://$($article.FullName.replace('\', '/'))"
+                    Write-Warning "adding bad image path:`r`n`t$($imagePath)`r`n`tfor article:`r`n`tfile://$($article.FullName)"
 
                     $imageFound = $false
                     if ($repair) {
-                        $newPath = repair-articleImagePath -article $article -imagePath $imagePath -images $images
+                        $newPath = repair-articleImagePath -article $article -imagePath $imagePathInfo -images $images
                     }
                 }
                 else {
@@ -130,7 +134,15 @@ function get-imagePathsFromArticle($articles, $images) {
     return $table
 }
 
-function get-path($path, $repoRootPath = '') {
+function forward-slash($path) {
+    if (!$path) { return $path }
+    if ($path.gettype().name -ieq 'PathInfo') { 
+        $path = $path.path 
+    }
+    return $path.replace('\', '/')
+}
+
+function get-path($path, $pathinMd, $repoRootPath = '') {
     # only pass in a path, not a file
     # return a full path, a relative path, a path from the repo root, and a path with repo root as root path in a new object
     write-verbose "get-path '$path' '$repoRootPath'"
@@ -148,29 +160,32 @@ function get-path($path, $repoRootPath = '') {
     }
     
     $fullFilePath = (resolve-path $path -ErrorAction SilentlyContinue)
-    if ($fullFilePath) { $fullFilePath = $fullFilePath.Path.Replace('\', '/') }
+    if ($fullFilePath) { 
+        $fullFilePath = $fullFilePath.Path 
+    }
     $fullPath = (resolve-path $tempPath -ErrorAction SilentlyContinue)
     if ($fullPath) {
-        $fullPath = $fullPath.Path.Replace('\', '/') 
-        $relativePath = [io.path]::GetRelativePath($pwd, $fullPath).Replace('\', '/')
+        $fullPath = $fullPath.Path 
+        $relativePath = [io.path]::GetRelativePath($pwd, $fullPath)
     }
 
     if ($repoRootPath) {
-        $repoRootFullPath = (resolve-path $repoRootPath).Path.Replace('\', '/')
+        $repoRootFullPath = (resolve-path $repoRootPath).Path
         write-verbose "repoRootFullPath: $repoRootFullPath"
         if ($fullPath) {
-            $repoPath = '/' + [io.path]::GetRelativePath($repoRootFullPath, $fullPath).Replace('\', '/')
+            $repoPath = '/' + [io.path]::GetRelativePath($repoRootFullPath, $fullPath)
         }
-        $relativeRepoPath = [io.path]::GetRelativePath($pwd, $repoRootFullPath).Replace('\', '/')
+        $relativeRepoPath = [io.path]::GetRelativePath($pwd, $repoRootFullPath)
     }
     $result = [ordered]@{
-        path             = $path
+        path             = forward-slash $path
+        pathinMd         = $pathinMd
         pathType         = $pathType
-        fullPath         = $fullPath
-        fullFilePath     = $fullFilePath
-        relativePath     = $relativePath
-        repoPath         = $repoPath
-        relativeRepoPath = $relativeRepoPath
+        fullPath         = forward-slash $fullPath
+        fullFilePath     = forward-slash $fullFilePath
+        relativePath     = forward-slash $relativePath
+        repoPath         = forward-slash $repoPath
+        relativeRepoPath = forward-slash $relativeRepoPath
     }
     write-host "get-path '$path' returning: $($result | convertto-json)" -ForegroundColor Cyan
     return $result
@@ -184,15 +199,15 @@ function get-articleBadImages($imagePathTable) {
         foreach ($image in $article.Value.GetEnumerator()) {
             write-verbose "checking $($article.Name) image $($image.pathinMd)"
             if (!($image.found)) {
-                write-warning "missing image in $($article) image $($image.pathinMd)"
+                write-warning "missing image in`n`tfile://$($article.key.replace('\','/'))`n`timage $($image.pathinMd)"
                 if (!$table.Count -or !($table.containsKey($article.Name))) {
                     [void]$table.Add($article.Name, [collections.ArrayList]::new())
                 }
                 
                 [void]$table[$article.Name].Add(@{
-                        mdFile   = "file://$($article.Name.replace('\', '/'))"
+                        mdFile   = forward-slash "file://$($article.Name)"
                         pathinMd = $image.pathinMd
-                        newPath  = $image.newPath
+                        newPath  = forward-slash $image.newPath
                     }
                 )
             }
@@ -220,8 +235,9 @@ function get-imagesWithNoArticles($images, $imagePathTable) {
     return $list
 }
 
-function repair-articleImagePath($article, $imagePath, $images) {
-    write-host "repair-articleImagePath $article $imagePath $images" -ForegroundColor Cyan
+function repair-articleImagePath($article, $imagePathInfo, $images) {
+    $imagePath = $imagePathInfo.pathinMd
+    write-host "repair-articleImagePath $article $imagePath `$images count:$($images.Count)" -ForegroundColor Cyan
     $articlePath = [io.path]::GetDirectoryName($article.FullName)
     $newContent = Get-Content -Raw -Path $article.FullName
     $imagePathFileName = [io.path]::GetFileName($imagePath)
@@ -230,7 +246,12 @@ function repair-articleImagePath($article, $imagePath, $images) {
     $imageFiles = @($images | Where-Object Name -ieq $imagePathFileName)
 
     if ($imageFiles.Count -eq 1) {
-        $relativePath = [io.path]::GetRelativePath($articlePath, $imageFiles[0].FullName).replace('\', '/')
+        $imageFile = $imageFiles[0].FullName
+        $relativePath = forward-slash ([io.path]::GetRelativePath($articlePath, $imageFile))
+        if (!$useRelativePaths) {
+            $newPath = get-path -path $imageFile -repoRootPath $repoRootPath
+            $relativePath = $newPath.fullFilePath.replace($newPath.fullPath, $newPath.repoPath)
+        }
     }
     else {
         write-error "unable to fix $imagePath`r`nmatching images:$imageFiles"
@@ -245,8 +266,8 @@ function repair-articleImagePath($article, $imagePath, $images) {
         out-file -InputObject $newContent -FilePath $article.FullName -NoNewline
     }
     
+    write-host "returning relative path:$relativePath" -ForegroundColor Cyan
     return $relativePath
 }
 
 main
-
