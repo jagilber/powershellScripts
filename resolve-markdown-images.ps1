@@ -21,7 +21,8 @@ param(
     [bool]$useRelativePaths = $true,
     [switch]$repair, # = $true,
     [switch]$whatIf, #= $true
-    [switch]$checkImagesWithoutArticles
+    [switch]$checkImagesWithoutArticles,
+    [switch]$force
 )
 
 $global:images = $null
@@ -108,7 +109,8 @@ function get-imagePathsFromArticle($articles, $images) {
                 }
 
                 #if (!$imageFullPath -or !(test-path $imageFullPath)) {
-                if (!$imageFullPath -or !($imagePathInfo.pathType -eq 'File')) {
+                if (!$imageFullPath -or !($imagePathInfo.pathType -eq 'File') `
+                    -or ($force -and $imagePathInfo.pathinMd.startswith('/') -eq $useRelativePaths)) {
                     Write-Warning "bad path: $imagePath"
                     Write-Warning "adding bad image path:`r`n`t$($imagePath)`r`n`tfor article:`r`n`tfile://$($article.FullName)"
 
