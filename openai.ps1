@@ -113,8 +113,8 @@ param(
   [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'dall-e-2', 'dall-e-3', 'davinci-codex-003')]
-  [string]$model = 'gpt-3.5-turbo-1106',
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003')]
+  [string]$model = 'gpt-4-turbo',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
