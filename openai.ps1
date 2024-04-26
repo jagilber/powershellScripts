@@ -80,7 +80,7 @@
 .PARAMETER promptRole
     The role of the message to send to the OpenAI API. This can be either 'system' or 'user'. The default is 'system'.
 .PARAMETER model
-    The model to use for the OpenAI API. This can be either 'gpt-3.5-turbo', 'gpt-3.5-turbo-0613', 'gpt-4-turbo-preview', or 'gpt-4'. The default is 'gpt-3.5-turbo'.
+    The model to use for the OpenAI API. This can be either 'gpt-3.5-turbo', 'gpt-3.5-turbo-0613', 'gpt-4-turbo', or 'gpt-4'. The default is 'gpt-3.5-turbo'.
 .PARAMETER logFile
     The log file to write the response from the OpenAI API to. If not specified, the response will not be logged.
 .PARAMETER promptsFile
@@ -107,14 +107,14 @@
 param(
   [string[]]$prompts = @(),
   [string]$apiKey = "$env:OPENAI_API_KEY", 
-  [ValidateSet('user', 'system', 'assistant', 'developer', 'customer', 'support', 'manager', 'reviewer', 'colleague', 'expert')]
+  [ValidateSet('user', 'system', 'assistant', 'user', 'function', 'tool')]
   [string]$promptRole = 'user', 
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo-preview', 'dall-e-2', 'dall-e-3', 'davinci-codex-003')]
-  [string]$model = 'gpt-3.5-turbo-1106',
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003')]
+  [string]$model = 'gpt-4-turbo',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
