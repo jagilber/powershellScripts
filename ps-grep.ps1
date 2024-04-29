@@ -27,7 +27,8 @@ param(
     [switch]$createBackup,
     [switch]$matchLine,
     [switch]$whatIf,
-    [string]$backupExtension = '.bak'
+    [string]$backupExtension = '.bak',
+    [switch]$quiet
 )
 
 $global:matchedFiles = @{}
@@ -45,14 +46,14 @@ function main() {
     
     write-verbose "filtered files: $($files | Format-List * | out-string)"
     $totalFiles = $files.count
-    write-host "checking $totalFiles files"
+    write-console "checking $totalFiles files"
 
     foreach ($file in $files) {
         $fileCount++
         $sr = $null
-        write-host "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
+        write-console "checking $fileCount of $totalFiles  $file" -ForegroundColor DarkGray
         if ([io.path]::GetExtension($file) -ieq $backupExtension) {
-            write-host "skipping backup file $file" -ForegroundColor Yellow
+            write-console "skipping backup file $file" -ForegroundColor Yellow
             continue
         }
 
@@ -65,7 +66,7 @@ function main() {
             if ($content.Length -lt 1) { continue }
 
             if ($regex.IsMatch($content)) {
-                write-host $file -ForegroundColor Magenta
+                write-console $file -ForegroundColor Magenta
                 [void]$global:matchedFiles.Add($file, [collections.arraylist]::new())
             }
             else {
@@ -102,11 +103,11 @@ function main() {
                         }
                         
                         [void]$global:matchedFiles.$file.add($matchObj)
-                        write-host "  $($line):$($match | Select-Object index, length, value)"
+                        write-console "  $($line):$($match | Select-Object index, length, value)"
 
                         if ($null -ne $replace) {
                             $newLine = $regex.Replace($content, $replace)
-                            write-host "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$newLine'" -ForegroundColor Cyan
+                            write-console "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$newLine'" -ForegroundColor Cyan
                             [void]$replaceContent.AppendLine($newLine)
                         }
                     }
@@ -122,7 +123,7 @@ function main() {
                 }
 
                 if ($createBackup) {
-                    write-host "saving backup file $file$backupExtension" -ForegroundColor Green
+                    write-console "saving backup file $file$backupExtension" -ForegroundColor Green
                     if (!$whatIf) {
                         [io.file]::copy($file, "$file$backupExtension", $true)
                     }
@@ -132,14 +133,14 @@ function main() {
                 $att = [io.file]::GetAttributes($file)
 
                 if ($att -band [io.fileAttributes]::ReadOnly) {
-                    write-host "attempting to remove readonly attribute from file $file" -ForegroundColor Yellow
+                    write-console "attempting to remove readonly attribute from file $file" -ForegroundColor Yellow
                     $att = $att -band (-bnot [io.fileAttributes]::ReadOnly)
                     if (!$whatIf) {
                         [io.file]::SetAttributes($file, $att)
                     }
                 }
     
-                write-host "saving replacements in file $file" -ForegroundColor Green
+                write-console "saving replacements in file $file" -ForegroundColor Green
                 if (!$whatIf) {
                     [io.file]::WriteAllText($file, $replaceContent.ToString())
                 }
@@ -153,20 +154,29 @@ function main() {
         }
     }
     if ($global:matchedFiles.Count) {
-        write-host "matched files summary:" -ForegroundColor Green
+        write-console "matched files summary:" -ForegroundColor Green
 
         foreach ($m in $global:matchedFiles.getenumerator()) {
-            write-host "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
+            write-console "`t$($m.key) matches:$($m.value.count)" -ForegroundColor Cyan
         }
 
-        write-host
-        write-host "$($global:matchedFiles.Count) matched files in global variable: `$global:matchedFiles" -ForegroundColor Magenta
-        write-host "to view: `$global:matchedFiles | convertto-json" -ForegroundColor Magenta
+        write-console
+        write-console "$($global:matchedFiles.Count) matched files in global variable: `$global:matchedFiles" -ForegroundColor Magenta
+        write-console "to view: `$global:matchedFiles | convertto-json" -ForegroundColor Magenta
     }
     else {
-        write-host "0 matched files" -ForegroundColor Yellow
+        write-console "0 matched files" -ForegroundColor Yellow
     }
-    write-host "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
+    write-console "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
+}
+
+function write-console([object]$msg, [consolecolor]$foregroundColor = [consolecolor]::White) {
+    if ($quiet) { 
+        Write-Verbose ($msg | Out-String)
+    }
+    else { 
+        write-host $msg -ForegroundColor $foregroundColor 
+    }
 }
 
 main
