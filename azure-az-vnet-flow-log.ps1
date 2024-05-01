@@ -325,8 +325,9 @@ function main() {
         }
 
         if ($remove -and $currentFlowLog) {
-            write-host "Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $($networkwatcher.Name) -ResourceGroupName $networkWatcherResourceGroupName" -ForegroundColor Yellow
-            Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcher.Name -ResourceGroupName $networkWatcherResourceGroupName
+            write-host "Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $($networkwatcherName) -ResourceGroupName $networkWatcherResourceGroupName" -ForegroundColor Yellow
+            Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $networkWatcherResourceGroupName
+            $currentFlowLog = get-flowLog
         }
         elseif ($remove) {
             write-host "flow log not found" -ForegroundColor Yellow
