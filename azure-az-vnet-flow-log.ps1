@@ -248,7 +248,7 @@ param(
     [string]$resourceGroupName = 'servicefabriccluster',
     [string]$vnetName = 'VNet',
     [string]$location = 'eastus',
-    [string]$networkWatcherResourceGroupName = 'NetworkWatcherRG',
+    # [string]$nwResourceGroup = 'NetworkWatcherRG',
     [string]$networkWatcherName = 'NetworkWatcher_' + $location,
     [string]$flowLogName = $vnetName + 'FlowLog',
     [string]$flowLogJson = "$pwd\flowLog.json",
@@ -273,6 +273,9 @@ $PSModuleAutoLoadingPreference = 2
 $ErrorActionPreference = "silentlycontinue"
 $scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 $global:sortedFlowTuple = $null
+$nwResourceGroup = $null
+$storageResourceGroup = $null
+$laResourceGroup = $null
 
 function main() {
 
@@ -325,8 +328,9 @@ function main() {
         }
 
         if ($remove -and $currentFlowLog) {
-            write-host "Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $($networkwatcherName) -ResourceGroupName $networkWatcherResourceGroupName" -ForegroundColor Yellow
-            Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $networkWatcherResourceGroupName
+            $nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+            write-host "Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $($networkwatcherName) -ResourceGroupName $nwResourceGroup" -ForegroundColor Yellow
+            Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $nwResourceGroup
             $currentFlowLog = get-flowLog
         }
         elseif ($remove) {
@@ -336,7 +340,7 @@ function main() {
         write-host "finished. results in:`$global:sortedFlowTuple" -ForegroundColor Green
     }
     catch {
-        write-verbose "variables:$((get-variable -scope local).value | convertto-json -depth 2)"
+        write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
         write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
         return 1
     }
@@ -449,10 +453,10 @@ function download-flowLog($currentFlowLog) {
                 -logTime $universalTime)
 
         foreach ($blockBlob in $global:blockBlobs) {
-            write-verbose "blockBlob: $($blockBlob | convertto-json -depth 3)"
+            write-verbose "blockBlob: $($blockBlob | convertto-json -WarningAction SilentlyContinue -depth 3)"
 
             $global:blockList = @(Get-VNetFlowLogBlockList -CloudBlockBlob $blockBlob)
-            Write-Verbose "blockList: $($global:blockList | convertto-json -depth 3)"
+            Write-Verbose "blockList: $($global:blockList | convertto-json -WarningAction SilentlyContinue -depth 3)"
 
             $valuearray = Get-VNetFlowLogReadBlock -blockList $global:blockList -CloudBlockBlob $blockBlob
             if ($valuearray) {
@@ -474,15 +478,25 @@ function download-flowLog($currentFlowLog) {
 }
 
 function get-flowLog() {
-    write-host "Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $networkWatcherResourceGroupName -ErrorAction SilentlyContinue" -ForegroundColor Cyan
-    $currentFlowLog = Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $networkWatcherResourceGroupName -ErrorAction SilentlyContinue
+    if(!$nwResourceGroup) {
+        $nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+    }
+    write-host "Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $nwResourceGroup -ErrorAction SilentlyContinue" -ForegroundColor Cyan
+    $currentFlowLog = Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $nwResourceGroup -ErrorAction SilentlyContinue
     if ($currentFlowLog) {
-        write-host "current flow log: $($currentFlowLog | convertto-json -depth 3)" -ForegroundColor Yellow
+        write-host "current flow log: $($currentFlowLog | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Yellow
     }
     else {
         write-host "flow log not found" -ForegroundColor Yellow
     }
     return $currentFlowLog
+}
+
+function get-resourceGroup($resourceName,$resourceType){
+    write-host "get-azresource -ResourceName $resourceName -ResourceType '$resourceType'"
+    $resourceGroup = (get-azresource -ResourceName $resourceName -ResourceType $resourceType).ResourceGroupName
+    write-host "returning resourceGroup: $resourceGroup"
+    return $resourceGroup
 }
 function Get-VNetFlowLogCloudBlockBlob (
     # https://learn.microsoft.com/en-us/azure/network-watcher/flow-logs-read?tabs=vnet
@@ -512,7 +526,7 @@ function Get-VNetFlowLogCloudBlockBlob (
     # Gets the storage blog
     write-host "Get-AzStorageBlob -Context $ctx -Container $ContainerName -Blob $BlobName" -ForegroundColor Cyan
     $Blob = Get-AzStorageBlob -Context $ctx -Container $ContainerName -Blob $BlobName
-    write-host "blob: $($Blob | convertto-json)" -ForegroundColor Green
+    write-host "blob: $($Blob | convertto-json -WarningAction SilentlyContinue)" -ForegroundColor Green
     # Gets the block blog of type 'Microsoft.Azure.Storage.Blob.CloudBlob' from the storage blob
     $CloudBlockBlob = [Microsoft.Azure.Storage.Blob.CloudBlockBlob[]] @($Blob.ICloudBlob)
 
@@ -581,9 +595,11 @@ function modify-flowLog() {
         return
     }        
     
-    write-host "Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $resourceGroupName" -ForegroundColor Cyan
-    $storageaccount = Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $resourceGroupName
-    write-host "storageaccount: $($storageaccount | convertto-json -depth 3)" -ForegroundColor Green
+    $storageResourceGroup = get-resourceGroup -ResourceName $storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
+
+    write-host "Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $storageResourceGroup" -ForegroundColor Cyan
+    $storageaccount = Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $storageResourceGroup
+    write-host "storageaccount: $($storageaccount | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
     if ($logRetentionInDays -gt 0 -and $storageaccount.kind -ne "StorageV2") {
         write-host "storage account kind must be StorageV2 for log retention or set logRetentionInDays = 0" -ForegroundColor Red
         return
@@ -591,15 +607,17 @@ function modify-flowLog() {
         
     write-host "Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName" -ForegroundColor Cyan
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
-    write-host "vnet: $($vnet | convertto-json -depth 3)" -ForegroundColor Green
+    write-host "vnet: $($vnet | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
 
-    write-host "Get-AzNetworkWatcher -ResourceGroupName $networkWatcherResourceGroupName -Name $networkWatcherName" -ForegroundColor Cyan
-    $networkwatcher = Get-AzNetworkWatcher -ResourceGroupName $networkWatcherResourceGroupName -Name $networkWatcherName
-    write-host "networkwatcher: $($networkwatcher | convertto-json -depth 3)" -ForegroundColor Green
+    $nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+
+    write-host "Get-AzNetworkWatcher -ResourceGroupName $nwResourceGroup -Name $networkWatcherName" -ForegroundColor Cyan
+    $networkwatcher = Get-AzNetworkWatcher -ResourceGroupName $nwResourceGroup -Name $networkWatcherName
+    write-host "networkwatcher: $($networkwatcher | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
     
     if ($currentFlowLog) {
         write-host "flow log already exists. updating flow log" -ForegroundColor Yellow
-        write-host "current flow log: $($currentFlowLog | convertto-json -depth 3)" -ForegroundColor Yellow
+        write-host "current flow log: $($currentFlowLog | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Yellow
     }
     else {
         write-host "flow log does not exist. creating flow log"
@@ -611,9 +629,10 @@ function modify-flowLog() {
             Register-AzResourceProvider -ProviderNamespace Microsoft.Insights
         }
 
+        $laResourceGroup = get-resourceGroup -ResourceName $logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
         $error.clear()
-        write-host "Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $resourceGroupName" -ForegroundColor Cyan
-        $workspace = Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $resourceGroupName
+        write-host "Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $laResourceGroup" -ForegroundColor Cyan
+        $workspace = Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $laResourceGroup
 
         if ($error -and $location) {
             write-host "workspace not found. creating workspace"
@@ -630,7 +649,7 @@ function modify-flowLog() {
             -Enabled:`$$($enable.IsPresent) ``
             -Name $flowLogName ``
             -NetworkWatcherName $($networkwatcher.Name) ``
-            -ResourceGroupName $networkWatcherResourceGroupName ``
+            -ResourceGroupName $nwResourceGroup ``
             -StorageId $($storageaccount.Id) ``
             -TargetResourceId $($vnet.Id) ``
             -EnableTrafficAnalytics ``
@@ -644,7 +663,7 @@ function modify-flowLog() {
         $setFlowLog = Set-AzNetworkWatcherFlowLog -Enabled:$($enable.IsPresent) `
             -Name $flowLogName `
             -NetworkWatcherName $networkwatcher.Name `
-            -ResourceGroupName $networkWatcherResourceGroupName `
+            -ResourceGroupName $nwResourceGroup `
             -StorageId $storageaccount.Id `
             -TargetResourceId $vnet.Id `
             -EnableTrafficAnalytics `
@@ -659,7 +678,7 @@ function modify-flowLog() {
             -Enabled:`$$($enable.IsPresent) ``
             -Name $flowLogName ``
             -NetworkWatcherName $($networkwatcher.Name) ``
-            -ResourceGroupName $networkWatcherResourceGroupName ``
+            -ResourceGroupName $nwResourceGroup ``
             -StorageId $($storageaccount.Id) ``
             -TargetResourceId $($vnet.Id) ``
             -EnableRetention:`$$($logRetentionInDays -gt 0) ``
@@ -670,7 +689,7 @@ function modify-flowLog() {
         $setFlowLog = Set-AzNetworkWatcherFlowLog -Enabled:$enable.IsPresent `
             -Name $flowLogName `
             -NetworkWatcherName $networkwatcher.Name `
-            -ResourceGroupName $networkWatcherResourceGroupName `
+            -ResourceGroupName $nwResourceGroup `
             -StorageId $storageaccount.Id `
             -TargetResourceId $vnet.Id `
             -EnableRetention:($logRetentionInDays -gt 0) `
@@ -682,7 +701,7 @@ function modify-flowLog() {
         write-host "error setting flow log $($error | out-string)" -ForegroundColor Red
         return $null
     }
-    write-host "setFlowLog: $($setFlowLog | convertto-json -depth 3)" -ForegroundColor Green
+    write-host "setFlowLog: $($setFlowLog | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
 
     return $setFlowLog
 }
@@ -755,16 +774,13 @@ function summarize-flowLog($flowLogFileName) {
                 foreach ($flowTuple in $flowGroup.flowTuples) {
                     write-verbose "flow tuple:$flowTuple"
                     [void]$parsedFlowTuple.Add((parse-flowTuple -flowTuple $flowTuple -hostMacAddress $hostMacAddress))
-                    write-verbose "parsed flow tuple:$($parsedFlowTuple | convertto-json -depth 3)"
+                    write-verbose "parsed flow tuple:$($parsedFlowTuple | convertto-json -WarningAction SilentlyContinue -depth 3)"
                 }
             }
         }
     }
 
     return save-flowTuple -flowLogFileName $flowLogFileName -parsedFlowTuple $parsedFlowTuple
-    # $global:sortedFlowTuple = $parsedFlowTuple | sort-object { $psitem.TimeStamp -as [datetime]}
-    # write-host "`$parsedFlowTuple | export-csv -Path $flowLogFileName.csv -NoTypeInformation" -ForegroundColor Cyan
-    # $global:sortedFlowTuple | export-csv -Path "$flowLogFileName.csv" -NoTypeInformation
 }
 
 main
