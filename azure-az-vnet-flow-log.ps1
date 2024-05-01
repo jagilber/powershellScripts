@@ -176,6 +176,10 @@
     to review output for denied traffic
 
 .EXAMPLE
+    $global:sortedFlowTuple | group SourceIP,DestinationIP
+    group and count by ip address
+
+.EXAMPLE
     example steps to enable flow log for capture and analysis
     enable flow log
         .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
