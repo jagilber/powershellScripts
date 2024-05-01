@@ -297,6 +297,7 @@ function main() {
             if (!(modify-flowLog)) {
                 return
             }
+            $currentFlowLog = get-flowLog
         }
 
         $universalTime = $logTime.ToUniversalTime()
