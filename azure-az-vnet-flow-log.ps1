@@ -129,7 +129,6 @@
 
 .EXAMPLE
     .\azure-az-vnet-flow-log.ps1 -resourceGroupName "samoham-eastus2euap-rg" `
-        -networkWatcherName "NETWORKWATCHER_EASTUS2EUAP" `
         -flowLogName "FLRUNNERSFLOWLOG" `
         -vnetName "flrunnersVnet" `
         -storageAccountName "flrunnersstorage" `
@@ -143,23 +142,19 @@
         -flowLogName "FLRUNNERSFLOWLOG" `
         -vnetName "flrunnersVnet" `
         -storageAccountName "flrunnersstorage" `
-        -location "eastus2euap" `
         -disable
     disable flow log
 
 .EXAMPLE
     .\azure-az-vnet-flow-log.ps1 -resourceGroupName "samoham-eastus2euap-rg" `
-        -networkWatcherName "NETWORKWATCHER_EASTUS2EUAP" `
         -flowLogName "FLRUNNERSFLOWLOG" `
         -vnetName "flrunnersVnet" `
         -storageAccountName "flrunnersstorage" `
-        -location "eastus2euap" `
         -get
     get flow log
 
 .EXAMPLE
     .\azure-az-vnet-flow-log.ps1 -resourceGroupName "samoham-eastus2euap-rg" `
-        -networkWatcherName "NETWORKWATCHER_EASTUS2EUAP" `
         -flowLogName "FLRUNNERSFLOWLOG" `
         -vnetName "flrunnersVnet" `
         -storageAccountName "flrunnersstorage" `
@@ -170,11 +165,9 @@
 
 .EXAMPLE
     .\azure-az-vnet-flow-log.ps1 -resourceGroupName "samoham-eastus2euap-rg" `
-        -networkWatcherName "NETWORKWATCHER_EASTUS2EUAP" `
         -flowLogName "FLRUNNERSFLOWLOG" `
         -vnetName "flrunnersVnet" `
         -storageAccountName "flrunnersstorage" `
-        -location "eastus2euap" `
         -remove
     remove flow log
 
@@ -182,6 +175,25 @@
     $global:sortedFlowTuple | ? FlowState -ieq 'denied'
     to review output for denied traffic
 
+.EXAMPLE
+    example steps to enable flow log for capture and analysis
+    enable flow log
+        .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
+            -vnetName <vnet name> `
+            -storageAccountName <storage account name> `
+            -enable
+    reproduce traffic
+    download flow log
+        .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
+            -vnetName <vnet name> `
+            -storageAccountName <storage account name> `
+            -get
+    remove flow log
+        .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
+            -vnetName <vnet name> `
+            -storageAccountName <storage account name> `
+            -remove
+    
 .PARAMETER resourceGroupName
     resource group name
 
@@ -245,10 +257,10 @@ using namespace System.Collections.Generic
 using namespace System.Linq
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
+    # [Parameter(Mandatory = $true)]
     [string]$resourceGroupName,
     [string]$vnetName = 'VNet',
-    [Parameter(Mandatory = $true)]
+    # [Parameter(Mandatory = $true)]
     [string]$storageAccountName,
     [string]$flowLogName = $vnetName + 'FlowLog',
     [string]$flowLogJson = "$pwd\flowLog.json",
