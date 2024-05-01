@@ -245,19 +245,19 @@ using namespace System.Collections.Generic
 using namespace System.Linq
 [CmdletBinding()]
 param(
-    [string]$resourceGroupName = 'servicefabriccluster',
+    [Parameter(Mandatory = $true)]
+    [string]$resourceGroupName,
     [string]$vnetName = 'VNet',
-    [string]$location = 'eastus',
-    # [string]$script:nwResourceGroup = 'NetworkWatcherRG',
-    [string]$networkWatcherName = 'NetworkWatcher_' + $location,
+    [Parameter(Mandatory = $true)]
+    [string]$storageAccountName,
     [string]$flowLogName = $vnetName + 'FlowLog',
     [string]$flowLogJson = "$pwd\flowLog.json",
     [string]$subscriptionId = (get-azContext).Subscription.Id,
-    [string]$storageAccountName,
+    [string]$location,
+    [string]$networkwatcherName, # = 'NetworkWatcher_' + $script:location,
     [string]$logAnalyticsWorkspaceName,
     [string]$macAddress = '*',
     [datetime]$logTime = (get-date),
-    # [bool]$minutePrecision = $true,
     [int]$logRetentionInDays = 0, # 0 to disable log retention
     [switch]$enable,
     [switch]$disable,
@@ -270,12 +270,15 @@ param(
 
 Set-StrictMode -Version Latest
 $PSModuleAutoLoadingPreference = 2
-$ErrorActionPreference = "silentlycontinue"
+$ErrorActionPreference = 'continue'
 $scriptName = "$psscriptroot\$($MyInvocation.MyCommand.Name)"
 $global:sortedFlowTuple = $null
 $script:nwResourceGroup = $null
 $script:storageResourceGroup = $null
 $script:laResourceGroup = $null
+$script:networkwatcherName = $networkwatcherName
+$script:location = $location
+$script:logAnalyticsWorkspaceName = $logAnalyticsWorkspaceName
 
 function main() {
 
@@ -329,9 +332,9 @@ function main() {
         }
 
         if ($remove -and $currentFlowLog) {
-            # $script:nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
-            write-host "Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $($networkwatcherName) -ResourceGroupName $script:nwResourceGroup" -ForegroundColor Yellow
-            Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $script:nwResourceGroup
+            # $script:nwResourceGroup = get-resourceGroup -ResourceName $script:networkwatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+            write-host "Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $($script:networkwatcherName) -ResourceGroupName $script:nwResourceGroup" -ForegroundColor Yellow
+            Remove-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $script:networkwatcherName -ResourceGroupName $script:nwResourceGroup
             $currentFlowLog = get-flowLog
         }
         elseif ($remove) {
@@ -353,16 +356,46 @@ function main() {
 }
 
 function check-arguments() {
+    
+    if (!$subscriptionId) {
+        Write-Warning "subscription id is required."
+        return $false
+    }
+    
+    if (!$resourceGroupName) {
+        Write-Warning "resource group name is required."
+        return $false
+    }        
+
+    if (!$vnetName) {
+        Write-Warning "vnet name is required."
+        return $false
+    }
+
+    if (!$script:location) {
+        $script:location = (Get-AzResourceGroup -Name $resourceGroupName).Location
+        write-host "setting location: $script:location" -ForegroundColor Cyan
+    }
+    if (!$script:location) {
+        Write-Warning "location is required."
+        return $false
+    }
+
+    if (!$flowLogName) {
+        Write-Warning "flow log name is required."
+        return $false
+    }
+
+    if (!$script:networkwatcherName) {
+        Write-Warning "network watcher name is required."
+        $script:networkwatcherName = 'NetworkWatcher_' + $script:location
+        write-host "setting network watcher name: $script:networkwatcherName" -ForegroundColor Cyan
+    }
 
     if (!$storageAccountName) {
         Write-Warning "storage account name is required."
         return
     }
-
-    if (!$resourceGroupName) {
-        Write-Warning "resource group name is required."
-        return $false
-    }        
 
     if ($enable -and $disable) {
         Write-Warning "enable and disable switches are mutually exclusive."
@@ -378,17 +411,17 @@ function check-arguments() {
         Write-Warning "enable/disable and get/remove switches are mutually exclusive."
         return $false
     }
+    
+    if (!(check-logAnalytics)) {
+        return $false
+    }
+    
+    if (!(check-storage)) {
+        return $false
+    }
 
-    if($storageAccountName){
-        $script:storageResourceGroup = get-resourceGroup -ResourceName $storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
-    }
-    
-    if($logAnalyticsWorkspaceName){
-        $script:laResourceGroup = get-resourceGroup -ResourceName $logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
-    }
-    
-    if($networkWatcherName){
-        $script:nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+    if (!(check-networkWatcher)) {
+        return $false
     }
 
     if (!(check-module)) {
@@ -439,6 +472,84 @@ function check-module() {
     return $true
 }
 
+function check-logAnalytics() {
+    $script:laResourceGroup = get-resourceGroup -ResourceName $logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
+    if (!$script:laResourceGroup) {
+        write-warning "log analytics workspace resource group not found for $logAnalyticsWorkspaceName. getting log analytics workspace resource group."
+        $continue = read-host "do you want to create a new log analytics workspace named $logAnalyticsWorkspaceName in $resourceGroupName in $($script:location)?[y|n]"
+        if ($continue -imatch "y") {
+            $error.clear()
+            write-host "New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName -Name $logAnalyticsWorkspaceName -Location $script:location" -ForegroundColor Cyan
+            $logAnalyticsWorkspace = New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName -Name $logAnalyticsWorkspaceName -Location $script:location
+            $script:laResourceGroup = $resourceGroupName
+            if ($error -or !$logAnalyticsWorkspace) {
+                Write-Error "error creating log analytics workspace:$($error | out-string)"
+                return $false
+            }
+            else {
+                write-host "log analytics workspace created" -ForegroundColor Green
+            }
+        }
+        else {
+            write-host "log analytics workspace resource group not found. exiting" -ForegroundColor Red
+            return $false
+        }
+    }
+    return $true
+}
+
+function check-networkWatcher() {
+    $script:nwResourceGroup = get-resourceGroup -ResourceName $script:networkwatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+    if (!$script:nwResourceGroup) {
+        write-warning "network watcher resource group not found for $($script:networkwatcherName). getting network watcher resource group."
+        $continue = read-host "do you want to create a new network watcher named $($script:networkwatcherName) in $resourceGroupName in $($script:location)?[y|n]"
+        if ($continue -imatch "y") {
+            $error.clear()
+            write-host "New-AzNetworkWatcher -ResourceGroupName $resourceGroupName -Name $script:networkwatcherName -Location $script:location" -ForegroundColor Cyan
+            $networkwatcher = New-AzNetworkWatcher -ResourceGroupName $resourceGroupName -Name $script:networkwatcherName -Location $script:location
+            $script:nwResourceGroup = $resourceGroupName
+            if ($error -or !$networkwatcher) {
+                write-error "error creating network watcher:$($error | out-string)"
+                return $false
+            }
+            else {
+                write-host "network watcher created" -ForegroundColor Green
+            }
+        }
+        else {
+            write-host "network watcher resource group not found. exiting" -ForegroundColor Red
+            return $false
+        }
+    }
+    return $true
+}
+
+function check-storage() {
+    $script:storageResourceGroup = get-resourceGroup -ResourceName $storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
+    if (!$script:storageResourceGroup) {
+        write-warning "storage account resource group not found for $storageAccountName. getting storage account resource group."
+        $continue = read-host "do you want to create a new storage account named $storageAccountName in $resourceGroupName in $($script:location)?[y|n]"
+        if ($continue -imatch "y") {
+            $error.clear()
+            write-host "New-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2" -ForegroundColor Cyan
+            $storageaccount = New-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2
+            $script:storageResourceGroup = $resourceGroupName
+            if ($error -or !$storageaccount) {
+                write-error "error creating storage account:$($error | out-string)"
+                return $false
+            }
+            else {
+                write-host "storage account created" -ForegroundColor Green
+            }
+        }
+        else {
+            write-host "storage account resource group not found. exiting" -ForegroundColor Red
+            return $false
+        }
+    }
+    return $true
+}
+
 
 function download-flowLog($currentFlowLog) {
     $flowLog = $currentFlowLog
@@ -447,12 +558,12 @@ function download-flowLog($currentFlowLog) {
     if ($flowLog) {
         write-host "flow log stored in global variable: `$flowLog" -ForegroundColor Magenta
         $global:blockBlobs = @(Get-VNetFlowLogCloudBlockBlob -subscriptionId $subscriptionId `
-        -region $location `
-        -VNetFlowLogName $flowLogName `
-        -storageAccountName $storageAccountName `
-        -storageAccountResourceGroup $script:storageResourceGroup `
-        -macAddress $macAddress `
-        -logTime $universalTime)
+                -region $script:location `
+                -VNetFlowLogName $flowLogName `
+                -storageAccountName $storageAccountName `
+                -storageAccountResourceGroup $script:storageResourceGroup `
+                -macAddress $macAddress `
+                -logTime $universalTime)
         
         foreach ($blockBlob in $global:blockBlobs) {
             write-verbose "blockBlob: $($blockBlob | convertto-json -WarningAction SilentlyContinue -depth 3)"
@@ -495,11 +606,8 @@ function generate-fileName($fileName, $identifier = "") {
 }
 
 function get-flowLog() {
-    # if(!$script:nwResourceGroup) {
-    #     $script:nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
-    # }
-    write-host "Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $script:nwResourceGroup -ErrorAction SilentlyContinue" -ForegroundColor Cyan
-    $currentFlowLog = Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $networkwatcherName -ResourceGroupName $script:nwResourceGroup -ErrorAction SilentlyContinue
+    write-host "Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $script:networkwatcherName -ResourceGroupName $script:nwResourceGroup -ErrorAction SilentlyContinue" -ForegroundColor Cyan
+    $currentFlowLog = Get-AzNetworkWatcherFlowLog -Name $flowLogName -NetworkWatcherName $script:networkwatcherName -ResourceGroupName $script:nwResourceGroup -ErrorAction SilentlyContinue
     if ($currentFlowLog) {
         write-host "current flow log: $($currentFlowLog | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Yellow
     }
@@ -509,16 +617,17 @@ function get-flowLog() {
     return $currentFlowLog
 }
 
-function get-resourceGroup($resourceName,$resourceType){
+function get-resourceGroup($resourceName, $resourceType) {
     write-host "get-azresource -ResourceName $resourceName -ResourceType '$resourceType'"
     $resourceGroups = @(get-azresource -ResourceName $resourceName -ResourceType $resourceType)
-    if($resourceGroups -and $resourceGroups.Count -eq 1){
+    $resourceGroup = $null
+    if ($resourceGroups -and $resourceGroups.Count -eq 1) {
 
         $resourceGroup = $resourceGroups[0].ResourceGroupName
     }
-    else{
+    else {
         write-host "resource group not found" -ForegroundColor Red
-        throw "resource group not found for $resourceName and $resourceType`r`t$($resourceGroups | convertto-json -WarningAction SilentlyContinue)"
+        # throw "resource group not found for $resourceName and $resourceType`r`t$($resourceGroups | convertto-json -WarningAction SilentlyContinue)"
     }
     write-host "returning resourceGroup: $resourceGroup"
     return $resourceGroup
@@ -620,10 +729,10 @@ function modify-flowLog() {
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
     write-host "vnet: $($vnet | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
 
-    # $script:nwResourceGroup = get-resourceGroup -ResourceName $networkWatcherName -ResourceType 'Microsoft.Network/networkWatchers'
+    # $script:nwResourceGroup = get-resourceGroup -ResourceName $script:networkwatcherName -ResourceType 'Microsoft.Network/networkWatchers'
 
-    write-host "Get-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $networkWatcherName" -ForegroundColor Cyan
-    $networkwatcher = Get-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $networkWatcherName
+    write-host "Get-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName" -ForegroundColor Cyan
+    $networkwatcher = Get-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName
     write-host "networkwatcher: $($networkwatcher | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
     
     if ($currentFlowLog) {
@@ -653,11 +762,11 @@ function modify-flowLog() {
         write-host "Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $script:laResourceGroup" -ForegroundColor Cyan
         $workspace = Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $script:laResourceGroup
 
-        if ($error -and $location) {
+        if ($error -and $script:location) {
             write-host "workspace not found. creating workspace"
             $workspace = New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName `
-                -Name $logAnalyticsWorkspaceName 
-            -Location $location
+                -Name $logAnalyticsWorkspaceName `
+                -Location $script:location
         }
         elseif ($error) {
             write-host "workspace not found. exiting"
