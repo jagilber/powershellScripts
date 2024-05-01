@@ -322,6 +322,7 @@ function main() {
                 $csvFileName = save-flowTuple -flowLogFileName $flowLogFileName -parsedFlowTuple $parsedFlowTuple
                 write-host "merged flow log saved to $csvFileName" -ForegroundColor Green
             }
+            write-host "finished. results in:`$global:sortedFlowTuple" -ForegroundColor Green
         }
         elseif ($get) {
             write-host "flow log not found" -ForegroundColor Yellow
@@ -336,8 +337,6 @@ function main() {
         elseif ($remove) {
             write-host "flow log not found" -ForegroundColor Yellow
         }
-
-        write-host "finished. results in:`$global:sortedFlowTuple" -ForegroundColor Green
     }
     catch {
         write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
@@ -354,6 +353,11 @@ function main() {
 }
 
 function check-arguments() {
+
+    if (!$storageAccountName) {
+        Write-Warning "storage account name is required."
+        return
+    }
 
     if (!$resourceGroupName) {
         Write-Warning "resource group name is required."
@@ -606,23 +610,11 @@ function Get-VNetFlowLogReadBlock(
 }
 
 function modify-flowLog() {
-    if (!$storageAccountName -and !$logAnalyticsWorkspaceName) {
-        Write-Warning "storage account name or log analytics workspace name is required."
-        return
-    }
 
     if (!$vnetName) {
         Write-Warning "resource group and vnet name are required."
         return
     }        
-
-    write-host "Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $script:storageResourceGroup" -ForegroundColor Cyan
-    $storageaccount = Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $script:storageResourceGroup
-    write-host "storageaccount: $($storageaccount | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
-    if ($logRetentionInDays -gt 0 -and $storageaccount.kind -ne "StorageV2") {
-        write-host "storage account kind must be StorageV2 for log retention or set logRetentionInDays = 0" -ForegroundColor Red
-        return
-    }
         
     write-host "Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName" -ForegroundColor Cyan
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
@@ -640,6 +632,14 @@ function modify-flowLog() {
     }
     else {
         write-host "flow log does not exist. creating flow log"
+    }
+    
+    write-host "Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $script:storageResourceGroup" -ForegroundColor Cyan
+    $storageaccount = Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $script:storageResourceGroup
+    write-host "storageaccount: $($storageaccount | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
+    if ($logRetentionInDays -gt 0 -and $storageaccount.kind -ne "StorageV2") {
+        write-host "storage account kind must be StorageV2 for log retention or set logRetentionInDays = 0" -ForegroundColor Red
+        return
     }
 
     if ($logAnalyticsWorkspaceName) {
@@ -671,7 +671,7 @@ function modify-flowLog() {
             -ResourceGroupName $script:nwResourceGroup ``
             -StorageId $($storageaccount.Id) ``
             -TargetResourceId $($vnet.Id) ``
-            -EnableTrafficAnalytics ``
+            -EnableTrafficAnalytics:`$true ``
             -TrafficAnalyticsWorkspaceId $($workspace.ResourceId) ``
             -TrafficAnalyticsInterval 10 ``
             -EnableRetention:`$$($logRetentionInDays -gt 0) ``
@@ -685,13 +685,14 @@ function modify-flowLog() {
             -ResourceGroupName $script:nwResourceGroup `
             -StorageId $storageaccount.Id `
             -TargetResourceId $vnet.Id `
-            -EnableTrafficAnalytics `
+            -EnableTrafficAnalytics:$true `
             -TrafficAnalyticsWorkspaceId $workspace.ResourceId `
             -TrafficAnalyticsInterval 10 `
-            -EnableRetention:($logRetentionInDays -gt 0) ``
-        -RetentionPolicyDays $logRetentionInDays ``
-        -Force:$force
+            -EnableRetention:($logRetentionInDays -gt 0) `
+            -RetentionPolicyDays $logRetentionInDays `
+            -Force:$force
     }
+
     else {
         Write-Host "Set-AzNetworkWatcherFlowLog ``
             -Enabled:`$$($enable.IsPresent) ``
