@@ -255,10 +255,6 @@
 #>
 
 #requires -version 7.4.0
-using namespace System
-using namespace System.Collections
-using namespace System.Collections.Generic
-using namespace System.Linq
 [CmdletBinding()]
 param(
     # [Parameter(Mandatory = $true)]
@@ -365,7 +361,7 @@ function main() {
     finally {
         if ($currentFlowLog) {
             if ($currentFlowLog.enabled) {
-                Write-Warning "flow log enabled. to prevent unnecessary charges, disable flow log when not in use using -disable switch"
+                write-warning "flow log enabled. to prevent unnecessary charges, disable flow log when not in use using -disable switch"
             }
         }
     }
@@ -374,57 +370,61 @@ function main() {
 function check-arguments() {
     
     if (!$subscriptionId) {
-        Write-Warning "subscription id is required."
+        write-warning "subscription id is required."
         return $false
     }
     
     if (!$resourceGroupName) {
-        Write-Warning "resource group name is required."
+        write-warning "resource group name is required."
         return $false
     }        
-
+    
     if (!$vnetName) {
-        Write-Warning "vnet name is required."
+        write-warning "vnet name is required."
         return $false
     }
-
+    
+    if (!(check-module)) {
+        return $false
+    }
+    
     if (!$script:location) {
         $script:location = (Get-AzResourceGroup -Name $resourceGroupName).Location
         write-host "setting location: $script:location" -ForegroundColor Cyan
     }
     if (!$script:location) {
-        Write-Warning "location is required."
+        write-warning "location is required."
         return $false
     }
 
     if (!$flowLogName) {
-        Write-Warning "flow log name is required."
+        write-warning "flow log name is required."
         return $false
     }
 
     if (!$script:networkwatcherName) {
-        Write-Warning "network watcher name is required."
+        write-warning "network watcher name is required."
         $script:networkwatcherName = 'NetworkWatcher_' + $script:location
         write-host "setting network watcher name: $script:networkwatcherName" -ForegroundColor Cyan
     }
 
     if (!$storageAccountName) {
-        Write-Warning "storage account name is required."
+        write-warning "storage account name is required."
         return
     }
 
     if ($enable -and $disable) {
-        Write-Warning "enable and disable switches are mutually exclusive."
+        write-warning "enable and disable switches are mutually exclusive."
         return $false
     }
 
     if ($get -and $remove) {
-        Write-Warning "get and remove switches are mutually exclusive."
+        write-warning "get and remove switches are mutually exclusive."
         return $false
     }
 
     if (($enable -or $disable) -and ($get -or $remove)) {
-        Write-Warning "enable/disable and get/remove switches are mutually exclusive."
+        write-warning "enable/disable and get/remove switches are mutually exclusive."
         return $false
     }
     
@@ -440,9 +440,6 @@ function check-arguments() {
         return $false
     }
 
-    if (!(check-module)) {
-        return $false
-    }
 
     if (!(Get-azResourceGroup)) {
         connect-azaccount
@@ -737,7 +734,7 @@ function Get-VNetFlowLogReadBlock(
 function modify-flowLog() {
 
     if (!$vnetName) {
-        Write-Warning "resource group and vnet name are required."
+        write-warning "resource group and vnet name are required."
         return
     }        
         
