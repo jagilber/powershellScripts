@@ -210,7 +210,7 @@ function main() {
     write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
   }
 
-  write-log "response:$($message.content)" -color Green
+  write-log "response:$($message.content | convertfrom-json | convertto-json)" -color Green
   write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
   write-log "===================================="
   return $message.content
