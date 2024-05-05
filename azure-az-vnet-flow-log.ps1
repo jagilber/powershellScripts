@@ -266,7 +266,7 @@ param(
     [string]$flowLogJson = "$pwd\flowLog.json",
     [string]$subscriptionId = (get-azContext).Subscription.Id,
     [string]$location,
-    [string]$networkwatcherName, # = 'NetworkWatcher_' + $script:location,
+    [string]$networkwatcherName = '*', # = 'NetworkWatcher_' + $script:location,
     [string]$logAnalyticsWorkspaceName,
     [string]$macAddress = '*',
     [datetime]$logTime = (get-date),
@@ -398,18 +398,12 @@ function check-arguments() {
     }
 
     if (!$flowLogName) {
-        write-warning "flow log name is required."
+        write-warning "flow log name is required with -flowLogName argument. To create a new flow log, use -flowLogName with name of new flow log."
         return $false
     }
 
-    if (!$script:networkwatcherName) {
-        write-warning "network watcher name is required."
-        $script:networkwatcherName = 'NetworkWatcher_' + $script:location
-        write-host "setting network watcher name: $script:networkwatcherName" -ForegroundColor Cyan
-    }
-
     if (!$storageAccountName) {
-        write-warning "storage account name is required."
+        write-warning "storage account name is required. To create a new storage account, use -storageAccountName with name of new storage account or use '*' to generate."
         return
     }
 
@@ -429,7 +423,8 @@ function check-arguments() {
     }
     
     if (!(check-logAnalytics)) {
-        return $false
+        Write-Warning "log analytics workspace not configured/found. To create a new log analytics workspace, use -logAnalyticsWorkspaceName with name of new workspace or use '*' to generate."
+        # return $false
     }
     
     if (!(check-storage)) {
@@ -439,7 +434,6 @@ function check-arguments() {
     if (!(check-networkWatcher)) {
         return $false
     }
-
 
     if (!(Get-azResourceGroup)) {
         connect-azaccount
@@ -486,6 +480,14 @@ function check-module() {
 }
 
 function check-logAnalytics() {
+    if (!$logAnalyticsWorkspaceName -and $logAnalyticsWorkspaceName -ne "*") {
+        write-warning "log analytics workspace not provided."
+        return $false
+    }
+    if($logAnalyticsWorkspaceName -eq "*") {
+        $logAnalyticsWorkspaceName = $resourceGroupName + 'la'
+        write-warning "generated log analytics workspace name: $logAnalyticsWorkspaceName"
+    }
     $script:laResourceGroup = get-resourceGroup -ResourceName $logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
     if (!$script:laResourceGroup) {
         write-warning "log analytics workspace resource group not found for $logAnalyticsWorkspaceName. getting log analytics workspace resource group."
@@ -512,6 +514,14 @@ function check-logAnalytics() {
 }
 
 function check-networkWatcher() {
+    if(!$script:networkwatcherName -and $script:networkwatcherName -ne "*") {
+        write-warning "network watcher name not provided."
+        return $false
+    }
+    if($script:networkwatcherName -eq "*") {
+        $script:networkwatcherName = 'NetworkWatcher_' + $script:location
+        write-warning "generated network watcher name: $script:networkwatcherName"
+    }
     $script:nwResourceGroup = get-resourceGroup -ResourceName $script:networkwatcherName -ResourceType 'Microsoft.Network/networkWatchers'
     if (!$script:nwResourceGroup) {
         write-warning "network watcher resource group not found for $($script:networkwatcherName). getting network watcher resource group."
@@ -538,6 +548,14 @@ function check-networkWatcher() {
 }
 
 function check-storage() {
+    if (!$storageAccountName -and $storageAccountName -ne "*") {
+        write-warning "storage account name not provided."
+        return $false
+    }
+    if($storageAccountName -eq "*") {
+        $storageAccountName = (-join (('flow', [Guid]::NewGuid().ToString('N').Substring(0,22)) | ForEach-Object { $_.ToLower() })) -replace '[^a-z0-9]', ''
+        write-warning "generated storage account name: $storageAccountName"
+    }
     $script:storageResourceGroup = get-resourceGroup -ResourceName $storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
     if (!$script:storageResourceGroup) {
         write-warning "storage account resource group not found for $storageAccountName. getting storage account resource group."
