@@ -291,6 +291,7 @@ $script:laResourceGroup = $null
 $script:networkwatcherName = $networkwatcherName
 $script:location = $location
 $script:logAnalyticsWorkspaceName = $logAnalyticsWorkspaceName
+$script:storageAccountName = $storageAccountName
 
 function main() {
 
@@ -402,7 +403,7 @@ function check-arguments() {
         return $false
     }
 
-    if (!$storageAccountName) {
+    if (!$script:storageAccountName) {
         write-warning "storage account name is required. To create a new storage account, use -storageAccountName with name of new storage account or use '*' to generate."
         return
     }
@@ -480,22 +481,22 @@ function check-module() {
 }
 
 function check-logAnalytics() {
-    if (!$logAnalyticsWorkspaceName -and $logAnalyticsWorkspaceName -ne "*") {
+    if (!$script:logAnalyticsWorkspaceName -and $script:logAnalyticsWorkspaceName -ne "*") {
         write-warning "log analytics workspace not provided."
         return $false
     }
-    if($logAnalyticsWorkspaceName -eq "*") {
-        $logAnalyticsWorkspaceName = $resourceGroupName + 'la'
-        write-warning "generated log analytics workspace name: $logAnalyticsWorkspaceName"
+    if($script:logAnalyticsWorkspaceName -eq "*") {
+        $script:logAnalyticsWorkspaceName = $resourceGroupName + 'la'
+        write-warning "generated log analytics workspace name: $script:logAnalyticsWorkspaceName"
     }
-    $script:laResourceGroup = get-resourceGroup -ResourceName $logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
+    $script:laResourceGroup = get-resourceGroup -ResourceName $script:logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
     if (!$script:laResourceGroup) {
-        write-warning "log analytics workspace resource group not found for $logAnalyticsWorkspaceName. getting log analytics workspace resource group."
-        $continue = read-host "do you want to create a new log analytics workspace named $logAnalyticsWorkspaceName in $resourceGroupName in $($script:location)?[y|n]"
+        write-warning "log analytics workspace resource group not found for $script:logAnalyticsWorkspaceName. getting log analytics workspace resource group."
+        $continue = read-host "do you want to create a new log analytics workspace named $script:logAnalyticsWorkspaceName in $resourceGroupName in $($script:location)?[y|n]"
         if ($continue -imatch "y") {
             $error.clear()
-            write-host "New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName -Name $logAnalyticsWorkspaceName -Location $script:location" -ForegroundColor Cyan
-            $logAnalyticsWorkspace = New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName -Name $logAnalyticsWorkspaceName -Location $script:location
+            write-host "New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName -Name $script:logAnalyticsWorkspaceName -Location $script:location" -ForegroundColor Cyan
+            $logAnalyticsWorkspace = New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName -Name $script:logAnalyticsWorkspaceName -Location $script:location
             $script:laResourceGroup = $resourceGroupName
             if ($error -or !$logAnalyticsWorkspace) {
                 Write-Error "error creating log analytics workspace:$($error | out-string)"
@@ -548,22 +549,23 @@ function check-networkWatcher() {
 }
 
 function check-storage() {
-    if (!$storageAccountName -and $storageAccountName -ne "*") {
+    if (!$script:storageAccountName -and $script:storageAccountName -ne "*") {
         write-warning "storage account name not provided."
         return $false
     }
-    if($storageAccountName -eq "*") {
-        $storageAccountName = (-join (('flow', [Guid]::NewGuid().ToString('N').Substring(0,22)) | ForEach-Object { $_.ToLower() })) -replace '[^a-z0-9]', ''
-        write-warning "generated storage account name: $storageAccountName"
+    if($script:storageAccountName -eq "*") {
+        $base64String = [convert]::toBase64String([text.encoding]::UTF8.GetBytes($resourceGroupName)).tolower().substring(0,20) -replace '[^a-z0-9]', ''
+        $script:storageAccountName = [string]::join('',@('flow', $base64String))
+        write-warning "generated storage account name: $script:storageAccountName"
     }
-    $script:storageResourceGroup = get-resourceGroup -ResourceName $storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
+    $script:storageResourceGroup = get-resourceGroup -ResourceName $script:storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
     if (!$script:storageResourceGroup) {
-        write-warning "storage account resource group not found for $storageAccountName. getting storage account resource group."
-        $continue = read-host "do you want to create a new storage account named $storageAccountName in $resourceGroupName in $($script:location)?[y|n]"
+        write-warning "storage account resource group not found for $script:storageAccountName. getting storage account resource group."
+        $continue = read-host "do you want to create a new storage account named $script:storageAccountName in $resourceGroupName in $($script:location)?[y|n]"
         if ($continue -imatch "y") {
             $error.clear()
-            write-host "New-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2" -ForegroundColor Cyan
-            $storageaccount = New-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2
+            write-host "New-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $script:storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2" -ForegroundColor Cyan
+            $storageaccount = New-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $script:storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2
             $script:storageResourceGroup = $resourceGroupName
             if ($error -or !$storageaccount) {
                 write-error "error creating storage account:$($error | out-string)"
@@ -591,7 +593,7 @@ function download-flowLog($currentFlowLog) {
         $global:blockBlobs = @(Get-VNetFlowLogCloudBlockBlob -subscriptionId $subscriptionId `
                 -region $script:location `
                 -VNetFlowLogName $flowLogName `
-                -storageAccountName $storageAccountName `
+                -storageAccountName $script:storageAccountName `
                 -storageAccountResourceGroup $script:storageResourceGroup `
                 -macAddress $macAddress `
                 -logTime $universalTime)
@@ -668,17 +670,17 @@ function Get-VNetFlowLogCloudBlockBlob (
     [string] [Parameter(Mandatory = $true)] $subscriptionId,
     [string] [Parameter(Mandatory = $true)] $region,
     [string] [Parameter(Mandatory = $true)] $VNetFlowLogName,
-    [string] [Parameter(Mandatory = $true)] $storageAccountName,
+    [string] [Parameter(Mandatory = $true)] $script:storageAccountName,
     [string] [Parameter(Mandatory = $true)] $storageAccountResourceGroup,
     [string] [Parameter(Mandatory = $true)] $macAddress,
     [datetime] [Parameter(Mandatory = $true)] $logTime
 ) {
 
     # Retrieve the primary storage account key to access the virtual network flow logs
-    $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $storageAccountResourceGroup -Name $storageAccountName).Value[0]
+    $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $storageAccountResourceGroup -Name $script:storageAccountName).Value[0]
 
     # Setup a new storage context to be used to query the logs
-    $ctx = New-AzStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $StorageAccountKey
+    $ctx = New-AzStorageContext -StorageAccountName $script:storageAccountName -StorageAccountKey $StorageAccountKey
 
     # Container name used by virtual network flow logs
     $ContainerName = "insights-logs-flowlogflowevent"
@@ -774,29 +776,29 @@ function modify-flowLog() {
         write-host "flow log does not exist. creating flow log"
     }
     
-    write-host "Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $script:storageResourceGroup" -ForegroundColor Cyan
-    $storageaccount = Get-AzStorageAccount -Name $storageAccountName -ResourceGroupName $script:storageResourceGroup
+    write-host "Get-AzStorageAccount -Name $script:storageAccountName -ResourceGroupName $script:storageResourceGroup" -ForegroundColor Cyan
+    $storageaccount = Get-AzStorageAccount -Name $script:storageAccountName -ResourceGroupName $script:storageResourceGroup
     write-host "storageaccount: $($storageaccount | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
     if ($logRetentionInDays -gt 0 -and $storageaccount.kind -ne "StorageV2") {
         write-host "storage account kind must be StorageV2 for log retention or set logRetentionInDays = 0" -ForegroundColor Red
         return
     }
 
-    if ($logAnalyticsWorkspaceName) {
+    if ($script:logAnalyticsWorkspaceName) {
         if (!(Get-AzResourceProvider -ProviderNamespace Microsoft.Insights)) {
             write-host "Register-AzResourceProvider -ProviderNamespace Microsoft.Insights" -ForegroundColor Cyan
             Register-AzResourceProvider -ProviderNamespace Microsoft.Insights
         }
 
-        # $script:laResourceGroup = get-resourceGroup -ResourceName $logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
+        # $script:laResourceGroup = get-resourceGroup -ResourceName $script:logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
         $error.clear()
-        write-host "Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $script:laResourceGroup" -ForegroundColor Cyan
-        $workspace = Get-AzOperationalInsightsWorkspace -Name $logAnalyticsWorkspaceName -ResourceGroupName $script:laResourceGroup
+        write-host "Get-AzOperationalInsightsWorkspace -Name $script:logAnalyticsWorkspaceName -ResourceGroupName $script:laResourceGroup" -ForegroundColor Cyan
+        $workspace = Get-AzOperationalInsightsWorkspace -Name $script:logAnalyticsWorkspaceName -ResourceGroupName $script:laResourceGroup
 
         if ($error -and $script:location) {
             write-host "workspace not found. creating workspace"
             $workspace = New-AzOperationalInsightsWorkspace -ResourceGroupName $resourceGroupName `
-                -Name $logAnalyticsWorkspaceName `
+                -Name $script:logAnalyticsWorkspaceName `
                 -Location $script:location
         }
         elseif ($error) {
@@ -811,7 +813,7 @@ function modify-flowLog() {
             -ResourceGroupName $script:nwResourceGroup ``
             -StorageId $($storageaccount.Id) ``
             -TargetResourceId $($vnet.Id) ``
-            -EnableTrafficAnalytics:`$true ``
+            -EnableTrafficAnalytics:`$$($enable.IsPresent) ``
             -TrafficAnalyticsWorkspaceId $($workspace.ResourceId) ``
             -TrafficAnalyticsInterval 10 ``
             -EnableRetention:`$$($logRetentionInDays -gt 0) ``
@@ -825,7 +827,7 @@ function modify-flowLog() {
             -ResourceGroupName $script:nwResourceGroup `
             -StorageId $storageaccount.Id `
             -TargetResourceId $vnet.Id `
-            -EnableTrafficAnalytics:$true `
+            -EnableTrafficAnalytics:$($enable.IsPresent) `
             -TrafficAnalyticsWorkspaceId $workspace.ResourceId `
             -TrafficAnalyticsInterval 10 `
             -EnableRetention:($logRetentionInDays -gt 0) `
