@@ -132,6 +132,8 @@ param(
   [string]$user = 'default',
   [ValidateSet('url', 'b64_json')]
   [string]$imageResponseFormat = 'url',
+  [ValidateSet('json_object', 'text')]
+  [string]$responseFormat = 'json_object',
   [string[]]$systemPrompts = @(
     'always reply in json format with the response containing complete details',
     'prefer accurate and complete responses including references and citations',
@@ -251,7 +253,7 @@ function build-chatRequestBody($messageRequests) {
 
   $requestBody = @{
     response_format = @{ 
-      type = "json_object"
+      type = $responseFormat
     }
     model           = $model
     seed            = $seed
