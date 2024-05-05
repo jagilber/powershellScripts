@@ -486,7 +486,7 @@ function check-logAnalytics() {
         return $false
     }
     if($script:logAnalyticsWorkspaceName -eq "*") {
-        $script:logAnalyticsWorkspaceName = $resourceGroupName + 'la'
+        $script:logAnalyticsWorkspaceName = 'flow' + $resourceGroupName
         write-warning "generated log analytics workspace name: $script:logAnalyticsWorkspaceName"
     }
     $script:laResourceGroup = get-resourceGroup -ResourceName $script:logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces'
