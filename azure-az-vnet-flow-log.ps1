@@ -18,14 +18,14 @@
     https://learn.microsoft.com/en-us/azure/network-watcher/vnet-flow-logs-overview
     https://learn.microsoft.com/en-us/azure/network-watcher/flow-logs-read?tabs=vnet\
 
-    We recommend disabling network security group flow logs before enabling virtual network flow logs on the same underlying workloads to avoid duplicate traffic recording and additional costs. 
-    If you enable network security group flow logs on the network security group of a subnet, then you enable virtual network flow logs on the same subnet or parent virtual network, 
+    We recommend disabling network security group flow logs before enabling virtual network flow logs on the same underlying workloads to avoid duplicate traffic recording and additional costs.
+    If you enable network security group flow logs on the network security group of a subnet, then you enable virtual network flow logs on the same subnet or parent virtual network,
     you might get duplicate logging (both network security group flow logs and virtual network flow logs generated for all supported workloads in that particular subnet).
-    
+
 .NOTES
    File Name  : azure-az-vnet-flow-log.ps1
    Author     : jagilber
-   Version    : 240501
+   Version    : 240505
    History    :
 
    Schema
@@ -197,7 +197,7 @@
             -vnetName <vnet name> `
             -storageAccountName <storage account name> `
             -remove
-    
+
 .PARAMETER resourceGroupName
     resource group name
 
@@ -264,7 +264,7 @@ param(
     [string]$storageAccountName,
     [string]$flowLogName = $vnetName + 'FlowLog',
     [string]$flowLogJson = "$pwd\flowLog.json",
-    [string]$subscriptionId = (get-azContext).Subscription.Id,
+    [string]$subscriptionId, # = (get-azContext).Subscription.Id,
     [string]$location,
     [string]$networkwatcherName = '*', # = 'NetworkWatcher_' + $script:location,
     [string]$logAnalyticsWorkspaceName,
@@ -292,6 +292,7 @@ $script:networkwatcherName = $networkwatcherName
 $script:location = $location
 $script:logAnalyticsWorkspaceName = $logAnalyticsWorkspaceName
 $script:storageAccountName = $storageAccountName
+$script:subscriptionId = $subscriptionId
 
 function main() {
 
@@ -336,7 +337,7 @@ function main() {
                 }
                 $flowLogFileName = generate-fileName $flowLogJson "merged"
                 $csvFileName = save-flowTuple -flowLogFileName $flowLogFileName -parsedFlowTuple $parsedFlowTuple
-                write-host "merged flow log saved to $csvFileName" -ForegroundColor Green
+                write-host "merged flow log saved to $csvFileName" -ForegroundColor Magenta
             }
             write-host "finished. results in:`$global:sortedFlowTuple" -ForegroundColor Green
         }
@@ -369,26 +370,32 @@ function main() {
 }
 
 function check-arguments() {
-    
-    if (!$subscriptionId) {
-        write-warning "subscription id is required."
-        return $false
-    }
-    
+
+
     if (!$resourceGroupName) {
         write-warning "resource group name is required."
         return $false
-    }        
-    
+    }
+
     if (!$vnetName) {
         write-warning "vnet name is required."
         return $false
     }
-    
+
     if (!(check-module)) {
         return $false
     }
-    
+
+    if (!$script:subscriptionId) {
+        $script:subscriptionId = (get-azContext).Subscription.Id
+
+        if (!$script:subscriptionId) {
+            write-warning "subscription id is required."
+            return $false
+        }
+        write-host "setting subscription id: $script:subscriptionId" -ForegroundColor Cyan
+    }
+
     if (!$script:location) {
         $script:location = (Get-AzResourceGroup -Name $resourceGroupName).Location
         write-host "setting location: $script:location" -ForegroundColor Cyan
@@ -422,12 +429,12 @@ function check-arguments() {
         write-warning "enable/disable and get/remove switches are mutually exclusive."
         return $false
     }
-    
+
     if (!(check-logAnalytics)) {
         Write-Warning "log analytics workspace not configured/found. To create a new log analytics workspace, use -logAnalyticsWorkspaceName with name of new workspace or use '*' to generate."
         # return $false
     }
-    
+
     if (!(check-storage)) {
         return $false
     }
@@ -485,7 +492,7 @@ function check-logAnalytics() {
         write-warning "log analytics workspace not provided."
         return $false
     }
-    if($script:logAnalyticsWorkspaceName -eq "*") {
+    if ($script:logAnalyticsWorkspaceName -eq "*") {
         $script:logAnalyticsWorkspaceName = 'flow' + $resourceGroupName
         write-warning "generated log analytics workspace name: $script:logAnalyticsWorkspaceName"
     }
@@ -515,11 +522,11 @@ function check-logAnalytics() {
 }
 
 function check-networkWatcher() {
-    if(!$script:networkwatcherName -and $script:networkwatcherName -ne "*") {
+    if (!$script:networkwatcherName -and $script:networkwatcherName -ne "*") {
         write-warning "network watcher name not provided."
         return $false
     }
-    if($script:networkwatcherName -eq "*") {
+    if ($script:networkwatcherName -eq "*") {
         $script:networkwatcherName = 'NetworkWatcher_' + $script:location
         write-warning "generated network watcher name: $script:networkwatcherName"
     }
@@ -553,9 +560,9 @@ function check-storage() {
         write-warning "storage account name not provided."
         return $false
     }
-    if($script:storageAccountName -eq "*") {
-        $base64String = [convert]::toBase64String([text.encoding]::UTF8.GetBytes($resourceGroupName)).tolower().substring(0,20) -replace '[^a-z0-9]', ''
-        $script:storageAccountName = [string]::join('',@('flow', $base64String))
+    if ($script:storageAccountName -eq "*") {
+        $base64String = [convert]::toBase64String([text.encoding]::UTF8.GetBytes($resourceGroupName)).tolower().substring(0, 20) -replace '[^a-z0-9]', ''
+        $script:storageAccountName = [string]::join('', @('flow', $base64String))
         write-warning "generated storage account name: $script:storageAccountName"
     }
     $script:storageResourceGroup = get-resourceGroup -ResourceName $script:storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
@@ -587,23 +594,23 @@ function check-storage() {
 function download-flowLog($currentFlowLog) {
     $flowLog = $currentFlowLog
     $flowLogFileNames = @()
-    
+
     if ($flowLog) {
         write-host "flow log stored in global variable: `$flowLog" -ForegroundColor Magenta
-        $global:blockBlobs = @(Get-VNetFlowLogCloudBlockBlob -subscriptionId $subscriptionId `
+        $global:blockBlobs = @(Get-VNetFlowLogCloudBlockBlob -subscriptionId $script:subscriptionId `
                 -region $script:location `
                 -VNetFlowLogName $flowLogName `
                 -storageAccountName $script:storageAccountName `
                 -storageAccountResourceGroup $script:storageResourceGroup `
                 -macAddress $macAddress `
                 -logTime $universalTime)
-        
+
         foreach ($blockBlob in $global:blockBlobs) {
             write-verbose "blockBlob: $($blockBlob | convertto-json -WarningAction SilentlyContinue -depth 3)"
-            
+
             $global:blockList = @(Get-VNetFlowLogBlockList -CloudBlockBlob $blockBlob)
             Write-Verbose "blockList: $($global:blockList | convertto-json -WarningAction SilentlyContinue -depth 3)"
-            
+
             $valuearray = Get-VNetFlowLogReadBlock -blockList $global:blockList -CloudBlockBlob $blockBlob
             if ($valuearray) {
                 $flowMacAddress = [regex]::match($blockBlob.name, 'macAddress=(.+?)/').Groups[1].value
@@ -627,14 +634,14 @@ function generate-fileName($fileName, $identifier = "") {
     $flowLogFileName = [io.path]::GetFileNameWithoutExtension($fileName)
     $flowLogFilePath = [io.path]::GetDirectoryName($fileName)
     $flowLogFileNameExt = [io.path]::GetExtension($fileName)
-    
+
     if ($identifier) {
         $name = "$($flowLogFilePath)\$($flowLogFileName)_$($identifier)_$($universalTime.ToString("yyyyMMddHHmm"))$flowLogFileNameExt"
     }
     else {
         $name = "$($flowLogFilePath)\$($flowLogFileName)_$($universalTime.ToString("yyyyMMddHHmm"))$flowLogFileNameExt"
     }
-    
+
     return $name
 }
 
@@ -670,17 +677,17 @@ function Get-VNetFlowLogCloudBlockBlob (
     [string] [Parameter(Mandatory = $true)] $subscriptionId,
     [string] [Parameter(Mandatory = $true)] $region,
     [string] [Parameter(Mandatory = $true)] $VNetFlowLogName,
-    [string] [Parameter(Mandatory = $true)] $script:storageAccountName,
+    [string] [Parameter(Mandatory = $true)] $storageAccountName,
     [string] [Parameter(Mandatory = $true)] $storageAccountResourceGroup,
     [string] [Parameter(Mandatory = $true)] $macAddress,
     [datetime] [Parameter(Mandatory = $true)] $logTime
 ) {
 
     # Retrieve the primary storage account key to access the virtual network flow logs
-    $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $storageAccountResourceGroup -Name $script:storageAccountName).Value[0]
+    $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $storageAccountResourceGroup -Name $storageAccountName).Value[0]
 
     # Setup a new storage context to be used to query the logs
-    $ctx = New-AzStorageContext -StorageAccountName $script:storageAccountName -StorageAccountKey $StorageAccountKey
+    $ctx = New-AzStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $StorageAccountKey
 
     # Container name used by virtual network flow logs
     $ContainerName = "insights-logs-flowlogflowevent"
@@ -715,7 +722,7 @@ function Get-VNetFlowLogReadBlock(
     [Microsoft.Azure.Storage.Blob.CloudBlockBlob] [Parameter(Mandatory = $true)] $CloudBlockBlob
 ) {
     $blocklistResult = $blockList.Result
-    
+
     # Set the size of the byte array to the largest block
     $maxvalue = ($blocklistResult | Measure-Object Length -Maximum).Maximum
     write-verbose "Max value is ${maxvalue}"
@@ -756,8 +763,8 @@ function modify-flowLog() {
     if (!$vnetName) {
         write-warning "resource group and vnet name are required."
         return
-    }        
-        
+    }
+
     write-host "Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName" -ForegroundColor Cyan
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
     write-host "vnet: $($vnet | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
@@ -767,7 +774,7 @@ function modify-flowLog() {
     write-host "Get-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName" -ForegroundColor Cyan
     $networkwatcher = Get-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName
     write-host "networkwatcher: $($networkwatcher | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
-    
+
     if ($currentFlowLog) {
         write-host "flow log already exists. updating flow log" -ForegroundColor Yellow
         write-host "current flow log: $($currentFlowLog | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Yellow
@@ -775,7 +782,7 @@ function modify-flowLog() {
     else {
         write-host "flow log does not exist. creating flow log"
     }
-    
+
     write-host "Get-AzStorageAccount -Name $script:storageAccountName -ResourceGroupName $script:storageResourceGroup" -ForegroundColor Cyan
     $storageaccount = Get-AzStorageAccount -Name $script:storageAccountName -ResourceGroupName $script:storageResourceGroup
     write-host "storageaccount: $($storageaccount | convertto-json -WarningAction SilentlyContinue -depth 3)" -ForegroundColor Green
