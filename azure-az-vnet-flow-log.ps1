@@ -15,6 +15,8 @@
     Network flow logs collected1	5 GB per month	$0.50 per GB
 
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-vnet-flow-log.ps1" -outFile "$pwd\azure-az-vnet-flow-log.ps1"
+    .\azure-az-vnet-flow-log.ps1 -examples
+
     https://learn.microsoft.com/en-us/azure/network-watcher/vnet-flow-logs-overview
     https://learn.microsoft.com/en-us/azure/network-watcher/flow-logs-read?tabs=vnet\
 
@@ -25,7 +27,7 @@
 .NOTES
    File Name  : azure-az-vnet-flow-log.ps1
    Author     : jagilber
-   Version    : 240505
+   Version    : 240506
    History    :
 
    Schema
@@ -180,7 +182,9 @@
     group and count by ip address
 
 .EXAMPLE
-    example steps to enable flow log for capture and analysis
+    example steps to enable flow log for capture and analysis with existing / new storage account by name.
+    storage account and log analytics workspace names are not removed.
+
     enable flow log
         .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
             -vnetName <vnet name> `
@@ -196,6 +200,30 @@
         .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
             -vnetName <vnet name> `
             -storageAccountName <storage account name> `
+            -remove
+
+.EXAMPLE
+    example steps to enable flow log for capture and analysis with new generated storage account and new generated log analytics workspace.
+    storage account and log analytics workspace names are not removed.
+    
+    enable flow log
+        .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
+            -vnetName <vnet name> `
+            -storageAccountName * `
+            -logAnalyticsWorkspaceName * `
+            -enable
+    reproduce traffic
+    download flow log
+        .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
+            -vnetName <vnet name> `
+            -storageAccountName * `
+            -logAnalyticsWorkspaceName * `
+            -get
+    remove flow log
+        .\azure-az-vnet-flow-log.ps1 -resourceGroupName <vnet resource group name> `
+            -vnetName <vnet name> `
+            -storageAccountName * `
+            -logAnalyticsWorkspaceName * `
             -remove
 
 .PARAMETER resourceGroupName
@@ -700,7 +728,7 @@ function Get-VNetFlowLogCloudBlockBlob (
     # Gets the storage blog
     write-host "Get-AzStorageBlob -Context $ctx -Container $ContainerName -Blob $BlobName" -ForegroundColor Cyan
     $Blob = Get-AzStorageBlob -Context $ctx -Container $ContainerName -Blob $BlobName
-    write-host "blob: $($Blob | convertto-json -WarningAction SilentlyContinue)" -ForegroundColor Green
+    write-verbose "blob: $($Blob | convertto-json -WarningAction SilentlyContinue)"
     # Gets the block blog of type 'Microsoft.Azure.Storage.Blob.CloudBlob' from the storage blob
     $CloudBlockBlob = [Microsoft.Azure.Storage.Blob.CloudBlockBlob[]] @($Blob.ICloudBlob)
 
