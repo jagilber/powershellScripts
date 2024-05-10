@@ -938,7 +938,7 @@ function modify-flowLog() {
         $setFlowLog = Set-AzNetworkWatcherFlowLog -Enabled:$enable.IsPresent `
             -Name $flowLogName `
             -NetworkWatcherName $networkwatcher.Name `
-            -ResourceGroupName $script:nwLogResourceGroup `
+            -ResourceGroupName $script:nwResourceGroup `
             -StorageId $storageaccount.Id `
             -TargetResourceId $vnet.Id `
             -EnableRetention:($logRetentionInDays -gt 0) `
