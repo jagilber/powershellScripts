@@ -8,8 +8,8 @@
     requires az modules to be installed.
     requires at least powershell 7.4.0
     requires storage account or log analytics workspace to store flow logs.
-    requires network watcher to be installed and configured.
-    requires virtual network to be created.
+    requires network watcher to be enabled in region.
+    requires virtual network to be monitored.
 
     Feature	Free units included	Price
     Network flow logs collected1	5 GB per month	$0.50 per GB
@@ -23,106 +23,31 @@
     We recommend disabling network security group flow logs before enabling virtual network flow logs on the same underlying workloads to avoid duplicate traffic recording and additional costs.
     If you enable network security group flow logs on the network security group of a subnet, then you enable virtual network flow logs on the same subnet or parent virtual network,
     you might get duplicate logging (both network security group flow logs and virtual network flow logs generated for all supported workloads in that particular subnet).
+    
+    Microsoft Privacy Statement: https://privacy.microsoft.com/en-US/privacystatement
+    MIT License
+    Copyright (c) Microsoft Corporation. All rights reserved.
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
 
 .NOTES
    File Name  : azure-az-vnet-flow-log.ps1
    Author     : jagilber
-   Version    : 240509
+   Version    : 240510
    History    :
-
-   Schema
-    Example JSON
-    {
-        "records": [
-            {
-                "time": "2023-02-04T23:00:23.8575523Z",
-                "flowLogVersion": 4,
-                "flowLogGUID": "4c6afa0c-e30c-4866-acb0-60a6439ad918",
-                "macAddress": "6045BD7431F1",
-                "category": "FlowLogFlowEvent",
-                "flowLogResourceID": "/SUBSCRIPTIONS/014E7430-FD92-4579-9119-E861D926508A/RESOURCEGROUPS/NETWORKWATCHERRG/PROVIDERS/MICROSOFT.NETWORK/NETWORKWATCHERS/NETWORKWATCHER_EASTUS2EUAP/FLOWLOGS/FLRUNNERSFLOWLOG",
-                "targetResourceID": "/subscriptions/014e7430-fd92-4579-9119-e861d926508a/resourceGroups/samoham-eastus2euap-rg/providers/Microsoft.Network/virtualNetworks/flrunnersVnet",
-                "operationName": "FlowLogFlowEvent",
-                "flowRecords": {
-                    "flows": [
-                        {
-                            "aclID": "fbd9a77e-bdab-4ce8-b4fb-64bf199d66bf",
-                            "flowGroups": [
-                                {
-                                    "rule": "DefaultRule_AllowInternetOutBound",
-                                    "flowTuples": [
-                                        "1675551600689,192.168.0.8,40.79.154.85,58973,443,6,O,E,NX,15,8645,13,9044"
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "aclID": "65624055-d088-44e6-9c98-b7cadd84885a",
-                            "flowGroups": [
-                                {
-                                    "rule": "BlockHighRiskTCPPortsFromInternet_8e593d16-5f9d-4b25-b3b2-df7b6951a08b",
-                                    "flowTuples": [
-                                        "1675551614124,205.210.31.32,192.168.0.8,53998,5986,6,I,D,NX,0,0,0,0"
-                                    ]
-                                },
-                                {
-                                    "rule": "Internet_d04abb96-9395-47cb-a760-7640a232c7a1",
-                                    "flowTuples": [
-                                        "1675551583200,91.191.209.198,192.168.0.8,50706,15800,6,I,D,NX,0,0,0,0",
-                                        "1675551586719,89.248.165.195,192.168.0.8,43666,635,6,I,D,NX,0,0,0,0",
-                                        "1675551607297,162.142.125.243,192.168.0.8,42356,56570,6,I,D,NX,0,0,0,0",
-                                        "1675551608150,170.187.229.195,192.168.0.8,51602,9205,6,I,D,NX,0,0,0,0",
-                                        "1675551618678,107.170.245.18,192.168.0.8,49147,1400,6,I,D,NX,0,0,0,0"
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
-        ]
-    }
-    Flow logs properties
-    Field Name	Description
-    time	Time in UTC when the event was logged
-    flowLogVersion	Version of flow log schema
-    flowLogGUID	The resource GUID of the FlowLog resource
-    macAddress	MAC address of the network interface where the event was captured
-    category	The category of the event. The category is always FlowLogFlowEvent
-    flowLogResourceID	The resource ID of the FlowLog resource
-    targetResourceID	The resource ID target resource associated to the FlowLog resource
-    operationName	This is always FlowLogFlowEvent
-    flowRecords	A collection of flow records
-    flows	A collection of flows. This property has multiple entries for different ACLs
-    aclID	This is a GUID which identifies the NSG resource. For cases like traffic denied by encryption, this will be "unspecified"
-    flowGroups	a collection of flow records at a rule level
-    rule	The rule name which allowed or denied the traffic. For traffic denied due to encryption, this value can be "unspecified"
-    flowTuples	A string that contains multiple properties for the flow tuple in comma-separated format
-    Flow tuple fields
-    Field Name	Description
-    TimeStamp	This value is the time stamp of when the flow occurred in UNIX epoch format
-    Source IP	The source IP
-    Destination IP	The destination IP
-    Source Port	The source port
-    Destination Port	The destination Port
-    Protocol	The L4 protocol of the flow expressed as IANA assigned values
-    Flow direction	The direction of the traffic flow. Valid values are I for inbound and O for outbound
-    Flow State	Captures the state of the flow. Possible states are B: Begin, when a flow is created, statistics are not provided. C: Continuing for an ongoing flow, statistics are provided at 5-minute intervals. E: End, when a flow is terminated, statistics are provided. D: when a flow is denied
-    Flow Encryption	Captures the encryption state of the flow. Possible values: 'X' representing Encrypted, 'NX' representing Unencrypted, 'NX_HW_NOT_SUPPORTED' representing Unsupported hardware, 'NX_SW_NOT_READY' representing Software not ready, 'NX_NOT_ACCEPTED' representing Drop due to no encryption, 'NX_NOT_SUPPORTED' representing Discovery not supported, 'NX_LOCAL_DST' representing Destination on same host, 'NX_FALLBACK' representing Fallback to no encryption
-    Packets from Source to destination	The total number of packets sent from source to destination since the last update
-    Bytes sent from Source to destination	The total number of packet bytes sent from source to destination since the last update. Packet bytes include the packet header and payload
-    Packets from Destination to source	The total number of packets sent from destination to source since the last update
-    Bytes sent from Destination to source	The total number of packet bytes sent from destination to source since the last update. Packet bytes include packet header and payload
-    Encryption field
-    Encryption Status	Description
-    Encrypted (X)	Connection is encrypted. This refers to the scenario where customer has configured encryption and the platform has encrypted the connection.
-    Unencrypted (NX)	Connection is not encrypted. This will be logged in the scenario where encryption is not configured. It will also be logged in scenario where allow unencrypted policy is configured and the remote endpoint of the traffic does not support encryption.
-    Unsupported Hardware (NX_HW_NOT_SUPPORTED)	Customer has configured encryption, but the VM is running on a host which does not support encryption. This can usually be the case where the FPGA is not attached to the host, or could be faulty. Needs further investigation.
-    Software not ready (NX_SW_NOT_READY)	Customer has configured encryption, but the software component (GFT) in the host networking stack is not ready to process encrypted connections. Needs further investigation.
-    Drop due to no encryption (NX_NOT_ACCEPTED)	Customer has configured drop on unencrypted policy as a part of VNET encryption. If the connection is not encrypted, it will be dropped.
-    Discovery not supported (NX_NOT_SUPPORTED)	Encryption is configured, but the encryption session was not established, as discovery is not supported in the host networking stack. This needs further investigation.
-    Destination on same host (NX_LOCAL_DST)	Encryption is configured, but the source and destination VMs are running on the same Azure host. In this case, the connection will not be encrypted by design.
-    Fallback to no encryption (NX_FALLBACK)	Encryption is configured with the allow unencrypted policy. Connection will not be encrypted.
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.securityProtocolType]::Tls12;
@@ -329,6 +254,7 @@ param(
     [datetime]$logTime = (get-date),
     [int]$logRetentionInDays = 0, # 0 to disable log retention
     [switch]$enable,
+    [switch]$create,
     [switch]$disable,
     [switch]$get,
     [switch]$remove,
@@ -371,7 +297,7 @@ function main() {
         $currentFlowLog = get-flowLog
         $error.Clear()
 
-        if ($enable -or $disable) {
+        if ($create -or $enable -or $disable) {
             if (!(modify-flowLog)) {
                 return
             }
