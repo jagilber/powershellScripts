@@ -17,20 +17,21 @@
 #>
 param(
   $vsVersion = "2022",
-  $vsBasePath = "C:\Program Files\Microsoft Visual Studio"
+  $vsBasePath = "C:\Program Files\Microsoft Visual Studio",
+  [ValidateSet("Enterprise","IntPreview","Community")]
+  $edition = "Enterprise"
 )
 
 function main() {
   $currentLocation = (Get-Location).Path
-  
-  $vsModulePath = "$vsBasePath\$vsVersion\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+  $vsModulePath = "$vsBasePath\$vsVersion\$edition\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
   if (-not (Test-Path $vsModulePath)) {
     write-error "Visual Studio module not found at $vsModulePath"
     return
   }
   try {
 
-    $workingDir = "$vsBasePath\$vsVersion\Enterprise\"
+    $workingDir = "$vsBasePath\$vsVersion\$edition\"
     Set-Location $workingDir
 
     write-host "Import-Module -name $vsModulePath -PassThru"
@@ -42,12 +43,13 @@ function main() {
     }
     
     $error.clear()
-    write-host "Enter-VsDevShell -VsInstallPath $vsBasePath\$vsVersion\Enterprise -SkipAutomaticLocation"
-    Enter-VsDevShell -VsInstallPath $vsBasePath\$vsVersion\Enterprise -SkipAutomaticLocation
+    write-host "Enter-VsDevShell -VsInstallPath $vsBasePath\$vsVersion\$edition -SkipAutomaticLocation"
+    Enter-VsDevShell -VsInstallPath $vsBasePath\$vsVersion\$edition -SkipAutomaticLocation
     if ($error) {
       write-error "Failed to enter Visual Studio Developer Command Prompt"
       return
     }
+    [environment]::GetEnvironmentVariables()
   }
   catch {
   }
