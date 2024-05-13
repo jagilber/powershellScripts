@@ -189,14 +189,16 @@ function main() {
 
   # Convert the request body to JSON
   $jsonBody = $requestBody | convertto-json -depth 5
+
+  if($listModels) {
+    write-log "listing models" -color Yellow
+    $response = invoke-restMethod -Uri 'https://api.openai.com/v1/models' -Headers $headers
+    write-log "models: $($response | convertto-json -depth 5)" -color Yellow
+    return
+  }
   
   # Make the API request using Invoke-RestMethod
-  write-log "$response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
-  if (!$whatIf) {
-    $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
-  }
-
-  write-log ($response | convertto-json -depth 5) -color Magenta
+  $response = invoke-rest $endpoint $headers $jsonBody
   $message = read-messageResponse $response $script:messageRequests
   $global:openaiResponse = $response
   write-log "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
@@ -310,6 +312,15 @@ function build-imageRequestBody($messageRequests) {
   return $requestBody
 }
 
+function invoke-rest($endpoint, $headers, $jsonBody){
+  write-log "invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
+  if (!$whatIf) {
+    $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
+  }
+
+  write-log ($response | convertto-json -depth 5) -color Magenta
+  return $response
+}
 function read-messageResponse($response, [collections.arraylist]$messageRequests) {
   # Extract the response from the API request
   write-log $response
