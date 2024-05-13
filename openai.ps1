@@ -113,8 +113,8 @@ param(
   [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003')]
-  [string]$model = 'gpt-4-turbo',
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003','gpt-4o')]
+  [string]$model = 'gpt-4o',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
@@ -139,6 +139,7 @@ param(
     'prefer accurate and complete responses including references and citations',
     'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
   ),
+  [switch]$listModels,
   [switch]$whatIf
 )
 
