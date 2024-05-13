@@ -192,7 +192,7 @@ function main() {
 
   if($listModels) {
     write-log "listing models" -color Yellow
-    $response = invoke-restMethod -Uri 'https://api.openai.com/v1/models' -Headers $headers
+    $response = invoke-rest 'https://api.openai.com/v1/models' $headers $null
     write-log "models: $($response | convertto-json -depth 5)" -color Yellow
     return
   }
@@ -313,9 +313,13 @@ function build-imageRequestBody($messageRequests) {
 }
 
 function invoke-rest($endpoint, $headers, $jsonBody){
-  write-log "invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
-  if (!$whatIf) {
+  if (!$whatIf -and $jsonBody) {
+    write-log "invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
+  }
+  elseif(!$whatIf) {
+    write-log "invoke-restMethod -Uri $endpoint -Headers $headers -Method Get" -color Cyan
+    $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Get
   }
 
   write-log ($response | convertto-json -depth 5) -color Magenta
