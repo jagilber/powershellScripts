@@ -33,6 +33,7 @@ function prompt() {
             $promptInfo.cacheTimer = get-date
             $promptInfo.path = $path
             $promptInfo.status = get-gitInfo -newPath $newPath -gitCommand $isGitCommand -cacheTimeout $cacheTimeout
+            $promptInfo.ps = get-psEnv
         }
 
         $date = (get-date).ToString('HH:mm:ss')
@@ -237,6 +238,15 @@ function get-gitInfo([bool]$newPath = $false, [bool]$gitCommand = $false, [bool]
     return $promptInfo.status
 }
 
+function get-psEnv() {
+    write-debug "get-psEnv()"
+    if($env:VSCMD_VER) {
+        $psEnv = "vs$($env:VSCMD_VER) "
+    }
+    $psEnv += if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
+    return $psEnv
+}
+
 function new-promptInfo() {
     if (!$global:promptInfo) {
         write-debug "new-promptInfo()"
@@ -250,7 +260,7 @@ function new-promptInfo() {
             stashes            = [collections.arraylist]::new()
             repo               = ""
             status             = ""
-            ps                 = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
+            ps                 = get-psEnv
             cacheTimer         = [datetime]::MinValue
             enableGit          = $true
             cacheMinutes       = 1

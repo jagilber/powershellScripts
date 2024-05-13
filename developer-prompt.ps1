@@ -49,7 +49,9 @@ function main() {
       write-error "Failed to enter Visual Studio Developer Command Prompt"
       return
     }
-    [environment]::GetEnvironmentVariables()
+
+    $global:envVar = [environment]::GetEnvironmentVariables().getEnumerator()| sort-object Name
+    $global:envVar
   }
   catch {
   }
