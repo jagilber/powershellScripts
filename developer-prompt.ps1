@@ -18,7 +18,7 @@
 param(
   [ValidateSet("2019","2022","2017")]
   $vsVersion = "2022",
-  [ValidateScript("C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio")]
+  [ValidateSet("C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio")]
   $vsBasePath = "C:\Program Files\Microsoft Visual Studio",
   [ValidateSet("Enterprise","IntPreview","Community","Professional")]
   $edition = "Enterprise"
