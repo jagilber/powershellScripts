@@ -113,8 +113,8 @@ param(
   [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003','gpt-4o')]
-  [string]$model = 'gpt-4o',
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003','gpt-4o','gpt-4o-2024-05-13')]
+  [string]$model = 'gpt-4o-2024-05-13',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
@@ -139,6 +139,7 @@ param(
     'prefer accurate and complete responses including references and citations',
     'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
   ),
+  [switch]$listAssistants,
   [switch]$listModels,
   [switch]$whatIf
 )
@@ -179,6 +180,7 @@ function main() {
   $headers = @{
     'Authorization' = "Bearer $apiKey"
     'Content-Type'  = 'application/json'
+    'OpenAI-Beta'   = 'assistants=v1'
   }
   if($endpointType -eq 'images') {
     $headers.'Content-Type' = 'multipart/form-data'
@@ -192,8 +194,15 @@ function main() {
 
   if($listModels) {
     write-log "listing models" -color Yellow
-    $response = invoke-rest 'https://api.openai.com/v1/models' $headers $null
+    $response = invoke-rest 'https://api.openai.com/v1/models' $headers
     write-log "models: $($response | convertto-json -depth 5)" -color Yellow
+    return
+  }
+
+  if($listAssistants) {
+    write-log "listing assistants" -color Yellow
+    $response = invoke-rest 'https://api.openai.com/v1/assistants?limit=100' $headers
+    write-log "assistants: $($response | convertto-json -depth 5)" -color Yellow
     return
   }
   
@@ -312,17 +321,18 @@ function build-imageRequestBody($messageRequests) {
   return $requestBody
 }
 
-function invoke-rest($endpoint, $headers, $jsonBody){
+function invoke-rest($endpoint, $headers, $jsonBody = $null){
   if (!$whatIf -and $jsonBody) {
-    write-log "invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody" -color Cyan
+    write-log "invoke-restMethod -Uri $endpoint -Headers $($headers | convertto-json) -Method Post -Body $jsonBody" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
   }
   elseif(!$whatIf) {
-    write-log "invoke-restMethod -Uri $endpoint -Headers $headers -Method Get" -color Cyan
+    write-log "invoke-restMethod -Uri $endpoint -Headers $($headers | convertto-json) -Method Get" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Get
   }
 
   write-log ($response | convertto-json -depth 5) -color Magenta
+  $global:openaiResponse = $response
   return $response
 }
 function read-messageResponse($response, [collections.arraylist]$messageRequests) {
