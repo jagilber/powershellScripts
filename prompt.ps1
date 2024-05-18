@@ -38,9 +38,18 @@ function prompt() {
 
         $date = (get-date).ToString('HH:mm:ss')
         write-host "$($promptInfo.ps) $date" -ForegroundColor DarkGray -NoNewline
-        write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
-        write-host " $path" -ForegroundColor White
-        return ">"
+
+        if ($promptInfo.pathOnPromptLine) {
+            $path = $path.trim("'")
+            write-host "$($promptInfo.status)" -ForegroundColor DarkCyan
+            write-host "$path>" -ForegroundColor White -NoNewline
+            return
+        }
+        else {
+            write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
+            write-host " $path" -ForegroundColor White
+            return ">"
+        }
     }
     catch {
         write-host "Error: $($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
@@ -130,7 +139,7 @@ function get-diffs() {
     write-debug "get-diffs()"
     $diff = @(git status --porcelain).Count
     if ($diff -gt 0) {
-        add-status " $([char]0x2325)($($promptInfo.branch)*$($diff))" -reset
+        add-status " $([char]0x2325) ($($promptInfo.branch)*$($diff))" -reset
     }
 }
 
@@ -240,7 +249,7 @@ function get-gitInfo([bool]$newPath = $false, [bool]$gitCommand = $false, [bool]
 
 function get-psEnv() {
     write-debug "get-psEnv()"
-    if($env:VSCMD_VER) {
+    if ($env:VSCMD_VER) {
         $psEnv = "vs$($env:VSCMD_VER) "
     }
     $psEnv += if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
@@ -265,6 +274,7 @@ function new-promptInfo() {
             enableGit          = $true
             cacheMinutes       = 1
             fetchedRepos       = [collections.arraylist]::new()
+            pathOnPromptLine   = $false
         }
     }
 }
