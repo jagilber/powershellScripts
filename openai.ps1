@@ -114,11 +114,12 @@ param(
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
   [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003','gpt-4o','gpt-4o-2024-05-13')]
-  [string]$model = 'gpt-4o-2024-05-13',
+  [string]$model = 'gpt-4o',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
-  [switch]$newConversation,
+  [switch]$continueConversation,
+  [switch]$newConversation = !$continueConversation,
   [switch]$completeConversation,
   [bool]$logProbabilities = $false,
   [string]$imageQuality = 'hd',
@@ -190,19 +191,19 @@ function main() {
   $requestBody = build-requestBody $script:messageRequests
 
   # Convert the request body to JSON
-  $jsonBody = $requestBody | convertto-json -depth 5
+  $jsonBody = convert-toJson $requestBody
 
   if($listModels) {
     write-log "listing models" -color Yellow
     $response = invoke-rest 'https://api.openai.com/v1/models' $headers
-    write-log "models: $($response | convertto-json -depth 5)" -color Yellow
+    write-log "models: $(convert-toJson $response)" -color Yellow
     return
   }
 
   if($listAssistants) {
     write-log "listing assistants" -color Yellow
     $response = invoke-rest 'https://api.openai.com/v1/assistants?limit=100' $headers
-    write-log "assistants: $($response | convertto-json -depth 5)" -color Yellow
+    write-log "assistants: $(convert-toJson $response)" -color Yellow
     return
   }
   
@@ -220,14 +221,19 @@ function main() {
 
   if (!$completeConversation -and $promptsFile) {
     # $script:messageRequests += $message
-    $script:messageRequests | ConvertTo-Json | Out-File $promptsFile
+    convert-toJson $script:messageRequests | Out-File $promptsFile
     write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
   }
 
-  write-log "response:$($message.content | convertfrom-json | convertto-json)" -color Green
+  write-log "set-alias openai $($MyInvocation.ScriptName)"
+  set-alias openai $MyInvocation.ScriptName -scope global
+
+  write-log "response:$(convert-toJson ($message.content | convertfrom-json))" -color Green
+  write-log ($global:openaiResponse | out-string) -color DarkGray
+  write-log "use alias 'openai' to run script with new prompt:ex:openai '$($prompts[0])'" -color DarkCyan
   write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
   write-log "===================================="
-  return $message.content
+  return #$message.content
 }
 
 function build-requestBody($messageRequests) {
@@ -242,7 +248,7 @@ function build-requestBody($messageRequests) {
       $requestBody = build-codexRequestBody $messageRequests
     }
   }
-  write-log "request body: $($requestBody | convertto-json -depth 5)" -color Yellow
+  write-log "request body: $(convert-toJson $requestBody)" -color Yellow
   return $requestBody
 }
 
@@ -321,17 +327,21 @@ function build-imageRequestBody($messageRequests) {
   return $requestBody
 }
 
+function convert-toJson($object, $depth = 5) {
+  return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue
+}
+
 function invoke-rest($endpoint, $headers, $jsonBody = $null){
   if (!$whatIf -and $jsonBody) {
-    write-log "invoke-restMethod -Uri $endpoint -Headers $($headers | convertto-json) -Method Post -Body $jsonBody" -color Cyan
+    write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Post -Body $jsonBody" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
   }
   elseif(!$whatIf) {
-    write-log "invoke-restMethod -Uri $endpoint -Headers $($headers | convertto-json) -Method Get" -color Cyan
+    write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Get" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Get
   }
 
-  write-log ($response | convertto-json -depth 5) -color Magenta
+  write-log (convert-toJson $response) -color Magenta
   $global:openaiResponse = $response
   return $response
 }
@@ -347,7 +357,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
         $error.Clear()
         if (($messageObject = convertfrom-json $message.content) -and !$error) {
           write-log "converting message content from json to compressed json" -color Yellow
-          $message.content = ($messageObject | convertto-json -depth 99 -Compress)
+          $message.content = (convert-toJson $messageObject -depth 99)
         }
       }
     }
@@ -379,7 +389,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
     }
   }
 
-  write-log "message: $($message | convertto-json -depth 5)" -color Yellow  
+  write-log "message: $(convert-toJson $message)" -color Yellow  
   return $message
 }
 
@@ -393,7 +403,7 @@ function to-FileFromBase64String($base64) {
 function to-base64StringFromFile($file) {
   $bytes = [io.file]::ReadAllBytes($file)
   $base64 = [convert]::ToBase64String($bytes)
-  return $base64 # convertto-json $base64
+  return $base64
 }
 
 function write-log($message, [switch]$verbose, [ConsoleColor]$color = 'White') {
