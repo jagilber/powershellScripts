@@ -258,3 +258,6 @@ secrets.ps1
 openaiMessages.json
 **/Downloads
 **flowlog**
+**/openai*.json
+**/openai*.txt
+**/openai*.md

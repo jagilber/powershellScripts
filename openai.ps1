@@ -133,10 +133,12 @@ param(
   [string]$user = 'default',
   [ValidateSet('url', 'b64_json')]
   [string]$imageResponseFormat = 'url',
+  [ValidateSet('json', 'markdown')]
+  [string]$responseFileFormat = 'markdown',
   [ValidateSet('json_object', 'text')]
   [string]$responseFormat = 'json_object',
   [string[]]$systemPrompts = @(
-    'always reply in json format with the response containing complete details',
+    'when processing, reply with the high level chain of thought details and reiterations used to generate response.',
     'prefer accurate and complete responses including references and citations',
     'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
   ),
@@ -148,6 +150,7 @@ param(
 [ValidateSet('chat', 'images', 'davinci-codex', 'custom')]
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
+$script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
 
 function main() {
   $startTime = Get-Date
@@ -158,6 +161,14 @@ function main() {
   if (!$apiKey) {
     write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
     return
+  }
+
+  if($responseFormat -imatch 'json'){
+    $script:systemPromptsList.add(' always reply in json format.')
+  }
+  
+  if ($responseFileFormat -ieq 'markdown') {
+    $script:systemPromptsList.add(' format reply message content in github markdown format.')
   }
 
   if($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
@@ -188,7 +199,7 @@ function main() {
     #$headers.Add('Accept', 'image/png')
   }
 
-  $requestBody = build-requestBody $script:messageRequests
+  $requestBody = build-requestBody $script:messageRequests $script:systemPromptsList
 
   # Convert the request body to JSON
   $jsonBody = convert-toJson $requestBody
@@ -210,8 +221,11 @@ function main() {
   # Make the API request using Invoke-RestMethod
   $response = invoke-rest $endpoint $headers $jsonBody
   $message = read-messageResponse $response $script:messageRequests
+  code (save-MessageResponse $message.content)
+
   $global:openaiResponse = $response
-  write-log "api response stored in global variable: `$global:openaiResponse" -ForegroundColor Cyan
+  $global:message = $message
+  write-log "api response stored in global variables: `$global:openaiResponse and `$global:message" -ForegroundColor Cyan
 
   if ($logFile) {
     write-log "result appended to logfile: $logFile"
@@ -236,23 +250,23 @@ function main() {
   return #$message.content
 }
 
-function build-requestBody($messageRequests) {
+function build-requestBody($messageRequests,$systemPrompts) {
   switch -Wildcard ($script:endpointType) {
     'chat' {
-      $requestBody = build-chatRequestBody $messageRequests
+      $requestBody = build-chatRequestBody $messageRequests $systemPrompts
     }
     'images' {
-      $requestBody = build-imageRequestBody $messageRequests
+      $requestBody = build-imageRequestBody $messageRequests $systemPrompts
     }
     'davinci-codex' {
-      $requestBody = build-codexRequestBody $messageRequests
+      $requestBody = build-codexRequestBody $messageRequests $systemPrompts
     }
   }
   write-log "request body: $(convert-toJson $requestBody)" -color Yellow
   return $requestBody
 }
 
-function build-chatRequestBody($messageRequests) {
+function build-chatRequestBody($messageRequests, $systemPrompts) {
   if (!$messageRequests) {
     foreach ($message in $systemPrompts) {
       [void]$messageRequests.Add(@{
@@ -331,6 +345,33 @@ function convert-toJson($object, $depth = 5) {
   return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue
 }
 
+function get-endpoint() {
+  #($script:endpointType, $endpoint) {
+  switch -Wildcard ($model) {
+    'gpt-*' {
+      $endpoint = 'https://api.openai.com/v1/chat/completions'
+      $script:endpointType = 'chat'
+    }
+    'dall-e-*' {
+      $endpoint = 'https://api.openai.com/v1/images/generations'
+      $script:endpointType = 'images'
+      if ($imageEdit) {
+        $endpoint = 'https://api.openai.com/v1/images/edits'
+      }
+    }
+    'codex-*' {
+      $endpoint = 'https://api.openai.com/v1/davinci-codex/completions'
+      $script:endpointType = 'davinci-codex'
+    }
+    default {
+      #$endpoint = 'https://api.openai.com/v1/chat/completions'
+      $script:endpointType = 'custom'
+    }
+  }
+  write-log "using endpoint: $endpoint" -color Yellow
+  return $endpoint
+}
+
 function invoke-rest($endpoint, $headers, $jsonBody = $null){
   if (!$whatIf -and $jsonBody) {
     write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Post -Body $jsonBody" -color Cyan
@@ -393,6 +434,21 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
   return $message
 }
 
+function save-MessageResponse($message) {
+  $responseExtension = 'json'
+  $baseFileName = "$psscriptroot\openai"
+  $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHssmmss')"
+  if ($responseFileFormat -ieq 'markdown') { # -and $message -imatch '```markdown') {
+    $responseExtension = 'md'
+    $message = (convertfrom-json $message).response.content.trimstart('```markdown').trimend('```')
+  }
+  
+  write-log "saving markdown response to $responseFile.$responseExtension" -color Magenta
+  $message | out-file -FilePath "$responseFile.$responseExtension"
+  copy-item "$responseFile.$responseExtension" "$baseFileName.$responseExtension" -force
+  return "$baseFileName.$responseExtension"
+}
+
 function to-FileFromBase64String($base64) {
   $bytes = [convert]::FromBase64String($base64)
   $file = [io.path]::GetTempFileName()
@@ -419,33 +475,6 @@ function write-log($message, [switch]$verbose, [ConsoleColor]$color = 'White') {
   else {
     write-host $message -ForegroundColor $color
   }
-}
-
-function get-endpoint() {
-  #($script:endpointType, $endpoint) {
-  switch -Wildcard ($model) {
-    'gpt-*' {
-      $endpoint = 'https://api.openai.com/v1/chat/completions'
-      $script:endpointType = 'chat'
-    }
-    'dall-e-*' {
-      $endpoint = 'https://api.openai.com/v1/images/generations'
-      $script:endpointType = 'images'
-      if ($imageEdit) {
-        $endpoint = 'https://api.openai.com/v1/images/edits'
-      }
-    }
-    'codex-*' {
-      $endpoint = 'https://api.openai.com/v1/davinci-codex/completions'
-      $script:endpointType = 'davinci-codex'
-    }
-    default {
-      #$endpoint = 'https://api.openai.com/v1/chat/completions'
-      $script:endpointType = 'custom'
-    }
-  }
-  write-log "using endpoint: $endpoint" -color Yellow
-  return $endpoint
 }
 
 main
