@@ -138,7 +138,7 @@ param(
   [ValidateSet('json_object', 'text')]
   [string]$responseFormat = 'json_object',
   [string[]]$systemPrompts = @(
-    'when processing, reply with the high level chain of thought details and reiterations used to generate response.',
+    'use chain of thought reasoning to step throuogh the prompts thoroughly, reiterating for precision when generating a response.',
     'prefer accurate and complete responses including references and citations',
     'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
   ),
@@ -169,6 +169,8 @@ function main() {
   
   if ($responseFileFormat -ieq 'markdown') {
     $script:systemPromptsList.add(' format reply message content in github markdown format.')
+    $script:systemPromptsList.add(' json_object response schema:"markdown:{}".')
+    $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
   }
 
   if($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
@@ -437,10 +439,11 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 function save-MessageResponse($message) {
   $responseExtension = 'json'
   $baseFileName = "$psscriptroot\openai"
-  $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHssmmss')"
+  $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHmmss')"
   if ($responseFileFormat -ieq 'markdown') { # -and $message -imatch '```markdown') {
     $responseExtension = 'md'
-    $message = (convertfrom-json $message).response.content.trimstart('```markdown').trimend('```')
+    $message = (convertfrom-json $message).markdown
+    #$message = $message.trimstart('```markdown').trimend('```').replace("\n","`r`n")
   }
   
   write-log "saving markdown response to $responseFile.$responseExtension" -color Magenta
