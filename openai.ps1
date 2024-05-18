@@ -11,7 +11,7 @@
 .NOTES
     File Name      : openai.ps1
     Author         : Jagilber
-    version: 240205
+    version: 240518
 
     https://platform.openai.com/docs/api-reference/models
     https://platform.openai.com/docs/guides/prompt-engineering
@@ -113,7 +113,7 @@ param(
   [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
   # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
   # [string]$script:endpointType = 'chat',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003','gpt-4o','gpt-4o-2024-05-13')]
+  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
   [string]$model = 'gpt-4o',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
@@ -130,6 +130,7 @@ param(
   [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
   [string]$imageStyle = 'vivid',
+  [string]$outputPath = "$psscriptroot\output",
   [string]$user = 'default',
   [ValidateSet('url', 'b64_json')]
   [string]$imageResponseFormat = 'url',
@@ -138,21 +139,27 @@ param(
   [ValidateSet('json_object', 'text')]
   [string]$responseFormat = 'json_object',
   [string[]]$systemPrompts = @(
-    'use chain of thought reasoning to step throuogh the prompts thoroughly, reiterating for precision when generating a response.',
-    'prefer accurate and complete responses including references and citations',
-    'use github stackoverflow microsoft wikipedia associated press reuters and other reliable sources for the response'
+    'use chain of thought reasoning to break down and step through the prompts thoroughly, reiterating for precision when generating a response.',
+    'prefer accurate and complete responses including any references and citations',
+    'use github.com, stackoverflow.com, microsoft.com, azure.com, openai.com, grafana.com, wikipedia.com, associatedpress.com, reuters.com, referencesource.microsoft.com and other reliable sources for the response'
   ),
   [switch]$listAssistants,
   [switch]$listModels,
-  [switch]$whatIf
+  [switch]$whatIf,
+  [switch]$init
 )
 
 [ValidateSet('chat', 'images', 'davinci-codex', 'custom')]
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
+$variableExclusions = @('PS*','?','Host','HOME','input','MyInvocation','variableExclusions','false','true','Is*','*Experimental*','apiKey')
 
 function main() {
+  if(!(set-variables)){
+    return
+  }
+  
   $startTime = Get-Date
   $messages = @()
   write-log "===================================="
@@ -163,17 +170,30 @@ function main() {
     return
   }
 
-  if($responseFormat -imatch 'json'){
+  if ($responseFormat -imatch 'json') {
     $script:systemPromptsList.add(' always reply in json format.')
   }
   
   if ($responseFileFormat -ieq 'markdown') {
     $script:systemPromptsList.add(' format reply message content in github markdown format.')
-    $script:systemPromptsList.add(' json_object response schema:"markdown:{}".')
+    $markdownJsonSchema = convert-toJson @{
+      markdown = @{
+        content    = '<markdown content>'
+        name       = '<github compliant markdown file name with dashes and extension>'
+        references = @(
+          @{
+            name = '<reference name>'
+            url  = '<reference url>'
+          }
+        )
+      }      
+    }
+  
+    $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
     $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
   }
 
-  if($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
+  if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
     write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
     mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
   }
@@ -196,7 +216,7 @@ function main() {
     'Content-Type'  = 'application/json'
     'OpenAI-Beta'   = 'assistants=v1'
   }
-  if($endpointType -eq 'images') {
+  if ($endpointType -eq 'images') {
     $headers.'Content-Type' = 'multipart/form-data'
     #$headers.Add('Accept', 'image/png')
   }
@@ -206,14 +226,14 @@ function main() {
   # Convert the request body to JSON
   $jsonBody = convert-toJson $requestBody
 
-  if($listModels) {
+  if ($listModels) {
     write-log "listing models" -color Yellow
     $response = invoke-rest 'https://api.openai.com/v1/models' $headers
     write-log "models: $(convert-toJson $response)" -color Yellow
     return
   }
 
-  if($listAssistants) {
+  if ($listAssistants) {
     write-log "listing assistants" -color Yellow
     $response = invoke-rest 'https://api.openai.com/v1/assistants?limit=100' $headers
     write-log "assistants: $(convert-toJson $response)" -color Yellow
@@ -241,18 +261,15 @@ function main() {
     write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
   }
 
-  write-log "set-alias openai $($MyInvocation.ScriptName)"
-  set-alias openai $MyInvocation.ScriptName -scope global
-
   write-log "response:$(convert-toJson ($message.content | convertfrom-json))" -color Green
   write-log ($global:openaiResponse | out-string) -color DarkGray
-  write-log "use alias 'openai' to run script with new prompt:ex:openai '$($prompts[0])'" -color DarkCyan
+  write-log "use alias 'ai' to run script with new prompt. example:ai '$($prompts[0])'" -color DarkCyan
   write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
   write-log "===================================="
   return #$message.content
 }
 
-function build-requestBody($messageRequests,$systemPrompts) {
+function build-requestBody($messageRequests, $systemPrompts) {
   switch -Wildcard ($script:endpointType) {
     'chat' {
       $requestBody = build-chatRequestBody $messageRequests $systemPrompts
@@ -374,12 +391,12 @@ function get-endpoint() {
   return $endpoint
 }
 
-function invoke-rest($endpoint, $headers, $jsonBody = $null){
+function invoke-rest($endpoint, $headers, $jsonBody = $null) {
   if (!$whatIf -and $jsonBody) {
     write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Post -Body $jsonBody" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
   }
-  elseif(!$whatIf) {
+  elseif (!$whatIf) {
     write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Get" -color Cyan
     $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Get
   }
@@ -398,7 +415,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
       $messageRequests += $message
       if ($message.content) {
         $error.Clear()
-        if (($messageObject = convertfrom-json $message.content) -and !$error) {
+        if (($messageObject = convertfrom-json $message.content -AsHashtable) -and !$error) {
           write-log "converting message content from json to compressed json" -color Yellow
           $message.content = (convert-toJson $messageObject -depth 99)
         }
@@ -411,14 +428,14 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
         $messageRequests.Clear()
         $messageRequests.Add($response.data.revised_prompt)
       }
-      if($response.data.url) {
+      if ($response.data.url) {
         write-log "downloading image: $($response.data.url)" -color Yellow
         write-host "invoke-webRequest -Uri $($response.data.url) -OutFile $imageFilePng"
         invoke-webRequest -Uri $response.data.url -OutFile $imageFilePng
         
         $tempImageFile = $imageFilePng.replace(".png", "$(get-date -f 'yyMMdd-HHmmss').png")
         writ-log "copying image to $tempImageFile" -color Yellow
-        copy $imageFilePng $tempImageFile
+        Copy-Item $imageFilePng $tempImageFile
         code $tempImageFile
       }
 
@@ -438,18 +455,42 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 
 function save-MessageResponse($message) {
   $responseExtension = 'json'
-  $baseFileName = "$psscriptroot\openai"
+  $baseFileName = "$outputPath\openai"
   $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHmmss')"
-  if ($responseFileFormat -ieq 'markdown') { # -and $message -imatch '```markdown') {
+  if ($responseFileFormat -ieq 'markdown') {
+    # -and $message -imatch '```markdown') {
     $responseExtension = 'md'
-    $message = (convertfrom-json $message).markdown
-    #$message = $message.trimstart('```markdown').trimend('```').replace("\n","`r`n")
+    $message = (convertfrom-json $message -AsHashtable).markdown.content
+    #$message = $message.trimstart('```markdown').trimend('```').replace("\n", "`r`n")
   }
   
   write-log "saving markdown response to $responseFile.$responseExtension" -color Magenta
   $message | out-file -FilePath "$responseFile.$responseExtension"
   copy-item "$responseFile.$responseExtension" "$baseFileName.$responseExtension" -force
   return "$baseFileName.$responseExtension"
+}
+
+function set-variables() {
+  write-log "set-alias ai $($MyInvocation.ScriptName)"
+  set-alias ai $MyInvocation.ScriptName -scope global
+  set-alias openai $MyInvocation.ScriptName -scope global
+
+  if(!$global:ai -or $init){
+    $global:ai = [ordered]@{}
+  }
+  #$variables = get-variable -scope script -exclude @('PS*','?','Host','HOME','input','MyInvocation','variableExclusions')
+  foreach ($variable in get-variable -scope script -exclude $variableExclusions) {
+    $global:ai[$variable.Name] = $variable.Value
+    # write-log "$($variable.Name): $($variable.Value)"
+  }
+
+  if ($init) {
+    write-log "variables: $(convert-toJson $global:ai -depth 1)" -color Green
+    write-log "ai initialized" -color Green
+    return $false
+  }
+
+  return $true
 }
 
 function to-FileFromBase64String($base64) {

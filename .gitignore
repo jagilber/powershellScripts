@@ -261,3 +261,4 @@ openaiMessages.json
 **/openai*.json
 **/openai*.txt
 **/openai*.md
+**/output
