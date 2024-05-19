@@ -153,17 +153,18 @@ param(
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
-$variableExclusions = @('apiKey', 'init')
+$variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer')
 $parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort-object
 $boundParameters = $PSBoundParameters
   
 function main() {
+  $endpoint = get-endpoint
+  
   if (!(set-variables)) {
     return
   }
   
   $startTime = Get-Date
-  $messages = @()
   write-log "===================================="
   write-log ">>>>starting openAI chat request $startTime<<<<" -color White
   
@@ -187,20 +188,18 @@ function main() {
             name = '<reference name>'
             url  = '<reference url>'
           }
-        )
-      }      
+          )
+        }      
+      }
+      
+      $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
+      $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
     }
-  
-    $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
-    $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
-  }
-
-  if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
-    write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
-    mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
-  }
-
-  $endpoint = get-endpoint #$script:endpointType $endpoint
+    
+    if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
+      write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
+      mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
+    }
   
   if ($newConversation -and (Test-Path $promptsFile)) {
     write-log "resetting context" -color Yellow
@@ -367,7 +366,6 @@ function convert-toJson($object, $depth = 5) {
 }
 
 function get-endpoint() {
-  #($script:endpointType, $endpoint) {
   switch -Wildcard ($model) {
     'gpt-*' {
       $endpoint = 'https://api.openai.com/v1/chat/completions'
@@ -456,7 +454,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 }
 
 function save-MessageResponse($message) {
-  if(!(test-path $outputPath)) {
+  if (!(test-path $outputPath)) {
     write-log "creating directory: $outputPath" -color Yellow
     mkdir -Force $outputPath
   }
@@ -491,9 +489,9 @@ function set-variables() {
   set-alias openai $MyInvocation.ScriptName -scope global
   write-debug ($boundParameters | convertto-Json)
 
-  foreach($name in $parameterNames) {
+  foreach ($name in $parameterNames) {
     write-debug "checking variable: $name"
-    if ($variableExclusions -contains $name) {
+    if ($name -imatch [string]::join('|', $variableExclusions)) {
       write-debug "excluded variable: $name"
       continue
     }
