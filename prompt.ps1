@@ -52,8 +52,8 @@ function prompt() {
         }
     }
     catch {
-        write-host "Error: $($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
-        return ">"
+        write-host "Error: $($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red -NoNewline
+        return "$path>"
     }
 }
 
@@ -131,7 +131,7 @@ function get-currentBranch() {
         return $null
     }
 
-    add-status " $([char]0x2325)($($promptInfo.branch))"
+    add-status " $([char]0x2325) ($($promptInfo.branch))"
     return $promptInfo.branch
 }
 

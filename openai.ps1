@@ -153,18 +153,9 @@ param(
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
-$variableExclusions = @('PS*', '?', 'Host', 'HOME', 'input', 'MyInvocation', 'variableExclusions', 'false', 'true', 'Is*', '*Experimental*', 'apiKey')
-
-# Enumerate all parameters
-if (!$global:ai -or $init) {
-  $global:ai = [ordered]@{}
-}
-
-foreach ($name in $PSBoundParameters.Keys) {
-  $value = $PSBoundParameters[$name]
-  write-host "$name = $value"
-  $global:ai[$name] = $value
-}
+$variableExclusions = @('apiKey', 'init')
+$parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort-object
+$boundParameters = $PSBoundParameters
   
 function main() {
   if (!(set-variables)) {
@@ -466,38 +457,60 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 
 function save-MessageResponse($message) {
   $responseExtension = 'json'
-  $baseFileName = "openai-$(get-date -f 'yyMMddHHmmss')"
-  $responseFile = "$outputPath\$baseFileName"
+  $baseFileName = "$outputPath\openai"
+  $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHmmss')"
   
   if ($responseFileFormat -ieq 'markdown') {
     $responseExtension = 'md'
     $response = convertfrom-json $message -AsHashtable
     $message = $response.markdown.content
     if ($response.markdown.name) {
-      $responseFile = "$outputPath\$baseFileName-$($response.markdown.name.trimend($responseExtension))"
+      $responseFile = "$responseFile-$($response.markdown.name.trimend($responseExtension))"
     }
   }
   
   write-log "saving markdown response to $responseFile.$responseExtension" -color Magenta
   $message | out-file -FilePath "$responseFile.$responseExtension"
   copy-item "$responseFile.$responseExtension" "$baseFileName.$responseExtension" -force
-  return "$responseFile.$responseExtension"
+  return "$baseFileName.$responseExtension"
 }
 
 function set-variables() {
+  
+  # Enumerate all parameters
+  if (!$global:ai -or $init) {
+    $global:ai = [ordered]@{}
+  }
+   
   write-log "set-alias ai $($MyInvocation.ScriptName)"
   set-alias ai $MyInvocation.ScriptName -scope global
   set-alias openai $MyInvocation.ScriptName -scope global
+  write-debug ($boundParameters | convertto-Json)
 
+  foreach($name in $parameterNames) {
+    write-debug "checking variable: $name"
+    if ($variableExclusions -contains $name) {
+      write-debug "excluded variable: $name"
+      continue
+    }
+    $variable = get-variable -name $name -erroraction SilentlyContinue
 
-  #$variables = get-variable -scope script -exclude @('PS*','?','Host','HOME','input','MyInvocation','variableExclusions')
-  # foreach ($variable in get-variable -scope script -exclude $variableExclusions) {
-  #   $global:ai[$variable.Name] = $variable.Value
-  #   # write-log "$($variable.Name): $($variable.Value)"
-  # }
+    if ($variable) {
+      $value = $variable.Value
+    }
+    elseif ($global:ai[$name]) {
+      $value = $global:ai[$name]
+    }
+    else {
+      $value = $null
+    }
+
+    write-debug "$name = $value"
+    $global:ai[$name] = $value
+  }
 
   if ($init) {
-    write-log "variables: $(convert-toJson $global:ai -depth 1)" -color Green
+    write-debug "variables: $(convert-toJson $global:ai -depth 1)"
     write-log "ai initialized" -color Green
     return $false
   }
