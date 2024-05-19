@@ -478,7 +478,6 @@ function save-MessageResponse($message) {
 }
 
 function set-variables() {
-  
   # Enumerate all parameters
   if (!$global:ai -or $init) {
     $global:ai = [ordered]@{}
@@ -497,17 +496,23 @@ function set-variables() {
     }
     $variable = get-variable -name $name -erroraction SilentlyContinue
 
-    if ($variable) {
+    if (!$boundParameters[$name] -and ![string]::IsNullOrEmpty($global:ai[$name])) {
+      $value = $global:ai[$name]
+      $variable.value = $value
+    }
+    elseif($boundParameters[$name]) {
+      $value = $boundParameters[$name]
+      $variable.value = $value
+    }
+    elseif ($variable) {
       $value = $variable.Value
     }
-    elseif ($global:ai[$name]) {
-      $value = $global:ai[$name]
-    }
     else {
+      write-debug "variable not found: $name"
       $value = $null
     }
 
-    write-debug "$name = $value"
+    write-log "$name = $value"
     $global:ai[$name] = $value
   }
 
