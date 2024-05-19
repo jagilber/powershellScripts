@@ -153,10 +153,21 @@ param(
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
-$variableExclusions = @('PS*','?','Host','HOME','input','MyInvocation','variableExclusions','false','true','Is*','*Experimental*','apiKey')
+$variableExclusions = @('PS*', '?', 'Host', 'HOME', 'input', 'MyInvocation', 'variableExclusions', 'false', 'true', 'Is*', '*Experimental*', 'apiKey')
 
+# Enumerate all parameters
+if (!$global:ai -or $init) {
+  $global:ai = [ordered]@{}
+}
+
+foreach ($name in $PSBoundParameters.Keys) {
+  $value = $PSBoundParameters[$name]
+  write-host "$name = $value"
+  $global:ai[$name] = $value
+}
+  
 function main() {
-  if(!(set-variables)){
+  if (!(set-variables)) {
     return
   }
   
@@ -455,19 +466,22 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 
 function save-MessageResponse($message) {
   $responseExtension = 'json'
-  $baseFileName = "$outputPath\openai"
-  $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHmmss')"
+  $baseFileName = "openai-$(get-date -f 'yyMMddHHmmss')"
+  $responseFile = "$outputPath\$baseFileName"
+  
   if ($responseFileFormat -ieq 'markdown') {
-    # -and $message -imatch '```markdown') {
     $responseExtension = 'md'
-    $message = (convertfrom-json $message -AsHashtable).markdown.content
-    #$message = $message.trimstart('```markdown').trimend('```').replace("\n", "`r`n")
+    $response = convertfrom-json $message -AsHashtable
+    $message = $response.markdown.content
+    if ($response.markdown.name) {
+      $responseFile = "$outputPath\$baseFileName-$($response.markdown.name.trimend($responseExtension))"
+    }
   }
   
   write-log "saving markdown response to $responseFile.$responseExtension" -color Magenta
   $message | out-file -FilePath "$responseFile.$responseExtension"
   copy-item "$responseFile.$responseExtension" "$baseFileName.$responseExtension" -force
-  return "$baseFileName.$responseExtension"
+  return "$responseFile.$responseExtension"
 }
 
 function set-variables() {
@@ -475,14 +489,12 @@ function set-variables() {
   set-alias ai $MyInvocation.ScriptName -scope global
   set-alias openai $MyInvocation.ScriptName -scope global
 
-  if(!$global:ai -or $init){
-    $global:ai = [ordered]@{}
-  }
+
   #$variables = get-variable -scope script -exclude @('PS*','?','Host','HOME','input','MyInvocation','variableExclusions')
-  foreach ($variable in get-variable -scope script -exclude $variableExclusions) {
-    $global:ai[$variable.Name] = $variable.Value
-    # write-log "$($variable.Name): $($variable.Value)"
-  }
+  # foreach ($variable in get-variable -scope script -exclude $variableExclusions) {
+  #   $global:ai[$variable.Name] = $variable.Value
+  #   # write-log "$($variable.Name): $($variable.Value)"
+  # }
 
   if ($init) {
     write-log "variables: $(convert-toJson $global:ai -depth 1)" -color Green

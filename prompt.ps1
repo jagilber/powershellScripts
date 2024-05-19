@@ -256,8 +256,21 @@ function get-psEnv() {
     return $psEnv
 }
 
+function init-promptInfoEnv(){
+    write-debug "init-promptInfo()"
+    $openai = '\github\jagilber\powershellscripts\openai.ps1'
+    if((test-path $openai -WarningAction SilentlyContinue)) {
+        . $openai -init
+    }
+    else {
+        write-debug "openai.ps1 not found"
+    }
+
+}
+
 function new-promptInfo() {
     if (!$global:promptInfo) {
+        init-promptInfoEnv
         write-debug "new-promptInfo()"
         $global:promptInfo = @{
             path               = ""
