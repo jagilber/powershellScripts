@@ -456,12 +456,16 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
 }
 
 function save-MessageResponse($message) {
-  $responseExtension = 'json'
+  if(!(test-path $outputPath)) {
+    write-log "creating directory: $outputPath" -color Yellow
+    mkdir -Force $outputPath
+  }
+  $responseExtension = '.json'
   $baseFileName = "$outputPath\openai"
   $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHmmss')"
   
   if ($responseFileFormat -ieq 'markdown') {
-    $responseExtension = 'md'
+    $responseExtension = '.md'
     $response = convertfrom-json $message -AsHashtable
     $message = $response.markdown.content
     if ($response.markdown.name) {
@@ -469,10 +473,10 @@ function save-MessageResponse($message) {
     }
   }
   
-  write-log "saving markdown response to $responseFile.$responseExtension" -color Magenta
-  $message | out-file -FilePath "$responseFile.$responseExtension"
-  copy-item "$responseFile.$responseExtension" "$baseFileName.$responseExtension" -force
-  return "$baseFileName.$responseExtension"
+  write-log "saving markdown response to $responseFile$responseExtension" -color Magenta
+  $message | out-file -FilePath "$responseFile$responseExtension"
+  copy-item "$responseFile$responseExtension" "$baseFileName$responseExtension" -force
+  return "$baseFileName$responseExtension"
 }
 
 function set-variables() {
