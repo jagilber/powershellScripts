@@ -110,9 +110,7 @@ param(
   [ValidateSet('user', 'system', 'assistant', 'user', 'function', 'tool')]
   [string]$promptRole = 'user', 
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
-  [string]$endpoint = '', #'https://api.openai.com/v1/chat/completions',
-  # [ValidateSet('chat', 'images', 'davinci-codex','custom')]
-  # [string]$script:endpointType = 'chat',
+  [string]$endpoint = '', 
   [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
   [string]$model = 'gpt-4o',
   [string]$logFile = "$psscriptroot\openai.log",
@@ -125,7 +123,7 @@ param(
   [string]$imageQuality = 'hd',
   [int]$imageCount = 1, # n
   [switch]$imageEdit, # edit image
-  [string]$imageFilePng = "$psscriptroot\downloads\openai.png", #"$pwd\openai-$((get-date).tostring('yyMMdd-HHmmss')).png)", # png file to upload and edit . 4mb max with transparency layer and square aspect ratio
+  [string]$imageFilePng = "$psscriptroot\downloads\openai.png", 
   [ValidateSet('256x256', '512x512', '1024x1024', '1792x1024', '1024x1792')]
   [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
@@ -145,6 +143,7 @@ param(
   ),
   [switch]$listAssistants,
   [switch]$listModels,
+  [switch]$quiet,
   [switch]$whatIf,
   [switch]$init
 )
@@ -153,7 +152,7 @@ param(
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
-$variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer')
+$variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer', 'Debug', 'Verbose')
 $parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort-object
 $boundParameters = $PSBoundParameters
   
@@ -174,11 +173,11 @@ function main() {
   }
 
   if ($responseFormat -imatch 'json') {
-    $script:systemPromptsList.add(' always reply in json format.')
+    [void]$script:systemPromptsList.add(' always reply in json format.')
   }
   
   if ($responseFileFormat -ieq 'markdown') {
-    $script:systemPromptsList.add(' format reply message content in github markdown format.')
+    [void]$script:systemPromptsList.add(' format reply message content in github markdown format.')
     $markdownJsonSchema = convert-toJson @{
       markdown = @{
         content    = '<markdown content>'
@@ -188,18 +187,18 @@ function main() {
             name = '<reference name>'
             url  = '<reference url>'
           }
-          )
-        }      
-      }
+        )
+      }      
+    }
       
-      $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
-      $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
-    }
+    [void]$script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
+    [void]$script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
+  }
     
-    if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
-      write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
-      mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
-    }
+  if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
+    write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
+    mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
+  }
   
   if ($newConversation -and (Test-Path $promptsFile)) {
     write-log "resetting context" -color Yellow
@@ -244,7 +243,7 @@ function main() {
   # Make the API request using Invoke-RestMethod
   $response = invoke-rest $endpoint $headers $jsonBody
   $message = read-messageResponse $response $script:messageRequests
-  code (save-MessageResponse $message.content)
+  open-withCode (save-MessageResponse $message.content)
 
   $global:openaiResponse = $response
   $global:message = $message
@@ -331,7 +330,7 @@ function build-codexRequestBody($messageRequests) {
 }
 
 function build-imageRequestBody($messageRequests) {
-  $messageRequests.AddRange($prompts)
+  [void]$messageRequests.AddRange($prompts)
   if ($imageEdit) {
     if (!(Test-Path $imageFilePng)) {
       throw "image file not found: $imageFilePng"
@@ -405,6 +404,14 @@ function invoke-rest($endpoint, $headers, $jsonBody = $null) {
   $global:openaiResponse = $response
   return $response
 }
+
+function open-withCode($file) {
+  if ($file) {
+    write-log "opening file with code: $file" -color Yellow
+    code $file
+  }
+}
+
 function read-messageResponse($response, [collections.arraylist]$messageRequests) {
   # Extract the response from the API request
   write-log $response
@@ -426,11 +433,11 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
       if ($response.data.revised_prompt) {
         write-log "revised prompt: $($response.data.revised_prompt)" -color Yellow
         $messageRequests.Clear()
-        $messageRequests.Add($response.data.revised_prompt)
+        [void]$messageRequests.Add($response.data.revised_prompt)
       }
       if ($response.data.url) {
         write-log "downloading image: $($response.data.url)" -color Yellow
-        write-host "invoke-webRequest -Uri $($response.data.url) -OutFile $imageFilePng"
+        write-log "invoke-webRequest -Uri $($response.data.url) -OutFile $imageFilePng"
         invoke-webRequest -Uri $response.data.url -OutFile $imageFilePng
         
         $tempImageFile = $imageFilePng.replace(".png", "$(get-date -f 'yyMMdd-HHmmss').png")
@@ -487,7 +494,7 @@ function set-variables() {
   set-alias ai $MyInvocation.ScriptName -scope global
   set-alias openai $MyInvocation.ScriptName -scope global
   write-debug ($boundParameters | convertto-Json)
-
+  
   foreach ($name in $parameterNames) {
     write-debug "checking variable: $name"
     if ($name -imatch [string]::join('|', $variableExclusions)) {
@@ -495,14 +502,12 @@ function set-variables() {
       continue
     }
     $variable = get-variable -name $name -erroraction SilentlyContinue
-
+    
     if (!$boundParameters[$name] -and ![string]::IsNullOrEmpty($global:ai[$name])) {
       $value = $global:ai[$name]
-      $variable.value = $value
     }
-    elseif($boundParameters[$name]) {
+    elseif ($boundParameters[$name]) {
       $value = $boundParameters[$name]
-      $variable.value = $value
     }
     elseif ($variable) {
       $value = $variable.Value
@@ -512,7 +517,9 @@ function set-variables() {
       $value = $null
     }
 
-    write-log "$name = $value"
+    $variable.value = $value
+
+    write-debug "$name = $value"
     $global:ai[$name] = $value
   }
 
@@ -548,7 +555,7 @@ function write-log($message, [switch]$verbose, [ConsoleColor]$color = 'White') {
   if ($verbose) {
     write-verbose $message
   }
-  else {
+  elseif (!$quiet) {
     write-host $message -ForegroundColor $color
   }
 }

@@ -260,7 +260,7 @@ function init-promptInfoEnv(){
     write-debug "init-promptInfo()"
     $openai = '\github\jagilber\powershellscripts\openai.ps1'
     if((test-path $openai -WarningAction SilentlyContinue)) {
-        . $openai -init
+        . $openai -init -quiet
     }
     else {
         write-debug "openai.ps1 not found"
