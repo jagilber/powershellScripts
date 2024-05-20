@@ -34,12 +34,18 @@ param(
 $global:matchedFiles = @{}
 
 function main() {
+    $startTime = get-date
     $error.clear()
     if ($matchLine) {
         $pattern = ".*$pattern.*"
     }
     
-    $startTime = get-date
+    if ($filePattern.startsWith('*')) {
+        # $filePattern = [regex]::escape($filePattern)
+        $filePattern = '.' + $filePattern
+        write-console "escaped filePattern: $filePattern"
+    }
+    
     $fileCount = 0
     $regex = [regex]::new($pattern, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
     $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | Where-Object Name -match $filePattern).FullName
@@ -64,6 +70,21 @@ function main() {
             $content = $sr.readtoend()
 
             if ($content.Length -lt 1) { continue }
+
+            # read first 100 bytes or max length if less than 100 bytes to check if file is binary or text, then reset position
+            $testContent = $content.substring(0, [math]::min(100, $content.Length))
+            $bytes = [system.text.encoding]::UTF8.GetBytes($testContent)
+            $isBinary = $false
+            foreach ($byte in $bytes) {
+                if ($byte -lt 32 -and $byte -ne 9 -and $byte -ne 10 -and $byte -ne 13) {
+                    write-console "skipping binary file $file" -ForegroundColor Yellow
+                    $isBinary = $true
+                    break
+                }
+            }
+
+            if ($isBinary) { continue }
+            $sr.basestream.position = 0
 
             if ($regex.IsMatch($content)) {
                 write-console $file -ForegroundColor Magenta
