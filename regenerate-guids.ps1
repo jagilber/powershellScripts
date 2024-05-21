@@ -4,18 +4,17 @@
 
 .LINK
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/regenerate-guids.ps1" -outFile "$pwd\regenerate-guids.ps1";
-    .\regenerate-guids.ps1 [-path] [-pattern]
+    .\regenerate-guids.ps1 [-path] <string> [-filePattern] <regex string> [-includeSubDirs] [-replace] <string> [-createBackup] [-whatIf]
 
 .EXAMPLE
     example to search template.json files in the templates directory and subdirectories for guids and replace them with new guids
-    .\regenerate-guids.ps1 -pattern '%old thumbprint%' `
-        -path '\templates' `
+    .\regenerate-guids.ps1 -path '\templates' `
         -filePattern 'template\.json' `
         -includeSubDirs `
         -replace `
         -createBackup `
         -whatIf
-#>
+#>#>
 
 [cmdletbinding()]
 param(
@@ -41,8 +40,12 @@ function main() {
   $error.clear()
   if ($filePattern.startsWith('*')) {
     $filePattern = '.' + $filePattern
-    # $filePattern = [regex]::escape($filePattern)
     write-console "escaped filePattern: $filePattern"
+  }
+
+  if(!(test-path $path)) {
+    write-console "path $path does not exist" -ForegroundColor Red
+    return
   }
     
   $fileCount = 0
