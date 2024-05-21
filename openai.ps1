@@ -191,7 +191,7 @@ function main() {
           }
           )
         }      
-      }
+      } -compress
       
       $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
       $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
@@ -227,7 +227,7 @@ function main() {
   $requestBody = build-requestBody $script:messageRequests $script:systemPromptsList
 
   # Convert the request body to JSON
-  $jsonBody = convert-toJson $requestBody
+  $jsonBody = convert-toJson $requestBody -compress
 
   if ($listModels) {
     write-log "listing models" -color Yellow
@@ -367,8 +367,8 @@ function build-imageRequestBody($messageRequests) {
   return $requestBody
 }
 
-function convert-toJson($object, $depth = 5) {
-  return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue
+function convert-toJson([object]$object, [int]$depth = 5, [switch]$compress = $false) {
+  return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue -compress:$compress
 }
 
 function get-endpoint() {
