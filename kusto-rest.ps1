@@ -15,7 +15,7 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 231030
+Version    : 240521
 History    : migrate from netcoreapp2.1 to net6.0
 
 .EXAMPLE
