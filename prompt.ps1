@@ -119,7 +119,13 @@ function get-commandDuration() {
     }
 
     $lastCommand = get-history -count 1
-    $promptInfo.commandDurationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
+    if (!$lastCommand) {
+        write-debug "no last command found. returning"
+        $promptInfo.commandDurationMs = 0
+    }
+    else {
+        $promptInfo.commandDurationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
+    }
     return " $([char]0x0394)$($promptInfo.commandDurationMs)ms"
 }
 
