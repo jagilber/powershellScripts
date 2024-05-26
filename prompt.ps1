@@ -37,9 +37,9 @@ function prompt() {
         }
 
         $date = (get-date).ToString('HH:mm:ss')
-        write-host "$($promptInfo.ps) $date" -ForegroundColor DarkGray -NoNewline
+        write-host "$($promptInfo.ps)$(get-commandDuration) $date" -ForegroundColor DarkGray -NoNewline
 
-        if ($promptInfo.pathOnPromptLine) {
+        if ($promptInfo.enablePathOnPromptLine) {
             $path = $path.trim("'")
             write-host "$($promptInfo.status)" -ForegroundColor DarkCyan
             write-host "$path>" -ForegroundColor White -NoNewline
@@ -109,6 +109,24 @@ function get-branches() {
     else {
         write-debug "remote branches are the same"
     }
+}
+
+function get-commandDuration() {
+    write-debug "get-commandDuration()"
+    if (!$promptInfo.enableCommandDuration) {
+        write-debug "command duration disabled. returning"
+        return $null
+    }
+
+    $lastCommand = get-history -count 1
+    if (!$lastCommand) {
+        write-debug "no last command found. returning"
+        $promptInfo.commandDurationMs = 0
+    }
+    else {
+        $promptInfo.commandDurationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
+    }
+    return " $([char]0x0394)$($promptInfo.commandDurationMs)ms"
 }
 
 function get-currentBranch() {
@@ -256,7 +274,7 @@ function get-psEnv() {
     return $psEnv
 }
 
-function init-promptInfoEnv(){
+function init-promptInfoEnv() {
     write-debug "init-promptInfo()"
     $openai = '\github\jagilber\powershellscripts\openai.ps1'
     if((test-path $openai -WarningAction SilentlyContinue)) {
@@ -273,21 +291,23 @@ function new-promptInfo() {
         init-promptInfoEnv
         write-debug "new-promptInfo()"
         $global:promptInfo = @{
-            path               = ""
-            branch             = ""
-            defaultBranchCount = 20
-            branches           = @()
-            remoteBranches     = @()
-            remotes            = [collections.arraylist]::new()
-            stashes            = [collections.arraylist]::new()
-            repo               = ""
-            status             = ""
-            ps                 = get-psEnv
-            cacheTimer         = [datetime]::MinValue
-            enableGit          = $true
-            cacheMinutes       = 1
-            fetchedRepos       = [collections.arraylist]::new()
-            pathOnPromptLine   = $false
+            path                   = ""
+            branch                 = ""
+            cacheMinutes           = 1
+            branches               = @()
+            defaultBranchCount     = 20
+            remoteBranches         = @()
+            remotes                = [collections.arraylist]::new()
+            stashes                = [collections.arraylist]::new()
+            repo                   = ""
+            status                 = ""
+            ps                     = get-psEnv
+            cacheTimer             = [datetime]::MinValue
+            enableGit              = $true
+            enableCommandDuration  = $true
+            enablePathOnPromptLine = $false
+            fetchedRepos           = [collections.arraylist]::new()
+            commandDurationMs      = 0
         }
     }
 }

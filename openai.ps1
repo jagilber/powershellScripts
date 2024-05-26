@@ -128,6 +128,7 @@ param(
   [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
   [string]$imageStyle = 'vivid',
+  [int]$maxTokens = 4096,
   [string]$outputPath = "$psscriptroot\output",
   [string]$user = 'default',
   [ValidateSet('url', 'b64_json')]
@@ -187,13 +188,14 @@ function main() {
             name = '<reference name>'
             url  = '<reference url>'
           }
-        )
-      }      
-    }
+          )
+        }      
+      } -compress
       
-    [void]$script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
-    [void]$script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
-  }
+      $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
+      $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
+      $script:systemPromptsList.add(' include flow diagrams to visually describe topic. use mermaid for creation of figures and flow diagrams.')
+    }
     
   if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
     write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
@@ -224,7 +226,7 @@ function main() {
   $requestBody = build-requestBody $script:messageRequests $script:systemPromptsList
 
   # Convert the request body to JSON
-  $jsonBody = convert-toJson $requestBody
+  $jsonBody = convert-toJson $requestBody -compress
 
   if ($listModels) {
     write-log "listing models" -color Yellow
@@ -311,6 +313,7 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
     logprobs        = $logProbabilities
     messages        = $messageRequests.toArray()
     user            = $user
+    max_tokens      = $maxTokens
   }
 
   return $requestBody
@@ -324,6 +327,7 @@ function build-codexRequestBody($messageRequests) {
     logprobs = $logProbabilities
     messages = $script:messageRequests.toArray()
     user     = $user
+    max_tokens      = $maxTokens
   }
 
   return $requestBody
@@ -342,6 +346,7 @@ function build-imageRequestBody($messageRequests) {
       response_format = $imageResponseFormat
       size            = $imageSize
       user            = $user
+      max_tokens      = $maxTokens
       image           = $imageFilePng # to-base64StringFromFile $imageFilePng
     }
   }
@@ -355,13 +360,14 @@ function build-imageRequestBody($messageRequests) {
       size            = $imageSize
       style           = $imageStyle
       user            = $user
+      max_tokens      = $maxTokens
     }
   }
   return $requestBody
 }
 
-function convert-toJson($object, $depth = 5) {
-  return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue
+function convert-toJson([object]$object, [int]$depth = 5, [switch]$compress = $false) {
+  return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue -compress:$compress
 }
 
 function get-endpoint() {

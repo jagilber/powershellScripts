@@ -15,8 +15,8 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 .NOTES
 Author : jagilber
 File Name  : kusto-rest.ps1
-Version    : 231030
-History    : migrate from netcoreapp2.1 to net6.0
+Version    : 240521
+History    : resolve cluster and database on first run
 
 .EXAMPLE
 .\kusto-rest.ps1 -cluster kustocluster -database kustodatabase
@@ -33,7 +33,7 @@ $kusto.SetCluster($cluster)
 $kusto.parameters = @{'T'= $table}
 $kusto.ExecScript("..\KustoFunctions\sflogs\TraceKnownIssueSummary.csl", $kusto.parameters)
 
-.EXAMPLE 
+.EXAMPLE
 $kusto.SetTable("test_$env:USERNAME").Import()
 
 .EXAMPLE
@@ -53,7 +53,7 @@ query string or command to execute against a kusto database
     example: kustocluster
     example: azurekusto.eastus
 
-.PARAMETER database 
+.PARAMETER database
 [string]kusto database name
 
 .PARAMETER table
@@ -146,9 +146,34 @@ if ($updateScript) {
     return
 }
 
+function main() {
+    try {
+        $error.Clear()
+        $global:kusto = [KustoObj]::new()
+        $kusto.SetTables()
+        $kusto.SetFunctions()
+        $kusto.Exec()
+        $kusto.ClearResults()
+
+        write-host ($PSBoundParameters | out-string)
+
+        if ($error) {
+            write-warning ($error | out-string)
+        }
+        else {
+            write-host ($kusto | Get-Member | out-string)
+            write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
+            write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
+        }
+    }
+    catch {
+        write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
+    }
+}
+
 function AddIdentityPackageType([string]$packageName, [string] $edition) {
     # support ps core on linux
-    if ($IsLinux) { 
+    if ($IsLinux) {
         $env:USERPROFILE = $env:HOME
     }
     [string]$nugetPackageDirectory = "$($env:USERPROFILE)/.nuget/packages"
@@ -156,14 +181,14 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
     [string]$nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
     [io.directory]::createDirectory($nugetPackageDirectory)
     [string]$packageDirectory = "$nugetPackageDirectory/$packageName"
-    
+
     $global:identityPackageLocation = get-identityPackageLocation $packageDirectory
 
     if (!$global:identityPackageLocation) {
         if ($psedition -ieq 'core') {
             $tempProjectFile = './temp.csproj'
-    
-            #dotnet new console 
+
+            #dotnet new console
             $csproj = "<Project Sdk=`"Microsoft.NET.Sdk`">
                     <PropertyGroup>
                         <OutputType>Exe</OutputType>
@@ -178,12 +203,12 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
             out-file -InputObject $csproj -FilePath $tempProjectFile
             write-host "dotnet restore --packages $packageDirectory --no-cache --no-dependencies $tempProjectFile"
             dotnet restore --packages $packageDirectory --no-cache --no-dependencies $tempProjectFile
-    
+
             remove-item "$pwd/obj" -re -fo
             remove-item -path $tempProjectFile
         }
         else {
-            $nuget = "nuget.exe"    
+            $nuget = "nuget.exe"
             if (!(test-path $nuget)) {
                 $nuget = "$env:temp/nuget.exe"
                 if (!(test-path $nuget)) {
@@ -201,7 +226,7 @@ function AddIdentityPackageType([string]$packageName, [string] $edition) {
             }
         }
     }
-    
+
     $global:identityPackageLocation = get-identityPackageLocation $packageDirectory
     write-host "identityDll: $($global:identityPackageLocation)" -ForegroundColor Green
     add-type -literalPath $global:identityPackageLocation
@@ -212,7 +237,7 @@ function get-identityPackageLocation($packageDirectory) {
     $pv = [version]::new($packageVersion)
     $pv = [version]::new($pv.Major, $pv.Minor)
 
-    $versions = @{} 
+    $versions = @{}
     $files = @(get-childitem -Path $packageDirectory -Recurse | where-object FullName -imatch "lib.$edition.$packageName\.dll")
     write-host "existing identity dlls $($files|out-string)"
 
@@ -282,6 +307,7 @@ class KustoObj {
     [string]$clientId = $clientId
     hidden [string]$clientSecret = $clientSecret
     [string]$Cluster = $cluster
+    [bool]$ClusterResolved = $false
     [string]$Database = $database
     [bool]$FixDuplicateColumns = $fixDuplicateColumns
     [bool]$Force = $force
@@ -307,7 +333,7 @@ class KustoObj {
     [hashtable]$Tables = @{}
     [hashtable]$Functions = @{}
     hidden [hashtable]$FunctionObjs = @{}
-        
+
     KustoObj() { }
     static KustoObj() { }
 
@@ -319,12 +345,12 @@ class KustoObj {
     [KustoObj] CreateResultTable() {
         $this.ResultTable = [collections.arraylist]@()
         $columns = @{ }
-    
+
         if (!$this.ResultObject.tables) {
             write-warning "run query first"
             return $this.Pipe()
         }
-    
+
         foreach ($column in ($this.ResultObject.tables[0].columns)) {
             try {
                 [void]$columns.Add($column.ColumnName, $null)
@@ -333,14 +359,14 @@ class KustoObj {
                 write-warning "$($column.ColumnName) already added"
             }
         }
-    
+
         $resultModel = New-Object -TypeName PsObject -Property $columns
         $rowCount = 0
-    
+
         foreach ($row in ($this.ResultObject.tables[0].rows)) {
             $count = 0
             $resultCopy = $resultModel.PsObject.Copy()
-                
+
             foreach ($column in ($this.ResultObject.tables[0].columns)) {
                 #write-verbose "createResultTable: procesing column $count"
                 $resultCopy.($column.ColumnName) = $row[$count++]
@@ -348,75 +374,75 @@ class KustoObj {
 
             write-verbose "createResultTable: processing row $rowCount columns $count"
             $rowCount++
-    
+
             [void]$this.ResultTable.add($resultCopy)
         }
         $this.ResultTable = $this.RemoveEmptyResults($this.ResultTable)
         return $this.Pipe()
     }
-    
+
     [KustoObj] Exec([string]$query) {
         $this.Query = $query
         $this.Exec()
         $this.Query = $null
         return $this.Pipe()
     }
-    
+
     [KustoObj] Exec() {
         $startTime = get-date
         $this
-    
+
         if (!$this.Limit) {
             $this.Limit = 10000
         }
-    
+
         if (!$this.Script -and !$this.Query) {
             Write-Warning "-script and / or -query should be set. exiting"
             return $this.Pipe()
         }
-    
+
         if (!$this.Cluster -or !$this.Database) {
             Write-Warning "-cluster and -database have to be set once. exiting"
             return $this.Pipe()
         }
-    
+
         if ($this.Query) {
             write-host "table:$($this.Table) query:$($this.Query.substring(0, [math]::min($this.Query.length,512)))" -ForegroundColor Cyan
         }
-    
+
         if ($this.Script) {
             write-host "script:$($this.Script)" -ForegroundColor Cyan
         }
-    
+
         if ($this.Table -and $this.Query.startswith("|")) {
             $this.Query = $this.Table + $this.Query
         }
-    
+
         $this.ResultObject = $this.Post($null)
-    
+
         if ($this.ResultObject.Exceptions) {
             write-warning ($this.ResultObject.Exceptions | out-string)
             $this.ResultObject.Exceptions = $null
         }
-    
+
         if ($this.ViewResults -or $this.CreateResults) {
             $this.CreateResultTable()
             if ($this.ViewResults) {
                 write-host ($this.ResultTable | out-string)
             }
         }
-    
+
         if ($this.ResultFile) {
             out-file -FilePath $this.ResultFile -InputObject  ($this.ResultObject | convertto-json -Depth 99)
         }
-    
+
         $primaryResult = $this.ResultObject | where-object TableKind -eq PrimaryResult
-        
+
         if ($primaryResult) {
             write-host ($primaryResult.columns | out-string)
             write-host ($primaryResult.Rows | out-string)
         }
-    
+
         if ($this.ResultObject.tables) {
             write-host "results: $($this.ResultObject.tables[0].rows.count) / $(((get-date) - $startTime).TotalSeconds) seconds to execute" -ForegroundColor DarkCyan
             if ($this.ResultObject.tables[0].rows.count -eq $this.limit) {
@@ -465,18 +491,18 @@ class KustoObj {
         $this.Script = $null
         return $this.Pipe()
     }
-    
+
     [KustoObj] ExecScript([string]$script) {
         $this.Script = $script
         $this.ExecScript()
         $this.Script = $null
         return $this.Pipe()
     }
-    
+
     [KustoObj] ExecScript() {
         if ($this.Script.startswith('http')) {
             $destFile = "$pwd\$([io.path]::GetFileName($this.Script))" -replace '\?.*', ''
-            
+
             if (!(test-path $destFile)) {
                 Write-host "downloading $($this.Script)" -foregroundcolor green
                 invoke-webRequest $this.Script -outFile  $destFile
@@ -484,10 +510,10 @@ class KustoObj {
             else {
                 Write-host "using cached script $($this.Script)"
             }
-    
+
             $this.Script = $destFile
         }
-        
+
         if ((test-path $this.Script)) {
             $this.Query = (Get-Content -raw -Path $this.Script)
         }
@@ -499,46 +525,46 @@ class KustoObj {
         $this.Exec()
         return $this.Pipe()
     }
-    
+
     [void] ExportCsv([string]$exportFile) {
         $this.CreateResultTable()
         [io.directory]::createDirectory([io.path]::getDirectoryName($exportFile))
         $this.ResultTable | export-csv -notypeinformation $exportFile
     }
-    
+
     [void] ExportJson([string]$exportFile) {
         $this.CreateResultTable()
         [io.directory]::createDirectory([io.path]::getDirectoryName($exportFile))
         $this.ResultTable | convertto-json -depth 99 | out-file $exportFile
     }
-    
+
     [string] FixColumns([string]$sourceContent) {
         if (!($this.fixDuplicateColumns)) {
             return $sourceContent
         }
-    
+
         [hashtable]$tempTable = @{ }
         $matches = [regex]::Matches($sourceContent, '"ColumnName":"(?<columnName>.+?)"', 1)
-    
+
         foreach ($match in $matches) {
             $matchInfo = $match.Captures[0].Groups['columnName']
             $column = $match.Captures[0].Groups['columnName'].Value
             $newColumn = $column
             $increment = $true
             $count = 0
-    
+
             while ($increment) {
                 try {
                     [void]$tempTable.Add($newColumn, $null)
                     $increment = $false
-                        
+
                     if ($newColumn -ne $column) {
                         write-warning "replacing $column with $newColumn"
                         return $this.FixColumns($sourceContent.Substring(0, $matchInfo.index) `
                                 + $newColumn `
-                                + $sourceContent.Substring($matchInfo.index + $matchinfo.Length))                            
+                                + $sourceContent.Substring($matchInfo.index + $matchinfo.Length))
                     }
-                        
+
                 }
                 catch {
                     $count++
@@ -549,7 +575,7 @@ class KustoObj {
         }
         return $sourceContent
     }
-    
+
     [void] Import() {
         if ($this.Table) {
             $this.Import($this.Table)
@@ -559,29 +585,29 @@ class KustoObj {
             return
         }
     }
-    
+
     [KustoObj] Import([string]$table) {
         if (!$this.ResultObject.Tables) {
             write-warning 'no results to import'
             return $this.Pipe()
         }
-    
+
         [object]$results = $this.ResultObject.Tables[0]
         [string]$formattedHeaders = "("
-    
+
         foreach ($column in ($results.Columns)) {
             $formattedHeaders += "['$($column.ColumnName)']:$($column.DataType.tolower()), "
         }
-            
+
         $formattedHeaders = $formattedHeaders.trimend(', ')
         $formattedHeaders += ")"
-    
+
         [text.StringBuilder]$csv = New-Object text.StringBuilder
-    
+
         foreach ($row in ($results.rows)) {
             $csv.AppendLine($row -join ',')
         }
-    
+
         $this.Exec(".drop table ['$table'] ifexists")
         $this.Exec(".create table ['$table'] $formattedHeaders")
         $this.Exec(".ingest inline into table ['$table'] <| $($csv.tostring())")
@@ -600,26 +626,26 @@ class KustoObj {
         $this.ImportCsv($csvFile)
         return $this.Pipe()
     }
-    
+
     [KustoObj] ImportCsv([string]$csvFile) {
         if (!(test-path $csvFile) -or !$this.Table) {
             write-warning "verify importfile: $csvFile and import table: $($this.Table)"
             return $this.Pipe()
         }
-            
+
         # not working
         #POST https://help.kusto.windows.net/v1/rest/ingest/Test/Logs?streamFormat=Csv HTTP/1.1
         #[string]$csv = Get-Content -Raw $csvFile -encoding utf8
         #$this.Post($csv)
-    
-        $sr = new-object io.streamreader($csvFile) 
+
+        $sr = new-object io.streamreader($csvFile)
         [string]$tempHeaders = $sr.ReadLine()
         [text.StringBuilder]$csv = New-Object text.StringBuilder
-    
+
         while ($sr.peek() -ge 0) {
             $csv.AppendLine($sr.ReadLine())
         }
-    
+
         $sr.close()
         $formattedHeaderList = @{ }
         [string]$formattedHeaders = "("
@@ -630,11 +656,11 @@ class KustoObj {
                 [string]$normalizedHeader = $header.trim('`"').Replace(" ", "_")
                 $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
                 $uniqueHeader = $normalizedHeader
-        
+
                 while ($formattedHeaderList.ContainsKey($uniqueHeader)) {
                     $uniqueHeader = $normalizedHeader + ++$columnCount
                 }
-                    
+
                 $formattedHeaderList.Add($uniqueHeader, "")
                 $formattedHeaders += "['$($uniqueHeader)']:string, "
             }
@@ -646,13 +672,13 @@ class KustoObj {
         $formattedHeaders = $formattedHeaders.trimend(', ')
 
         $formattedHeaders += ")"
-    
+
         #$this.Exec(".drop table ['$($this.Table)'] ifexists")
-        $this.Exec(".create table ['$($this.Table)'] $formattedHeaders") 
+        $this.Exec(".create table ['$($this.Table)'] $formattedHeaders")
         $this.Exec(".ingest inline into table ['$($this.Table)'] <| $($csv.tostring())")
         return $this.Pipe()
     }
-    
+
     [KustoObj] ImportJson([string]$jsonFile) {
         [string]$csvFile = [io.path]::GetTempFileName()
         try {
@@ -681,6 +707,7 @@ class KustoObj {
     [bool] Logon([string]$resourceUrl) {
         [int]$expirationRefreshMinutes = 15
         [int]$expirationMinutes = 0
+        write-host "logon($resourceUrl)" -foregroundcolor green
 
         if (!$resourceUrl) {
             write-warning "-resourceUrl required. example: https://{{ kusto cluster }}.kusto.windows.net"
@@ -704,7 +731,8 @@ class KustoObj {
         try {
             $error.Clear()
             [string[]]$defaultScope = @(".default")
-            
+            write-host "logonMsal($resourceUrl,$($scopes | out-string))" -foregroundcolor green
+
             if ($this.clientId -and $this.clientSecret) {
                 [string[]]$defaultScope = @("$resourceUrl/.default")
                 [Microsoft.Identity.Client.ConfidentialClientApplicationOptions] $cAppOptions = new-Object Microsoft.Identity.Client.ConfidentialClientApplicationOptions
@@ -736,7 +764,7 @@ class KustoObj {
                 # user creds
                 [Microsoft.Identity.Client.PublicClientApplicationBuilder]$pAppBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($this.clientId)
                 $pAppBuilder = $pAppBuilder.WithAuthority([microsoft.identity.client.azureCloudInstance]::AzurePublic, $this.tenantId)
-                
+
                 if (!($this.publicClientApplication)) {
                     if ($global:PSVersionTable.PSEdition -eq "Core") {
                         $pAppBuilder = $pAppBuilder.WithDefaultRedirectUri()
@@ -747,7 +775,7 @@ class KustoObj {
                     }
                     $this.publicClientApplication = $pAppBuilder.Build()
                 }
-                    
+
                 write-verbose ($this.publicClientApplication | convertto-json)
 
                 [Microsoft.Identity.Client.IAccount]$account = $this.publicClientApplication.GetAccountsAsync().Result[0]
@@ -819,15 +847,19 @@ class KustoObj {
 
     hidden [object] Post([string]$body = "") {
         # authorize aad to get token
-        [string]$kustoHost = "$($this.cluster).kusto.windows.net"
-        [string]$kustoResource = "https://$kustoHost"
+        if(!($this.ClusterResolved)){
+            $this.ClusterResolved = $this.ResolveCluster()
+        }
+
+        [string]$kustoHost = $this.cluster
+        [string]$kustoResource = 'https://' + $kustoHost
         [string]$csl = "$($this.Query)"
-        
+
         $this.Result = $null
         $this.ResultObject = $null
         $this.ResultTable = $null
         $this.Query = $this.Query.trim()
-    
+
         if ($body -and ($this.Table)) {
             $uri = "$kustoResource/v1/rest/ingest/$($this.Database)/$($this.Table)?streamFormat=Csv&mappingName=CsvMapping"
         }
@@ -845,20 +877,20 @@ class KustoObj {
                 return $error
             }
         }
-    
+
         $requestId = [guid]::NewGuid().ToString()
         write-verbose "request id: $requestId"
-    
+
         $header = @{
             'accept'                 = 'application/json'
             'authorization'          = "Bearer $($this.Token)"
             'content-type'           = 'application/json'
             'host'                   = $kustoHost
-            'x-ms-app'               = 'kusto-rest.ps1' 
+            'x-ms-app'               = 'kusto-rest.ps1'
             'x-ms-user'              = $env:USERNAME
             'x-ms-client-request-id' = $requestId
-        } 
-    
+        }
+
         if ($body) {
             $header.Add("content-length", $body.Length)
         }
@@ -875,31 +907,31 @@ class KustoObj {
                 }
             } | ConvertTo-Json
         }
-    
+
         write-verbose ($header | convertto-json)
         write-verbose $body
-    
+
         $error.clear()
         $this.Result = Invoke-WebRequest -Method Post -Uri $uri -Headers $header -Body $body
         write-verbose $this.Result
-        
+
         if ($error) {
             return $error
         }
-    
+
         try {
             return ($this.FixColumns($this.Result.content) | convertfrom-json)
         }
         catch {
             write-warning "error converting json result to object. unparsed results in `$this.Result`r`n$error"
-                
+
             if (!$this.FixDuplicateColumns) {
                 write-warning "$this.fixDuplicateColumns = $true may resolve."
             }
             return ($this.Result.content)
         }
     }
-    
+
     [collections.arrayList] RemoveEmptyResults([collections.arrayList]$sourceContent) {
         if (!$this.RemoveEmptyColumns -or !$sourceContent -or $sourceContent.count -eq 0) {
             return $sourceContent
@@ -907,7 +939,7 @@ class KustoObj {
         $columnList = (Get-Member -InputObject $sourceContent[0] -View Extended).Name
         write-verbose "checking column list $columnList"
         $populatedColumnList = [collections.arraylist]@()
-    
+
         foreach ($column in $columnList) {
             if (@($sourceContent | where-object $column -ne "").Count -gt 0) {
                 $populatedColumnList += $column
@@ -915,24 +947,43 @@ class KustoObj {
         }
         return [collections.arrayList]@($sourceContent | select-object $populatedColumnList)
     }
-    
+
+    [bool] ResolveCluster() {
+        if($this.cluster.startswith('https://')) {
+            $this.cluster = $this.cluster.trimstart('https://')
+        }
+
+        if(!(test-netConnection $this.cluster -p 443).TcpTestSucceeded) {
+            write-warning "cluster not reachable:$($this.cluster)"
+            if((test-netConnection "$($this.cluster).kusto.windows.net" -p 443).TcpTestSucceeded) {
+                $this.cluster += '.kusto.windows.net'
+                write-host "cluster reachable:$($this.cluster)" -foregroundcolor green
+            }
+            else {
+                write-warning "cluster not reachable:$($this.cluster)"
+                return $false
+            }
+        }
+        return $true
+    }
+
     [KustoObj] SetCluster([string]$cluster) {
         $this.Cluster = $cluster
         return $this.Pipe()
     }
-    
+
     [KustoObj] SetDatabase([string]$database) {
         $this.Database = $database
         $this.SetTables()
         $this.SetFunctions()
         return $this.Pipe()
     }
-    
+
     [KustoObj] SetPipe([bool]$enable) {
         $this.PipeLine = $enable
         return $this.Pipe()
     }
-    
+
     [KustoObj] SetTable([string]$table) {
         $this.Table = $table
         return $this.Pipe()
@@ -964,22 +1015,6 @@ class KustoObj {
 }
 
 # comment next line after microsoft.identity.client type has been imported into powershell session to troubleshoot 2 of 2
-'@ 
+'@
 
-$error.Clear()
-$global:kusto = [KustoObj]::new()
-$kusto.SetTables()
-$kusto.SetFunctions()
-$kusto.Exec()
-$kusto.ClearResults()
-
-write-host ($PSBoundParameters | out-string)
-
-if ($error) {
-    write-warning ($error | out-string)
-}
-else {
-    write-host ($kusto | Get-Member | out-string)
-    write-host "use `$kusto object to set properties and run queries. example: `$kusto.Exec('.show operations')" -ForegroundColor Green
-    write-host "set `$kusto.viewresults=`$true to see results." -ForegroundColor Green
-}
+main
