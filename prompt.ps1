@@ -1,17 +1,17 @@
 <#
 .SYNOPSIS
-    Custom prompt for powershell
+Custom prompt for powershell
 .DESCRIPTION
-    Custom prompt for powershell
-    in ps open $PROFILE and add the following:
-    code $PROFILE
-    version 231121 add stashes list
+Custom prompt for powershell
+in ps open $PROFILE and add the following:
+code $PROFILE
+version 231121 add stashes list
 
 .LINK
-    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/prompt.ps1" -outFile "$pwd\prompt.ps1";
-    code $PROFILE
-    code .\prompt.ps1
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/prompt.ps1" -outFile "$pwd\prompt.ps1";
+code $PROFILE
+code .\prompt.ps1
 #>
 
 # autoload modules
@@ -20,6 +20,13 @@ $PSModuleAutoLoadingPreference = 2
 $global:promptInfo = $null
 # set terminal tab completion same as editor
 Set-PSReadLineKeyHandler -Chord Tab -Function AcceptSuggestion
+
+# symbols
+$branchSymbol = [char]0x2325
+$deltaSymbol = [char]0x0394
+$downArrow = [char]0x2193
+$upArrow = [char]0x2191
+$stashSymbol = [char]0x21B2
 
 function prompt() {
     $path = "'$pwd'"#.ToLower()
@@ -114,6 +121,8 @@ function get-branches() {
 }
 
 function get-commandDuration() {
+    $precision = 'ms'
+
     write-debug "get-commandDuration()"
     if (!$promptInfo.enableCommandDuration) {
         write-debug "command duration disabled. returning"
@@ -123,12 +132,29 @@ function get-commandDuration() {
     $lastCommand = get-history -count 1
     if (!$lastCommand) {
         write-debug "no last command found. returning"
-        $promptInfo.commandDurationMs = 0
+        $durationMs = 0
     }
     else {
-        $promptInfo.commandDurationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
+        $durationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
     }
-    return " $([char]0x0394)$($promptInfo.commandDurationMs)ms"
+
+    if ($durationMs -gt 1000) {
+        $durationMs = [math]::Round($durationMs / 1000, 2)
+        $precision = 's'
+    
+        if ($durationMs -gt 60) {
+            $durationMs = [math]::Round($durationMs / 60, 2)
+            $precision = 'm'
+    
+            if ($durationMs -gt 60) {
+                $durationMs = [math]::Round($durationMs / 60, 2)
+                $precision = 'h'
+            }
+        }
+    }
+    
+    $promptInfo.commandDurationMs = $durationMs
+    return " $($deltaSymbol)$($promptInfo.commandDurationMs)$($precision)"
 }
 
 function get-currentBranch() {
@@ -151,7 +177,7 @@ function get-currentBranch() {
         return $null
     }
 
-    add-status " $([char]0x2325) ($($promptInfo.branch))"
+    add-status " $($branchSymbol) ($($promptInfo.branch))"
     return $promptInfo.branch
 }
 
@@ -159,7 +185,7 @@ function get-diffs() {
     write-debug "get-diffs()"
     $diff = @(git status --porcelain).Count
     if ($diff -gt 0) {
-        add-status " $([char]0x2325) ($($promptInfo.branch)*$($diff))" -reset
+        add-status " $($branchSymbol) ($($promptInfo.branch)*$($diff))" -reset
     }
 }
 
@@ -213,7 +239,7 @@ function get-revisions() {
             $aheadBehind = "0 0"
         }
         if ($aheadBehind) {
-            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', "$([char]0x2193)`$1/$([char]0x2191)`$2")
+            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', "$($downArrow)`$1/$($upArrow)`$2")
             add-status "[$($remote):$($aheadBehind)]"
         }
     }
@@ -241,7 +267,7 @@ function get-stashes() {
 
     if ($promptInfo.stashes) {
         write-debug "stashes found. adding to status"
-        add-status "{$([char]0x21B2)$($promptInfo.stashes.count)}"
+        add-status "{$($stashSymbol)$($promptInfo.stashes.count)}"
     }
 }
 
@@ -279,7 +305,7 @@ function get-psEnv() {
 function init-promptInfoEnv() {
     write-debug "init-promptInfo()"
     $openai = '\github\jagilber\powershellscripts\openai.ps1'
-    if((test-path $openai -WarningAction SilentlyContinue)) {
+    if ((test-path $openai -WarningAction SilentlyContinue)) {
         . $openai -init -quiet
     }
     else {
