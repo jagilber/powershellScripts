@@ -19,7 +19,8 @@ $PSModuleAutoLoadingPreference = 2
 #$DebugPreference = "Continue"
 $global:promptInfo = $null
 # set terminal tab completion same as editor
-Set-PSReadLineKeyHandler -Chord Tab -Function AcceptSuggestion
+#Set-PSReadLineKeyHandler -Chord Tab -Function AcceptSuggestion
+Set-PSReadLineKeyHandler -Chord Tab -Function MenuComplete
 
 # symbols
 $branchSymbol = [char]0x2325
