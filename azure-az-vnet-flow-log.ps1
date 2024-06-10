@@ -243,6 +243,7 @@ param(
     # [Parameter(Mandatory = $true)]
     [string]$storageAccountName,
     [string]$storageResourceGroupName = $resourceGroupName,
+    [string]$networkwatcherResourceGroupName = 'NetworkWatcherRG', #$resourceGroupName,
     [string]$flowLogName = $vnetName + 'FlowLog',
     [string]$flowLogJson = "$pwd\flowLog.json",
     [string]$subscriptionId, # = (get-azContext).Subscription.Id,
@@ -271,7 +272,7 @@ $global:sortedFlowTuple = $null
 $script:storageResourceGroup = $storageResourceGroupName
 $script:laResourceGroup = $logAnalyticsResourceGroupName
 $script:networkwatcherName = $networkwatcherName
-$script:nwResourceGroup = $null
+$script:nwResourceGroup = $networkwatcherResourceGroupName
 $script:location = $location
 $script:logAnalyticsWorkspaceName = $logAnalyticsWorkspaceName
 $script:storageAccountName = $storageAccountName
@@ -520,9 +521,13 @@ function check-networkWatcher() {
     }
     $nwResourceGroup = get-resourceGroup -ResourceName $script:networkwatcherName -ResourceType 'Microsoft.Network/networkWatchers'
     if (!$nwResourceGroup) {
+        if(!(Get-AzResourceGroup -ResourceGroupName $script:nwResourceGroup)) {
+            write-warning "network watcher resource group not found. creating"
+            write-host "New-AzResourceGroup -Name $script:nwResourceGroup -Location $script:location" -ForegroundColor Cyan
+            New-AzResourceGroup -Name $script:nwResourceGroup -Location $script:location
+        }
         write-warning "network watcher resource group not found for $($script:networkwatcherName). getting network watcher resource group."
         $continue = read-host "do you want to create a new network watcher named $($script:networkwatcherName) in $script:nwResourceGroup in $($script:location)?[y|n]"
-        $script:nwResourceGroup = $resourceGroupName
         if ($continue -imatch "y") {
             $error.clear()
             write-host "New-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName -Location $script:location" -ForegroundColor Cyan
