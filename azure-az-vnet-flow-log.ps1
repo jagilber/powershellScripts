@@ -522,6 +522,7 @@ function check-networkWatcher() {
     if (!$nwResourceGroup) {
         write-warning "network watcher resource group not found for $($script:networkwatcherName). getting network watcher resource group."
         $continue = read-host "do you want to create a new network watcher named $($script:networkwatcherName) in $script:nwResourceGroup in $($script:location)?[y|n]"
+        $script:nwResourceGroup = $resourceGroupName
         if ($continue -imatch "y") {
             $error.clear()
             write-host "New-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName -Location $script:location" -ForegroundColor Cyan
@@ -628,12 +629,13 @@ function generate-fileName($fileName, $identifier = "") {
     $flowLogFileNameExt = [io.path]::GetExtension($fileName)
 
     if ($identifier) {
-        $name = "$($flowLogFilePath)\$($flowLogFileName)_$($identifier)_$($universalTime.ToString("yyyyMMddHHmm"))$flowLogFileNameExt"
+        $name = "$($flowLogFilePath)/$($flowLogFileName)_$($identifier)_$($universalTime.ToString("yyyyMMddHHmm"))$flowLogFileNameExt"
     }
     else {
-        $name = "$($flowLogFilePath)\$($flowLogFileName)_$($universalTime.ToString("yyyyMMddHHmm"))$flowLogFileNameExt"
+        $name = "$($flowLogFilePath)/$($flowLogFileName)_$($universalTime.ToString("yyyyMMddHHmm"))$flowLogFileNameExt"
     }
 
+    $name = $name.replace('\','/')
     return $name
 }
 
