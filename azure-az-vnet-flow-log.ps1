@@ -493,12 +493,14 @@ function check-logAnalytics() {
         write-warning "generated log analytics workspace name: $script:logAnalyticsWorkspaceName"
     }
 
-    $laResourceGroup = get-resourceGroup -ResourceName $script:logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces' -resourceGroup $script:laResourceGroup
+    $laResourceGroup = get-resourceGroupFromResource -ResourceName $script:logAnalyticsWorkspaceName -ResourceType 'Microsoft.OperationalInsights/workspaces' -resourceGroup $script:laResourceGroup
     if (!$laResourceGroup) {
         write-warning "log analytics workspace resource group not found for $script:logAnalyticsWorkspaceName. getting log analytics workspace resource group."
         $continue = read-host "do you want to create a new log analytics workspace named $script:logAnalyticsWorkspaceName in $script:laResourceGroup in $($script:location)?[y|n]"
         if ($continue -imatch "y") {
-            $script:laResourceGroup = get-resourceGroup -resourceGroupName $script:laResourceGroup -create
+            if(!(get-resourceGroup -resourceGroupName $script:laResourceGroup -create)){
+                return $false
+            }
 
             $error.clear()
             write-host "New-AzOperationalInsightsWorkspace -ResourceGroupName $script:laResourceGroup -Name $script:logAnalyticsWorkspaceName -Location $script:location" -ForegroundColor Cyan
@@ -552,7 +554,9 @@ function check-networkWatcher() {
         write-warning "network watcher not found for $($script:networkwatcherName)."
         $continue = read-host "do you want to create a new network watcher named:$($script:networkwatcherName) in resource group:$script:nwResourceGroup in location:$($script:location)?[y|n]"
         if ($continue -imatch "y") {
-            $script:nwResourceGroup = get-resourceGroup -resourceGroupName $script:nwResourceGroup -create
+            if(!(get-resourceGroup -resourceGroupName $script:nwResourceGroup -create)){
+                return $false
+            }
 
             $error.clear()
             write-host "New-AzNetworkWatcher -ResourceGroupName $script:nwResourceGroup -Name $script:networkwatcherName -Location $script:location" -ForegroundColor Cyan
@@ -586,12 +590,14 @@ function check-storage() {
         $script:storageAccountName = [string]::join('', @('flow', $base64String))
         write-warning "generated storage account name: $script:storageAccountName"
     }
-    $storageResourceGroup = get-resourceGroup -ResourceName $script:storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts' -resourceGroup $script:storageResourceGroup
+    $storageResourceGroup = get-resourceGroupFromResource -ResourceName $script:storageAccountName -ResourceType 'Microsoft.Storage/storageAccounts' -resourceGroup $script:storageResourceGroup
     if (!$storageResourceGroup) {
         write-warning "storage account resource group not found for $script:storageAccountName. getting storage account resource group."
         $continue = read-host "do you want to create a new storage account named $script:storageAccountName in $script:storageResourceGroup in $($script:location)?[y|n]"
         if ($continue -imatch "y") {
-            $script:storageResourceGroup = get-resourceGroup -resourceGroupName $script:storageResourceGroup -create
+            if(!(get-resourceGroup -resourceGroupName $script:storageResourceGroup -create)){
+                return $false
+            }
 
             $error.clear()
             write-host "New-AzStorageAccount -ResourceGroupName $script:storageResourceGroup -Name $script:storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2" -ForegroundColor Cyan
@@ -614,6 +620,17 @@ function check-storage() {
     return $true
 }
 
+function create-resourceGroup($resourceGroupName) {
+    $error.Clear()
+    write-host "New-AzResourceGroup -Name $resourceGroupName -Location $script:location" -ForegroundColor Cyan
+    $resourceGroup = New-AzResourceGroup -Name $resourceGroupName -Location $script:location
+    if ($error -or !$resourceGroup) {
+        write-error "error creating resource group:$($error | out-string)"
+        return $null
+    }
+    $global:newResources += $resourceGroup.ResourceId
+    return $resourceGroup
+}
 
 function download-flowLog($currentFlowLog) {
     $flowLog = $currentFlowLog
@@ -687,7 +704,7 @@ function get-flowLog() {
 }
 
 function get-vnet() {
-    $script:vnetResourceGroup = get-resourceGroup -ResourceName $vnetName -ResourceType 'Microsoft.Network/virtualNetworks' -resourceGroup $script:vnetResourceGroup
+    $script:vnetResourceGroup = get-resourceGroupFromResource -ResourceName $vnetName -ResourceType 'Microsoft.Network/virtualNetworks' -resourceGroup $script:vnetResourceGroup
     if (!$script:vnetResourceGroup) {
         write-host "vnet resource group not found. exiting" -ForegroundColor Red
         return $false
@@ -704,17 +721,27 @@ function get-vnet() {
 
 }
 
-function get-resourceGroup($resourceName= $null, $resourceType= $null, $resourceGroupName = $null, [switch]$create = $false) {
-    write-host "get-azresource -ResourceName $resourceName -ResourceType '$resourceType' -ResourceGroupName $resourceGroupName" -ForegroundColor Cyan
-    $resourceGroup = $null
-    if($resourceGroupName -and !$resourceName -and !$resourceType) {
-        write-host "get-azresourcegroup -resourceGroupName $resourceGroupName -Location $script:location -ErrorAction SilentlyContinue" -ForegroundColor Cyan
-        $resourceGroup = get-azresourcegroup -resourceGroupName $resourceGroupName -Location $script:location -ErrorAction SilentlyContinue
-        if($resourceGroup) { 
-            return $resourceGroup.ResourceGroupName 
+function get-resourceGroup($resourceGroupName, [switch]$create = $false) {
+
+    write-host "Get-AzResourceGroup -Name $resourceGroupName -Location $script:location" -ForegroundColor Cyan
+    $resourceGroup = Get-AzResourceGroup -Name $resourceGroupName -Location $script:location -ErrorAction SilentlyContinue
+    if(!$resourceGroup) {
+        if($create) {
+            return create-resourceGroup $resourceGroupName
+        }
+        else {
+            write-host "resource group not found" -ForegroundColor Red
         }
     }
-    elseif ($resourceGroupName) {
+    return $resourceGroup
+}
+
+function get-resourceGroupFromResource($resourceName= $null, $resourceType= $null, $resourceGroupName = $null) {
+    write-host "get-azresource -ResourceName '$resourceName' -ResourceType '$resourceType' -ResourceGroupName $resourceGroupName" -ForegroundColor Cyan
+    $resourceGroup = $null
+    $resourceGroups = @()
+    
+    if ($resourceGroupName) {
         $resourceGroups = @(get-azresource -ResourceName $resourceName -ResourceType $resourceType -ResourceGroupName $resourceGroupName -ErrorAction SilentlyContinue)
     }
     else {
@@ -723,20 +750,14 @@ function get-resourceGroup($resourceName= $null, $resourceType= $null, $resource
 
     if (!$resourceGroups -and $resourceGroupName) {
         write-host "resource not found in resource group $resourceGroupName. searching without resource group" -ForegroundColor Red
-        $resourceGroup = get-resourceGroup -ResourceName $resourceName -ResourceType $resourceType
+        $resourceGroup = get-resourceGroupFromResource -ResourceName $resourceName -ResourceType $resourceType
     }
 
     if ($resourceGroups -and $resourceGroups.Count -eq 1) {
         $resourceGroup = $resourceGroups[0].ResourceGroupName
     }
     else {
-        write-host "resource group not found" -ForegroundColor Red
-        if($create){
-            write-host "creating resource group" -ForegroundColor Yellow
-            write-host "New-AzResourceGroup -Name $resourceName -Location $script:location"
-            $resourceGroup = New-AzResourceGroup -Name $resourceName -Location $script:location
-            $global:newResources += $resourceGroup.ResourceId
-        }
+        write-host "resource group resource not found" -ForegroundColor Red
     }
     write-host "returning resourceGroup: $resourceGroup"
     return $resourceGroup
