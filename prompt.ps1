@@ -138,48 +138,48 @@ function get-commandDuration() {
     else {
         $durationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
     }
-    
-    $timespan = [timespan]::fromMilliseconds($durationMs)
+    $result = '{0:N0}' -f $durationMs
+    # $timespan = [timespan]::fromMilliseconds($durationMs)
     $promptInfo.commandDurationMs = $durationMs
     # $hours = $null
     # $minutes = $null
     # $seconds = $null
     # $milliseconds = $durationMs
 
-    if ($timespan.TotalMilliseconds -gt 1000) {
-        $precision = 's'
-        # $seconds = [int]($durationMs / 1000)
-        # $milliseconds = $durationMs % 100
+    # if ($timespan.TotalMilliseconds -gt 1000) {
+    #     $precision = 's'
+    #     # $seconds = [int]($durationMs / 1000)
+    #     # $milliseconds = $durationMs % 100
     
-        if ($timespan.TotalSeconds -gt 60) {
-            $precision = 'm'
-            # $minutes = [int]($durationMs / 1000 / 60)
-            # $seconds = $durationMs /1000 % 60
-            # $milliseconds = $durationMs /1000 /60 % 60
+    #     if ($timespan.TotalSeconds -gt 60) {
+    #         $precision = 'm'
+    #         # $minutes = [int]($durationMs / 1000 / 60)
+    #         # $seconds = $durationMs /1000 % 60
+    #         # $milliseconds = $durationMs /1000 /60 % 60
     
-            if ($timespan.TotalMinutes -gt 60) {
-                $precision = 'h'
-                # $hours = [int]($durationMs / 3600)
-                # $minutes = $durationMs % 60
-                # $seconds = $durationMs % 60
-                # $milliseconds = $durationMs % 60
-            }
-        }
-    }
+    #         if ($timespan.TotalMinutes -gt 60) {
+    #             $precision = 'h'
+    #             # $hours = [int]($durationMs / 3600)
+    #             # $minutes = $durationMs % 60
+    #             # $seconds = $durationMs % 60
+    #             # $milliseconds = $durationMs % 60
+    #         }
+    #     }
+    # }
 
-    $result = $null
-    if ($timespan.hours) {
-        $result = "$($timespan.hours):$($timespan.minutes):$($timespan.seconds).$($timespan.milliseconds)" #h"
-    }
-    elseif ($timespan.minutes) {
-        $result = "$($timespan.minutes):$($timespan.seconds).$($timespan.milliseconds)" #m"
-    }
-    elseif ($timespan.seconds) {
-        $result = "$($timespan.seconds).$($timespan.milliseconds)" #s"
-    }
-    elseif ($timespan.milliseconds -or $timespan.milliseconds -eq 0) {
-        $result = "$($timespan.milliseconds)" #ms"
-    }
+    # $result = $null
+    # if ($timespan.hours) {
+    #     $result = "$($timespan.hours):$($timespan.minutes):$($timespan.seconds).$($timespan.milliseconds)" #h"
+    # }
+    # elseif ($timespan.minutes) {
+    #     $result = "$($timespan.minutes):$($timespan.seconds).$($timespan.milliseconds)" #m"
+    # }
+    # elseif ($timespan.seconds) {
+    #     $result = "$($timespan.seconds).$($timespan.milliseconds)" #s"
+    # }
+    # elseif ($timespan.milliseconds -or $timespan.milliseconds -eq 0) {
+    #     $result = "$($timespan.milliseconds)" #ms"
+    # }
 
     return " $($deltaSymbol)$($result)$($precision)"
 }
