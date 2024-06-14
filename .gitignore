@@ -254,7 +254,7 @@ ModelManifest.xml
 **/gather
 **/Configuration
 #.vscode
-secrets.ps1
+secrets.json
 openaiMessages.json
 **/Downloads
 **flowlog**
