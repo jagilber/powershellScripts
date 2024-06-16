@@ -67,25 +67,29 @@ function main() {
         }
 
         if ($createSecret) {
-            if(!(add-secret $secretName (new-secret $secretName $secretValue $secretNotes))) {
+            add-secret $secretName (new-secret $secretName $secretValue $secretNotes)
+            if(!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
                 return
             }
+            get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
         }
         elseif ($updateSecret) {
             update-secret -name $secretName -value $secretValue -notes $secretNotes
+            set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
+            get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
         }
         elseif ($removeSecret) {
             $secret = get-secret $secretName
             if ($secret) {
                 write-host "removing secret $secretName"
                 $script:secrets.Remove($secret)
+                set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
+                get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
             }
             else {
                 write-warning "secret $secretName not found"
             }
         }
-
-        set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
 
         if ($saveSecretsToFile) {
             save-secretsToFile $secretFile
@@ -314,6 +318,7 @@ function get-secretsFromVault([string]$vaultName, [string]$vaultSecretName, [swi
             write-error "unable to convert secret string to object"
             return $noSecrets
         }
+        [void]$script:secrets.clear()
         [void]$script:secrets.addrange($secretObj)
         return $script:secrets
     }
