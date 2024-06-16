@@ -2,26 +2,29 @@
 .\secrets.ps1 -createVault -resourceGroup vaults -vaultName vault -vaultSecretName secrets -location eastus
 .\secrets.ps1 -secretKeyName external-subscription  -secretValue '00000000-0000-0000-0000-000000000000' -updateSecret -secretNotes 'test secret'
 #>
-
+[CmdletBinding()]
 param(
-    [string]$secretKeyName, # = "key",
     [string]$secretName, # = "secret",
     [string]$secretValue, # = "value",
     [string]$secretNotes, # = "notes",
     [string]$subscriptionId, # = "00000000-0000-0000-0000-000000000000",
     [string]$resourceGroup = "vaults",
-    [string]$jsonConfig = "$pwd\secrets.json",
+    [string]$secretFile = "$pwd\secrets.json",
     [string]$vaultName = "vault",
     [string]$vaultSecretName = "secrets",
     [string]$location, # = "eastus",
     [switch]$saveSecretsToFile,
-    [switch]$updateVault,
+    [switch]$createSecret,
     [switch]$updateSecret,
+    [switch]$removeSecret,
+    [switch]$createVault,
+    [switch]$updateVault,
+    [switch]$removeVault,
     [switch]$setGlobalVariable,
-    [switch]$createVault
+    [switch]$whatif
 )
 
-$script:secrets = @{}
+$script:secrets = [collections.arrayList]::new()
 $ErrorActionPreference = 'Continue'
 $maxSizeBytes = 25 * 1024
 
@@ -31,12 +34,11 @@ function main() {
 
         if ($createVault) {
             $vault = create-keyVault -resourceGroup $resourceGroup -vaultName $vaultName -location $location
-            if (!$vault) {
-                return
-            }
+            write-host "vault: $($vault | ConvertTo-Json -Depth 1)"
+            return
         }
-        if ($updateVault) {
-            $script:secrets = read-secretsFromFile $jsonConfig
+        elseif ($updateVault) {
+            [void]$script:secrets.AddRange((read-secretsFromFile $secretFile))
             if (!($script:secrets)) {
                 write-error "secrets file not found"
                 return
@@ -47,24 +49,54 @@ function main() {
             }
             return
         }
-
-        if ($updateSecret) {
-            $script:secrets = get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
-            update-secret -secretName $secretKeyName -name $secretName -value $secretValue -notes $secretNotes
-            set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
+        elseif ($removeVault) {
+            if ((get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName)) {
+                write-host "removing vault $vaultName"
+                remove-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup
+            }
+            else {
+                write-warning "vault $vaultName not found"
+            }
             return
         }
 
+        get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
+        write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
         if ($setGlobalVariable) {
             $global:secrets = $script:secrets
         }
 
-        $script:secrets = get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
-        write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
+        if ($createSecret) {
+            if(!(add-secret $secretName (new-secret $secretName $secretValue $secretNotes))) {
+                return
+            }
+        }
+        elseif ($updateSecret) {
+            update-secret -name $secretName -value $secretValue -notes $secretNotes
+        }
+        elseif ($removeSecret) {
+            $secret = get-secret $secretName
+            if ($secret) {
+                write-host "removing secret $secretName"
+                $script:secrets.Remove($secret)
+            }
+            else {
+                write-warning "secret $secretName not found"
+            }
+        }
+
+        set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
 
         if ($saveSecretsToFile) {
-            save-secrets
+            save-secretsToFile $secretFile
         }
+
+        if ($secretName) {
+            $secret = get-secret $secretName
+            write-verbose "returning secret: $($secret | ConvertTo-Json -Depth 100)"
+            return $secret
+        }
+
         return $script:secrets
     }
     catch {
@@ -82,7 +114,7 @@ function add-secret([string]$secretName, [object]$secretObj) {
         return $false
     }
     if (!(get-secret $secretName)) {
-        [void]$script:secrets.add($secretName, $secretObj)
+        [void]$script:secrets.add($secretObj)
         write-host "secret $secretName added"
         return $true
     }
@@ -90,12 +122,27 @@ function add-secret([string]$secretName, [object]$secretObj) {
         write-host "secret $secretName already exists"
         return $false
     }
-    
+
+}
+
+function check-secretSize([string]$secretValue) {
+    $secretSize = $secretValue.Length
+    if ($secretSize -gt $maxSizeBytes) {
+        write-error "secret ($($script:secrets.Count)) size $secretSize exceeds maximum size $maxSizeBytes"
+        return $false
+    }
+    if ($maxSizeBytes - $secretSize -lt 10000) {
+        write-warning "secret ($($script:secrets.Count)) size $secretSize is close to maximum size $maxSizeBytes"
+    }
+    else {
+        write-host "secret ($($script:secrets.Count)) size $secretSize (percentage: $($secretSize / $maxSizeBytes * 100))" -ForegroundColor Green
+    }
+    return $true
 }
 
 function connect-az($resourceGroup, $subscriptionId) {
     $moduleList = @('az.accounts', 'az.resources', 'az.keyvault')
-    
+
     foreach ($module in $moduleList) {
         write-verbose "checking module $module"
         if (!(get-module -name $module)) {
@@ -128,25 +175,41 @@ function connect-az($resourceGroup, $subscriptionId) {
     return $null = get-azcontext
 }
 
-function new-secret([string]$secretName, [string]$name = "", [string]$value = "", [string]$notes = "") {
-    if (!$name) {
-        $name = $secretName
+function convert-csvToJson([string]$csv) {
+    write-host "converting csv to json:`n$csv" -ForegroundColor Cyan
+    $jsonString = "[$(($csv | ConvertFrom-Csv | ConvertTo-Json).trim("[]"))]"
+    write-host "returning json string:`n$jsonString" -ForegroundColor DarkCyan
+    return $jsonString
+}
+
+function convert-jsonToCsv([string]$jsonString) {
+    write-host "converting json to csv:`n$jsonString" -ForegroundColor Cyan
+    $jsonObj = $jsonString | ConvertFrom-Json
+    $csvString = [text.stringbuilder]::new()
+
+    $header = $null
+    foreach ($obj in $jsonObj) {
+        if (!$header) {
+            $withHeader = ($obj | ConvertTo-Csv)
+            $withoutHeader = ($obj | ConvertTo-Csv -NoHeader)
+            $header = $withHeader.replace($withoutHeader, "")
+            write-host "header: $header"
+            [void]$csvString.appendLine($header)
+        }
+        [void]$csvString.appendLine(($obj | ConvertTo-Csv -NoHeader))
     }
-    $secret = @{
-        name     = $name
-        value    = $value
-        notes    = $notes
-        created  = (Get-Date).ToString()
-        modified = (Get-Date).ToString()
-    }
-    return $secret
+
+    write-host "returning csv string:`n$csvString" -ForegroundColor DarkCyan
+    return ($csvString.toString())
 }
 
 function create-keyVault([string]$resourceGroup, [string]$vaultName, [string]$location) {
     $error.clear()
     if (!(get-resourceGroup $resourceGroup)) {
         if ($createVault) {
-            return create-resourceGroup $resourceGroup $location
+            if (!(create-resourceGroup $resourceGroup $location)) {
+                return $null
+            }
         }
         else {
             write-error "resource group $resourceGroup not found"
@@ -155,13 +218,31 @@ function create-keyVault([string]$resourceGroup, [string]$vaultName, [string]$lo
     }
 
     write-host "creating vault $vaultName"
-    write-host "new-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup -Location $location"
+    write-host "new-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup -Location $location" -ForegroundColor Green
+    if ($whatif) { return $true }
     $vault = new-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup -Location $location
     if ($error) {
         write-error $error
         return $null
     }
     return $vault
+}
+
+function create-resourceGroup([string]$resourceGroup, [string]$location) {
+    $error.clear()
+    if (!$location) {
+        write-error "location is required"
+        return $null
+    }
+    write-host "creating resource group $resourceGroup"
+    write-host "new-azresourcegroup -name $resourceGroup -location $location" -ForegroundColor Green
+    if ($whatif) { return $true }
+    $result = new-azresourcegroup -name $resourceGroup -location $location
+    if ($error) {
+        write-error $error
+        return $null
+    }
+    return $result
 }
 
 function get-keyVault([string]$resourceGroup, [string]$vaultName) {
@@ -179,18 +260,6 @@ function get-keyVault([string]$resourceGroup, [string]$vaultName) {
     return $vault
 }
 
-function create-resourceGroup([string]$resourceGroup, [string]$location) {
-    $error.clear()
-    write-host "creating resource group $resourceGroup"
-    write-host "new-azresourcegroup -name $resourceGroup -location $location"
-    $result = new-azresourcegroup -name $resourceGroup -location $location
-    if ($error) {
-        write-error $error
-        return $null
-    }
-    return $result
-}
-
 function get-resourceGroup([string]$resourceGroup) {
     $error.clear()
     write-host "get-azresourcegroup -name $resourceGroup"
@@ -204,44 +273,93 @@ function get-resourceGroup([string]$resourceGroup) {
 
 function get-secret([string]$secretName) {
     write-host "getting secret $secretName"
-    if (!$script:secrets -or !$script:secrets.ContainsKey($secretName)) {
+    if (!$script:secrets -or !($script:secrets | Where-Object name -ieq $secretName)) {
         write-host "secret $secretName not found"
         return $null
     }
-    return $script:secrets[$secretName]
+    return ($script:secrets | Where-Object name -ieq $secretName)
 }
 
 function get-secretsFromVault([string]$vaultName, [string]$vaultSecretName, [switch]$includeVersions) {
     $error.clear()
-    $secrets = @{}
+    $noSecrets = [collections.arrayList]::new()
     write-host "get-azkeyvaultsecret -vaultName $vaultName -name $vaultSecretName"
-    $kvSecret = get-azkeyvaultsecret -vaultName $vaultName -name $vaultSecretName #-AsPlainText
-    $global:kvSecret = $kvSecret
-    write-verbose "kvSecret: $($kvSecret | ConvertTo-Json -Depth 100)"
-    $plainString = ConvertFrom-SecureString -SecureString $kvSecret.SecretValue -AsPlainText
-    $secretString = [text.encoding]::UNICODE.GetString([convert]::FromBase64String($plainString))
-    if ($error) {
-        write-warning "$($error.Exception | out-string)"
-        return @{}
-    }
-    if (!$secretString) {
-        write-host "secrets not found"
-        return @{}
-    }
     try {
+        $kvSecret = get-azkeyvaultsecret -vaultName $vaultName -name $vaultSecretName #-AsPlainText
+        #temp
+        $global:kvSecret = $kvSecret
+        if (!$kvSecret) {
+            write-host "secrets not found"
+            return $noSecrets
+        }
+        write-verbose "kvSecret: $($kvSecret | ConvertTo-Json -Depth 100)"
+        $plainString = ConvertFrom-SecureString -SecureString $kvSecret.SecretValue -AsPlainText
+        $secretString = [text.encoding]::UNICODE.GetString([convert]::FromBase64String($plainString))
+        if ($error) {
+            write-warning "$($error.Exception | out-string)"
+            return $noSecrets
+        }
+        if (!$secretString) {
+            write-host "secrets not found"
+            return $noSecrets
+        }
         write-host $secretString
-        $secretObj = $secretString | ConvertFrom-Json -AsHashtable
-        $script:secrets = $secretObj
+        $null = check-secretSize $secretString
+        # convert csv to json
+        $jsonString = convert-csvToJson $secretString
+        #temp
+        $global:jsonString = $jsonString
+        $secretObj = @(ConvertFrom-Json $jsonString) #-AsHashtable
+        if (!$secretObj) {
+            write-error "unable to convert secret string to object"
+            return $noSecrets
+        }
+        [void]$script:secrets.addrange($secretObj)
         return $script:secrets
     }
     catch [System.Management.Automation.PSArgumentException] {
         write-host "error converting secret string to object $($error.Exception.Message)"
         $error.Clear()
-        return @{}
+        return $noSecrets
     }
 }
 
-function set-secretsToVault([string]$vaultName, [string]$vaultSecretName, [object]$secrets) {
+function new-secret([string]$name = "", [string]$value = "", [string]$notes = "") {
+    $secret = [ordered]@{
+        name     = $name
+        value    = $value
+        notes    = $notes
+        created  = (Get-Date).ToString()
+        modified = (Get-Date).ToString()
+    }
+    return $secret
+}
+
+function read-secretsFromFile($secretFile) {
+    write-host "reading secrets from $secretFile"
+    if (!(test-path $secretFile)) {
+        write-error "secrets file not found"
+        return $null
+    }
+    $secrets = ConvertFrom-Json (Get-Content -Raw -Path $secretFile)
+    return $secrets
+}
+
+function save-secretsToFile([string]$secretFile) {
+    write-host "saving secrets to $secretFile"
+    $jsonString = "[$((convertto-json $script:secrets).trim("[]"))]"
+    write-verbose "jsonString: $jsonString"
+    out-file -InputObject $jsonString -FilePath $secretFile
+}
+
+function save-toFile([string]$file, [string]$content) {
+    write-host "saving $file"
+    $content = "$(Get-Date) ----------------`r`n$content"
+    write-verbose "content: $content"
+    out-file -InputObject $content -FilePath $file
+}
+
+function set-secretsToVault([string]$vaultName, [string]$vaultSecretName, [collections.arraylist]$secrets) {
     if (!$secrets) {
         write-error "secrets object is null"
         return $false
@@ -249,21 +367,17 @@ function set-secretsToVault([string]$vaultName, [string]$vaultSecretName, [objec
 
     $error.clear()
     $secretString = $secrets | ConvertTo-Json -Depth 100 -Compress
-    $baseString = [convert]::ToBase64String([text.encoding]::Unicode.GetBytes($secretString))
-    write-host "set-azkeyvaultsecret -vaultName $vaultName -Name $vaultSecretName -SecretValue $secretString"
+    # convert json to csv
+    $csvString = convert-jsonToCsv $secretString
+    $baseString = [convert]::ToBase64String([text.encoding]::Unicode.GetBytes($csvString))
+
     $secureString = ConvertTo-SecureString -String $baseString -Force -AsPlainText
-    $secureStringSize = $baseString.Length
-    if ($secureStringSize -gt $maxSizeBytes) {
-        write-error "secret size $secureStringSize exceeds maximum size $maxSizeBytes"
+    if (!(check-secretSize $baseString)) {
         return $false
     }
-    if($maxSizeBytes - $secureStringSize -lt 10000) {
-        write-warning "secret size $secureStringSize is close to maximum size $maxSizeBytes"
-    }
-    else {
-        write-host "secret size $secureStringSize (percentage: $($secureStringSize / $maxSizeBytes * 100))" -ForegroundColor Green
-    }
 
+    write-host "set-azkeyvaultsecret -vaultName $vaultName -Name $vaultSecretName -SecretValue $secretString"
+    if ($whatif) { return $true }
     set-azkeyvaultsecret -vaultName $vaultName -Name $vaultSecretName -SecretValue $secureString
     if ($error) {
         write-error $error
@@ -272,50 +386,23 @@ function set-secretsToVault([string]$vaultName, [string]$vaultSecretName, [objec
     return $true
 }
 
-function set-secret([string]$secretName, [string]$value) {
-    write-host "setting secret $secretName"
-    if (!(get-secret $secretName)) {
-        $script:secrets[$secretName] = new-secret $secretName $value
+function update-secret([string]$name = "", [string]$value = "", [string]$notes = "") {
+    write-host "updating secret $Name"
+    $secret = get-secret $name
+    if (!$secret) {
+        write-host "secret $name not found"
+        return add-secret $name (new-secret $name $value $notes)
     }
     else {
-        $script:secrets[$secretName].value = $value
+        # update secret
+        $secret.name = if ($name) { $name } else { $secret.name }
+        $secret.value = if ($value) { $value } else { $secret.value }
+        $secret.notes = if ($notes) { $notes } else { $secret.notes }
+        $secret.created = $secret.created
+        $secret.modified = (Get-Date).ToString()
     }
-}
 
-function read-secretsFromFile($jsonConfig) {
-    write-host "reading secrets from $jsonConfig"
-    if (!(test-path $jsonConfig)) {
-        write-error "secrets file not found"
-        return $null
-    }
-    $secrets = Get-Content -Raw -Path $jsonConfig | ConvertFrom-Json
-    return $secrets
-}
-
-function save-secrets() {
-    write-host "saving secrets to $jsonConfig"
-    $script:secrets | ConvertTo-Json | Set-Content -Path $jsonConfig
-}
-
-function update-secret([string]$secretName, [string]$name = "", [string]$value = "", [string]$notes = "") {
-    write-host "updating secret $secretName"
-    # if(!$name) {
-    #     $name = $secretName
-    # }
-    $secret = get-secret $secretName
-    if (!$secret) {
-        write-host "secret $secretName not found"
-        return add-secret $secretName (new-secret $secretName $name $value $notes)
-    }
-    $script:secrets[$secretName] = @{
-        name     = if ($name) { $name } else { $secret.name }
-        value    = if ($value) { $value } else { $secret.value }
-        notes    = if ($notes) { $notes } else { $secret.notes }
-        created  = $secret.created
-        modified = (Get-Date).ToString()
-    }
     return $secret
 }
-
 
 main
