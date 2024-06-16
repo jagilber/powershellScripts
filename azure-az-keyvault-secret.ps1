@@ -10,7 +10,7 @@ param(
     [string]$subscriptionId, # = "00000000-0000-0000-0000-000000000000",
     [string]$resourceGroup = "vaults",
     [string]$secretFile = "$pwd\secrets.json",
-    [string]$vaultName = "vault",
+    [string]$vaultName = "vault", # has to be globally unique
     [string]$vaultSecretName = "secrets",
     [string]$location, # = "eastus",
     [switch]$saveSecretsToFile,
@@ -62,9 +62,6 @@ function main() {
 
         get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
         write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
-        if ($setGlobalVariable) {
-            $global:secrets = $script:secrets
-        }
 
         if ($createSecret) {
             add-secret $secretName (new-secret $secretName $secretValue $secretNotes)
@@ -94,14 +91,26 @@ function main() {
         if ($saveSecretsToFile) {
             save-secretsToFile $secretFile
         }
+        
 
         if ($secretName) {
             $secret = get-secret $secretName
             write-verbose "returning secret: $($secret | ConvertTo-Json -Depth 100)"
             return $secret
         }
+        
+        # convert list to keyed dictionary so we can return by name
+        $secretDict = [ordered]@{}
+        foreach($secret in $script:secrets) {
+            write-host "secret: $($secret)"
+            [void]$secretDict.add($secret.name, $secret)
+        }
 
-        return $script:secrets
+        if ($setGlobalVariable) {
+            $global:secrets = $secretDict
+        }
+
+        return $secretDict # $script:secrets
     }
     catch {
         write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
