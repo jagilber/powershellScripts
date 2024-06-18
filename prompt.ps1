@@ -140,23 +140,29 @@ function get-commandDuration() {
         $durationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
     }
 
-    if ($durationMs -gt 1000) {
-        $durationMs = [math]::Round($durationMs / 1000, 2)
-        $precision = 's'
-    
-        if ($durationMs -gt 60) {
-            $durationMs = [math]::Round($durationMs / 60, 2)
-            $precision = 'm'
-    
+    if ($promptInfo.forceDurationMs) {
+        # add commas to the number
+        $durationMs = "{0:N0}" -f $durationMs
+    }
+    else {
+        if ($durationMs -gt 1000) {
+            $durationMs = [math]::Round($durationMs / 1000, 2)
+            $precision = 's'
+        
             if ($durationMs -gt 60) {
                 $durationMs = [math]::Round($durationMs / 60, 2)
-                $precision = 'h'
+                $precision = 'm'
+        
+                if ($durationMs -gt 60) {
+                    $durationMs = [math]::Round($durationMs / 60, 2)
+                    $precision = 'h'
+                }
             }
-        }
+        }    
     }
-    
-    $promptInfo.commandDurationMs = $durationMs
-    return " $($deltaSymbol)$($promptInfo.commandDurationMs)$($precision)"
+
+    $promptInfo.commandDurationMs = "$($deltaSymbol)$($durationMs)$($precision)"
+    return " $($promptInfo.commandDurationMs)"
 }
 
 function get-currentBranch() {
@@ -338,6 +344,7 @@ function new-promptInfo() {
             enablePathOnPromptLine = $false
             fetchedRepos           = [collections.arraylist]::new()
             commandDurationMs      = 0
+            forceDurationMs        = $false
         }
     }
 }
