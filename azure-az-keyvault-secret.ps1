@@ -10,7 +10,7 @@ param(
     [string]$subscriptionId, # = "00000000-0000-0000-0000-000000000000",
     [string]$resourceGroup = "vaults",
     [string]$secretFile = "$pwd\secrets.json",
-    [string]$vaultName = "vault", # has to be globally unique
+    [string]$vaultName = "*", #"vault", # has to be globally unique
     [string]$vaultSecretName = "secrets",
     [string]$location, # = "eastus",
     [switch]$saveSecretsToFile,
@@ -31,6 +31,18 @@ $maxSizeBytes = 25 * 1024
 function main() {
     try {
         if (!(connect-az)) { return }
+
+        if(!$location) {
+            $location = (get-resourceGroup $resourceGroup).Location
+            if(!$location) {
+                write-error "location is required"
+                return
+            }
+        }
+        # check if vaultName is unique
+        $vaultName = create-vaultName -vaultName $vaultName -createVault$createVault
+
+        if (!($vaultName)) { return }
 
         if ($createVault) {
             $vault = create-keyVault -resourceGroup $resourceGroup -vaultName $vaultName -location $location
@@ -60,12 +72,16 @@ function main() {
             return
         }
 
+        if ((get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) -eq $null) {
+            write-error "vault $vaultName not found"
+            return
+        }
         get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
         write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
 
         if ($createSecret) {
             add-secret $secretName (new-secret $secretName $secretValue $secretNotes)
-            if(!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
+            if (!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
                 return
             }
             get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
@@ -101,7 +117,7 @@ function main() {
         
         # convert list to keyed dictionary so we can return by name
         $secretDict = [ordered]@{}
-        foreach($secret in $script:secrets) {
+        foreach ($secret in $script:secrets) {
             write-host "secret: $($secret)"
             [void]$secretDict.add($secret.name, $secret)
         }
@@ -258,12 +274,72 @@ function create-resourceGroup([string]$resourceGroup, [string]$location) {
     return $result
 }
 
+function create-vaultName([string]$vaultName, [switch]$createVault) {
+    write-host "creating vault name:$vaultName"
+    $retval = $null
+    $count = 0
+    $newName = $vaultName
+    
+    if (!$vaultName) {
+        write-host "vault name is required" -ForegroundColor Red
+        return $null
+    }
+    if ($vaultName -eq "*") {
+        write-host "generating vault name for '*' vaultname"
+        while ($count -lt 100) {
+            $newName = "vault-$($count)$([regex]::Match(((get-azcontext).Account.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
+            write-host "newName: $newName"
+            $newName = $newName.Substring(0, [math]::min($newName.length, 21)).ToLower()
+            write-host "get-keyVault -vaultName $newName"
+            $vault = (get-keyVault -vaultName $newName -resourceGroup $resourceGroup) -ne $null
+            if (($vault -ne $createVault)) {
+                write-host "create-vaultName:returning vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
+                break
+            }
+            write-host "vault name:'$newName' exists:$($vault -ne $null)"
+            $count++
+        }
+    }
+
+    if (!$count -lt 100) { 
+        $newName = $null 
+        write-host "unable to generate vault name" -ForegroundColor Red
+    }
+    else {
+        write-host "create-vaultName:returning vault name:'$newName' for vaultname" -ForegroundColor Yellow
+    }
+    return $newName
+}
+
 function get-keyVault([string]$resourceGroup, [string]$vaultName) {
     $error.clear()
     write-host "get-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup"
+    if (!$vaultName -or $vaultname -eq "*") {
+        write-host "vault name is required" -ForegroundColor Red
+        return $null
+    }
+    # if($vaultname -eq "*") {
+    #     $vaults = @(get-azkeyvault -ResourceGroupName $resourceGroup)
+    #     if($vaults.Count -eq 1) {
+    #         write-host "returning vault:'$($vaults[0].VaultName)' for '*' vaultname" -ForegroundColor Yellow
+    #         return $vaults[0]
+    #     }
+    #     write-host "'*' specified but $($vaults.Count) vaults found. to use '*', only 1 vaultname can be enumerated. list of vaults in subscription:$($vaults | out-string)" -ForegroundColor Yellow
+    #     return $null
+    # }
     $vault = get-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup
     if (!$vault) {
-        write-host "vault $vaultName not found"
+        $rgVaults = get-azkeyvault -ResourceGroupName $resourceGroup
+        if ($rgVaults) {
+            write-host "list of vaults in resource group:$($resourceGroup)$($rgVaults | out-string)" -ForegroundColor Yellow
+        }
+        else {
+            $vaults = get-azkeyvault
+            write-host "no vaults found in resource group:$($resourceGroup)" -ForegroundColor Yellow
+            write-host "list of vaults in subscription:$($vaults | out-string)" -ForegroundColor Yellow
+        }
+
+        write-host "vault name:'$vaultName' not found" -ForegroundColor Red
         return $null
     }
     if ($error) {
@@ -281,6 +357,7 @@ function get-resourceGroup([string]$resourceGroup) {
         write-warning "$($error.Exception | out-string)"
         return $null
     }
+
     return $result
 }
 
