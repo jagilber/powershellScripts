@@ -13,6 +13,7 @@ param(
     [string]$vaultName = "*", #"vault", # has to be globally unique
     [string]$vaultSecretName = "secrets",
     [string]$location, # = "eastus",
+    [bool]$setGlobalVariable = $true,
     [switch]$saveSecretsToFile,
     [switch]$createSecret,
     [switch]$updateSecret,
@@ -20,7 +21,6 @@ param(
     [switch]$createVault,
     [switch]$updateVault,
     [switch]$removeVault,
-    [switch]$setGlobalVariable,
     [switch]$whatif
 )
 
@@ -32,9 +32,9 @@ function main() {
     try {
         if (!(connect-az)) { return }
 
-        if(!$location) {
+        if (!$location) {
             $location = (get-resourceGroup $resourceGroup).Location
-            if(!$location) {
+            if (!$location) {
                 write-error "location is required"
                 return
             }
@@ -292,10 +292,23 @@ function create-vaultName([string]$vaultName, [switch]$createVault) {
             $newName = $newName.Substring(0, [math]::min($newName.length, 21)).ToLower()
             write-host "get-keyVault -vaultName $newName"
             $vault = (get-keyVault -vaultName $newName -resourceGroup $resourceGroup) -ne $null
-            if (($vault -ne $createVault)) {
+            if (($vault -and !$createVault)) {
                 write-host "create-vaultName:returning vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
                 break
             }
+            elseif ($vault -and $createVault) {
+                write-host "vault name:'$newName' exists:$($vault)" -ForegroundColor Yellow
+                break
+            }
+            elseif (!$vault -and $createVault) {
+                write-host "create-vaultName:returning vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
+                break
+            }
+            elseif (!$vault -and !$createVault) {
+                write-host "vault name:'$newName' exists:$($vault)" -ForegroundColor Yellow
+                break
+            }
+           
             write-host "vault name:'$newName' exists:$($vault -ne $null)"
             $count++
         }
