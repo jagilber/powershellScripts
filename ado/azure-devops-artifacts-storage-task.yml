@@ -1,0 +1,55 @@
+# used to store artifacts into azure storage account
+
+variables:
+  project_name: CollectSFData
+  build_configuration: release
+  system.debug: false
+  start_time: $[format('{0}-{1:yyyy}{1:MM}{1:dd}-{1:HH}{1:mm}{1:ss}', variables['project_name'], pipeline.startTime)]
+  artifacts_drive: Z
+  artifacts_share_target: 'Z:\$(System.DefinitionName)\$(System.JobId)\$(start_time)'
+  release_path: $(System.DefaultWorkingDirectory)/src/bin/$(build_configuration)
+  release_stage_path: $(release_path)/signed
+  artifacts_name_suffix: $(project_name)
+
+stages:
+  - stage: build
+    jobs:
+    - job: build
+      displayName: 'build'
+      steps:
+      - task: PowerShell@2
+        displayName: 'copy artifacts to azure storage'
+        condition: eq(variables.build_configuration, 'debug')
+        inputs:
+          targetType: 'inline'
+          script: |
+            [environment]::getEnvironmentVariables().getEnumerator()|sort Name
+            write-host "test-netConnection -computerName $env:mapped_artifacts_storage_uri -Port 445 -informationLevel detailed"
+            $connectTestResult = test-netConnection -computerName $env:mapped_artifacts_storage_uri -Port 445 -informationLevel detailed
+            if ($connectTestResult.tcpTestSucceeded) {
+                $securePassword = ConvertTo-SecureString -String $env:mapped_artifacts_pass -Force -AsPlainText
+                $credentials = [psCredential]::new($env:mapped_artifacts_user, $securePassword)
+                write-host "new-psDrive -name $drive -psProvider fileSystem -root "$env:mapped_artifacts_share" -credential $credentials"
+                new-psDrive -name $env:artifacts_drive -psProvider fileSystem -root "$env:mapped_artifacts_share" -credential $credentials -scope global
+            } else {
+                write-error -message "Unable to reach the azure storage account via port 445."
+            }
+            if(!(test-path $env:artifacts_share_target))
+            {
+              write-host "mkdir "$env:artifacts_share_target""
+              mkdir "$env:artifacts_share_target"
+            }
+            write-host "copy $env:release_path "$env:artifacts_share_target" -recurse"
+            copy $env:release_path "$env:artifacts_share_target" -recurse
+            write-host "copy $env:artifacts_directory $env:artifacts_share_target -recurse"
+            copy $env:artifacts_directory "$env:artifacts_share_target" -recurse
+          errorActionPreference: 'continue'
+          verbosePreference: 'continue'
+          debugPreference: 'continue'
+        env:
+          mapped_artifacts_storage_uri: $(artifacts_storage_uri)
+          mapped_artifacts_user: $(artifacts_user)
+          mapped_artifacts_pass: $(artifacts_pass)
+          mapped_artifacts_share: $(artifacts_share)
+          artifacts_directory: $(System.ArtifactsDirectory)
+
