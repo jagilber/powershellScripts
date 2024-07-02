@@ -84,7 +84,7 @@
 .PARAMETER logFile
     The log file to write the response from the OpenAI API to. If not specified, the response will not be logged.
 .PARAMETER promptsFile
-    The file to store the conversation history. If not specified, the conversation history will not be stored.  
+    The file to store the conversation history. If not specified, the conversation history will not be stored.
 .PARAMETER seed
     The seed to use for the OpenAI API. The default is the process ID of the script.
 .PARAMETER newConversation
@@ -106,11 +106,11 @@
 [cmdletbinding()]
 param(
   [string[]]$prompts = @(),
-  [string]$apiKey = "$env:OPENAI_API_KEY", 
+  [string]$apiKey = "$env:OPENAI_API_KEY",
   [ValidateSet('user', 'system', 'assistant', 'user', 'function', 'tool')]
-  [string]$promptRole = 'user', 
+  [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
-  [string]$endpoint = '', 
+  [string]$endpoint = '',
   [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
   [string]$model = 'gpt-4o',
   [string]$logFile = "$psscriptroot\openai.log",
@@ -123,7 +123,7 @@ param(
   [string]$imageQuality = 'hd',
   [int]$imageCount = 1, # n
   [switch]$imageEdit, # edit image
-  [string]$imageFilePng = "$psscriptroot\downloads\openai.png", 
+  [string]$imageFilePng = "$psscriptroot\downloads\openai.png",
   [ValidateSet('256x256', '512x512', '1024x1024', '1792x1024', '1024x1792')]
   [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
@@ -156,18 +156,18 @@ $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
 $variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer', 'Debug', 'Verbose')
 $parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort-object
 $boundParameters = $PSBoundParameters
-  
+
 function main() {
   $endpoint = get-endpoint
-  
+
   if (!(set-variables)) {
     return
   }
-  
+
   $startTime = Get-Date
   write-log "===================================="
   write-log ">>>>starting openAI chat request $startTime<<<<" -color White
-  
+
   if (!$apiKey) {
     write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
     return
@@ -176,7 +176,7 @@ function main() {
   if ($responseFormat -imatch 'json') {
     [void]$script:systemPromptsList.add(' always reply in json format.')
   }
-  
+
   if ($responseFileFormat -ieq 'markdown') {
     [void]$script:systemPromptsList.add(' format reply message content in github markdown format.')
     $markdownJsonSchema = convert-toJson @{
@@ -189,25 +189,25 @@ function main() {
             url  = '<reference url>'
           }
           )
-        }      
+        }
       } -compress
-      
-      $script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
-      $script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
-      $script:systemPromptsList.add(' include flow diagrams to visually describe topic. use mermaid for creation of figures and flow diagrams.')
+
+      [void]$script:systemPromptsList.add(' json_object response schema:' + $markdownJsonSchema)
+      [void]$script:systemPromptsList.add(' include the markdown content directly ready for presentation.')
+      [void]$script:systemPromptsList.add(' include flow diagrams to visually describe topic. use mermaid for creation of figures and flow diagrams.')
     }
-    
+
   if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
     write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
     mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
   }
-  
+
   if ($newConversation -and (Test-Path $promptsFile)) {
     write-log "resetting context" -color Yellow
     write-log "deleting messages file: $promptsFile" -color Yellow
     Remove-Item $promptsFile
   }
-  
+
   if (Test-Path $promptsFile) {
     write-log "reading messages from file: $promptsFile" -color Yellow
     [void]$script:messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
@@ -241,7 +241,7 @@ function main() {
     write-log "assistants: $(convert-toJson $response)" -color Yellow
     return
   }
-  
+
   # Make the API request using Invoke-RestMethod
   $response = invoke-rest $endpoint $headers $jsonBody
   $message = read-messageResponse $response $script:messageRequests
@@ -260,7 +260,7 @@ function main() {
   if (!$completeConversation -and $promptsFile) {
     # $script:messageRequests += $message
     convert-toJson $script:messageRequests | Out-File $promptsFile
-    write-log "messages stored in: $promptsFile" -ForegroundColor Cyan  
+    write-log "messages stored in: $promptsFile" -ForegroundColor Cyan
   }
 
   write-log "response:$(convert-toJson ($message.content | convertfrom-json))" -color Green
@@ -305,7 +305,7 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
   }
 
   $requestBody = @{
-    response_format = @{ 
+    response_format = @{
       type = $responseFormat
     }
     model           = $model
@@ -445,7 +445,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
         write-log "downloading image: $($response.data.url)" -color Yellow
         write-log "invoke-webRequest -Uri $($response.data.url) -OutFile $imageFilePng"
         invoke-webRequest -Uri $response.data.url -OutFile $imageFilePng
-        
+
         $tempImageFile = $imageFilePng.replace(".png", "$(get-date -f 'yyMMdd-HHmmss').png")
         writ-log "copying image to $tempImageFile" -color Yellow
         Copy-Item $imageFilePng $tempImageFile
@@ -462,7 +462,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
     }
   }
 
-  write-log "message: $(convert-toJson $message)" -color Yellow  
+  write-log "message: $(convert-toJson $message)" -color Yellow
   return $message
 }
 
@@ -474,7 +474,7 @@ function save-MessageResponse($message) {
   $responseExtension = '.json'
   $baseFileName = "$outputPath\openai"
   $responseFile = "$baseFileName-$(get-date -f 'yyMMddHHmmss')"
-  
+
   if ($responseFileFormat -ieq 'markdown') {
     $responseExtension = '.md'
     $response = convertfrom-json $message -AsHashtable
@@ -483,7 +483,7 @@ function save-MessageResponse($message) {
       $responseFile = "$responseFile-$($response.markdown.name.trimend($responseExtension))"
     }
   }
-  
+
   write-log "saving markdown response to $responseFile$responseExtension" -color Magenta
   $message | out-file -FilePath "$responseFile$responseExtension"
   copy-item "$responseFile$responseExtension" "$baseFileName$responseExtension" -force
@@ -495,12 +495,12 @@ function set-variables() {
   if (!$global:ai -or $init) {
     $global:ai = [ordered]@{}
   }
-   
+
   write-log "set-alias ai $($MyInvocation.ScriptName)"
   set-alias ai $MyInvocation.ScriptName -scope global
   set-alias openai $MyInvocation.ScriptName -scope global
   write-debug ($boundParameters | convertto-Json)
-  
+
   foreach ($name in $parameterNames) {
     write-debug "checking variable: $name"
     if ($name -imatch [string]::join('|', $variableExclusions)) {
@@ -508,7 +508,7 @@ function set-variables() {
       continue
     }
     $variable = get-variable -name $name -erroraction SilentlyContinue
-    
+
     if (!$boundParameters[$name] -and ![string]::IsNullOrEmpty($global:ai[$name])) {
       $value = $global:ai[$name]
     }
