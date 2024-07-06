@@ -287,34 +287,46 @@ function create-vaultName([string]$vaultName, [switch]$createVault) {
     if ($vaultName -eq "*") {
         write-host "generating vault name for '*' vaultname"
         while ($count -lt 100) {
-            $newName = "vault-$($count)$([regex]::Match(((get-azcontext).Account.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
+            #$newName = "vault-$($count)$([regex]::Match(((get-azcontext).Account.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
+            $newName = "vault$($count)-$([regex]::Match(((get-azcontext).Subscription.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
             write-host "newName: $newName"
             $newName = $newName.Substring(0, [math]::min($newName.length, 21)).ToLower()
+
+            # resolve dns name to see if it is unique before checking if vault exists in subscription
+            $newDnsName = "$newName.vault.azure.net"
+            write-host "Resolve-DnsName -Name $newDnsName -Type A -ErrorAction SilentlyContinue"
+            $dnsNameExists = Resolve-DnsName -Name $newDnsName -Type A -ErrorAction SilentlyContinue
+            if ($dnsNameExists) {
+                write-host "dns name $newDnsName exists" -ForegroundColor Yellow
+            }
+            else {
+                write-host "dns name $newDnsName does not exist" -ForegroundColor Yellow
+            }
+
             write-host "get-keyVault -vaultName $newName"
             $vault = (get-keyVault -vaultName $newName -resourceGroup $resourceGroup) -ne $null
             if (($vault -and !$createVault)) {
-                write-host "create-vaultName:returning vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
+                write-host "create-vaultName:returning existing vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
                 break
             }
             elseif ($vault -and $createVault) {
                 write-host "vault name:'$newName' exists:$($vault)" -ForegroundColor Yellow
                 break
             }
-            elseif (!$vault -and $createVault) {
-                write-host "create-vaultName:returning vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
+            elseif (!$dnsNameExists -and !$vault) {
+                write-host "create-vaultName:returning new vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
                 break
             }
-            elseif (!$vault -and !$createVault) {
-                write-host "vault name:'$newName' exists:$($vault)" -ForegroundColor Yellow
-                break
+            elseif ($dnsNameExists -and !$vault) {
+                write-host "vault name:'$newName' exists in different sub:$($vault)" -ForegroundColor Yellow
+                #break
             }
-           
-            write-host "vault name:'$newName' exists:$($vault -ne $null)"
+
             $count++
         }
     }
 
-    if (!$count -lt 100) { 
+    if (!($count -lt 100)) { 
         $newName = $null 
         write-host "unable to generate vault name" -ForegroundColor Red
     }
