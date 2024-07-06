@@ -85,6 +85,11 @@ function add-status($status = "", [switch]$reset) {
 function get-branches() {
     write-debug "get-branches()"
     $branches = @(git branch)
+    # if there is a configuration or security issue, git will return an error starting with 'fatal:'. check for this and return
+    if ($branches -match '^fatal:') {
+        write-host "git error: $($branches)" -ForegroundColor Red
+        return
+    }
     $branchesChanged = compare-object $branches $promptInfo.branches
 
     $remoteBranches = @(git branch -r)
