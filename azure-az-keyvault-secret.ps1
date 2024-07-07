@@ -137,7 +137,7 @@ function main() {
     }
 }
 
-function add-secret([string]$secretName, [object]$secretObj) {
+function add-secret([string]$secretName, [collections.specialized.orderedDictionary]$secretObj) {
     if (!$secretObj) {
         write-error "secret object is null"
         return $false
@@ -444,8 +444,8 @@ function new-secret([string]$name = "", [string]$value = "", [string]$notes = ""
     $secret = [ordered]@{
         name     = $name
         value    = $value
-        notes    = $notes
         created  = (Get-Date).ToString()
+        notes    = $notes
         modified = (Get-Date).ToString()
     }
     return $secret
@@ -513,8 +513,8 @@ function update-secret([string]$name = "", [string]$value = "", [string]$notes =
         # update secret
         $secret.name = if ($name) { $name } else { $secret.name }
         $secret.value = if ($value) { $value } else { $secret.value }
-        $secret.notes = if ($notes) { $notes } else { $secret.notes }
         $secret.created = $secret.created
+        $secret.notes = if ($notes) { $notes } else { $secret.notes }
         $secret.modified = (Get-Date).ToString()
     }
 
