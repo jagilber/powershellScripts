@@ -602,7 +602,7 @@ function check-storage() {
             $error.clear()
             write-host "New-AzStorageAccount -ResourceGroupName $script:storageResourceGroup -Name $script:storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2" -ForegroundColor Cyan
             $storageaccount = New-AzStorageAccount -ResourceGroupName $script:storageResourceGroup -Name $script:storageAccountName -Location $script:location -SkuName Standard_LRS -Kind StorageV2
-            $global:newResources += $storageaccount.ResourceId
+            $global:newResources += $storageaccount.Id
             # $script:storageResourceGroup = $resourceGroupName
             if ($error -or !$storageaccount) {
                 write-error "error creating storage account:$($error | out-string)"
