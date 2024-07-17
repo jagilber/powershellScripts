@@ -208,116 +208,123 @@ class SFTemplate {
     static SFTemplate() { }
 
     [void] Export() {
-        $this.clusterModel = [ClusterModel]::new($this)
+        try {
+            $this.clusterModel = [ClusterModel]::new($this)
 
-        if (!(test-path $this.templatePath)) {
-            # test local and for cloudshell
-            mkdir $this.templatePath
-            $this.WriteLog("making directory $($this.templatePath)")
-        }
-
-        $this.WriteLog("starting")
-        if ($this.updateScript -and ($this.GetUpdate($this.updateUrl))) {
-            return
-        }
-
-        if (!$this.resourceGroupName) {
-            $this.WriteError("resource group name is required.")
-            return
-        }
-
-        if (!($this.CheckModule())) {
-            return
-        }
-
-        if (!(@(Get-AzResourceGroup).Count)) {
-            $this.WriteLog("connecting to azure")
-            Connect-AzAccount
-        }
-
-        if ($this.resourceNames) {
-            foreach ($resourceName in $this.resourceNames) {
-                $this.WriteLog("getting resource $resourceName")
-                [void]$this.configuredRGResources.AddRange(@($this.GetAzResourceByName($this.resourceGroupName, $resourceName)))
+            if (!(test-path $this.templatePath)) {
+                # test local and for cloudshell
+                mkdir $this.templatePath
+                $this.WriteLog("making directory $($this.templatePath)")
             }
-        }
-        else {
-            $resourceIds = $this.EnumAllResources()
-            foreach ($resourceId in $resourceIds) {
-                $resource = $this.GetAzResourceById($resourceId)
-                if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
-                    $this.WriteLog("adding resource id to configured resources: $($resource.resourceId)", [consolecolor]::Cyan)
-                    [void]$this.configuredRGResources.Add($resource)
-                }
-                else {
-                    $this.WriteWarning("skipping resource $($resource.resourceid) as it is out of resource group scope $($resource.ResourceGroupName)")
+
+            $this.WriteLog("starting")
+            if ($this.updateScript -and ($this.GetUpdate($this.updateUrl))) {
+                return
+            }
+
+            if (!$this.resourceGroupName) {
+                $this.WriteError("resource group name is required.")
+                return
+            }
+
+            if (!($this.CheckModule())) {
+                return
+            }
+
+            if (!(@(Get-AzResourceGroup).Count)) {
+                $this.WriteLog("connecting to azure")
+                Connect-AzAccount
+            }
+
+            if ($this.resourceNames) {
+                foreach ($resourceName in $this.resourceNames) {
+                    $this.WriteLog("getting resource $resourceName")
+                    [void]$this.configuredRGResources.AddRange(@($this.GetAzResourceByName($this.resourceGroupName, $resourceName)))
                 }
             }
-        }
+            else {
+                $resourceIds = $this.EnumAllResources()
+                foreach ($resourceId in $resourceIds) {
+                    $resource = $this.GetAzResourceById($resourceId)
+                    if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
+                        $this.WriteLog("adding resource id to configured resources: $($resource.resourceId)", [consolecolor]::Cyan)
+                        [void]$this.configuredRGResources.Add($resource)
+                    }
+                    else {
+                        $this.WriteWarning("skipping resource $($resource.resourceid) as it is out of resource group scope $($resource.ResourceGroupName)")
+                    }
+                }
+            }
 
-        $this.DisplaySettings($this.configuredRGResources)
+            $this.DisplaySettings($this.configuredRGResources)
 
-        if ($this.configuredRGResources.count -lt 1) {
-            $this.WriteWarning("error enumerating resource $($error | format-list * | out-string)")
-            return
-        }
+            if ($this.configuredRGResources.count -lt 1) {
+                $this.WriteWarning("error enumerating resource $($error | format-list * | out-string)")
+                return
+            }
 
-        $deploymentName = "$($this.resourceGroupName)-$((get-date).ToString("yyyyMMdd-HHmms"))"
+            $deploymentName = "$($this.resourceGroupName)-$((get-date).ToString("yyyyMMdd-HHmms"))"
 
-        # create $this.currentConfig
-        $this.CreateExportTemplate()
+            # create $this.currentConfig
+            $this.CreateExportTemplate()
 
-        # use $this.currentConfig
-        $this.CreateCurrentTemplate()
-        $this.CreateRedeployTemplate()
-        $this.CreateAddPrimaryNodeTypeTemplate()
-        $this.CreateAddSecondaryNodeTypeTemplate()
-        $this.CreateNewTemplate()
+            # use $this.currentConfig
+            $this.CreateCurrentTemplate()
+            $this.CreateRedeployTemplate()
+            $this.CreateAddPrimaryNodeTypeTemplate()
+            $this.CreateAddSecondaryNodeTypeTemplate()
+            $this.CreateNewTemplate()
 
-        if ($this.compress) {
-            $zipFile = "$($this.templatePath).zip"
-            compress-archive $this.templatePath $zipFile -Force
-            $this.WriteLog("zip file located here:$zipFile", [consolecolor]::Cyan)
-        }
+            if ($this.compress) {
+                $zipFile = "$($this.templatePath).zip"
+                compress-archive $this.templatePath $zipFile -Force
+                $this.WriteLog("zip file located here:$zipFile", [consolecolor]::Cyan)
+            }
 
-        $error.clear()
+            $error.clear()
 
-        write-host "finished. files stored in $($this.templatePath)" -ForegroundColor Green
-        code $this.templatePath # for cloudshell and local
+            write-host "finished. files stored in $($this.templatePath)" -ForegroundColor Green
+            code $this.templatePath # for cloudshell and local
 
-        if ($error) {
-            . $this.templateJsonFile.Replace(".json", ".current.json")
-        }
+            if ($error) {
+                . $this.templateJsonFile.Replace(".json", ".current.json")
+            }
 
-        if ($this.resourceErrors -or $this.resourceWarnings) {
-            $this.WriteWarning("deployment may not have been successful: errors: $this.resourceErrors warnings: $this.resourceWarnings")
+            if ($this.resourceErrors -or $this.resourceWarnings) {
+                $this.WriteWarning("deployment may not have been successful: errors: $this.resourceErrors warnings: $this.resourceWarnings")
 
-            if ($this.DebugPreference -ieq 'continue') {
-                $this.WriteLog("errors: $($error | sort-object -Descending | out-string)")
+                if ($this.DebugPreference -ieq 'continue') {
+                    $this.WriteLog("errors: $($error | sort-object -Descending | out-string)")
+                }
+            }
+
+            $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $this.resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
+
+            $this.WriteLog("deployment:`r`n$($deployment | format-list * | out-string)")
+            Write-Progress -Completed -Activity "complete"
+
+            if ($this.warnings) {
+                $this.WriteLog("global warnings:", [consolecolor]::Yellow)
+                $this.WriteWarning(($this.CreateJson($this.warnings)))
+            }
+
+            if ($this.errors) {
+                $this.WriteLog("global errors:", [consolecolor]::Red)
+                $this.WriteError(($this.CreateJson($this.errors)))
+            }
+
+            $this.clusterModel.sfTemplate = $null
+            $this.WriteLog("time elapsed:  $(((get-date) - $this.startTime).TotalMinutes.ToString("0.0")) minutes`r`n")
+            $this.WriteLog('finished. template stored in $global:sftemplate', [consolecolor]::Cyan)
+
+            if ($this.logFile) {
+                $this.WriteLog("log file saved to $this.logFile")
             }
         }
-
-        $deployment = Get-AzResourceGroupDeployment -ResourceGroupName $this.resourceGroupName -Name $deploymentName -ErrorAction silentlycontinue
-
-        $this.WriteLog("deployment:`r`n$($deployment | format-list * | out-string)")
-        Write-Progress -Completed -Activity "complete"
-
-        if ($this.warnings) {
-            $this.WriteLog("global warnings:", [consolecolor]::Yellow)
-            $this.WriteWarning(($this.CreateJson($this.warnings)))
-        }
-
-        if ($this.errors) {
-            $this.WriteLog("global errors:", [consolecolor]::Red)
-            $this.WriteError(($this.CreateJson($this.errors)))
-        }
-
-        $this.clusterModel.sfTemplate = $null
-        $this.WriteLog("time elapsed:  $(((get-date) - $this.startTime).TotalMinutes.ToString("0.0")) minutes`r`n")
-        $this.WriteLog('finished. template stored in $global:sftemplate', [consolecolor]::Cyan)
-
-        if ($this.logFile) {
-            $this.WriteLog("log file saved to $this.logFile")
+        catch {
+            $this.WriteVerbose("variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)")
+            $this.WriteError("exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)")
+            return
         }
     }
 
@@ -2441,7 +2448,7 @@ class SFTemplate {
         $this.WriteLog("ModifyClusterResourceRedeploy:setting `$clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter")
         $clusterResource.properties.diagnosticsStorageAccountConfig.storageAccountName = $sflogsParameter
 
-        if ($clusterResource.properties.upgradeMode -ieq 'Automatic') {
+        if ($clusterResource.properties.upgradeMode -ieq 'Automatic' -and $this.GetPSPropertyValue($clusterResource.properties, 'clusterCodeVersion')) {
             $this.WriteLog("ModifyClusterResourceRedeploy:removing value cluster code version $($clusterResource.properties.clusterCodeVersion)", [consolecolor]::Yellow)
             [void]$clusterResource.properties.psobject.Properties.remove('clusterCodeVersion')
         }
