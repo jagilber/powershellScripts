@@ -2,6 +2,11 @@
 .SYNOPSIS
     microsoft graph rest api script 
 
+.DESCRIPTION
+    microsoft graph rest api script
+    24-07-08 08:19:44 may need to create a new app registration in azure portal as default one has been modified
+    for ms internal connect must be made from ms device
+
 .NOTES
     https://myapps.microsoft.com/ <--- can only be accessed from 'work' account
     have to set 'api permissions' on app registration. add 'microsoft graph' 'application permissions'

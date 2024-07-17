@@ -32,7 +32,7 @@ param(
 
 [io.directory]::CreateDirectory($gitHubDir)
 if (!(test-path "$pwd\download-git-client.ps1")) {
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -outFile  "$pwd/download-git-client.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -user 'powershell' -outFile  "$pwd/download-git-client.ps1";
 }
 
 $error.Clear()
@@ -93,7 +93,7 @@ $error.clear()
 (code /?) | out-null
 
 if ($error) {
-    invoke-webRequest $vscodeScriptUrl -outFile  "$pwd/Install-VSCode.ps1";
+    invoke-webRequest $vscodeScriptUrl -user 'powershell' -outFile  "$pwd/Install-VSCode.ps1";
     .\Install-VSCode.ps1 -additionalExtensions @($additionalExtensions) -launchWhenDone -enableContextMenus
 }
 
