@@ -26,7 +26,7 @@
 .NOTES
     File Name  : azure-az-sf-export-arm-template.ps1
     Author     : jagilber
-    Version    : 231115 fix nsg resource dependency error
+    Version    : 240717 fix $lbresource.Properties.inboundNatPools.Name check
     todo       :
 
     History    : add support for private ip address and clusters with no diagnostics extension v2
@@ -2533,12 +2533,20 @@ class SFTemplate {
             foreach ($depends in $lbresource.dependsOn) {
                 $this.WriteLog("ModifyLbResources:checking depends:$depends")
 
-                if ($depends -inotmatch "$($lbresource.Properties.backendAddressPools.Name -join '|')" -and $depends -inotmatch "$($lbresource.Properties.inboundNatPools.Name -join '|')") {
-                    $this.WriteLog("ModifyLbResources:adding depends:$depends")
+                if (($this.GetPSPropertyValue($lbresource.Properties.backendAddressPools, 'Name') -and $depends -inotmatch "$($lbresource.Properties.backendAddressPools.Name -join '|')")) {
+                    $this.WriteLog("ModifyLbResources:adding backendAddressPools depends:$depends")
                     [void]$dependsOn.Add($depends)
                 }
                 else {
-                    $this.WriteLog("ModifyLbResources:skipping depends:$depends")
+                    $this.WriteLog("ModifyLbResources:skipping backendAddressPools depends:$depends")
+                }
+
+                if (($this.GetPSPropertyValue($lbresource.Properties.inboundNatPools, 'Name') -and $depends -inotmatch "$($lbresource.Properties.inboundNatPools.Name -join '|')")) {
+                    $this.WriteLog("ModifyLbResources:adding inboundNatPools depends:$depends")
+                    [void]$dependsOn.Add($depends)
+                }
+                else {
+                    $this.WriteLog("ModifyLbResources:skipping inboundNatPools depends:$depends")
                 }
             }
             $lbResource.dependsOn = $dependsOn.ToArray()
@@ -2628,238 +2636,98 @@ class SFTemplate {
             $this.WriteLog("ModifyNsgResources:removing securityrules from nsg dependson")
 
             if ($this.GetPSPropertyValue($nsgResource, 'dependsOn')) {
-                    foreach ($depends in $nsgResource.dependsOn) {
-                        $this.WriteLog("ModifyNsgResources:checking depends:$depends")
+                foreach ($depends in $nsgResource.dependsOn) {
+                    $this.WriteLog("ModifyNsgResources:checking depends:$depends")
 
-                        if ($depends -inotmatch "$($nsgResource.Properties.securityRules.Name -join '|')") {
-                            $this.WriteLog("ModifyNsgResources:adding depends:$depends")
-                            [void]$dependsOn.Add($depends)
-                        }
-                        else {
-                            $this.WriteLog("ModifyNsgResources:skipping depends:$depends")
-                        }
+                    if ($depends -inotmatch "$($nsgResource.Properties.securityRules.Name -join '|')") {
+                        $this.WriteLog("ModifyNsgResources:adding depends:$depends")
+                        [void]$dependsOn.Add($depends)
                     }
-                    $nsgResource.dependsOn = $dependsOn.ToArray()
-                    $this.WriteLog("ModifyNsgResources:nsg resource modified dependson: $($this.CreateJson($nsgResource.dependson))", [consolecolor]::Yellow)
+                    else {
+                        $this.WriteLog("ModifyNsgResources:skipping depends:$depends")
+                    }
                 }
-                else {
-                    $this.WriteLog("no dependson for $($this.CreateJson($nsgResource))")
-                }
+                $nsgResource.dependsOn = $dependsOn.ToArray()
+                $this.WriteLog("ModifyNsgResources:nsg resource modified dependson: $($this.CreateJson($nsgResource.dependson))", [consolecolor]::Yellow)
             }
-            $this.WriteLog("exit:ModifyNsgResources")
+            else {
+                $this.WriteLog("no dependson for $($this.CreateJson($nsgResource))")
+            }
         }
+        $this.WriteLog("exit:ModifyNsgResources")
+    }
 
-        [string[]] ModifyStorageResourcesDeploy() {
-            <#
+    [string[]] ModifyStorageResourcesDeploy() {
+        <#
         .SYNOPSIS
             modifies storage resources for deploy template
             outputs: string[]
         .OUTPUTS
             [string[]]
         #>
-            $this.WriteLog("enter:ModifyStorageResourcesDeploy")
-            $metadataDescription = 'this name must be unique in deployment region.'
-            $parameterExclusions = [collections.arraylist]::new()
-            $sflogsParameter = $this.CreateParametersName($this.sflogs)
-            [void]$parameterExclusions.Add($sflogsParameter)
-            $this.AddToParametersSection($sflogsParameter, $this.defaultSflogsValue, 'string', $metadataDescription)
+        $this.WriteLog("enter:ModifyStorageResourcesDeploy")
+        $metadataDescription = 'this name must be unique in deployment region.'
+        $parameterExclusions = [collections.arraylist]::new()
+        $sflogsParameter = $this.CreateParametersName($this.sflogs)
+        [void]$parameterExclusions.Add($sflogsParameter)
+        $this.AddToParametersSection($sflogsParameter, $this.defaultSflogsValue, 'string', $metadataDescription)
 
-            foreach ($sfdiag in $this.sfdiags) {
-                $sfdiagParameter = $this.CreateParametersName($sfdiag)
-                [void]$parameterExclusions.Add($sfdiagParameter)
-                $this.AddToParametersSection($sfdiagParameter, $this.defaultSfdiagsValue, 'string', $metadataDescription)
-            }
-
-            $this.WriteLog("exit:ModifyStorageResourcesDeploy")
-            return $parameterExclusions.ToArray()
+        foreach ($sfdiag in $this.sfdiags) {
+            $sfdiagParameter = $this.CreateParametersName($sfdiag)
+            [void]$parameterExclusions.Add($sfdiagParameter)
+            $this.AddToParametersSection($sfdiagParameter, $this.defaultSfdiagsValue, 'string', $metadataDescription)
         }
 
-        [void] ModifyVmssResourceCertificateUrl([object]$vmssResource) {
-            $this.WriteLog("enter:ModifyVmssResourceCertificateUrl")
-            $certificatePropertyName = 'certificateUrl'
-            $secretUrl = $this.GetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName)
-            if ($secretUrl) {
-                $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
-                $this.WriteLog("setting $certificatePropertyName to $secretUrl")
-                $null = $this.SetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName, $thumbprintParameterizedName)
-                $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $vmssResource.properties.virtualMachineProfile.osProfile.secrets, $secretUrl)
-            }
-            $this.WriteLog("exit:ModifyVmssResourceCertificateUrl")
+        $this.WriteLog("exit:ModifyStorageResourcesDeploy")
+        return $parameterExclusions.ToArray()
+    }
+
+    [void] ModifyVmssResourceCertificateUrl([object]$vmssResource) {
+        $this.WriteLog("enter:ModifyVmssResourceCertificateUrl")
+        $certificatePropertyName = 'certificateUrl'
+        $secretUrl = $this.GetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName)
+        if ($secretUrl) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
+            $this.WriteLog("setting $certificatePropertyName to $secretUrl")
+            $null = $this.SetResourceParameterValue($vmssResource.properties.virtualMachineProfile.osProfile.secrets, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $vmssResource.properties.virtualMachineProfile.osProfile.secrets, $secretUrl)
+        }
+        $this.WriteLog("exit:ModifyVmssResourceCertificateUrl")
+    }
+
+    [void] ModifyVmssResourceExtensionCerts([object] $vmssResource, [string] $certificatePropertyName = 'thumbprint') {
+        $this.WriteLog("enter:ModifyVmssResourcesExtensionCerts")
+        $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
+        #parameterize certificate information
+        $thumbprint = $this.GetResourceParameterValue($extension, $certificatePropertyName)
+        if ($thumbprint) {
+            $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
+            $this.WriteLog("setting $certificatePropertyName to $thumbprint")
+            $null = $this.SetResourceParameterValue($extension.properties.settings.certificate, $certificatePropertyName, $thumbprintParameterizedName)
+            $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $extension.properties.settings.certificate, $thumbprint)
         }
 
-        [void] ModifyVmssResourceExtensionCerts([object] $vmssResource, [string] $certificatePropertyName = 'thumbprint') {
-            $this.WriteLog("enter:ModifyVmssResourcesExtensionCerts")
-            $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
-            #parameterize certificate information
-            $thumbprint = $this.GetResourceParameterValue($extension, $certificatePropertyName)
-            if ($thumbprint) {
-                $thumbprintParameterizedName = $this.CreateParameterizedName($certificatePropertyName, $vmssResource)
-                $this.WriteLog("setting $certificatePropertyName to $thumbprint")
-                $null = $this.SetResourceParameterValue($extension.properties.settings.certificate, $certificatePropertyName, $thumbprintParameterizedName)
-                $this.AddParameter($vmssResource, $certificatePropertyName, $certificatePropertyName, $extension.properties.settings.certificate, $thumbprint)
-            }
+        $this.WriteLog("exit:ModifyVmssResourcesExtensionCerts")
+    }
 
-            $this.WriteLog("exit:ModifyVmssResourcesExtensionCerts")
-        }
-
-        [void] ModifyVmssResources() {
-            <#
+    [void] ModifyVmssResources() {
+        <#
         .SYNOPSIS
             modifies vmss resources dependson for current template
             outputs: null
         .OUTPUTS
             [null]
         #>
-            $this.WriteLog("enter:ModifyVmssResources")
-            $vmssResources = $this.GetVmssResources()
+        $this.WriteLog("enter:ModifyVmssResources")
+        $vmssResources = $this.GetVmssResources()
 
-            foreach ($vmssResource in $vmssResources) {
+        foreach ($vmssResource in $vmssResources) {
 
-                $this.WriteLog("modifying dependson")
-                $dependsOn = [collections.arraylist]::new()
-                $subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
+            $this.WriteLog("modifying dependson")
+            $dependsOn = [collections.arraylist]::new()
+            $subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
 
-                if ($this.GetPSPropertyValue($vmssResource, 'dependsOn')) {
-                    foreach ($depends in $vmssResource.dependsOn) {
-                        if ($depends -imatch 'backendAddressPools') { continue }
-
-                        if ($depends -imatch 'Microsoft.Network/loadBalancers') {
-                            [void]$dependsOn.Add($depends)
-                        }
-                        # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
-                        if ($subnetIds.contains($depends)) {
-                            $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
-                            $depends = $depends.replace("/subnets'", "/'")
-                            $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
-                            [void]$dependsOn.Add($depends)
-                        }
-                    }
-                    $vmssResource.dependsOn = $dependsOn.ToArray()
-                    $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
-                }
-                else {
-                    $this.WriteWarning("no dependson for $($this.CreateJson($vmssResource))")
-                }
-                #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprint')
-                #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprintSecondary')
-
-                # secreturl
-                #$this.ModifyVmssResourceCertificateUrl($vmssResource)
-
-                $adminPasswordName = 'adminPassword'
-
-                if (!($this.GetPSPropertyValue($vmssResource, "properties.virtualMachineProfile.osProfile.$adminPasswordName"))) {
-                    $this.WriteLog("ModifyVmssResources:adding admin password")
-                    $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name $adminPasswordName -Value $this.adminPassword
-
-                    $this.AddParameter(
-                        $vmssResource, # resource
-                        $adminPasswordName, # name
-                        $adminPasswordName, # aliasName
-                        $vmssResource.properties.virtualMachineProfile.osProfile, # resourceObject
-                        $null, # value
-                        'string', # type
-                        'password must be set before deploying template.' # metadataDescription
-                    )
-                }
-
-                # fix The property 'requireGuestProvisionSignal' is not valid because the 'Microsoft.Compute/Agentless' feature is not enabled for this subscription."
-                if ($this.GetPSPropertyValue($vmssResource, 'properties.virtualMachineProfile.osProfile.requireGuestProvisionSignal')) {
-                    $this.WriteLog("ModifyVmssResources:setting requireGuestProvisionSignal to false")
-                    $vmssResource.properties.virtualMachineProfile.osProfile.requireGuestProvisionSignal = $null
-                }
-            }
-            $this.WriteLog("exit:ModifyVmssResources")
-        }
-
-        [void] ModifyVmssResourcesAddPrimary() {
-            <#
-        .SYNOPSIS
-            modifies vmss resources for AddPrimary and AddSecondary template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.WriteLog("enter:ModifyVmssResourcesAddPrimary")
-            $primaryVmss = $this.GetPrimaryVmss()
-
-            foreach ($vmssResource in $this.GetVmssResources()) {
-                $description = $this.descriptionAddPrimary
-                if ($primaryVmss.resource.name -inotmatch $vmssResource.name) {
-                    $description = $this.descriptionAddSecondary
-                }
-                $this.UpdateParametersSectionMetadataDescription($vmssResource.Name, $description)
-                $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
-                $this.AddParameter(
-                    $vmssResource, # resource
-                    'capacity', # name
-                    $vmssResource.sku, # resourceObject
-                    'int' # type
-                )
-            }
-            $this.WriteLog("exit:ModifyVmssResourcesAddPrimary")
-        }
-
-        [void] ModifyVmssResourcesAddSecondary() {
-            <#
-        .SYNOPSIS
-            modifies vmss resources for AddSecondary template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.WriteLog("enter:ModifyVmssResourcesAddSecondary")
-            $primaryVmss = $this.GetPrimaryVmss()
-
-            foreach ($vmssResource in $this.GetVmssResources()) {
-                $description = $this.descriptionAddSecondary
-                if ($primaryVmss.resource.name -imatch $vmssResource.name) {
-                    $description = $this.descriptionPrimaryDoNotModify
-                }
-                $this.UpdateParametersSectionMetadataDescription($vmssResource.Name, $description)
-            }
-            $this.WriteLog("exit:ModifyVmssResourcesAddSecondary")
-        }
-
-        [void] ModifyVmssResourcesRedeploy() {
-            <#
-        .SYNOPSIS
-            modifies vmss resources for redeploy template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.WriteLog("enter:ModifyVmssResourcesReDeploy")
-            $vmssResources = $this.GetVmssResources()
-
-            foreach ($vmssResource in $vmssResources) {
-                # add protected settings
-                $this.AddVmssProtectedSettings($vmssResource)
-
-                # remove mma
-                $extensions = [collections.arraylist]::new()
-                foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
-                    if ($extension.properties.type -ieq 'MicrosoftMonitoringAgent') {
-                        continue
-                    }
-                    if ($extension.properties.type -ieq 'ServiceFabricNode') {
-                        $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing cluster endpoint")
-                        $clusterResource = $this.GetClusterResource()
-                        $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
-                        $newName = "[reference($parameterizedName).clusterEndpoint]"
-
-                        $this.WriteLog("ModifyVmssResourcesReDeploy:setting cluster endpoint value to:$newName")
-                        $null = $this.SetResourceParameterValue($extension.properties.settings, 'clusterEndpoint', $newName)
-                    }
-                    [void]$extensions.Add($extension)
-                }
-
-                $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions = $extensions
-
-                $this.WriteLog("ModifyVmssResourcesReDeploy:modifying dependson")
-                $dependsOn = [collections.arraylist]::new()
-                $subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
-
+            if ($this.GetPSPropertyValue($vmssResource, 'dependsOn')) {
                 foreach ($depends in $vmssResource.dependsOn) {
                     if ($depends -imatch 'backendAddressPools') { continue }
 
@@ -2868,130 +2736,270 @@ class SFTemplate {
                     }
                     # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
                     if ($subnetIds.contains($depends)) {
-                        $this.WriteLog('ModifyVmssResourcesReDeploy:cleaning subnet dependson', [consolecolor]::Yellow)
+                        $this.WriteLog('cleaning subnet dependson', [consolecolor]::Yellow)
                         $depends = $depends.replace("/subnets'", "/'")
                         $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
                         [void]$dependsOn.Add($depends)
                     }
                 }
-
                 $vmssResource.dependsOn = $dependsOn.ToArray()
-                $this.WriteLog("ModifyVmssResourcesReDeploy:vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
+                $this.WriteLog("vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
+            }
+            else {
+                $this.WriteWarning("no dependson for $($this.CreateJson($vmssResource))")
+            }
+            #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprint')
+            #$this.ModifyVmssResourceExtensionCerts($vmssResource, 'thumbprintSecondary')
 
-                $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware sku")
+            # secreturl
+            #$this.ModifyVmssResourceCertificateUrl($vmssResource)
+
+            $adminPasswordName = 'adminPassword'
+
+            if (!($this.GetPSPropertyValue($vmssResource, "properties.virtualMachineProfile.osProfile.$adminPasswordName"))) {
+                $this.WriteLog("ModifyVmssResources:adding admin password")
+                $vmssResource.properties.virtualMachineProfile.osProfile | Add-Member -MemberType NoteProperty -Name $adminPasswordName -Value $this.adminPassword
+
                 $this.AddParameter(
                     $vmssResource, # resource
-                    'name', # name
-                    'hardwareSku', # aliasName
-                    $vmssResource.sku # resourceObject
-                )
-
-                $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing os sku")
-                $this.AddParameter(
-                    $vmssResource, # resource
-                    'sku', # name
-                    'osSku', # aliasName
-                    $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference # resourceObject
+                    $adminPasswordName, # name
+                    $adminPasswordName, # aliasName
+                    $vmssResource.properties.virtualMachineProfile.osProfile, # resourceObject
+                    $null, # value
+                    'string', # type
+                    'password must be set before deploying template.' # metadataDescription
                 )
             }
-            $this.WriteLog("exit:ModifyVmssResourcesReDeploy")
-        }
 
-        [void] ModifyVnetResources() {
-            <#
+            # fix The property 'requireGuestProvisionSignal' is not valid because the 'Microsoft.Compute/Agentless' feature is not enabled for this subscription."
+            if ($this.GetPSPropertyValue($vmssResource, 'properties.virtualMachineProfile.osProfile.requireGuestProvisionSignal')) {
+                $this.WriteLog("ModifyVmssResources:setting requireGuestProvisionSignal to false")
+                $vmssResource.properties.virtualMachineProfile.osProfile.requireGuestProvisionSignal = $null
+            }
+        }
+        $this.WriteLog("exit:ModifyVmssResources")
+    }
+
+    [void] ModifyVmssResourcesAddPrimary() {
+        <#
+        .SYNOPSIS
+            modifies vmss resources for AddPrimary and AddSecondary template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVmssResourcesAddPrimary")
+        $primaryVmss = $this.GetPrimaryVmss()
+
+        foreach ($vmssResource in $this.GetVmssResources()) {
+            $description = $this.descriptionAddPrimary
+            if ($primaryVmss.resource.name -inotmatch $vmssResource.name) {
+                $description = $this.descriptionAddSecondary
+            }
+            $this.UpdateParametersSectionMetadataDescription($vmssResource.Name, $description)
+            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware capacity")
+            $this.AddParameter(
+                $vmssResource, # resource
+                'capacity', # name
+                $vmssResource.sku, # resourceObject
+                'int' # type
+            )
+        }
+        $this.WriteLog("exit:ModifyVmssResourcesAddPrimary")
+    }
+
+    [void] ModifyVmssResourcesAddSecondary() {
+        <#
+        .SYNOPSIS
+            modifies vmss resources for AddSecondary template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVmssResourcesAddSecondary")
+        $primaryVmss = $this.GetPrimaryVmss()
+
+        foreach ($vmssResource in $this.GetVmssResources()) {
+            $description = $this.descriptionAddSecondary
+            if ($primaryVmss.resource.name -imatch $vmssResource.name) {
+                $description = $this.descriptionPrimaryDoNotModify
+            }
+            $this.UpdateParametersSectionMetadataDescription($vmssResource.Name, $description)
+        }
+        $this.WriteLog("exit:ModifyVmssResourcesAddSecondary")
+    }
+
+    [void] ModifyVmssResourcesRedeploy() {
+        <#
+        .SYNOPSIS
+            modifies vmss resources for redeploy template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ModifyVmssResourcesReDeploy")
+        $vmssResources = $this.GetVmssResources()
+
+        foreach ($vmssResource in $vmssResources) {
+            # add protected settings
+            $this.AddVmssProtectedSettings($vmssResource)
+
+            # remove mma
+            $extensions = [collections.arraylist]::new()
+            foreach ($extension in $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions) {
+                if ($extension.properties.type -ieq 'MicrosoftMonitoringAgent') {
+                    continue
+                }
+                if ($extension.properties.type -ieq 'ServiceFabricNode') {
+                    $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing cluster endpoint")
+                    $clusterResource = $this.GetClusterResource()
+                    $parameterizedName = $this.CreateParameterizedName('name', $clusterResource)
+                    $newName = "[reference($parameterizedName).clusterEndpoint]"
+
+                    $this.WriteLog("ModifyVmssResourcesReDeploy:setting cluster endpoint value to:$newName")
+                    $null = $this.SetResourceParameterValue($extension.properties.settings, 'clusterEndpoint', $newName)
+                }
+                [void]$extensions.Add($extension)
+            }
+
+            $vmssResource.properties.virtualMachineProfile.extensionProfile.extensions = $extensions
+
+            $this.WriteLog("ModifyVmssResourcesReDeploy:modifying dependson")
+            $dependsOn = [collections.arraylist]::new()
+            $subnetIds = @($this.EnumSubnetResourceIds(@($vmssResource)))
+
+            foreach ($depends in $vmssResource.dependsOn) {
+                if ($depends -imatch 'backendAddressPools') { continue }
+
+                if ($depends -imatch 'Microsoft.Network/loadBalancers') {
+                    [void]$dependsOn.Add($depends)
+                }
+                # example depends "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_VNet_name'), 'Subnet-0')]"
+                if ($subnetIds.contains($depends)) {
+                    $this.WriteLog('ModifyVmssResourcesReDeploy:cleaning subnet dependson', [consolecolor]::Yellow)
+                    $depends = $depends.replace("/subnets'", "/'")
+                    $depends = [regex]::replace($depends, "\), '.+?'\)\]", "))]")
+                    [void]$dependsOn.Add($depends)
+                }
+            }
+
+            $vmssResource.dependsOn = $dependsOn.ToArray()
+            $this.WriteLog("ModifyVmssResourcesReDeploy:vmssResource modified dependson: $($this.CreateJson($vmssResource.dependson))", [consolecolor]::Yellow)
+
+            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing hardware sku")
+            $this.AddParameter(
+                $vmssResource, # resource
+                'name', # name
+                'hardwareSku', # aliasName
+                $vmssResource.sku # resourceObject
+            )
+
+            $this.WriteLog("ModifyVmssResourcesReDeploy:parameterizing os sku")
+            $this.AddParameter(
+                $vmssResource, # resource
+                'sku', # name
+                'osSku', # aliasName
+                $vmssResource.properties.virtualMachineProfile.storageProfile.imageReference # resourceObject
+            )
+        }
+        $this.WriteLog("exit:ModifyVmssResourcesReDeploy")
+    }
+
+    [void] ModifyVnetResources() {
+        <#
         .SYNOPSIS
             modifies vnet dependson resources for current
             outputs: null
         .OUTPUTS
             [null]
         #>
-            $this.WriteLog("enter:ModifyVnetResources")
-            $vnetResources = $this.GetVnetResources()
+        $this.WriteLog("enter:ModifyVnetResources")
+        $vnetResources = $this.GetVnetResources()
 
-            foreach ($vnetResource in $vnetResources) {
-                # fix security rules
-                $this.WriteLog("ModifyVnetResources:fixing exported vnet resource $($this.CreateJson($vnetResource))")
-                $dependsOn = [collections.arraylist]::new()
-                $this.WriteLog("ModifyVnetResources:removing subnets from nsg dependson")
+        foreach ($vnetResource in $vnetResources) {
+            # fix security rules
+            $this.WriteLog("ModifyVnetResources:fixing exported vnet resource $($this.CreateJson($vnetResource))")
+            $dependsOn = [collections.arraylist]::new()
+            $this.WriteLog("ModifyVnetResources:removing subnets from nsg dependson")
 
-                foreach ($depends in $vnetResource.dependsOn) {
-                    $this.WriteLog("ModifyVnetResources:checking depends:$depends")
+            foreach ($depends in $vnetResource.dependsOn) {
+                $this.WriteLog("ModifyVnetResources:checking depends:$depends")
 
-                    if ($depends -inotmatch "$($vnetResource.Properties.subnets.Name -join '|')") {
-                        $this.WriteLog("ModifyVnetResources:adding depends:$depends")
-                        [void]$dependsOn.Add($depends)
-                    }
-                    else {
-                        $this.WriteLog("ModifyVnetResources:skipping depends:$depends")
-                    }
+                if ($depends -inotmatch "$($vnetResource.Properties.subnets.Name -join '|')") {
+                    $this.WriteLog("ModifyVnetResources:adding depends:$depends")
+                    [void]$dependsOn.Add($depends)
                 }
-                $vnetResource.dependsOn = $dependsOn.ToArray()
-                $this.WriteLog("ModifyVnetResources:nsg resource modified dependson: $($this.CreateJson($vnetResource.dependson))", [consolecolor]::Yellow)
-            }
-            $this.WriteLog("exit:ModifyVnetResources")
-        }
-
-        [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName) {
-            <#
-        .SYNOPSIS
-            parameterizes nodetype for addnodetype template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.ParameterizeNodetype($nodetype, $parameterName, $null, 'string')
-        }
-
-        [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName, [object]$parameterValue = $null) {
-            <#
-        .SYNOPSIS
-            parameterizes nodetype for addnodetype template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.ParameterizeNodetype($nodetype, $parameterName, $parameterValue, 'string')
-        }
-
-        [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName, [string]$type = 'string') {
-            <#
-        .SYNOPSIS
-            parameterizes nodetype for addnodetype template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.ParameterizeNodetype($nodetype, $parameterName, $null, $type)
-        }
-
-        [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName, [object]$parameterValue = $null, [string]$type = 'string') {
-            <#
-        .SYNOPSIS
-            parameterizes nodetype for addnodetype template
-            outputs: null
-        .OUTPUTS
-            [null]
-        #>
-            $this.WriteLog("enter:ParameterizeNodetype:nodetype:$($this.CreateJson($nodetype)) parameterName:$parameterName parameterValue:$parameterValue type:$type")
-            $vmssResources = @($this.GetVmssResourcesByNodeType($nodetype))
-            $parameterizedName = $null
-
-            if ($null -eq $parameterValue) {
-                $parameterValue = $this.GetResourceParameterValue($nodetype, $parameterName)
-            }
-            foreach ($vmssResource in $vmssResources) {
-                $parametersName = $this.CreateParametersName($vmssResource, $parameterName)
-
-                $parameterizedName = $this.GetParameterizedNameFromValue($this.GetResourceParameterValue($nodetype, $parameterName))
-                if (!$parameterizedName) {
-                    $parameterizedName = $this.CreateParameterizedName($parameterName, $vmssResource)
+                else {
+                    $this.WriteLog("ModifyVnetResources:skipping depends:$depends")
                 }
+            }
+            $vnetResource.dependsOn = $dependsOn.ToArray()
+            $this.WriteLog("ModifyVnetResources:nsg resource modified dependson: $($this.CreateJson($vnetResource.dependson))", [consolecolor]::Yellow)
+        }
+        $this.WriteLog("exit:ModifyVnetResources")
+    }
 
-                $metadataDescription = $null
-                $null = $this.AddToParametersSection($parametersName, $parameterValue, $type, $metadataDescription)
-                $this.WriteLog("ParameterizeNodetype:setting $parametersName to $parameterValue for $($nodetype.name)", [consolecolor]::Magenta)
+    [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName) {
+        <#
+        .SYNOPSIS
+            parameterizes nodetype for addnodetype template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.ParameterizeNodetype($nodetype, $parameterName, $null, 'string')
+    }
 
-                $this.WriteLog("ParameterizeNodetype:AddParameter `
+    [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName, [object]$parameterValue = $null) {
+        <#
+        .SYNOPSIS
+            parameterizes nodetype for addnodetype template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.ParameterizeNodetype($nodetype, $parameterName, $parameterValue, 'string')
+    }
+
+    [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName, [string]$type = 'string') {
+        <#
+        .SYNOPSIS
+            parameterizes nodetype for addnodetype template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.ParameterizeNodetype($nodetype, $parameterName, $null, $type)
+    }
+
+    [void] ParameterizeNodetype( [object]$nodetype, [string]$parameterName, [object]$parameterValue = $null, [string]$type = 'string') {
+        <#
+        .SYNOPSIS
+            parameterizes nodetype for addnodetype template
+            outputs: null
+        .OUTPUTS
+            [null]
+        #>
+        $this.WriteLog("enter:ParameterizeNodetype:nodetype:$($this.CreateJson($nodetype)) parameterName:$parameterName parameterValue:$parameterValue type:$type")
+        $vmssResources = @($this.GetVmssResourcesByNodeType($nodetype))
+        $parameterizedName = $null
+
+        if ($null -eq $parameterValue) {
+            $parameterValue = $this.GetResourceParameterValue($nodetype, $parameterName)
+        }
+        foreach ($vmssResource in $vmssResources) {
+            $parametersName = $this.CreateParametersName($vmssResource, $parameterName)
+
+            $parameterizedName = $this.GetParameterizedNameFromValue($this.GetResourceParameterValue($nodetype, $parameterName))
+            if (!$parameterizedName) {
+                $parameterizedName = $this.CreateParameterizedName($parameterName, $vmssResource)
+            }
+
+            $metadataDescription = $null
+            $null = $this.AddToParametersSection($parametersName, $parameterValue, $type, $metadataDescription)
+            $this.WriteLog("ParameterizeNodetype:setting $parametersName to $parameterValue for $($nodetype.name)", [consolecolor]::Magenta)
+
+            $this.WriteLog("ParameterizeNodetype:AddParameter `
                 -resource $vmssResource `
                 -name $parameterName `
                 -resourceObject $nodetype `
@@ -3000,19 +3008,19 @@ class SFTemplate {
                 -metadataDescription $metadataDescription
             ")
 
-                $this.AddParameter(
-                    $vmssResource, # resource
-                    $parameterName, # name
-                    $parameterName, # aliasName
-                    $nodetype, # resourceObject
-                    $parameterizedName, # value
-                    $type, # type
-                    $metadataDescription # description
-                )
+            $this.AddParameter(
+                $vmssResource, # resource
+                $parameterName, # name
+                $parameterName, # aliasName
+                $nodetype, # resourceObject
+                $parameterizedName, # value
+                $type, # type
+                $metadataDescription # description
+            )
 
-                $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
+            $extension = $this.GetVmssExtensions($vmssResource, 'ServiceFabricNode')
 
-                $this.WriteLog("ParameterizeNodetype:AddParameter `
+            $this.WriteLog("ParameterizeNodetype:AddParameter `
                 -resource $vmssResource `
                 -name $parameterName `
                 -resourceObject $($extension.properties.settings) `
@@ -3020,21 +3028,21 @@ class SFTemplate {
                 -type $type
             ")
 
-                $this.AddParameter(
-                    $vmssResource, # resource
-                    $parameterName, # name
-                    $parameterName, # aliasName
-                    $extension.properties.settings, # resourceObject
-                    $parameterizedName, # value
-                    $type, # type
-                    '' # description
-                )
-            }
-            $this.WriteLog("exit:ParameterizeNodetype")
+            $this.AddParameter(
+                $vmssResource, # resource
+                $parameterName, # name
+                $parameterName, # aliasName
+                $extension.properties.settings, # resourceObject
+                $parameterizedName, # value
+                $type, # type
+                '' # description
+            )
         }
+        $this.WriteLog("exit:ParameterizeNodetype")
+    }
 
-        [bool] ParameterizeNodetypes() {
-            <#
+    [bool] ParameterizeNodetypes() {
+        <#
         .SYNOPSIS
             parameterizes nodetypes for addnodetype template filtered by $isPrimaryFilter and isPrimary value set to $isPrimaryValue
             there will always be at least one primary nodetype unparameterized except for 'new' template
@@ -3043,11 +3051,11 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-            return $this.ParameterizeNodetypes($false, $false, $false)
-        }
+        return $this.ParameterizeNodetypes($false, $false, $false)
+    }
 
-        [bool] ParameterizeNodetypes([bool]$isPrimaryFilter = $false) {
-            <#
+    [bool] ParameterizeNodetypes([bool]$isPrimaryFilter = $false) {
+        <#
         .SYNOPSIS
             parameterizes nodetypes for addnodetype template filtered by $isPrimaryFilter and isPrimary value set to $isPrimaryValue
             there will always be at least one primary nodetype unparameterized except for 'new' template
@@ -3056,11 +3064,11 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-            return $this.ParameterizeNodetypes($isPrimaryFilter, $isPrimaryFilter, $false)
-        }
+        return $this.ParameterizeNodetypes($isPrimaryFilter, $isPrimaryFilter, $false)
+    }
 
-        [bool] ParameterizeNodetypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter) {
-            <#
+    [bool] ParameterizeNodetypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter) {
+        <#
         .SYNOPSIS
             parameterizes nodetypes for addnodetype template filtered by $isPrimaryFilter and isPrimary value set to $isPrimaryValue
             there will always be at least one primary nodetype unparameterized except for 'new' template
@@ -3069,11 +3077,11 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-            return $this.ParameterizeNodetypes($isPrimaryFilter, $isPrimaryValue, $false)
-        }
+        return $this.ParameterizeNodetypes($isPrimaryFilter, $isPrimaryValue, $false)
+    }
 
-        [bool] ParameterizeNodetypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter, [switch]$all) {
-            <#
+    [bool] ParameterizeNodetypes([bool]$isPrimaryFilter = $false, [bool]$isPrimaryValue = $isPrimaryFilter, [switch]$all) {
+        <#
         .SYNOPSIS
             parameterizes nodetypes for addnodetype template filtered by $isPrimaryFilter and isPrimary value set to $isPrimaryValue
             there will always be at least one primary nodetype unparameterized except for 'new' template
@@ -3082,121 +3090,121 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-            $this.WriteLog("enter:ParameterizeNodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue, [switch]$all)")
-            # todo. should validation be here? how many nodetypes
-            $null = $this.RemoveParameterizedNodeTypes()
-            $clusterResource = $this.GetClusterResource()
-            $nodetypes = [collections.arraylist]::new($this.GetNodeTypeResources())
-            $filterednodetypes = $nodetypes.psobject.copy()
+        $this.WriteLog("enter:ParameterizeNodetypes([bool]$isPrimaryFilter, [bool]$isPrimaryValue, [switch]$all)")
+        # todo. should validation be here? how many nodetypes
+        $null = $this.RemoveParameterizedNodeTypes()
+        $clusterResource = $this.GetClusterResource()
+        $nodetypes = [collections.arraylist]::new($this.GetNodeTypeResources())
+        $filterednodetypes = $nodetypes.psobject.copy()
 
-            if ($nodetypes.Count -lt 1) {
-                $this.WriteError("exit:ParameterizeNodetypes:no nodetypes detected!")
+        if ($nodetypes.Count -lt 1) {
+            $this.WriteError("exit:ParameterizeNodetypes:no nodetypes detected!")
+            return $false
+        }
+
+        $this.WriteLog("ParameterizeNodetypes:current nodetypes $($nodetypes.name)", [consolecolor]::Green)
+
+        if ($all) {
+            $nodetypes.Clear()
+        }
+        else {
+            $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)
+        }
+
+        if ($filterednodetypes.count -eq 0) {
+            $this.WriteWarning("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
+            return $false
+        }
+
+        if ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
+            $this.WriteWarning("ParameterizeNodetypes:more than one primary node type detected!")
+        }
+
+        if (!$all) {
+            $filterednodetypes = $filterednodetypes[0]
+        }
+
+        foreach ($filterednodetype in $filterednodetypes) {
+            $this.WriteLog("ParameterizeNodetypes:adding new nodetype", [consolecolor]::Cyan)
+            $newNodeType = $filterednodetype.psobject.copy()
+            $existingVmssNodeTypeRef = @($this.GetVmssResourcesByNodeType($newNodeType))
+
+            if ($existingVmssNodeTypeRef.count -lt 1) {
+                $this.WriteError("exit:ParameterizeNodetypes:unable to find existing nodetypes by nodetyperef")
                 return $false
             }
 
-            $this.WriteLog("ParameterizeNodetypes:current nodetypes $($nodetypes.name)", [consolecolor]::Green)
+            $this.WriteLog("ParameterizeNodetypes:parameterizing new nodetype ", [consolecolor]::Cyan)
+
+            # setting capacity value should be parametized value to vmInstanceCount value
+            $capacity = $this.GetResourceParameterValue($existingVmssNodeTypeRef[0].sku, 'capacity')
+            $null = $this.SetResourceParameterValue($newNodeType, 'vmInstanceCount', $capacity)
+
+            $this.ParameterizeNodetype(
+                $newNodeType, # nodetype
+                'durabilityLevel' # parameterName
+            )
 
             if ($all) {
-                $nodetypes.Clear()
+                $this.ParameterizeNodetype(
+                    $newNodeType, # nodetype
+                    'isPrimary', # parameterName
+                    'bool' # type
+                )
             }
             else {
-                $filterednodetypes = @($nodetypes | Where-Object isPrimary -ieq $isPrimaryFilter)
-            }
-
-            if ($filterednodetypes.count -eq 0) {
-                $this.WriteWarning("exit:ParameterizeNodetypes:unable to find nodetype where isPrimary=$isPrimaryFilter")
-                return $false
-            }
-
-            if ($filterednodetypes.count -gt 1 -and $isPrimaryFilter) {
-                $this.WriteWarning("ParameterizeNodetypes:more than one primary node type detected!")
-            }
-
-            if (!$all) {
-                $filterednodetypes = $filterednodetypes[0]
-            }
-
-            foreach ($filterednodetype in $filterednodetypes) {
-                $this.WriteLog("ParameterizeNodetypes:adding new nodetype", [consolecolor]::Cyan)
-                $newNodeType = $filterednodetype.psobject.copy()
-                $existingVmssNodeTypeRef = @($this.GetVmssResourcesByNodeType($newNodeType))
-
-                if ($existingVmssNodeTypeRef.count -lt 1) {
-                    $this.WriteError("exit:ParameterizeNodetypes:unable to find existing nodetypes by nodetyperef")
-                    return $false
-                }
-
-                $this.WriteLog("ParameterizeNodetypes:parameterizing new nodetype ", [consolecolor]::Cyan)
-
-                # setting capacity value should be parametized value to vmInstanceCount value
-                $capacity = $this.GetResourceParameterValue($existingVmssNodeTypeRef[0].sku, 'capacity')
-                $null = $this.SetResourceParameterValue($newNodeType, 'vmInstanceCount', $capacity)
-
                 $this.ParameterizeNodetype(
                     $newNodeType, # nodetype
-                    'durabilityLevel' # parameterName
+                    'isPrimary', # parameterName
+                    $isPrimaryValue, # parameterValue
+                    'bool' # type
                 )
-
-                if ($all) {
-                    $this.ParameterizeNodetype(
-                        $newNodeType, # nodetype
-                        'isPrimary', # parameterName
-                        'bool' # type
-                    )
-                }
-                else {
-                    $this.ParameterizeNodetype(
-                        $newNodeType, # nodetype
-                        'isPrimary', # parameterName
-                        $isPrimaryValue, # parameterValue
-                        'bool' # type
-                    )
-                }
-
-                # todo: currently name has to be parameterized last so parameter names above can be found
-                $this.ParameterizeNodetype(
-                    $newNodeType, # nodetype
-                    'name' # parameterName
-                )
-
-                [void]$nodetypes.Add($newNodeType)
             }
 
-            $clusterResource.properties.nodetypes = $nodetypes
-            $this.WriteLog("exit:ParameterizeNodetypes:result:`r`n$($this.CreateJson($nodetypes))")
-            return $true
+            # todo: currently name has to be parameterized last so parameter names above can be found
+            $this.ParameterizeNodetype(
+                $newNodeType, # nodetype
+                'name' # parameterName
+            )
+
+            [void]$nodetypes.Add($newNodeType)
         }
 
-        [void] RemoveDuplicateResources() {
-            <#
+        $clusterResource.properties.nodetypes = $nodetypes
+        $this.WriteLog("exit:ParameterizeNodetypes:result:`r`n$($this.CreateJson($nodetypes))")
+        return $true
+    }
+
+    [void] RemoveDuplicateResources() {
+        <#
         .SYNOPSIS
             removes duplicate resources for current template from export
             outputs: null
         .OUTPUTS
             [null]
         #>
-            $this.WriteLog("enter:RemoveDuplicateResources")
-            # fix up deploy errors by removing duplicated sub resources on root like lb rules by
-            # removing any 'type' added by export-azresourcegroup that was not in the $this.configuredRGResources
-            $currentResources = [collections.arraylist]::new()
+        $this.WriteLog("enter:RemoveDuplicateResources")
+        # fix up deploy errors by removing duplicated sub resources on root like lb rules by
+        # removing any 'type' added by export-azresourcegroup that was not in the $this.configuredRGResources
+        $currentResources = [collections.arraylist]::new()
 
-            $resourceTypes = $this.configuredRGResources.resourceType
-            foreach ($resource in $this.currentConfig.resources.GetEnumerator()) {
-                $this.WriteLog("RemoveDuplicateResources:checking exported resource $($resource.name)", [consolecolor]::Magenta)
-                $this.WriteVerbose("RemoveDuplicateResources:checking exported resource $($this.CreateJson($resource))")
+        $resourceTypes = $this.configuredRGResources.resourceType
+        foreach ($resource in $this.currentConfig.resources.GetEnumerator()) {
+            $this.WriteLog("RemoveDuplicateResources:checking exported resource $($resource.name)", [consolecolor]::Magenta)
+            $this.WriteVerbose("RemoveDuplicateResources:checking exported resource $($this.CreateJson($resource))")
 
-                if ($resourceTypes.Contains($resource.type)) {
-                    $this.WriteLog("RemoveDuplicateResources:adding exported resource $($resource.name)", [consolecolor]::Cyan)
-                    $this.WriteVerbose("RemoveDuplicateResources:adding exported resource $($this.CreateJson($resource))")
-                    [void]$currentResources.Add($resource)
-                }
+            if ($resourceTypes.Contains($resource.type)) {
+                $this.WriteLog("RemoveDuplicateResources:adding exported resource $($resource.name)", [consolecolor]::Cyan)
+                $this.WriteVerbose("RemoveDuplicateResources:adding exported resource $($this.CreateJson($resource))")
+                [void]$currentResources.Add($resource)
             }
-            $this.currentConfig.resources = $currentResources
-            $this.WriteLog("exit:RemoveDuplicateResources")
         }
+        $this.currentConfig.resources = $currentResources
+        $this.WriteLog("exit:RemoveDuplicateResources")
+    }
 
-        [bool] RemoveParameterizedNodeTypes() {
-            <#
+    [bool] RemoveParameterizedNodeTypes() {
+        <#
         .SYNOPSIS
             removes parameterized nodetypes for from cluster resource section in $this.currentConfig
             there will always be at least one primary nodetype unparameterized unless 'new' template
@@ -3204,226 +3212,226 @@ class SFTemplate {
         .OUTPUTS
             [bool]
         #>
-            $this.WriteLog("enter:RemoveParameterizedNodeTypes")
-            $clusterResource = $this.GetClusterResource()
-            $cleanNodetypes = [collections.arraylist]::new()
-            $nodetypes = [collections.arraylist]::new($this.GetNodeTypeResources())
-            $retval = $false
+        $this.WriteLog("enter:RemoveParameterizedNodeTypes")
+        $clusterResource = $this.GetClusterResource()
+        $cleanNodetypes = [collections.arraylist]::new()
+        $nodetypes = [collections.arraylist]::new($this.GetNodeTypeResources())
+        $retval = $false
 
-            if ($nodetypes.Count -lt 1) {
-                $this.WriteError("exit:RemoveParameterizedNodeTypes:no nodetypes detected!")
-                return $false
-            }
-
-            foreach ($nodetype in $nodetypes) {
-                if (!($this.GetParameterizedNameFromValue($nodetype.name))) {
-                    $this.WriteLog("RemoveParameterizedNodeTypes:skipping:$($nodetype.name)")
-                    [void]$cleanNodetypes.Add($nodetype)
-                }
-                else {
-                    $this.WriteLog("RemoveParameterizedNodeTypes:removing:$($nodetype.name)")
-                }
-            }
-
-            if ($cleanNodetypes.Count -gt 0) {
-                $retval = $true
-                $clusterResource.properties.nodetypes = $cleanNodetypes
-                $null = $this.RemoveUnusedParameters()
-            }
-            else {
-                $this.WriteError("RemoveParameterizedNodeTypes:no clean nodetypes")
-            }
-
-            $this.WriteLog("exit:RemoveParameterizedNodeTypes:$retval")
-            return $retval
+        if ($nodetypes.Count -lt 1) {
+            $this.WriteError("exit:RemoveParameterizedNodeTypes:no nodetypes detected!")
+            return $false
         }
 
-        [bool] RemoveUnparameterizedNodeTypes() {
-            <#
+        foreach ($nodetype in $nodetypes) {
+            if (!($this.GetParameterizedNameFromValue($nodetype.name))) {
+                $this.WriteLog("RemoveParameterizedNodeTypes:skipping:$($nodetype.name)")
+                [void]$cleanNodetypes.Add($nodetype)
+            }
+            else {
+                $this.WriteLog("RemoveParameterizedNodeTypes:removing:$($nodetype.name)")
+            }
+        }
+
+        if ($cleanNodetypes.Count -gt 0) {
+            $retval = $true
+            $clusterResource.properties.nodetypes = $cleanNodetypes
+            $null = $this.RemoveUnusedParameters()
+        }
+        else {
+            $this.WriteError("RemoveParameterizedNodeTypes:no clean nodetypes")
+        }
+
+        $this.WriteLog("exit:RemoveParameterizedNodeTypes:$retval")
+        return $retval
+    }
+
+    [bool] RemoveUnparameterizedNodeTypes() {
+        <#
         .SYNOPSIS
             removes unparameterized nodetypes for from cluster resource section in $this.currentConfig
             outputs: bool
         .OUTPUTS
             [bool]
         #>
-            $this.WriteLog("enter:RemoveUnparameterizedNodeTypes")
-            $clusterResource = $this.GetClusterResource()
-            $cleanNodetypes = [collections.arraylist]::new()
-            $nodetypes = [collections.arraylist]::new($this.GetNodeTypeResources())
-            $retval = $false
+        $this.WriteLog("enter:RemoveUnparameterizedNodeTypes")
+        $clusterResource = $this.GetClusterResource()
+        $cleanNodetypes = [collections.arraylist]::new()
+        $nodetypes = [collections.arraylist]::new($this.GetNodeTypeResources())
+        $retval = $false
 
-            if ($nodetypes.Count -lt 1) {
-                $this.WriteError("exit:RemoveUnparameterizedNodeTypes:no nodetypes detected!")
-                return $false
-            }
-
-            foreach ($nodetype in $nodetypes) {
-                if (($this.GetParameterizedNameFromValue($nodetype.name))) {
-                    $this.WriteLog("RemoveUnparameterizedNodeTypes:removing:$($nodetype.name)")
-                    [void]$cleanNodetypes.Add($nodetype)
-                }
-                else {
-                    $this.WriteLog("RemoveUnparameterizedNodeTypes:skipping:$($nodetype.name)")
-                }
-            }
-
-            if ($cleanNodetypes.Count -gt 0) {
-                $retval = $true
-                $clusterResource.properties.nodetypes = $cleanNodetypes
-                #$null = RemoveUnusedParameters
-            }
-            else {
-                $this.WriteError("RemoveUnparameterizedNodeTypes:no parameterized nodetypes")
-            }
-
-            $this.WriteLog("exit:RemoveUnparameterizedNodeTypes:$retval")
-            return $retval
+        if ($nodetypes.Count -lt 1) {
+            $this.WriteError("exit:RemoveUnparameterizedNodeTypes:no nodetypes detected!")
+            return $false
         }
 
-        [void] RemoveUnusedParameters() {
-            <#
+        foreach ($nodetype in $nodetypes) {
+            if (($this.GetParameterizedNameFromValue($nodetype.name))) {
+                $this.WriteLog("RemoveUnparameterizedNodeTypes:removing:$($nodetype.name)")
+                [void]$cleanNodetypes.Add($nodetype)
+            }
+            else {
+                $this.WriteLog("RemoveUnparameterizedNodeTypes:skipping:$($nodetype.name)")
+            }
+        }
+
+        if ($cleanNodetypes.Count -gt 0) {
+            $retval = $true
+            $clusterResource.properties.nodetypes = $cleanNodetypes
+            #$null = RemoveUnusedParameters
+        }
+        else {
+            $this.WriteError("RemoveUnparameterizedNodeTypes:no parameterized nodetypes")
+        }
+
+        $this.WriteLog("exit:RemoveUnparameterizedNodeTypes:$retval")
+        return $retval
+    }
+
+    [void] RemoveUnusedParameters() {
+        <#
         .SYNOPSIS
             removes unused parameters from parameters section
             outputs: null
         .OUTPUTS
             [null]
         #>
-            $this.WriteLog("enter:RemoveUnusedParameters")
-            $parametersRemoveList = [collections.arraylist]::new()
-            #serialize and copy
-            $currentConfigResourcejson = $this.CreateJson($this.currentConfig)
-            $currentConfigJson = $currentConfigResourcejson | convertfrom-json
+        $this.WriteLog("enter:RemoveUnusedParameters")
+        $parametersRemoveList = [collections.arraylist]::new()
+        #serialize and copy
+        $currentConfigResourcejson = $this.CreateJson($this.currentConfig)
+        $currentConfigJson = $currentConfigResourcejson | convertfrom-json
 
-            # remove parameters section but keep everything else like variables, resources, outputs
-            [void]$currentConfigJson.psobject.properties.remove('Parameters')
-            $currentConfigResourcejson = $this.CreateJson($currentConfigJson)
+        # remove parameters section but keep everything else like variables, resources, outputs
+        [void]$currentConfigJson.psobject.properties.remove('Parameters')
+        $currentConfigResourcejson = $this.CreateJson($currentConfigJson)
 
-            foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
-                $parameterizedName = $this.CreateParameterizedName($psObjectProperty.name)
-                $this.WriteLog("RemoveUnusedParameters:checking to see if $parameterizedName is being used")
-                if ([regex]::IsMatch($currentConfigResourcejson, [regex]::Escape($parameterizedName), $this.ignoreCase)) {
-                    $this.WriteVerbose("RemoveUnusedParameters:$parameterizedName is being used")
-                    continue
-                }
-                $this.WriteVerbose("RemoveUnusedParameters:removing $parameterizedName")
-                [void]$parametersRemoveList.Add($psObjectProperty)
+        foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
+            $parameterizedName = $this.CreateParameterizedName($psObjectProperty.name)
+            $this.WriteLog("RemoveUnusedParameters:checking to see if $parameterizedName is being used")
+            if ([regex]::IsMatch($currentConfigResourcejson, [regex]::Escape($parameterizedName), $this.ignoreCase)) {
+                $this.WriteVerbose("RemoveUnusedParameters:$parameterizedName is being used")
+                continue
             }
-
-            foreach ($parameter in $parametersRemoveList) {
-                $this.WriteLog("RemoveUnusedParameters:removing $($parameter.name)")
-                [void]$this.currentConfig.parameters.psobject.Properties.Remove($parameter.name)
-            }
-            $this.WriteLog("exit:RemoveUnusedParameters")
+            $this.WriteVerbose("RemoveUnusedParameters:removing $parameterizedName")
+            [void]$parametersRemoveList.Add($psObjectProperty)
         }
 
-        [bool] RenameParameter( [string]$oldParameterName, [string]$newParameterName) {
-            <#
+        foreach ($parameter in $parametersRemoveList) {
+            $this.WriteLog("RemoveUnusedParameters:removing $($parameter.name)")
+            [void]$this.currentConfig.parameters.psobject.Properties.Remove($parameter.name)
+        }
+        $this.WriteLog("exit:RemoveUnusedParameters")
+    }
+
+    [bool] RenameParameter( [string]$oldParameterName, [string]$newParameterName) {
+        <#
         .SYNOPSIS
             renames parameter from $oldParameterName to $newParameterName by $oldParameterName in all template sections
             outputs: bool
         .OUTPUTS
             [bool]
         #>
-            $this.WriteLog("enter:RenameParameter: $oldParameterName, $newParameterName")
+        $this.WriteLog("enter:RenameParameter: $oldParameterName, $newParameterName")
 
-            if (!$oldParameterName -or !$newParameterName) {
-                $this.WriteError("exit:RenameParameter:error:empty parameters:oldParameterName:$oldParameterName newParameterName:$newParameterName")
-                return $false
-            }
-
-            $oldParameterizedName = CreateParameterizedName -parameterName $oldParameterName
-            $newParameterizedName = CreateParameterizedName -parameterName $newParameterName
-            $this.currentConfigResourcejson = $null
-
-            if (!$this.currentConfig.parameters) {
-                $this.WriteError("exit:RenameParameter:error:empty parameters section")
-                return $false
-            }
-
-            #serialize
-            $this.currentConfigParametersjson = $this.CreateJson($this.currentConfig.parameters)
-            $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
-
-            if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($newParameterizedName), $this.ignoreCase)) {
-                $this.WriteError("exit:RenameParameter:new parameter already exists in resources section:$newParameterizedName")
-                return $false
-            }
-
-            if ([regex]::IsMatch($this.currentConfigParametersjson, [regex]::Escape($newParameterName), $this.ignoreCase)) {
-                $this.WriteError("exit:RenameParameter:new parameter already exists in parameters section:$newParameterizedName")
-                return $false
-            }
-
-            if ([regex]::IsMatch($this.currentConfigParametersjson, [regex]::Escape($oldParameterName), $this.ignoreCase)) {
-                $this.WriteVerbose("RenameParameter:found parameter Name:$oldParameterName")
-                $this.currentConfigParametersjson = [regex]::Replace($this.currentConfigParametersjson, [regex]::Escape($oldParameterName), $newParameterName, $this.ignoreCase)
-                $this.WriteVerbose("RenameParameter:replaced $oldParameterName json:$this.currentConfigParametersJson")
-                $this.currentConfig.parameters = $this.currentConfigParametersjson | convertfrom-json
-
-                # reserialize with modified parameters section
-                $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
-            }
-            else {
-                $this.WriteWarning("RenameParameter:parameter not found:$oldParameterName")
-            }
-
-            if ($this.currentConfigResourcesjson) {
-                if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($oldParameterizedName), $this.ignoreCase)) {
-                    $this.WriteVerbose("RenameParameter:found parameterizedName:$oldParameterizedName")
-                    $this.currentConfigResourceJson = [regex]::Replace($this.currentConfigResourcejson, [regex]::Escape($oldParameterizedName), $newParameterizedName, $this.ignoreCase)
-                    $this.WriteVerbose("RenameParameter:replaced $oldParameterizedName json:$this.currentConfigResourceJson")
-                    $this.currentConfig = $this.currentConfigResourcejson | convertfrom-json
-                }
-                else {
-                    $this.WriteWarning("RenameParameter:parameter not found:$oldParameterizedName")
-                }
-            }
-
-            $this.WriteVerbose("RenameParameter:result:$($this.CreateJson($this.currentConfig))")
-            $this.WriteLog("exit:RenameParameter")
-            return $true
+        if (!$oldParameterName -or !$newParameterName) {
+            $this.WriteError("exit:RenameParameter:error:empty parameters:oldParameterName:$oldParameterName newParameterName:$newParameterName")
+            return $false
         }
 
-        [bool] SetResourceParameterValue([object]$resource, [string]$name, [object]$newValue) {
-            <#
+        $oldParameterizedName = CreateParameterizedName -parameterName $oldParameterName
+        $newParameterizedName = CreateParameterizedName -parameterName $newParameterName
+        $this.currentConfigResourcejson = $null
+
+        if (!$this.currentConfig.parameters) {
+            $this.WriteError("exit:RenameParameter:error:empty parameters section")
+            return $false
+        }
+
+        #serialize
+        $this.currentConfigParametersjson = $this.CreateJson($this.currentConfig.parameters)
+        $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
+
+        if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($newParameterizedName), $this.ignoreCase)) {
+            $this.WriteError("exit:RenameParameter:new parameter already exists in resources section:$newParameterizedName")
+            return $false
+        }
+
+        if ([regex]::IsMatch($this.currentConfigParametersjson, [regex]::Escape($newParameterName), $this.ignoreCase)) {
+            $this.WriteError("exit:RenameParameter:new parameter already exists in parameters section:$newParameterizedName")
+            return $false
+        }
+
+        if ([regex]::IsMatch($this.currentConfigParametersjson, [regex]::Escape($oldParameterName), $this.ignoreCase)) {
+            $this.WriteVerbose("RenameParameter:found parameter Name:$oldParameterName")
+            $this.currentConfigParametersjson = [regex]::Replace($this.currentConfigParametersjson, [regex]::Escape($oldParameterName), $newParameterName, $this.ignoreCase)
+            $this.WriteVerbose("RenameParameter:replaced $oldParameterName json:$this.currentConfigParametersJson")
+            $this.currentConfig.parameters = $this.currentConfigParametersjson | convertfrom-json
+
+            # reserialize with modified parameters section
+            $this.currentConfigResourcejson = $this.CreateJson($this.currentConfig)
+        }
+        else {
+            $this.WriteWarning("RenameParameter:parameter not found:$oldParameterName")
+        }
+
+        if ($this.currentConfigResourcesjson) {
+            if ([regex]::IsMatch($this.currentConfigResourcejson, [regex]::Escape($oldParameterizedName), $this.ignoreCase)) {
+                $this.WriteVerbose("RenameParameter:found parameterizedName:$oldParameterizedName")
+                $this.currentConfigResourceJson = [regex]::Replace($this.currentConfigResourcejson, [regex]::Escape($oldParameterizedName), $newParameterizedName, $this.ignoreCase)
+                $this.WriteVerbose("RenameParameter:replaced $oldParameterizedName json:$this.currentConfigResourceJson")
+                $this.currentConfig = $this.currentConfigResourcejson | convertfrom-json
+            }
+            else {
+                $this.WriteWarning("RenameParameter:parameter not found:$oldParameterizedName")
+            }
+        }
+
+        $this.WriteVerbose("RenameParameter:result:$($this.CreateJson($this.currentConfig))")
+        $this.WriteLog("exit:RenameParameter")
+        return $true
+    }
+
+    [bool] SetResourceParameterValue([object]$resource, [string]$name, [object]$newValue) {
+        <#
         .SYNOPSIS
             sets resource parameter value in resources section
             outputs: bool
         .OUTPUTS
             [bool]
         #>
-            $this.WriteLog("enter:SetResourceParameterValue:resource:$($this.CreateJson($resource)) name:$name,newValue:$newValue", [consolecolor]::DarkCyan)
-            $retval = $false
-            foreach ($psObjectProperty in $resource.psobject.Properties.GetEnumerator()) {
-                $this.WriteVerbose("SetResourceParameterValue:checking parameter name $psobjectProperty")
+        $this.WriteLog("enter:SetResourceParameterValue:resource:$($this.CreateJson($resource)) name:$name,newValue:$newValue", [consolecolor]::DarkCyan)
+        $retval = $false
+        foreach ($psObjectProperty in $resource.psobject.Properties.GetEnumerator()) {
+            $this.WriteVerbose("SetResourceParameterValue:checking parameter name $psobjectProperty")
 
-                if (($psObjectProperty.Name -ieq $name)) {
-                    $parameterValues = @($psObjectProperty.Name)
-                    if ($parameterValues.Count -eq 1) {
-                        $psObjectProperty.Value = $newValue
-                        $retval = $true
-                        break
-                    }
-                    else {
-                        $this.WriteError("SetResourceParameterValue:multiple parameter names found in resource. returning")
-                        $retval = $false
-                        break
-                    }
-                }
-                elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
-                    $retval = $this.SetResourceParameterValue($psObjectProperty.Value, $name, $newValue)
+            if (($psObjectProperty.Name -ieq $name)) {
+                $parameterValues = @($psObjectProperty.Name)
+                if ($parameterValues.Count -eq 1) {
+                    $psObjectProperty.Value = $newValue
+                    $retval = $true
+                    break
                 }
                 else {
-                    $this.WriteVerbose("SetResourceParameterValue:skipping type:$($psObjectProperty.TypeNameOfValue)")
+                    $this.WriteError("SetResourceParameterValue:multiple parameter names found in resource. returning")
+                    $retval = $false
+                    break
                 }
             }
-
-            $this.WriteLog("exit:SetResourceParameterValue:returning:$retval")
-            return $retval
+            elseif ($psObjectProperty.TypeNameOfValue -ieq 'System.Management.Automation.PSCustomObject') {
+                $retval = $this.SetResourceParameterValue($psObjectProperty.Value, $name, $newValue)
+            }
+            else {
+                $this.WriteVerbose("SetResourceParameterValue:skipping type:$($psObjectProperty.TypeNameOfValue)")
+            }
         }
 
-        [void] UpdateParametersSectionMetadataDescription( [string]$parameterName, [string]$metadataDescription) {
-            <#
+        $this.WriteLog("exit:SetResourceParameterValue:returning:$retval")
+        return $retval
+    }
+
+    [void] UpdateParametersSectionMetadataDescription( [string]$parameterName, [string]$metadataDescription) {
+        <#
         .SYNOPSIS
             updates metadatadescription for existing parameter based on $parameterName
             outputs: null
@@ -3431,192 +3439,192 @@ class SFTemplate {
             [null]
         #>
 
-            $this.WriteLog("enter:UpdateParametersSectionMetadataDescription:parameterName:$parameterName, metadataDescription:$metadataDescription")
-            if ($this.IsParameterizedValue($parameterName)) {
-                $parameterName = $this.GetParameterizedNameFromValue($parameterName)
-            }
-
-            $existingParameters = @($this.GetFromParametersSection($parameterName))
-
-            if ($existingParameters.Count -lt 1) {
-                $this.WriteError("exit:UpdateParametersSectionMetadataDescription:$parameterName not found in parameters sections. returning.")
-                return
-                #$this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
-            }
-            elseif ($existingParameters.Count -lt 1) {
-                $this.WriteError("exit:UpdateParametersSectionMetadataDescription: multiple $parameterName found in parameters sections. returning.")
-                return
-                #$this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
-            }
-
-            $existingParameter = $existingParameters[0]
-            $parameterObject = [pscustomobject]@{
-                type         = $existingParameter.type
-                defaultValue = $existingParameter.defaultValue
-                metadata     = [pscustomobject]@{description = $metadataDescription }
-            }
-
-            foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
-                if (($psObjectProperty.Name -ieq $parameterName)) {
-                    $psObjectProperty.Value = $parameterObject
-                    $this.WriteLog("exit:UpdateParametersSectionMetadataDescription:parameterObject value added to existing parameter:$($this.CreateJson($parameterObject))")
-                    return
-                }
-            }
-
-            $this.WriteLog("exit:UpdateParametersSectionMetadataDescription:new parameter name:$parameterName added $($this.CreateJson($parameterObject))")
+        $this.WriteLog("enter:UpdateParametersSectionMetadataDescription:parameterName:$parameterName, metadataDescription:$metadataDescription")
+        if ($this.IsParameterizedValue($parameterName)) {
+            $parameterName = $this.GetParameterizedNameFromValue($parameterName)
         }
 
-        [void] VerifyConfig( [string]$templateParameterFile) {
-            <#
+        $existingParameters = @($this.GetFromParametersSection($parameterName))
+
+        if ($existingParameters.Count -lt 1) {
+            $this.WriteError("exit:UpdateParametersSectionMetadataDescription:$parameterName not found in parameters sections. returning.")
+            return
+            #$this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
+        }
+        elseif ($existingParameters.Count -lt 1) {
+            $this.WriteError("exit:UpdateParametersSectionMetadataDescription: multiple $parameterName found in parameters sections. returning.")
+            return
+            #$this.AddToParametersSection($parameterName, $parameterNameValue, $type, $metadataDescription)
+        }
+
+        $existingParameter = $existingParameters[0]
+        $parameterObject = [pscustomobject]@{
+            type         = $existingParameter.type
+            defaultValue = $existingParameter.defaultValue
+            metadata     = [pscustomobject]@{description = $metadataDescription }
+        }
+
+        foreach ($psObjectProperty in $this.currentConfig.parameters.psobject.Properties) {
+            if (($psObjectProperty.Name -ieq $parameterName)) {
+                $psObjectProperty.Value = $parameterObject
+                $this.WriteLog("exit:UpdateParametersSectionMetadataDescription:parameterObject value added to existing parameter:$($this.CreateJson($parameterObject))")
+                return
+            }
+        }
+
+        $this.WriteLog("exit:UpdateParametersSectionMetadataDescription:new parameter name:$parameterName added $($this.CreateJson($parameterObject))")
+    }
+
+    [void] VerifyConfig( [string]$templateParameterFile) {
+        <#
         .SYNOPSIS
             verifies current configuration $this.currentConfig using test-resourcegroupdeployment
             outputs: null
         .OUTPUTS
             [null]
         #>
-            $this.WriteLog("enter:VerifyConfig:templateparameterFile:$templateParameterFile")
-            $json = '.\VerifyConfig.json'
-            $this.CreateJson($this.currentConfig) | out-file -FilePath $json -Force
+        $this.WriteLog("enter:VerifyConfig:templateparameterFile:$templateParameterFile")
+        $json = '.\VerifyConfig.json'
+        $this.CreateJson($this.currentConfig) | out-file -FilePath $json -Force
 
-            $this.WriteLog("Test-AzResourceGroupDeployment -ResourceGroupName $($this.resourceGroupName) `
+        $this.WriteLog("Test-AzResourceGroupDeployment -ResourceGroupName $($this.resourceGroupName) `
             -Mode Incremental `
             -Templatefile $json `
             -TemplateParameterFile $templateParameterFile `
             -Verbose
         " , [consolecolor]::Green)
 
-            $error.Clear()
-            $result = Test-AzResourceGroupDeployment -ResourceGroupName $this.resourceGroupName `
-                -Mode Incremental `
-                -TemplateFile $json `
-                -TemplateParameterFile $templateParameterFile `
-                -Verbose
+        $error.Clear()
+        $result = Test-AzResourceGroupDeployment -ResourceGroupName $this.resourceGroupName `
+            -Mode Incremental `
+            -TemplateFile $json `
+            -TemplateParameterFile $templateParameterFile `
+            -Verbose
 
-            if ($error -or $result) {
-                $this.WriteError("exit:VerifyConfig:error:$($this.CreateJson($result)) `r`n$($error | out-string)")
-            }
-            else {
-                $this.WriteLog("exit:VerifyConfig:success", [consolecolor]::Green)
-            }
-
-            remove-item $json
-            $error.Clear()
+        if ($error -or $result) {
+            $this.WriteError("exit:VerifyConfig:error:$($this.CreateJson($result)) `r`n$($error | out-string)")
+        }
+        else {
+            $this.WriteLog("exit:VerifyConfig:success", [consolecolor]::Green)
         }
 
-        static [void]WriteErrorStatic([object]$data) {
-            if ([SFTemplate]::instance) {
-                [SFTemplate]::instance.WriteError($data)
-            }
+        remove-item $json
+        $error.Clear()
+    }
+
+    static [void]WriteErrorStatic([object]$data) {
+        if ([SFTemplate]::instance) {
+            [SFTemplate]::instance.WriteError($data)
         }
+    }
 
-        [void] WriteError([object]$data) {
-            $this.WriteLog($data, $true, $false, $false, [consolecolor]::Gray)
-        }
+    [void] WriteError([object]$data) {
+        $this.WriteLog($data, $true, $false, $false, [consolecolor]::Gray)
+    }
 
-        [void] WriteWarning([object]$data) {
-            $this.WriteLog($data, $false, $true, $false, [consolecolor]::Gray)
-        }
+    [void] WriteWarning([object]$data) {
+        $this.WriteLog($data, $false, $true, $false, [consolecolor]::Gray)
+    }
 
-        [void] WriteVerbose([object]$data) {
-            $this.WriteLog($data, $false, $false, $true, [consolecolor]::Gray)
-        }
+    [void] WriteVerbose([object]$data) {
+        $this.WriteLog($data, $false, $false, $true, [consolecolor]::Gray)
+    }
 
-        [void] WriteLog([object]$data) {
-            $this.WriteLog($data, $null, $null, $null, [consolecolor]::Gray)
-        }
+    [void] WriteLog([object]$data) {
+        $this.WriteLog($data, $null, $null, $null, [consolecolor]::Gray)
+    }
 
-        [void] WriteLog([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray) {
-            $this.WriteLog($data, $null, $false, $false, $foregroundcolor)
-        }
+    [void] WriteLog([object]$data, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray) {
+        $this.WriteLog($data, $null, $false, $false, $foregroundcolor)
+    }
 
-        # [void] WriteLog([object]$data, [switch]$isError, [switch]$isWarning) {
-        #     $this.WriteLog($data, $null, $isError, $isWarning, $false)
-        # }
+    # [void] WriteLog([object]$data, [switch]$isError, [switch]$isWarning) {
+    #     $this.WriteLog($data, $null, $isError, $isWarning, $false)
+    # }
 
-        [void] WriteLog([object]$data, [switch]$isError, [switch]$isWarning, [switch]$verbose, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray) {
-            <#
+    [void] WriteLog([object]$data, [switch]$isError, [switch]$isWarning, [switch]$verbose, [ConsoleColor]$foregroundcolor = [ConsoleColor]::Gray) {
+        <#
         .SYNOPSIS
             writes output to console and logfile
             outputs: null
         .OUTPUTS
             [null]
         #>
-            if (!$data) { return }
-            $stringData = [text.stringbuilder]::new()
-            $verboseTag = ''
-            if ($verbose) { $verboseTag = 'verbose:' }
+        if (!$data) { return }
+        $stringData = [text.stringbuilder]::new()
+        $verboseTag = ''
+        if ($verbose) { $verboseTag = 'verbose:' }
 
-            if ($data.GetType().Name -eq "PSRemotingJob") {
-                foreach ($job in $data.childjobs) {
-                    if ($job.Information) {
-                        [void]$stringData.appendline(@($job.Information.ReadAll()) -join "`r`n")
-                    }
-                    if ($job.Verbose) {
-                        [void]$stringData.appendline(@($job.Verbose.ReadAll()) -join "`r`n")
-                    }
-                    if ($job.Debug) {
-                        [void]$stringData.appendline(@($job.Debug.ReadAll()) -join "`r`n")
-                    }
-                    if ($job.Output) {
-                        [void]$stringData.appendline(@($job.Output.ReadAll()) -join "`r`n")
-                    }
-                    if ($job.Warning) {
-                        $this.WriteWarning((@($job.Warning.ReadAll()) -join "`r`n"))
-                        [void]$stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
-                        [void]$stringData.appendline(($job | format-list * | out-string))
-                        $this.resourceWarnings++
-                    }
-                    if ($job.Error) {
-                        $this.WriteError((@($job.Error.ReadAll()) -join "`r`n"))
-                        [void]$stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
-                        [void]$stringData.appendline(($job | format-list * | out-string))
-                        $this.resourceErrors++
-                    }
-                    if ($stringData.tostring().Trim().Length -lt 1) {
-                        return
-                    }
+        if ($data.GetType().Name -eq "PSRemotingJob") {
+            foreach ($job in $data.childjobs) {
+                if ($job.Information) {
+                    [void]$stringData.appendline(@($job.Information.ReadAll()) -join "`r`n")
                 }
-            }
-            else {
-                if ($data.startswith('enter:')) {
-                    $this.functionDepth++
+                if ($job.Verbose) {
+                    [void]$stringData.appendline(@($job.Verbose.ReadAll()) -join "`r`n")
                 }
-                elseif ($data.startswith('exit:')) {
-                    $this.functionDepth--
-
-                    if ($this.functionDepth -lt 0) {
-                        $this.WriteWarning("function depth enter / exit traces not equal: $data")
-                        $this.functionDepth = 0
-                    }
+                if ($job.Debug) {
+                    [void]$stringData.appendline(@($job.Debug.ReadAll()) -join "`r`n")
                 }
-
-                #write-verbose "$($this.functionDepth) $data"
-                $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$([string]::empty.PadLeft($this.functionDepth,'|'))$verboseTag$($data | format-list * | out-string)").trim()
-            }
-
-            if ($isError) {
-                write-error $stringData
-                [void]$this.errors.add($stringData)
-            }
-            elseif ($isWarning) {
-                Write-Warning $stringData
-                [void]$this.warnings.add($stringData)
-            }
-            elseif ($verbose) {
-                write-verbose $stringData
-            }
-            else {
-                write-host $stringData -ForegroundColor $foregroundcolor
-            }
-
-            if ($this.logFile) {
-                out-file -Append -inputobject $stringData.ToString() -filepath $this.logFile
+                if ($job.Output) {
+                    [void]$stringData.appendline(@($job.Output.ReadAll()) -join "`r`n")
+                }
+                if ($job.Warning) {
+                    $this.WriteWarning((@($job.Warning.ReadAll()) -join "`r`n"))
+                    [void]$stringData.appendline(@($job.Warning.ReadAll()) -join "`r`n")
+                    [void]$stringData.appendline(($job | format-list * | out-string))
+                    $this.resourceWarnings++
+                }
+                if ($job.Error) {
+                    $this.WriteError((@($job.Error.ReadAll()) -join "`r`n"))
+                    [void]$stringData.appendline(@($job.Error.ReadAll()) -join "`r`n")
+                    [void]$stringData.appendline(($job | format-list * | out-string))
+                    $this.resourceErrors++
+                }
+                if ($stringData.tostring().Trim().Length -lt 1) {
+                    return
+                }
             }
         }
-    }
+        else {
+            if ($data.startswith('enter:')) {
+                $this.functionDepth++
+            }
+            elseif ($data.startswith('exit:')) {
+                $this.functionDepth--
 
-    $global:addPrimaryNodeTypeReadme = @"
+                if ($this.functionDepth -lt 0) {
+                    $this.WriteWarning("function depth enter / exit traces not equal: $data")
+                    $this.functionDepth = 0
+                }
+            }
+
+            #write-verbose "$($this.functionDepth) $data"
+            $stringData = ("$((get-date).tostring('HH:mm:ss.fff')):$([string]::empty.PadLeft($this.functionDepth,'|'))$verboseTag$($data | format-list * | out-string)").trim()
+        }
+
+        if ($isError) {
+            write-error $stringData
+            [void]$this.errors.add($stringData)
+        }
+        elseif ($isWarning) {
+            Write-Warning $stringData
+            [void]$this.warnings.add($stringData)
+        }
+        elseif ($verbose) {
+            write-verbose $stringData
+        }
+        else {
+            write-host $stringData -ForegroundColor $foregroundcolor
+        }
+
+        if ($this.logFile) {
+            out-file -Append -inputobject $stringData.ToString() -filepath $this.logFile
+        }
+    }
+}
+
+$global:addPrimaryNodeTypeReadme = @"
 steps in this readme are to add a new primary nodetype to existing cluster.
 typical use case scenarios are if OS is being upgraded or hardware sku is modified.
 
@@ -3673,7 +3681,7 @@ addnodetype modifications:
     - additional nodetype resource has been added to cluster resource
 "@
 
-    $global:addSecondaryNodeTypeReadme = @"
+$global:addSecondaryNodeTypeReadme = @"
 steps in this readme are to add a new secondary nodetype to existing cluster.
 typical use case scenarios are if OS is being upgraded or hardware sku is modified or additional capacity is needed.
 
@@ -3711,7 +3719,7 @@ addnodetype modifications:
     - additional nodetype resource has been added to cluster resource
 "@
 
-    $readme = $global:currentReadme = @"
+$readme = $global:currentReadme = @"
 steps in this readme are to modify settings of current cluster.
 typical use case scenarios are changing isprimary for primary nodetype migrations
 
@@ -3723,7 +3731,7 @@ current modifications:
 - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
 "@
 
-    $readme = $global:exportReadme = @"
+$readme = $global:exportReadme = @"
 export modifications: none
 - this is raw export from ps cmdlet export-azresourcegroup -includecomments -includeparameterdefaults
 - this template File will *not* be usable to recreate / create new cluster in this state
@@ -3731,7 +3739,7 @@ export modifications: none
 - use 'redeploy' or 'new' to recreate / create cluster
 "@
 
-    $readme = $global:newReadme = @"
+$readme = $global:newReadme = @"
 new / add modifications:
 - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
 - adminPassword required parameter added (needs to be set)
@@ -3744,7 +3752,7 @@ new / add modifications:
 - if adding new vmss, verify isprimary nodetype durability matches durability in cluster resource
 "@
 
-    $readme = $global:redeployReadme = @"
+$readme = $global:redeployReadme = @"
 redeploy modifications:
 - microsoft monitoring agent extension has been removed (provisions automatically on deployment)
 - adminPassword required parameter added (needs to be set)
@@ -3752,9 +3760,9 @@ redeploy modifications:
 - protectedSettings for vmss extensions cluster and diagnostic extensions are added and set to storage account settings
 "@
 
-    $error.Clear()
-    [SFTemplate]$global:sftemplate = [SFTemplate]::new()
-    $global:sftemplate.Export();
+$error.Clear()
+[SFTemplate]$global:sftemplate = [SFTemplate]::new()
+$global:sftemplate.Export();
 
-    $ErrorActionPreference = $currentErrorActionPreference
-    $VerbosePreference = $currentVerbosePreference
+$ErrorActionPreference = $currentErrorActionPreference
+$VerbosePreference = $currentVerbosePreference
