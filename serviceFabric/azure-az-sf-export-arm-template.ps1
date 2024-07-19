@@ -246,7 +246,8 @@ class SFTemplate {
                 $resourceIds = $this.EnumAllResources()
                 foreach ($resourceId in $resourceIds) {
                     $resource = $this.GetAzResourceById($resourceId)
-                    if ($resource.ResourceGroupName -ieq $this.resourceGroupName) {
+                    if(!$resource) {continue}
+                    if ($this.GetPSPropertyValue($resource, 'ResourceGroupName') -ieq $this.resourceGroupName) {
                         $this.WriteLog("adding resource id to configured resources: $($resource.resourceId)", [consolecolor]::Cyan)
                         [void]$this.configuredRGResources.Add($resource)
                     }
@@ -1773,8 +1774,8 @@ class SFTemplate {
         $this.WriteLog("enter:GetParameterizedNameFromValue($resourceObject)")
         $retval = $null
         if ($this.IsParameterizedValue($resourceObject)) {
-            if ([regex]::IsMatch($resourceobject, "\[parameters\('(.+?)'\)\]", $this.ignoreCase)) {
-                $retval = [regex]::match($resourceobject, "\[parameters\('(.+?)'\)\]", $this.ignoreCase).groups[1].Value
+            if ([regex]::IsMatch($resourceobject, "\[.*?parameters\('(.+?)'\).*?\]", $this.ignoreCase)) {
+                $retval = [regex]::match($resourceobject, "\[.*?parameters\('(.+?)'\).*?\]", $this.ignoreCase).groups[1].Value
             }
         }
         $this.WriteLog("exit:GetParameterizedNameFromValue:returning $retval")
@@ -2173,7 +2174,7 @@ class SFTemplate {
                     else {
                         $this.WriteLog("GetResourceParameterValues:returning:$parameterValue", [consolecolor]::green)
                         if ($populateParameterizedValues -and $this.IsParameterizedValue($parameterValue)) {
-                            $parameterValue = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($parameterValue))
+                            $parameterValue = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($parameterValue)).defaultValue
                         }
                         [void]$retval.Add($parameterValue)
                     }
@@ -2182,7 +2183,7 @@ class SFTemplate {
                     $this.WriteLog("GetResourceParameterValues:multiple parameter names found in resource")
                     foreach ($parameterValue in $parameterValues) {
                         if ($populateParameterizedValues -and $this.IsParameterizedValue($parameterValue)) {
-                            $parameterValue = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($parameterValue))
+                            $parameterValue = $this.GetFromParametersSection($this.GetParameterizedNameFromValue($parameterValue)).defaultValue
                         }
                         [void]$retval.Add($parameterValues)
                     }
@@ -2540,7 +2541,7 @@ class SFTemplate {
             foreach ($depends in $lbresource.dependsOn) {
                 $this.WriteLog("ModifyLbResources:checking depends:$depends")
 
-                if (($this.GetPSPropertyValue($lbresource.Properties.backendAddressPools, 'Name') -and $depends -inotmatch "$($lbresource.Properties.backendAddressPools.Name -join '|')")) {
+                if ($depends -inotmatch "$($this.GetPSPropertyValue($lbresource.Properties.backendAddressPools, 'Name') -join '|')") {
                     $this.WriteLog("ModifyLbResources:adding backendAddressPools depends:$depends")
                     [void]$dependsOn.Add($depends)
                 }
@@ -2548,7 +2549,7 @@ class SFTemplate {
                     $this.WriteLog("ModifyLbResources:skipping backendAddressPools depends:$depends")
                 }
 
-                if (($this.GetPSPropertyValue($lbresource.Properties.inboundNatPools, 'Name') -and $depends -inotmatch "$($lbresource.Properties.inboundNatPools.Name -join '|')")) {
+                if ($depends -inotmatch "$($this.GetPSPropertyValue($lbresource.Properties.inboundNatPools, 'Name') -join '|')") {
                     $this.WriteLog("ModifyLbResources:adding inboundNatPools depends:$depends")
                     [void]$dependsOn.Add($depends)
                 }
@@ -3144,12 +3145,19 @@ class SFTemplate {
             $this.WriteLog("ParameterizeNodetypes:parameterizing new nodetype ", [consolecolor]::Cyan)
 
             # setting capacity value should be parametized value to vmInstanceCount value
-            $capacity = $this.GetResourceParameterValue($existingVmssNodeTypeRef[0].sku, 'capacity')
+            $capacity = $this.GetResourceParameterValue($existingVmssNodeTypeRef[0].sku, 'capacity', $true)
             $null = $this.SetResourceParameterValue($newNodeType, 'vmInstanceCount', $capacity)
 
             $this.ParameterizeNodetype(
                 $newNodeType, # nodetype
                 'durabilityLevel' # parameterName
+            )
+
+            $this.ParameterizeNodetype(
+                $newNodeType, # nodetype
+                'vmInstanceCount', # parameterName
+                $capacity, # parameterValue
+                'int' # type
             )
 
             if ($all) {
