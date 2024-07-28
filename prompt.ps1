@@ -53,8 +53,7 @@ function prompt() {
         if ($promptInfo.enablePathOnPromptLine) {
             $path = $path.trim("'")
             write-host "$($promptInfo.status)" -ForegroundColor DarkCyan
-            write-host "$path>" -ForegroundColor White -NoNewline
-            return
+            return "$path>"
         }
         else {
             write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
