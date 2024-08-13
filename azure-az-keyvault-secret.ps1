@@ -1,6 +1,95 @@
 <#
-.\secrets.ps1 -createVault -resourceGroup vaults -vaultName vault -vaultSecretName secrets -location eastus
-.\secrets.ps1 -secretKeyName external-subscription  -secretValue '00000000-0000-0000-0000-000000000000' -updateSecret -secretNotes 'test secret'
+
+.SYNOPSIS
+    Manage Azure Key Vault secrets
+
+.DESCRIPTION
+    Manage Azure Key Vault secrets
+
+.NOTES
+    File Name      : azure-az-keyvault-secret.ps1
+    Author         : jagilber
+    Prerequisite   : PowerShell core 6.1.0 or higher
+
+.PARAMETER secretName
+    The name of the secret
+
+.PARAMETER secretValue
+    The value of the secret
+
+.PARAMETER secretNotes
+    The notes for the secret
+
+.PARAMETER subscriptionId
+    The subscription id to use
+
+.PARAMETER resourceGroup
+    The resource group to use
+
+.PARAMETER secretFile
+    The file to save secrets to
+
+.PARAMETER vaultName
+    The name of the vault
+
+.PARAMETER vaultSecretName
+    The name of the vault secret
+
+.PARAMETER location
+    The location to use
+
+.PARAMETER setGlobalVariable
+    Set the global variable
+
+.PARAMETER saveSecretsToFile
+    Save secrets to file
+
+.PARAMETER createSecret
+    Create a secret
+
+.PARAMETER updateSecret
+    Update a secret
+
+.PARAMETER removeSecret
+    Remove a secret
+
+.PARAMETER createVault
+    Create a vault
+
+.PARAMETER updateVault
+    Update a vault
+
+.PARAMETER removeVault
+    Remove a vault
+
+.PARAMETER whatif
+    What if
+
+.EXAMPLE
+    azure-az-keyvault-secret.ps1 -createVault -vaultName "vault"
+    Create Azure Key Vault
+
+.EXAMPLE
+    azure-az-keyvault-secret.ps1 -removeVault -vaultName "vault"
+    Remove Azure Key Vault
+
+.EXAMPLE
+    azure-az-keyvault-secret.ps1 -secretName "secret" -secretValue "value" -secretNotes "notes" -createSecret
+    Create Azure Key Vault secrets
+
+.EXAMPLE
+    azure-az-keyvault-secret.ps1 -secretName "secret" -secretValue "value" -secretNotes "notes" -updateSecret
+    Update Azure Key Vault secrets
+
+.EXAMPLE
+    azure-az-keyvault-secret.ps1 -secretName "secret" -removeSecret
+    Remove Azure Key Vault secrets
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-keyvault-secret.ps1" -outFile "$pwd\azure-az-keyvault-secret.ps1";
+    .\azure-az-keyvault-secret.ps1
+
 #>
 [CmdletBinding()]
 param(
