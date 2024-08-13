@@ -169,7 +169,7 @@ function check-secretSize([string]$secretValue) {
     return $true
 }
 
-function connect-az($resourceGroup, $subscriptionId) {
+function connect-az($subscriptionId) {
     $moduleList = @('az.accounts', 'az.resources', 'az.keyvault')
 
     foreach ($module in $moduleList) {
