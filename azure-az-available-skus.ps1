@@ -142,15 +142,17 @@ function main() {
       return
     }
 
+    write-host "`$global:filteredSkus = `$global:skus" -ForegroundColor Cyan
+    
     if (!$withRestrictions) {
-      write-host "`$global:skus | Where-Object { `$psitem.Restrictions.Count -eq 0 }" -ForegroundColor Cyan
+      write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Restrictions.Count -eq 0 }" -ForegroundColor Cyan
       $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Restrictions.Count -eq 0 }
       write-verbose "unrestricted skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
       write-host "unrestricted skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
 
     if ($skuName) {
-      write-host "`$global:skus | Where-Object { `$psitem.Name -imatch $skuName }" -ForegroundColor Cyan
+      write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Name -imatch $skuName }" -ForegroundColor Cyan
       $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Name -imatch $skuName }
       write-verbose "skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
       write-host "skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
