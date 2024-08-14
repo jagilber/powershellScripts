@@ -27,7 +27,7 @@ Get available skus in a region for a given architecture type
   The location to get available skus
 
 .PARAMETER skuName
-  The sku name to filter by
+  The sku name to filter by. regex based
 
 .PARAMETER subscriptionId
   The subscription id to use
@@ -37,6 +37,10 @@ Get available skus in a region for a given architecture type
 
 .PARAMETER withRestrictions
   Include skus with restrictions
+
+.EXAMPLE
+  .\azure-az-available-skus.ps1 -skuName 'Standard_D2'
+  Get available skus in all regions with sku name regex matching Standard_D2
 
 .EXAMPLE
   .\azure-az-available-skus.ps1 -maxMemoryGB 64 -maxVCPU 12
