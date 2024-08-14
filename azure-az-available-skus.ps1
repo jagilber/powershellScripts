@@ -145,8 +145,8 @@ function main() {
     }
 
     if ($skuName) {
-      write-host "`$global:skus | Where-Object { `$psitem.Name -icontains $skuName }" -ForegroundColor Cyan
-      $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Name -icontains $skuName }
+      write-host "`$global:skus | Where-Object { `$psitem.Name -imatch $skuName }" -ForegroundColor Cyan
+      $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Name -imatch $skuName }
       write-verbose "skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
       write-host "skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
