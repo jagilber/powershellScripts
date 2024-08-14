@@ -227,7 +227,12 @@ function main() {
     }
 
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-    write-host "filtered skus ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Green
+    write-host "filtered skus ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Magenta
+
+    $locationGroup = $filteredSkus.LocationInfo.Location | group-object
+    if ($locationGroup.Count -gt 1) {
+      write-host "sku types grouped by location:`n$($locationGroup | select-object Count,Name | sort-object Name | out-string)" -ForegroundColor DarkMagenta
+    }
   }
   catch {
     write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
@@ -243,7 +248,7 @@ function main() {
       maxVCPU: $maxVCPU
       skuName: $skuName
       withRestrictions: $withRestrictions
-      " -ForegroundColor Yellow
+      " -ForegroundColor DarkGray
 
     write-host "use variable `$filteredSkus to get details on available skus. example `$filteredSkus | out-gridview" -ForegroundColor Green
   }
