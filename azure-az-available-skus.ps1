@@ -103,12 +103,13 @@ function main() {
         write-error "no locations found"
         return
       }
-      if ($global:locations.location -inotcontains $location) {
-        write-host ($locations | out-string) -ForegroundColor Cyan
-        write-warning "location $location is not valid"
-        # return
-      }
     }
+    if ($location -and ($global:locations.location -inotcontains $location)) {
+      write-host ($locations | out-string) -ForegroundColor Cyan
+      write-error "location $location is not valid"
+      return
+    }
+
 
     if (!$global:skus -or $force) {
       $global:skus = @{}
