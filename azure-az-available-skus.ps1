@@ -101,7 +101,7 @@ function main() {
       }
       if ($global:locations.location -inotcontains $location) {
         write-host ($locations | out-string) -ForegroundColor Cyan
-        write-error "location $location is not valid"
+        write-warning "location $location is not valid"
         # return
       }
     }
