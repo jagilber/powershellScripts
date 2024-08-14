@@ -125,8 +125,8 @@ function main() {
       $global:filteredSkus = $global:skus | Where-Object { 
         $psitem.Locations -ieq $location
       }
-      write-verbose "available skus in region:`n$($global:skus | convertto-json -depth 10)"
-      write-host "filtered skus in region ($($global:filteredSkus.Count))" -ForegroundColor Cyan
+      write-verbose "available skus:`n$($global:skus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
     else {
       $global:filteredSkus = $global:skus
@@ -164,8 +164,8 @@ function main() {
           $psitem.Name -ieq 'CpuArchitectureType' -and $psitem.Value -ieq $computerArchitectureType
         }
       }
-      write-verbose "filtered skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
 
     if ($hyperVGenerations) {
@@ -181,8 +181,8 @@ function main() {
           $psitem.Name -ieq 'HyperVGenerations' -and $psitem.Value -icontains $hyperVGenerations
         }
       }
-      write-verbose "filtered skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
 
     if ($maxMemoryGB) {
@@ -199,8 +199,8 @@ function main() {
           $psitem.Name -ieq 'MemoryGB' -and [int]$psitem.Value -le $maxMemoryGB
         }
       }
-      write-verbose "filtered skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
 
     if ($maxVCPU) {
@@ -217,12 +217,12 @@ function main() {
           $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -le $maxVCPU
         }
       }
-      write-verbose "filtered skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
 
-    write-verbose "filtered skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-    write-host "filtered skus in region ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Green
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Green
   }
   catch {
     write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
@@ -230,6 +230,16 @@ function main() {
     return 1
   }
   finally {
+    write-host "filtered skus with:
+      location: $location
+      computerArchitectureType: $computerArchitectureType
+      hyperVGenerations: $hyperVGenerations
+      maxMemoryGB: $maxMemoryGB
+      maxVCPU: $maxVCPU
+      skuName: $skuName
+      withRestrictions: $withRestrictions
+      " -ForegroundColor Yellow
+
     write-host "use variable `$filteredSkus to get details on available skus. example `$filteredSkus | out-gridview" -ForegroundColor Green
   }
 
