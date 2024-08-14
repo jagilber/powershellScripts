@@ -7,7 +7,7 @@
     Manage Azure Key Vault secrets
 
 .NOTES
-    File Name      : azure-az-keyvault-secret.ps1
+    File Name      : azure-az-keyvault-manager.ps1
     Author         : jagilber
     Prerequisite   : PowerShell core 6.1.0 or higher
 
@@ -66,29 +66,29 @@
     What if
 
 .EXAMPLE
-    azure-az-keyvault-secret.ps1 -createVault -vaultName "vault"
+    azure-az-keyvault-manager.ps1 -createVault -vaultName "vault"
     Create Azure Key Vault
 
 .EXAMPLE
-    azure-az-keyvault-secret.ps1 -removeVault -vaultName "vault"
+    azure-az-keyvault-manager.ps1 -removeVault -vaultName "vault"
     Remove Azure Key Vault
 
 .EXAMPLE
-    azure-az-keyvault-secret.ps1 -secretName "secret" -secretValue "value" -secretNotes "notes" -createSecret
+    azure-az-keyvault-manager.ps1 -secretName "secret" -secretValue "value" -secretNotes "notes" -createSecret
     Create Azure Key Vault secrets
 
 .EXAMPLE
-    azure-az-keyvault-secret.ps1 -secretName "secret" -secretValue "value" -secretNotes "notes" -updateSecret
+    azure-az-keyvault-manager.ps1 -secretName "secret" -secretValue "value" -secretNotes "notes" -updateSecret
     Update Azure Key Vault secrets
 
 .EXAMPLE
-    azure-az-keyvault-secret.ps1 -secretName "secret" -removeSecret
+    azure-az-keyvault-manager.ps1 -secretName "secret" -removeSecret
     Remove Azure Key Vault secrets
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-keyvault-secret.ps1" -outFile "$pwd\azure-az-keyvault-secret.ps1";
-    .\azure-az-keyvault-secret.ps1
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-keyvault-manager.ps1" -outFile "$pwd\azure-az-keyvault-manager.ps1";
+    .\azure-az-keyvault-manager.ps1
 
 #>
 [CmdletBinding()]
@@ -103,7 +103,12 @@ param(
     [string]$vaultSecretName = "secrets",
     [string]$location, # = "eastus",
     [bool]$setGlobalVariable = $true,
+    [string]$certificateName,
+    [string]$certificateIssuer = "Self",
+    [string]$certificateSubject,
+    [int]$certificateValidityInMonths = 12,
     [switch]$saveSecretsToFile,
+    [switch]$createCertificate,
     [switch]$createSecret,
     [switch]$updateSecret,
     [switch]$removeSecret,
@@ -116,6 +121,8 @@ param(
 $script:secrets = [collections.arrayList]::new()
 $ErrorActionPreference = 'Continue'
 $maxSizeBytes = 25 * 1024
+$maxOperationCounter = 20
+$sleepSeconds = 5
 
 function main() {
     try {
@@ -130,80 +137,39 @@ function main() {
         }
         # check if vaultName is unique
         $vaultName = create-vaultName -vaultName $vaultName -createVault$createVault
-
         if (!($vaultName)) { return }
 
-        if ($createVault) {
-            $vault = create-keyVault -resourceGroup $resourceGroup -vaultName $vaultName -location $location
-            write-host "vault: $($vault | ConvertTo-Json -Depth 1)"
-            return
-        }
-        elseif ($updateVault) {
-            [void]$script:secrets.AddRange((read-secretsFromFile $secretFile))
-            if (!($script:secrets)) {
-                write-error "secrets file not found"
-                return
-            }
-            if (!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
-                write-error "failed to set secrets to vault"
-                return
-            }
-            return
-        }
-        elseif ($removeVault) {
-            if ((get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName)) {
-                write-host "removing vault $vaultName"
-                remove-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup
-            }
-            else {
-                write-warning "vault $vaultName not found"
-            }
-            return
-        }
+        if (manage-vault $vaultName $location) { return }
 
         if ((get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) -eq $null) {
             write-error "vault $vaultName not found"
             return
         }
-        get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
-        write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
 
-        if ($createSecret) {
-            add-secret $secretName (new-secret $secretName $secretValue $secretNotes)
-            if (!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
-                return
-            }
+        if ($certificateName) {
+            if (!(manage-certifcate -name $certificateName `
+                    -subject $certificateSubject `
+                    -vaultName $vaultName `
+                    -issuer $certificateIssuer `
+                    -validity $certificateValidityInMonths)) { return }
+
+            $certificate = get-certificate $certificateName $vaultName
+            write-host "returning certificate $certificateName" -ForegroundColor Green
+            write-verbose "returning certificate: $($certificate | ConvertTo-Json -Depth 100)"
+            return $certificate
+        }
+        else {
             get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
-        }
-        elseif ($updateSecret) {
-            update-secret -name $secretName -value $secretValue -notes $secretNotes
-            set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
-            get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
-        }
-        elseif ($removeSecret) {
-            $secret = get-secret $secretName
-            if ($secret) {
-                write-host "removing secret $secretName"
-                $script:secrets.Remove($secret)
-                set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
-                get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
-            }
-            else {
-                write-warning "secret $secretName not found"
-            }
-        }
+            write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
 
-        if ($saveSecretsToFile) {
-            save-secretsToFile $secretFile
-        }
-        
-
-        if ($secretName) {
-            $secret = get-secret $secretName
-            write-verbose "returning secret: $($secret | ConvertTo-Json -Depth 100)"
-            return $secret
-        }
-        
+            if (!(manage-secrets)) { return }
+            if ($secretName) {
+                $secret = get-secret $secretName
+                write-verbose "returning secret: $($secret | ConvertTo-Json -Depth 100)"
+                return $secret
+            }    
+        }        
+                
         # convert list to keyed dictionary so we can return by name
         $secretDict = [ordered]@{}
         foreach ($secret in $script:secrets) {
@@ -321,6 +287,49 @@ function convert-jsonToCsv([string]$jsonString) {
     return ($csvString.toString())
 }
 
+function create-certificate([string]$certificateName, [string]$certificateSubject, [string]$vaultName, [string]$issuerName = "Self", [int]$validityInMonths = 12) {
+    $error.clear()
+    if (!$certificateName) {
+        write-error "certificate name is required"
+        return $null
+    }
+    if (!$certificateSubject) {
+        write-error "certificate subject is required"
+        return $null
+    }
+
+    if(get-certificate $certificateName $vaultName) {
+        write-warning "certificate $certificateName already exists"
+        return $null
+    }
+
+    write-host "creating certificate $certificateName"
+    write-host "new-azKeyVaultCertificatePolicy -SubjectName $certificateSubject -IssuerName $issuerName -ValidityInMonths $validityInMonths"
+    $certpolicy = new-azKeyVaultCertificatePolicy -SubjectName $certificateSubject -IssuerName $issuerName -ValidityInMonths $validityInMonths
+
+    write-host "add-azKeyVaultCertificate -VaultName $vaultName -Name $certificateName -CertificatePolicy $certpolicy"
+    $operation = add-azKeyVaultCertificate -VaultName $vaultName -Name $certificateName -CertificatePolicy $certpolicy
+    $status = $operation.Status
+    $counter = 0
+
+    while ($status -ine 'completed' -and $counter -lt $maxOperationCounter) {
+        write-host "status: $status counter: $counter"
+        start-sleep -Seconds $sleepSeconds
+        write-host "get-azKeyVaultCertificateOperation -VaultName $vaultName -Name $certificateName"
+        $operation = get-azKeyVaultCertificateOperation -VaultName $vaultName -Name $certificateName
+        write-verbose ($operation | ConvertTo-Json -Depth 1 -WarningAction SilentlyContinue)
+        $status = $operation.Status
+        $counter++
+    }
+
+    if ($status -ine 'completed') {
+        write-error "certificate $certificateName not created"
+        return $null
+    }
+
+    return $true
+}
+
 function create-keyVault([string]$resourceGroup, [string]$vaultName, [string]$location) {
     $error.clear()
     if (!(get-resourceGroup $resourceGroup)) {
@@ -425,6 +434,16 @@ function create-vaultName([string]$vaultName, [switch]$createVault) {
     return $newName
 }
 
+function get-certificate([string]$certificateName, [string]$vaultName) {
+    write-host "get-azkeyvaultcertificate -vaultName $vaultName -name $certificateName"
+    $certificate = get-azkeyvaultcertificate -vaultName $vaultName -name $certificateName -ErrorAction SilentlyContinue
+    if (!$certificate) {
+        write-host "certificate $certificateName not found"
+        return $null
+    }
+    return $certificate
+}
+
 function get-keyVault([string]$resourceGroup, [string]$vaultName) {
     $error.clear()
     write-host "get-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup"
@@ -527,6 +546,82 @@ function get-secretsFromVault([string]$vaultName, [string]$vaultSecretName, [swi
         $error.Clear()
         return $noSecrets
     }
+}
+
+function manage-certifcate([string]$name, [string]$subject, [string]$vaultName,[string]$issuer, [int]$validity) {
+    if ($createCertificate) {
+        $certificate = create-certificate -certificateName $name `
+            -certificateSubject $subject `
+            -vaultName $vaultName `
+            -issuerName $issuer `
+            -validityInMonths $validity
+
+        if (!$certificate) {
+            write-error "certificate $name not created"
+            return $false
+        }
+
+        write-host "certificate $name created"
+        return $true
+    }
+
+    return $true
+}
+
+function manage-secrets() {
+    if ($createSecret) {
+        add-secret $secretName (new-secret $secretName $secretValue $secretNotes)
+        if (!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
+            return $false
+        }
+        get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
+    }
+    elseif ($updateSecret) {
+        update-secret -name $secretName -value $secretValue -notes $secretNotes
+        set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
+        get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
+    }
+    elseif ($removeSecret) {
+        $secret = get-secret $secretName
+        if ($secret) {
+            write-host "removing secret $secretName"
+            $script:secrets.Remove($secret)
+            set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
+            get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
+        }
+        else {
+            write-warning "secret $secretName not found"
+        }
+    }
+
+    if ($saveSecretsToFile) {
+        save-secretsToFile $secretFile
+    }
+
+    return $true
+}
+
+function manage-vault([string]$vaultName, [string]$location) {
+    if ($createVault) {
+        $vault = create-keyVault -resourceGroup $resourceGroup -vaultName $vaultName -location $location
+        if (!$vault) {
+            write-error "vault $vaultName not created"
+            return $false
+        }
+        write-host "vault $vaultName created"
+        return $true
+    }
+    elseif ($updateVault) {
+        write-host "updating vault $vaultName"
+        # update vault
+        return $true
+    }
+    elseif ($removeVault) {
+        write-host "removing vault $vaultName"
+        # remove vault
+        return $true
+    }
+    return $false
 }
 
 function new-secret([string]$name = "", [string]$value = "", [string]$notes = "") {
