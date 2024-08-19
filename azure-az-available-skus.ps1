@@ -97,8 +97,8 @@ function main() {
     if (!(connect-az)) { return }
 
     if (!$global:locations -or $force) {
-      write-host "get-azlocation | Select-Object -Property DisplayName, Location" -ForegroundColor Cyan
-      $global:locations = get-azlocation | Select-Object -Property DisplayName, Location
+      write-host "get-azlocation | where-object Providers -imatch 'Microsoft.Compute'" -ForegroundColor Cyan
+      $global:locations = get-azlocation | where-object Providers -imatch 'Microsoft.Compute'
       if (!$global:locations) {
         write-error "no locations found"
         return
@@ -116,7 +116,8 @@ function main() {
       write-host "retrieving skus" -ForegroundColor Green
       write-host "Get-AzComputeResourceSku | Where-Object { `$psitem.resourceType -ieq 'virtualMachines' }" -ForegroundColor Cyan
       $global:skus = Get-AzComputeResourceSku | Where-Object { 
-        $psitem.resourceType -ieq 'virtualMachines'
+          $psitem.resourceType -ieq 'virtualMachines' `
+          -and $global:locations.Location -icontains $psitem.LocationInfo.Location
       }
       write-host "global:skus:$($global:skus.Count)" -ForegroundColor Cyan
     }
