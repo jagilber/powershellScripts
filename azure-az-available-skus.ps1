@@ -82,6 +82,7 @@ param (
   [string]$location = $null,
   [string]$subscriptionId = $null,
   [string]$computerArchitectureType = "x64",
+  [ValidateSet("V1","V2","V1,V2","")]
   [string]$hyperVGenerations = "V1", # "V2" will fail for sf. needs "V1" or "V1,V2" for sf
   [string]$skuName = $null,
   [int]$maxMemoryGB = 0, # 64, # 0 = unlimited
