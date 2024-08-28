@@ -649,28 +649,24 @@ class KustoObj {
         $sr.close()
         $formattedHeaderList = @{ }
         [string]$formattedHeaders = "("
-        if(!$this.Headers) {
-            foreach ($header in ($tempHeaders.Split(',').trim())) {
-                $columnCount = 0
-                if (!$header) { $header = 'column' }
-                [string]$normalizedHeader = $header.trim('`"').Replace(" ", "_")
-                $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
-                $uniqueHeader = $normalizedHeader
 
-                while ($formattedHeaderList.ContainsKey($uniqueHeader)) {
-                    $uniqueHeader = $normalizedHeader + ++$columnCount
-                }
+        foreach ($header in ($tempHeaders.Split(',').trim())) {
+            $columnCount = 0
+            if (!$header) { $header = 'column' }
+            [string]$normalizedHeader = $header.trim('`"').Replace(" ", "_")
+            $normalizedHeader = [regex]::Replace($normalizedHeader, "\W", "")
+            $uniqueHeader = $normalizedHeader
 
-                $formattedHeaderList.Add($uniqueHeader, "")
-                $formattedHeaders += "['$($uniqueHeader)']:string, "
+            while ($formattedHeaderList.ContainsKey($uniqueHeader)) {
+                $uniqueHeader = $normalizedHeader + ++$columnCount
             }
-            $this.Headers = $formattedHeaders
-        }
-        else {
-            $formattedHeaders += $this.Headers
-        }
-        $formattedHeaders = $formattedHeaders.trimend(', ')
 
+            $formattedHeaderList.Add($uniqueHeader, "")
+            $formattedHeaders += "['$($uniqueHeader)']:string, "
+        }
+
+        $this.Headers = $formattedHeaders
+        $formattedHeaders = $formattedHeaders.trimend(', ')
         $formattedHeaders += ")"
 
         #$this.Exec(".drop table ['$($this.Table)'] ifexists")
