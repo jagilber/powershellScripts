@@ -56,8 +56,8 @@
 .PARAMETER createVault
     Create a vault
 
-.PARAMETER updateVault
-    Update a vault
+# .PARAMETER updateVault
+#     Update a vault
 
 .PARAMETER removeVault
     Remove a vault
@@ -113,7 +113,7 @@ param(
     [switch]$updateSecret,
     [switch]$removeSecret,
     [switch]$createVault,
-    [switch]$updateVault,
+    # [switch]$updateVault,
     [switch]$removeVault,
     [switch]$whatif
 )
@@ -136,10 +136,10 @@ function main() {
             }
         }
         # check if vaultName is unique
-        $vaultName = create-vaultName -vaultName $vaultName -createVault$createVault
+        $vaultName = create-vaultName -resourceGroup $resourceGroup -vaultName $vaultName
         if (!($vaultName)) { return }
 
-        if (manage-vault $vaultName $location) { return }
+        if (manage-vault $vaultName $location $resourceGroup) { return }
 
         if ((get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) -eq $null) {
             write-error "vault $vaultName not found"
@@ -148,10 +148,10 @@ function main() {
 
         if ($certificateName) {
             if (!(manage-certifcate -name $certificateName `
-                    -subject $certificateSubject `
-                    -vaultName $vaultName `
-                    -issuer $certificateIssuer `
-                    -validity $certificateValidityInMonths)) { return }
+                        -subject $certificateSubject `
+                        -vaultName $vaultName `
+                        -issuer $certificateIssuer `
+                        -validity $certificateValidityInMonths)) { return }
 
             $certificate = get-certificate $certificateName $vaultName
             write-host "returning certificate $certificateName" -ForegroundColor Green
@@ -298,7 +298,7 @@ function create-certificate([string]$certificateName, [string]$certificateSubjec
         return $null
     }
 
-    if(get-certificate $certificateName $vaultName) {
+    if (get-certificate $certificateName $vaultName) {
         write-warning "certificate $certificateName already exists"
         return $null
     }
@@ -372,7 +372,7 @@ function create-resourceGroup([string]$resourceGroup, [string]$location) {
     return $result
 }
 
-function create-vaultName([string]$vaultName, [switch]$createVault) {
+function create-vaultName([string]$resourceGroup, [string]$vaultName) {
     write-host "creating vault name:$vaultName"
     $retval = $null
     $count = 0
@@ -382,48 +382,41 @@ function create-vaultName([string]$vaultName, [switch]$createVault) {
         write-host "vault name is required" -ForegroundColor Red
         return $null
     }
-    if ($vaultName -eq "*") {
+    if ($vaultName -imatch "\*") {
+        if ($vaultName -eq "*") {
+            $vaultName = 'vault'
+        }
+        else {
+            $vaultName = $vaultName.Replace("*", "")
+        }
         write-host "generating vault name for '*' vaultname"
         while ($count -lt 100) {
             #$newName = "vault-$($count)$([regex]::Match(((get-azcontext).Account.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
-            $newName = "vault$($count)-$([regex]::Match(((get-azcontext).Subscription.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
+            $newName = "$($vaultName)$($count)-$([regex]::Match(((get-azcontext).Subscription.Id) ,'[A-Za-z0-9]+').Captures[0].Value)"
+            $count++
             write-host "newName: $newName"
             $newName = $newName.Substring(0, [math]::min($newName.length, 21)).ToLower()
+            
+            if (!(is-vaultNameRegistered $newName)) {
+                break
+            }
 
-            # resolve dns name to see if it is unique before checking if vault exists in subscription
-            $newDnsName = "$newName.vault.azure.net"
-            write-host "Resolve-DnsName -Name $newDnsName -Type A -ErrorAction SilentlyContinue"
-            $dnsNameExists = Resolve-DnsName -Name $newDnsName -Type A -ErrorAction SilentlyContinue
-            if ($dnsNameExists) {
-                write-host "dns name $newDnsName exists" -ForegroundColor Yellow
+            if (!(is-vaultNameOwned $resourceGroup $newName)) {
+                write-verbose "vault exists in different subscription"
+                continue    
             }
             else {
-                write-host "dns name $newDnsName does not exist" -ForegroundColor Yellow
-            }
-
-            write-host "get-keyVault -vaultName $newName"
-            $vault = (get-keyVault -vaultName $newName -resourceGroup $resourceGroup) -ne $null
-            if (($vault -and !$createVault)) {
-                write-host "create-vaultName:returning existing vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
                 break
             }
-            elseif ($vault -and $createVault) {
-                write-host "vault name:'$newName' exists:$($vault)" -ForegroundColor Yellow
-                break
-            }
-            elseif (!$dnsNameExists -and !$vault) {
-                write-host "create-vaultName:returning new vault name:'$newName' for '*' vaultname vault:$($vault) createVault:$($createVault)" -ForegroundColor Yellow
-                break
-            }
-            elseif ($dnsNameExists -and !$vault) {
-                write-host "vault name:'$newName' exists in different sub:$($vault)" -ForegroundColor Yellow
-                #break
-            }
-
-            $count++
         }
     }
-
+    else {
+        $newName = $vaultName
+        if ((is-vaultNameRegistered $newName) -and !(is-vaultNameOwned $resourceGroup $newName)) {
+            write-error "vault exists in different subscription"
+            return $null
+        }
+    }
     if (!($count -lt 100)) { 
         $newName = $null 
         write-host "unable to generate vault name" -ForegroundColor Red
@@ -432,6 +425,39 @@ function create-vaultName([string]$vaultName, [switch]$createVault) {
         write-host "create-vaultName:returning vault name:'$newName' for vaultname" -ForegroundColor Yellow
     }
     return $newName
+}
+
+function is-vaultNameOwned([string]$resourceGroup, [string]$vaultName) {
+    $vault = get-keyVault $resourceGroup $vaultName
+    if ($vault) {
+        write-host "vault name:'$vaultName' exists:$($vault)" -ForegroundColor Yellow
+        return $true
+    }
+    write-host "vault name:'$vaultName' not found" -ForegroundColor Yellow
+    return $false
+}
+
+function is-vaultNameRegistered([string]$vaultName) {
+    if (!$vaultName) {
+        write-host "vault name is required" -ForegroundColor Red
+        return $null
+    }
+
+    $newName = $vaultName
+
+    # resolve dns name to see if it is unique before checking if vault exists in subscription
+    $newDnsName = "$newName.vault.azure.net"
+    write-host "Resolve-DnsName -Name $newDnsName -Type A -ErrorAction SilentlyContinue"
+    $dnsNameExists = Resolve-DnsName -Name $newDnsName -Type A -ErrorAction SilentlyContinue
+    if ($dnsNameExists) {
+        write-host "dns name $newDnsName exists" -ForegroundColor Yellow
+        return $true
+    }
+    else {
+        write-host "dns name $newDnsName does not exist" -ForegroundColor Yellow
+    }
+    
+    return $false
 }
 
 function get-certificate([string]$certificateName, [string]$vaultName) {
@@ -548,7 +574,7 @@ function get-secretsFromVault([string]$vaultName, [string]$vaultSecretName, [swi
     }
 }
 
-function manage-certifcate([string]$name, [string]$subject, [string]$vaultName,[string]$issuer, [int]$validity) {
+function manage-certifcate([string]$name, [string]$subject, [string]$vaultName, [string]$issuer, [int]$validity) {
     if ($createCertificate) {
         $certificate = create-certificate -certificateName $name `
             -certificateSubject $subject `
@@ -601,7 +627,7 @@ function manage-secrets() {
     return $true
 }
 
-function manage-vault([string]$vaultName, [string]$location) {
+function manage-vault([string]$vaultName, [string]$location, [string]$resourceGroup) {
     if ($createVault) {
         $vault = create-keyVault -resourceGroup $resourceGroup -vaultName $vaultName -location $location
         if (!$vault) {
@@ -611,13 +637,25 @@ function manage-vault([string]$vaultName, [string]$location) {
         write-host "vault $vaultName created"
         return $true
     }
-    elseif ($updateVault) {
-        write-host "updating vault $vaultName"
-        # update vault
-        return $true
-    }
+    # elseif ($updateVault) {
+    #     write-host "updating vault $vaultName"
+    #     if(get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) {
+    #         write-host "vault $vaultName already exists"
+    #     }
+    #     else {
+    #         write-warning "vault $vaultName not found"
+    #     }
+    #     # update vault
+    #     return $true
+    # }
     elseif ($removeVault) {
         write-host "removing vault $vaultName"
+        if (get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) {
+            remove-azkeyvault -vaultName $vaultName -ResourceGroupName $resourceGroup
+        }
+        else {
+            write-warning "vault $vaultName not found"
+        }
         # remove vault
         return $true
     }
