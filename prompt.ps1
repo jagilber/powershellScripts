@@ -84,11 +84,6 @@ function add-status($status = "", [switch]$reset) {
 function get-branches() {
     write-debug "get-branches()"
     $branches = @(git branch)
-    # if there is a configuration or security issue, git will return an error starting with 'fatal:'. check for this and return
-    if ($branches -match '^fatal:') {
-        write-host "git error: $($branches)" -ForegroundColor Red
-        return
-    }
     $branchesChanged = compare-object $branches $promptInfo.branches
 
     $remoteBranches = @(git branch -r)
@@ -171,7 +166,17 @@ function get-commandDuration() {
 
 function get-currentBranch() {
     write-debug "get-currentBranch()"
-    $currentBranch = @(git branch --show-current)
+    $currentBranch = @(git branch --show-current 2>&1)
+    # if there is a configuration or security issue, git will return an error starting with 'fatal:'. check for this and return
+    if($currentBranch -imatch 'not a git repository') {
+        write-verbose "not a git repository"
+        return
+    }
+    elseif ($currentBranch -match '^fatal:') {
+        write-host "git error: $($currentBranch)" -ForegroundColor Red
+        return
+    }
+    
     $currentBranchChanged = compare-object $currentBranch $promptInfo.branch
 
     if ($currentBranchChanged) {
