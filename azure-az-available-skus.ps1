@@ -82,12 +82,13 @@ param (
   [string]$location = $null,
   [string]$subscriptionId = $null,
   [string]$computerArchitectureType = "x64",
-  [ValidateSet("V1","V2","V1,V2","")]
-  [string]$hyperVGenerations = "V1", # "V2" will fail for sf. needs "V1" or "V1,V2" for sf
+  [ValidateSet("V1","V2","V1,V2","",".")]
+  [string]$hyperVGenerations = ".", # "V2" will fail for sf. needs "V1" or "V1,V2" for sf
   [string]$skuName = $null,
   [int]$maxMemoryGB = 0, # 64, # 0 = unlimited
   [int]$maxVCPU = 0, # 4, # 0 = unlimited
   [switch]$withRestrictions,
+  [switch]$serviceFabric,
   [switch]$force
 )
 
@@ -96,9 +97,13 @@ $global:filteredSkus = @{}
 function main() {
   try {
     if (!(connect-az)) { return }
+    if($serviceFabric) {
+      $computerArchitectureType = "x64"
+      $hyperVGenerations = "V1"
+    }
 
     if (!$global:locations -or $force) {
-      write-host "get-azlocation | where-object Providers -imatch 'Microsoft.Compute'" -ForegroundColor Cyan
+      write-host "Get-AzLocation | Where-Object Providers -imatch 'Microsoft.Compute'" -ForegroundColor Cyan
       $global:locations = get-azlocation | where-object Providers -imatch 'Microsoft.Compute'
       if (!$global:locations) {
         write-error "no locations found"
@@ -182,12 +187,12 @@ function main() {
       write-host "
       `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
         `$psitem.Capabilities | where-object {
-        `$psitem.Name -ieq 'HyperVGenerations' -and `$psitem.Value -icontains $hyperVGenerations
+        `$psitem.Name -ieq 'HyperVGenerations' -and `$psitem.Value -imatch $hyperVGenerations
       }" -ForegroundColor Cyan
       
       $global:filteredSkus = $global:filteredSkus | Where-Object {
         $psitem.Capabilities | where-object { 
-          $psitem.Name -ieq 'HyperVGenerations' -and $psitem.Value -icontains $hyperVGenerations
+          $psitem.Name -ieq 'HyperVGenerations' -and $psitem.Value -imatch $hyperVGenerations
         }
       }
       write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
