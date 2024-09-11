@@ -1,15 +1,17 @@
 <#
 .SYNOPSIS 
-Get available skus in a region for a given architecture type
+Get available virtual machine skus in a region
 
 .DESCRIPTION
-Get available skus in a region for a given architecture type
+Get available skus in a region for a virtual machine. 
+Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions, and serviceFabric. 
+Use the $filteredSkus variable to get details on available skus. example $filteredSkus | out-gridview
 
 .NOTES
   File Name      : azure-az-available-skus.ps1
   Author         : jagilber
   Prerequisite   : PowerShell core 6.1.0 or higher
-
+  version        : 1.0
 
 .PARAMETER force
   Force refresh of skus
@@ -37,6 +39,13 @@ Get available skus in a region for a given architecture type
 
 .PARAMETER withRestrictions
   Include skus with restrictions
+
+.PARAMETER serviceFabric
+  Filter for service fabric skus
+
+.EXAMPLE
+  .\azure-az-available-skus.ps1 -location "eastus" -serviceFabric
+  Get available skus in eastus for service fabric clusters
 
 .EXAMPLE
   .\azure-az-available-skus.ps1 -skuName 'Standard_D2'
