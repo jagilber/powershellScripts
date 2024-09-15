@@ -5,6 +5,7 @@ Get available virtual machine skus in a region
 .DESCRIPTION
 Get available skus in a region for a virtual machine. 
 Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions, and serviceFabric. 
+If no skus are found, script returns $false to indicate no skus found else returns $true
 Use the $filteredSkus variable to get details on available skus. example $filteredSkus | out-gridview
 
 .NOTES
@@ -79,6 +80,9 @@ Use the $filteredSkus variable to get details on available skus. example $filter
   .\azure-az-available-skus.ps1 -Location "eastus" -computerArchitectureType "ARM64" -withRestrictions
   Get available skus in eastus for ARM64 architecture including skus with restrictions
 
+.OUTPUTS
+  [bool] $true if skus are found, $false if no skus are found
+
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/azure-az-available-skus.ps1" -outFile "$pwd\azure-az-available-skus.ps1";
@@ -91,13 +95,13 @@ param (
   [string]$location = $null,
   [string]$subscriptionId = $null,
   [string]$computerArchitectureType = "x64",
-  [ValidateSet("V1","V2","V1,V2","",".")]
-  [string]$hyperVGenerations = ".", # "V2" will fail for sf. needs "V1" or "V1,V2" for sf
+  [ValidateSet("V1", "V2", "V1,V2", "", ".")]
+  [string]$hyperVGenerations = ".",
   [string]$skuName = $null,
   [int]$maxMemoryGB = 0, # 64, # 0 = unlimited
   [int]$maxVCPU = 0, # 4, # 0 = unlimited
   [switch]$withRestrictions,
-  [switch]$serviceFabric,
+  [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf
   [switch]$force
 )
 
@@ -106,7 +110,7 @@ $global:filteredSkus = @{}
 function main() {
   try {
     if (!(connect-az)) { return }
-    if($serviceFabric) {
+    if ($serviceFabric) {
       $computerArchitectureType = "x64"
       $hyperVGenerations = "V1"
     }
@@ -131,7 +135,7 @@ function main() {
       write-host "retrieving skus" -ForegroundColor Green
       write-host "Get-AzComputeResourceSku | Where-Object { `$psitem.resourceType -ieq 'virtualMachines' }" -ForegroundColor Cyan
       $global:skus = Get-AzComputeResourceSku | Where-Object { 
-          $psitem.resourceType -ieq 'virtualMachines' `
+        $psitem.resourceType -ieq 'virtualMachines' `
           -and $global:locations.Location -icontains $psitem.LocationInfo.Location
       }
       write-host "global:skus:$($global:skus.Count)" -ForegroundColor Cyan
@@ -251,13 +255,7 @@ function main() {
     if ($locationGroup.Count -gt 1) {
       write-host "sku types grouped by location:`n$($locationGroup | select-object Count,Name | sort-object Name | out-string)" -ForegroundColor DarkMagenta
     }
-  }
-  catch {
-    write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
-    write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
-    return 1
-  }
-  finally {
+
     write-host "filtered skus with:
       location: $location
       computerArchitectureType: $computerArchitectureType
@@ -269,8 +267,15 @@ function main() {
       " -ForegroundColor DarkGray
 
     write-host "use variable `$filteredSkus to get details on available skus. example `$filteredSkus | out-gridview" -ForegroundColor Green
+    return ($filteredSkus.Count -gt 0)
   }
-
+  catch {
+    write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
+    write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
+    return $false
+  }
+  finally {
+  }
 }
 
 function connect-az($subscriptionId) {
