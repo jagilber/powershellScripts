@@ -7,12 +7,13 @@ Get available skus in a region for a virtual machine.
 Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions, and serviceFabric. 
 If no skus are found, script returns $false to indicate no skus found else returns $true
 Use the $filteredSkus variable to get details on available skus. example $filteredSkus | out-gridview
+Can also be executed from https://shell.azure.com
 
 .NOTES
   File Name      : azure-az-available-skus.ps1
   Author         : jagilber
   Prerequisite   : PowerShell core 6.1.0 or higher
-  version        : 1.0
+  version        : 1.1
 
 .PARAMETER force
   Force refresh of skus
@@ -25,6 +26,12 @@ Use the $filteredSkus variable to get details on available skus. example $filter
 
 .PARAMETER maxVCPU
   The maximum vcpu to filter by
+
+.PARAMETER minMemoryGB
+  The minimum memory in GB to filter by
+
+.PARAMETER minVCPU
+  The minimum vcpu to filter by
 
 .PARAMETER location
   The location to get available skus
@@ -100,6 +107,8 @@ param (
   [string]$skuName = $null,
   [int]$maxMemoryGB = 0, # 64, # 0 = unlimited
   [int]$maxVCPU = 0, # 4, # 0 = unlimited
+  [int]$minMemoryGB = 0, # 0 = unlimited
+  [int]$minVCPU = 0, # 0 = unlimited
   [switch]$withRestrictions,
   [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf
   [switch]$force
@@ -242,6 +251,42 @@ function main() {
       $global:filteredSkus = $global:filteredSkus | where-object {
         $psitem.Capabilities | where-object {
           $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -le $maxVCPU
+        }
+      }
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+    }
+
+    if ($minMemoryGB) {
+      write-host "filtering skus by Capabilities.MemoryGB >= $minMemoryGB" -ForegroundColor Green
+      write-host "
+      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+        `$psitem.Capabilities | where-object {
+          `$psitem.Name -ieq 'MemoryGB' -and [int]`$psitem.Value -ge $minMemoryGB
+        }
+      }" -ForegroundColor Cyan
+
+      $global:filteredSkus = $global:filteredSkus | where-object { 
+        $psitem.Capabilities | where-object {
+          $psitem.Name -ieq 'MemoryGB' -and [int]$psitem.Value -ge $minMemoryGB
+        }
+      }
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+    }
+
+    if ($minVCPU) {
+      write-host "filtering skus by Capabilities.VCPUs >= $minVCPU" -ForegroundColor Green
+      write-host "
+      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+        `$psitem.Capabilities | where-object {
+          `$psitem.Name -ieq 'VCPUs' -and [int]`$psitem.Value -ge $minVCPU
+        }
+      }" -foregroundColor Cyan
+
+      $global:filteredSkus = $global:filteredSkus | where-object {
+        $psitem.Capabilities | where-object {
+          $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -ge $minVCPU
         }
       }
       write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
