@@ -109,10 +109,17 @@ function main() {
       Write-Warning "No destination prefix specified."
       return
     }
-
-    Write-Warning "Invalid destination prefix. attempting to resolve..."
+    
+    write-warning "Invalid destination prefix. attempting to resolve..."
+    
+    if($destinationPrefix -imatch '^(?:https?://)?(?<fqdn>[^/]+)'){
+      $destinationPrefix = $matches['fqdn']
+      write-host "destinationPrefix: $destinationPrefix"
+    }
+    
     write-host "Resolve-DnsName -Name $destinationPrefix -Type A"
     $destinationPrefixes = @(Resolve-DnsName -Name $destinationPrefix -Type A).IPAddress
+    
     if ($destinationPrefixes.Count -eq 0) {
       Write-Warning "Could not resolve destination prefix."
       return
@@ -163,8 +170,12 @@ function check-route($prefixParams) {
   }
 
   if ($lifetimeHours) {
-    $prefixParams.ValidLifetime = [timeSpan]::FromHours($lifetimeHours)
-    $prefixParams.PreferredLifetime = [timeSpan]::FromHours($lifetimeHours)
+    # $timespan = (Get-Date).AddHours($lifetimeHours) - (Get-Date)
+    #$timespan = new-timespan -Start (Get-Date) -End (Get-Date).AddHours($lifetimeHours)
+    $prefixParams.PolicyStore = 'ActiveStore' # by default it is added to 'PersistentStore' and will not be removed after reboot
+    # not working 
+    $prefixParams.ValidLifetime = (new-timespan -hours $lifetimeHours) # [timeSpan]::FromHours($lifetimeHours)
+    $prefixParams.PreferredLifetime = (new-timespan -hours $lifetimeHours) #[timeSpan]::FromHours($lifetimeHours)
   }
 
   write-host "new-netRoute $($prefixParams | convertto-json)"
