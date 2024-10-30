@@ -43,7 +43,7 @@ param(
   $identityHeader = $env:IDENTITY_HEADER, # 'eyAidHlwIiA...'
   $identityEndpoint = $env:IDENTITY_ENDPOINT, #'https://10.0.0.4:2377/metadata/identity/oauth2/token'
   $identityServerThumbprint = $env:IDENTITY_SERVER_THUMBPRINT,
-  $identityApiVersion = $env:IDENTITY_API_VERSION, # '2020-05-01'
+  $identityApiVersion = $env:IDENTITY_API_VERSION, # '2020-05-01' # 2448 has 2024-06-11
   $resource = 'https%3A%2F%2Fvault.azure.net',
   [switch]$useMetadataEndpoint
 )
