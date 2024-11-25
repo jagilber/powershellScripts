@@ -3,7 +3,7 @@
     Script runs on vm scaleset node
 
     to run with no arguments:
-    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-metadata-rest.ps1" -UseBasicParsing|iex
+    iwr "https://raw.githubusercontent.com/jagilber/powershellScripts/master/servicefabric/sf-metadata-rest.ps1" -UseBasicParsing|iex
 
     or use the following to save and pass arguments:
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/sf-metadata-rest.ps1" -outFile "$pwd/sf-metadata-rest.ps1";
