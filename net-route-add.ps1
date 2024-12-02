@@ -54,14 +54,17 @@ function main() {
   }
 
   write-host "network interfaces:" -ForegroundColor Green
+  write-host "get-netIpInterface"
   get-netIpInterface | out-string
 
   write-host "network ip configurations:" -ForegroundColor Green
+  write-host "get-netIPConfiguration"
   $ipConfigurations = get-netIPConfiguration
   $ipConfigurations | out-string
   $global:ipConfigurations = $ipConfigurations
 
-  $activeAdapters = @(get-netAdapter | where-object status -eq 'Up')
+  write-host "get-netAdapter | where-object status -eq 'Up'"
+  $activeAdapters = @(get-netAdapter | where-object {$psitem.status -eq 'Up' -and $psitem.PhysicalMediaType -ine 'unspecified'})
   $activeAdapters = $activeAdapters | sort-object -Property InterfaceIndex
   $primaryAdapter = $activeAdapters[0]
   $global:primaryAdapter = $primaryAdapter
@@ -70,17 +73,18 @@ function main() {
   $activeAdapters | out-string
 
   if (!$activeAdapters) {
-    Write-Warning "No active adapters found."
+    Write-Error "No active adapters found."
     return
   }
 
+  write-host "active vpn connections:" -ForegroundColor Green
+  write-host "Get-VpnConnection"
   $vpnConnections = Get-VpnConnection
   $connectedVpnConnections = $vpnConnections | where-object ConnectionStatus -eq 'Connected'
-  write-host "active vpn connections:" -ForegroundColor Green
   $connectedVpnConnections | Format-List *
 
   if ($interfaceIndex -and $interfaceAlias) {
-    Write-Warning "You must specify either an interface index or an interface alias, not both."
+    Write-Error "You must specify either an interface index or an interface alias, not both."
     return
   }
 
@@ -88,14 +92,18 @@ function main() {
     $interfaceIndex = $primaryAdapter.InterfaceIndex
     write-warning "No interface specified. Using default interface index $($interfaceIndex)."
 
-    $defaultGatewayConfiguration = ($ipConfigurations | where-object InterfaceIndex -eq $interfaceIndex).IPv4DefaultGateway
-    $nextHop = $defaultGatewayConfiguration.NextHop
-    write-warning "No next hop specified. Using default gateway $($nextHop)."
-    $routeMetric = $defaultGatewayConfiguration.RouteMetric
+    $global:defaultGatewayConfiguration = ($ipConfigurations | where-object InterfaceIndex -eq $interfaceIndex).IPv4DefaultGateway
+    $nextHop = $global:defaultGatewayConfiguration.NextHop
+    if(!$nextHop){
+      Write-Error "No default gateway found for interface index $($interfaceIndex)."
+      return
+    }
+    write-warning "No next hop specified. Using default gateway '$($nextHop)'."
+    $routeMetric = $global:defaultGatewayConfiguration.RouteMetric
   }
 
   if (!$nextHop -and !$force) {
-    Write-Warning "You must specify a next hop address."
+    Write-Error "You must specify a next hop address."
     return
   }
 
