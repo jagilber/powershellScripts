@@ -65,13 +65,35 @@ function main() {
     $DebugPreference = "continue"
     $global:ClusterConnection = $null
 
-    if (!(get-module -ListAvailable az)) {
-        install-module az
+    # authenticate
+    try {
+        get-command connect-azaccount | Out-Null
+    }
+    catch [management.automation.commandNotFoundException] {
+        if ((read-host "az not installed but is required for this script. is it ok to install?[y|n]") -imatch "y") {
+            write-host "installing minimum required az modules..."
+            install-module az.accounts
+            install-module az.resources
+            install-module az.servicefabric
+            
+            import-module az.accounts
+            import-module az.resources
+            import-module az.servicefabric
+        }
+        else {
+            return 1
+        }
     }
 
-    if (!(get-command get-azresource)) {
-        import-module az
+    if (!(@(Get-AzResourceGroup).Count)) {
+        connect-azaccount
+
+        if (!(Get-azResourceGroup)) {
+            Write-Warning "unable to authenticate to az. returning..."
+            return 1
+        }
     }
+
 
     $global:cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")
     if (!$cluster) {
