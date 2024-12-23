@@ -263,6 +263,18 @@ function deploy-template() {
         $outputs.Add($jsonParameter.name, $jsonParameter.value)
     }
 
+    # remove provisioningstate as it is not a valid property for deploy and will cause validation error if state is not equal to current state
+    foreach ($resource in $resources) {
+        $resourceProperties = $resource.properties.psobject.properties
+        foreach ($resourceProperty in $resourceProperties) {
+            if ($resourceProperty.Name -ieq 'provisioningState') {
+                $resourceProperty.Value = $null
+                write-host "removing provisioningState from resource: $($resource.id)" -ForegroundColor Yellow
+                continue
+            }
+        }
+    }
+
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
     $error.Clear()
@@ -393,8 +405,8 @@ function export-template($configuredResources) {
 function remove-jobs() {
     try {
         foreach ($job in get-job) {
-            write-host "removing job $($job.Name)" -report $global:scriptName
-            write-host $job -report $global:scriptName
+            write-host "removing job $($job.Name)"
+            write-host $job
             $job.StopJob()
             Remove-Job $job -Force
         }
