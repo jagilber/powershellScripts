@@ -45,6 +45,7 @@ param(
   $identityServerThumbprint = $env:IDENTITY_SERVER_THUMBPRINT,
   $identityApiVersion = $env:IDENTITY_API_VERSION, # '2020-05-01' # 2448 has 2024-06-11
   $resource = 'https%3A%2F%2Fvault.azure.net',
+  $resourceApiVersion = '2016-10-01',
   [switch]$useMetadataEndpoint
 )
 
@@ -55,10 +56,13 @@ $irmArgs = @{}
 [environment]::GetEnvironmentVariables().getEnumerator() | sort-object Name
 $hasPolicy = !$useCore -and [System.Net.ServicePointManager]::CertificatePolicy.gettype() -eq [IDontCarePolicy]
 
-if (!$useCore -and !$hasPolicy) {
-  # -and ($null -eq [IDontCarePolicy])) {
-  write-host 'adding type'
-  add-type @"
+function main() {
+  $error.clear()
+
+  if (!$useCore -and !$hasPolicy) {
+    # -and ($null -eq [IDontCarePolicy])) {
+    write-console 'adding type'
+    add-type @"
 using System;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -74,68 +78,88 @@ public class IDontCarePolicy : ICertificatePolicy {
     }
 }
 "@
-  [System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
-}
+    [System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
+  }
   
-if ($useMetadataEndpoint) {
-  # container will need a static route to the host to reach the metadata endpoint
-  if (!(tnc $metadataIp -p 80).TcpTestSucceeded) {
-    route print
-    $ipconfiguration = Get-NetIPConfiguration
-    $interfaceAlias = $ipconfiguration.InterfaceAlias
-    $defaultGateway = $ipconfiguration.IPv4DefaultGateway.NextHop
-        
-    Write-Warning "unable to connect to $metadataIp . adding static route to host with new-netRoute.
-        New-NetRoute -DestinationPrefix '$metadataIp/32' -AddressFamily IPv4 -InterfaceAlias '$($interfaceAlias)' -NextHop '$($defaultGateway)'"
-    New-NetRoute -DestinationPrefix "$metadataIp/32" -AddressFamily IPv4 -InterfaceAlias "$($interfaceAlias)" -NextHop "$($defaultGateway)"
-        
+  if ($useMetadataEndpoint) {
+    # container will need a static route to the host to reach the metadata endpoint
     if (!(tnc $metadataIp -p 80).TcpTestSucceeded) {
-      Write-Warning "unable to connect to $metadataIp. returning."
-      return
+      route print
+      $ipconfiguration = Get-NetIPConfiguration
+      $interfaceAlias = $ipconfiguration.InterfaceAlias
+      $defaultGateway = $ipconfiguration.IPv4DefaultGateway.NextHop
+        
+      Write-Warning "unable to connect to $metadataIp . adding static route to host with new-netRoute.
+        New-NetRoute -DestinationPrefix '$metadataIp/32' -AddressFamily IPv4 -InterfaceAlias '$($interfaceAlias)' -NextHop '$($defaultGateway)'"
+      New-NetRoute -DestinationPrefix "$metadataIp/32" -AddressFamily IPv4 -InterfaceAlias "$($interfaceAlias)" -NextHop "$($defaultGateway)"
+        
+      if (!(tnc $metadataIp -p 80).TcpTestSucceeded) {
+        Write-Warning "unable to connect to $metadataIp. returning."
+        return
+      }
+    }
+
+    $identityEndpoint = "http://$metadataIp/metadata/identity/oauth2/token"
+    # $identityApiVersion = '2018-02-01'
+  
+    $irmArgs = @{
+      uri     = "$($identityEndpoint)?api-version=2018-02-01&resource=$($resource)"
+      method  = 'get'
+      headers = @{'Metadata' = 'true' } 
+    }
+  }
+  else {
+    $header = @{
+      "Secret" = $identityHeader
+    }
+    
+    $irmArgs = @{
+      method  = 'get'
+      uri     = "$($identityEndpoint)?api-version=$($identityApiVersion)&resource=$($resource)"
+      headers = $header
+      #certificateThumbprint = $cert
+    }
+    if ($useCore) {
+      [void]$irmArgs.Add("SkipCertificateCheck", $true)
+      [void]$irmArgs.Add("SkipHttpErrorCheck", $true)
     }
   }
 
-  $identityEndpoint = "http://$metadataIp/metadata/identity/oauth2/token"
-  $identityApiVersion = '2018-02-01'
+  write-console "invoke-restMethod $($irmArgs | convertto-json)" -foregroundColor Cyan
+  $response = invoke-restmethod @irmArgs
+
+  write-console "response $($response | convertto-json)" -ForegroundColor Cyan
+  if ($error) {
+    write-console "error $($error | out-string)" -ForegroundColor Red
+  }
   
-  $irmArgs = @{
-    uri     = "$($identityEndpoint)?api-version=$($identityApiVersion)&resource=$($resource)"
-    method  = 'get'
-    headers = @{'Metadata' = 'true' } 
+  if ($response.error) {
+    write-console "error $($response.error | convertto-json)" -ForegroundColor Red
+    return
   }
-}
-else {
-  $header = @{
-    "Secret" = $identityHeader
-  }
-    
-  $irmArgs = @{
-    method  = 'get'
-    uri     = "$($identityEndpoint)?api-version=$($identityApiVersion)&resource=$($resource)"
-    headers = $header
-    #certificateThumbprint = $cert
-  }
-  if ($useCore) {
-    [void]$irmArgs.Add("SkipCertificateCheck", $true)
-    [void]$irmArgs.Add("SkipHttpErrorCheck", $true)
-  }
-}
 
-write-host "invoke-restMethod $($irmArgs | convertto-json)" -foregroundColor Cyan
-$response = invoke-restmethod @irmArgs
+  $bearertoken = "Bearer " + $response.access_token
+  write-console "$bearertoken" -ForegroundColor Cyan
 
-$response
-$bearertoken = "Bearer " + $response.access_token
-write-host "$bearertoken" -ForegroundColor Cyan
+  if(!$bearertoken) {
+    write-console "no bearer token" -ForegroundColor Red
+    return
+  }
 
-write-host "
-Invoke-RestMethod -Uri "$($secretUrl)?api-version=2016-10-01" `
+  write-console "Invoke-RestMethod -Uri '$($secretUrl)?api-version=$($resourceApiVersion)' ``
+      -Method GET ``
+      -Headers @{Authorization = $bearertoken }" -foregroundColor Cyan
+
+  $result = Invoke-RestMethod -Uri "$($secretUrl)?api-version=$($resourceApiVersion)" `
     -Method GET `
     -Headers @{Authorization = $bearertoken }
-" -foregroundColor Cyan
 
-$result = Invoke-RestMethod -Uri "$($secretUrl)?api-version=2016-10-01" `
-  -Method GET `
-  -Headers @{Authorization = $bearertoken }
+  write-console "result $($result | convertto-json)" -ForegroundColor Cyan
+}
 
-write-host "result $($result | convertto-json)" -ForegroundColor Cyan
+function write-console($message, $foregroundColor = 'White') {
+  $message = "$([datetime]::Now.ToString('yyyy-MM-dd HH:mm:ss.ffff')) $message"
+  write-host $message -ForegroundColor $foregroundColor
+}
+
+main
