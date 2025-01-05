@@ -113,11 +113,17 @@ public class IDontCarePolicy : ICertificatePolicy {
       "Secret" = $identityHeader
     }
     
+    $identityCertificate = @(Get-ChildItem -Path Cert:$identityServerThumbprint -Recurse)[0]
+    if(!$identityServerThumbprint) {
+      write-console "error retrieving identity server thumbprint" -foregroundColor red
+      return
+    }
     $irmArgs = @{
       method  = 'get'
       uri     = "$($identityEndpoint)?api-version=$($identityApiVersion)&resource=$($resource)"
       headers = $header
-      #certificateThumbprint = $cert
+      #certificateThumbprint = $identityServerThumbprint
+      certificate = $identityCertificate
     }
     if ($useCore) {
       [void]$irmArgs.Add("SkipCertificateCheck", $true)
@@ -125,10 +131,13 @@ public class IDontCarePolicy : ICertificatePolicy {
     }
   }
 
-  write-console "invoke-restMethod $($irmArgs | convertto-json)" -foregroundColor Cyan
+  $cleanArgs = $irmArgs.Clone()
+  $cleanARgs.certificate = "..."
+
+  write-console "invoke-restMethod $($cleanArgs | convertto-json)" -foregroundColor Cyan
   $response = invoke-restmethod @irmArgs
 
-  write-console "response $($response | convertto-json)" -ForegroundColor Cyan
+  write-console "response $($response | convertto-json)" -ForegroundColor Magenta
   if ($error) {
     write-console "error $($error | out-string)" -ForegroundColor Red
   }
@@ -139,7 +148,7 @@ public class IDontCarePolicy : ICertificatePolicy {
   }
 
   $bearertoken = "Bearer " + $response.access_token
-  write-console "$bearertoken" -ForegroundColor Cyan
+  write-console "$bearertoken" -ForegroundColor green
 
   if(!$bearertoken) {
     write-console "no bearer token" -ForegroundColor Red
@@ -154,7 +163,7 @@ public class IDontCarePolicy : ICertificatePolicy {
     -Method GET `
     -Headers @{Authorization = $bearertoken }
 
-  write-console "result $($result | convertto-json)" -ForegroundColor Cyan
+  write-console "result $($result | convertto-json)" -ForegroundColor green
 }
 
 function write-console($message, $foregroundColor = 'White') {
