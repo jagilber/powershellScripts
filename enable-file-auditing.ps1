@@ -1,5 +1,5 @@
 <#
-# This ai script enables auditing of object access success/failure 
+# This script enables auditing of object access success/failure 
 # and adds an audit rule for the 'Everyone' group on a specified folder and subfolders.
 # 250106
 
@@ -14,8 +14,12 @@ param(
 )
 
 # Enable auditing of object access at the OS level
-Write-Host "Enabling Object Access auditing..."
-auditpol /set /category:"Object Access" /success:enable /failure:enable
+Write-Host "Enabling Object Access auditing..." -ForegroundColor Yellow
+write-host "auditpol /set /category:'Object Access' /success:enable /failure:enable" -ForegroundColor Cyan
+auditpol /set /category:'Object Access' /success:enable /failure:enable
+
+write-host "auditpol /get /category:'Object Access'" -ForegroundColor Cyan
+auditpol /get /category:'Object Access'
 
 # Retrieve ACL from specified path
 $acl = Get-Acl -Path $Path
