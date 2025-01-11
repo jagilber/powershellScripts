@@ -111,8 +111,8 @@ param(
   [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '',
-  [ValidateSet('gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
-  [string]$model = 'gpt-4o',
+  [ValidateSet('o1-preview', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
+  [string]$model = 'gpt-4o', #'o1-preview',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
@@ -158,36 +158,37 @@ $parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort
 $boundParameters = $PSBoundParameters
 
 function main() {
-  $endpoint = get-endpoint
+  try {
+    $endpoint = get-endpoint
 
-  if (!(set-variables)) {
-    return
-  }
+    if (!(set-variables)) {
+      return
+    }
 
-  $startTime = Get-Date
-  write-log "===================================="
-  write-log ">>>>starting openAI chat request $startTime<<<<" -color White
+    $startTime = Get-Date
+    write-log "===================================="
+    write-log ">>>>starting openAI chat request $startTime<<<<" -color White
 
-  if (!$apiKey) {
-    write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
-    return
-  }
+    if (!$apiKey) {
+      write-log "API key not found. Please set the OPENAI_API_KEY environment variable or pass the API key as a parameter." -color Red
+      return
+    }
 
-  if ($responseFormat -imatch 'json') {
-    [void]$script:systemPromptsList.add(' always reply in json format.')
-  }
+    if ($responseFormat -imatch 'json') {
+      [void]$script:systemPromptsList.add(' always reply in json format.')
+    }
 
-  if ($responseFileFormat -ieq 'markdown') {
-    [void]$script:systemPromptsList.add(' format reply message content in github markdown format.')
-    $markdownJsonSchema = convert-toJson @{
-      markdown = @{
-        content    = '<markdown content>'
-        name       = '<github compliant markdown file name with dashes and extension>'
-        references = @(
-          @{
-            name = '<reference name>'
-            url  = '<reference url>'
-          }
+    if ($responseFileFormat -ieq 'markdown') {
+      [void]$script:systemPromptsList.add(' format reply message content in github markdown format.')
+      $markdownJsonSchema = convert-toJson @{
+        markdown = @{
+          content    = '<markdown content>'
+          name       = '<github compliant markdown file name with dashes and extension>'
+          references = @(
+            @{
+              name = '<reference name>'
+              url  = '<reference url>'
+            }
           )
         }
       } -compress
@@ -197,78 +198,83 @@ function main() {
       [void]$script:systemPromptsList.add(' include flow diagrams to visually describe topic. use mermaid for creation of figures and flow diagrams.')
     }
 
-  if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
-    write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
-    mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
+    if ($imageFilePng -and !(test-path ([io.path]::GetDirectoryName($imageFilePng)))) {
+      write-log "creating directory: [io.path]::GetDirectoryName($imageFilePng)" -color Yellow
+      mkdir -Force ([io.path]::GetDirectoryName($imageFilePng))
+    }
+
+    if ($newConversation -and (Test-Path $promptsFile)) {
+      write-log "resetting context" -color Yellow
+      write-log "deleting messages file: $promptsFile" -color Yellow
+      Remove-Item $promptsFile
+    }
+
+    if (Test-Path $promptsFile) {
+      write-log "reading messages from file: $promptsFile" -color Yellow
+      [void]$script:messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
+    }
+
+    $headers = @{
+      'Authorization' = "Bearer $apiKey"
+      'Content-Type'  = 'application/json'
+      'OpenAI-Beta'   = 'assistants=v1'
+    }
+    if ($endpointType -eq 'images') {
+      $headers.'Content-Type' = 'multipart/form-data'
+      #$headers.Add('Accept', 'image/png')
+    }
+
+    $requestBody = build-requestBody $script:messageRequests $script:systemPromptsList
+
+    # Convert the request body to JSON
+    $jsonBody = convert-toJson $requestBody -compress
+
+    if ($listModels) {
+      write-log "listing models" -color Yellow
+      $response = invoke-rest 'https://api.openai.com/v1/models' $headers
+      write-log "models: $(convert-toJson $response)" -color Yellow
+      return
+    }
+
+    if ($listAssistants) {
+      write-log "listing assistants" -color Yellow
+      $response = invoke-rest 'https://api.openai.com/v1/assistants?limit=100' $headers
+      write-log "assistants: $(convert-toJson $response)" -color Yellow
+      return
+    }
+
+    # Make the API request using Invoke-RestMethod
+    $response = invoke-rest $endpoint $headers $jsonBody
+    $message = read-messageResponse $response $script:messageRequests
+    open-withCode (save-MessageResponse $message.content)
+
+    $global:openaiResponse = $response
+    $global:message = $message
+    write-log "api response stored in global variables: `$global:openaiResponse and `$global:message" -ForegroundColor Cyan
+
+    if ($logFile) {
+      write-log "result appended to logfile: $logFile"
+    }
+
+    # Write the assistant response to the log file for future reference
+
+    if (!$completeConversation -and $promptsFile) {
+      # $script:messageRequests += $message
+      convert-toJson $script:messageRequests | Out-File $promptsFile
+      write-log "messages stored in: $promptsFile" -ForegroundColor Cyan
+    }
+
+    write-log "response:$(convert-toJson ($message.content | convertfrom-json))" -color Green
+    write-log ($global:openaiResponse | out-string) -color DarkGray
+    write-log "use alias 'ai' to run script with new prompt. example:ai '$($prompts[0])'" -color DarkCyan
+    write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
+    write-log "===================================="
+    return #$message.content
   }
-
-  if ($newConversation -and (Test-Path $promptsFile)) {
-    write-log "resetting context" -color Yellow
-    write-log "deleting messages file: $promptsFile" -color Yellow
-    Remove-Item $promptsFile
+  catch {
+    write-log "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -color Red
+    return $null
   }
-
-  if (Test-Path $promptsFile) {
-    write-log "reading messages from file: $promptsFile" -color Yellow
-    [void]$script:messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
-  }
-
-  $headers = @{
-    'Authorization' = "Bearer $apiKey"
-    'Content-Type'  = 'application/json'
-    'OpenAI-Beta'   = 'assistants=v1'
-  }
-  if ($endpointType -eq 'images') {
-    $headers.'Content-Type' = 'multipart/form-data'
-    #$headers.Add('Accept', 'image/png')
-  }
-
-  $requestBody = build-requestBody $script:messageRequests $script:systemPromptsList
-
-  # Convert the request body to JSON
-  $jsonBody = convert-toJson $requestBody -compress
-
-  if ($listModels) {
-    write-log "listing models" -color Yellow
-    $response = invoke-rest 'https://api.openai.com/v1/models' $headers
-    write-log "models: $(convert-toJson $response)" -color Yellow
-    return
-  }
-
-  if ($listAssistants) {
-    write-log "listing assistants" -color Yellow
-    $response = invoke-rest 'https://api.openai.com/v1/assistants?limit=100' $headers
-    write-log "assistants: $(convert-toJson $response)" -color Yellow
-    return
-  }
-
-  # Make the API request using Invoke-RestMethod
-  $response = invoke-rest $endpoint $headers $jsonBody
-  $message = read-messageResponse $response $script:messageRequests
-  open-withCode (save-MessageResponse $message.content)
-
-  $global:openaiResponse = $response
-  $global:message = $message
-  write-log "api response stored in global variables: `$global:openaiResponse and `$global:message" -ForegroundColor Cyan
-
-  if ($logFile) {
-    write-log "result appended to logfile: $logFile"
-  }
-
-  # Write the assistant response to the log file for future reference
-
-  if (!$completeConversation -and $promptsFile) {
-    # $script:messageRequests += $message
-    convert-toJson $script:messageRequests | Out-File $promptsFile
-    write-log "messages stored in: $promptsFile" -ForegroundColor Cyan
-  }
-
-  write-log "response:$(convert-toJson ($message.content | convertfrom-json))" -color Green
-  write-log ($global:openaiResponse | out-string) -color DarkGray
-  write-log "use alias 'ai' to run script with new prompt. example:ai '$($prompts[0])'" -color DarkCyan
-  write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
-  write-log "===================================="
-  return #$message.content
 }
 
 function build-requestBody($messageRequests, $systemPrompts) {
@@ -288,6 +294,15 @@ function build-requestBody($messageRequests, $systemPrompts) {
 }
 
 function build-chatRequestBody($messageRequests, $systemPrompts) {
+
+  if ($model -ieq 'o1-preview') {
+    # o1 doesnt currently support system prompts
+    # https://platform.openai.com/docs/guides/reasoning#beta-limitations
+    # $script:systemPromptsList.Clear()
+    $requestBody = build-o1chatRequestBody $script:messageRequests #$script:systemPromptsList
+    return $requestBody
+  }
+
   if (!$messageRequests) {
     foreach ($message in $systemPrompts) {
       [void]$messageRequests.Add(@{
@@ -319,15 +334,44 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
   return $requestBody
 }
 
+function build-o1chatRequestBody($messageRequests) {
+
+  # if (!$messageRequests) {
+  #   write-log 'no message requests found for o1 model. returning' -color Red
+  #   return $null
+  # }
+
+  foreach ($message in $prompts) {
+    [void]$messageRequests.Add(@{
+        role    = $promptRole
+        content = $message
+      })
+  }
+
+  $requestBody = @{
+    response_format = @{
+      type = $responseFormat
+    }
+    model           = $model
+    # seed            = $seed
+    # logprobs        = $logProbabilities
+    messages        = $messageRequests.toArray()
+    # user            = $user
+    # max_tokens      = $maxTokens
+  }
+
+  return $requestBody
+}
+
 function build-codexRequestBody($messageRequests) {
   throw "model $model not supported"
   $requestBody = @{
-    model    = $model
-    seed     = $seed
-    logprobs = $logProbabilities
-    messages = $script:messageRequests.toArray()
-    user     = $user
-    max_tokens      = $maxTokens
+    model      = $model
+    seed       = $seed
+    logprobs   = $logProbabilities
+    messages   = $script:messageRequests.toArray()
+    user       = $user
+    max_tokens = $maxTokens
   }
 
   return $requestBody
@@ -371,24 +415,30 @@ function convert-toJson([object]$object, [int]$depth = 5, [switch]$compress = $f
 }
 
 function get-endpoint() {
-  switch -Wildcard ($model) {
-    'gpt-*' {
+  switch -regex ($model) {
+    'gpt-' {
       $endpoint = 'https://api.openai.com/v1/chat/completions'
       $script:endpointType = 'chat'
     }
-    'dall-e-*' {
+    'o1-' {
+      $endpoint = 'https://api.openai.com/v1/chat/completions'
+      $script:endpointType = 'chat'
+    }
+    'dall-e-' {
       $endpoint = 'https://api.openai.com/v1/images/generations'
       $script:endpointType = 'images'
       if ($imageEdit) {
         $endpoint = 'https://api.openai.com/v1/images/edits'
       }
     }
-    'codex-*' {
+    'codex-' {
       $endpoint = 'https://api.openai.com/v1/davinci-codex/completions'
       $script:endpointType = 'davinci-codex'
     }
     default {
-      #$endpoint = 'https://api.openai.com/v1/chat/completions'
+      write-log "unknown model: $model" -color Red
+      # $endpoint = 'https://api.openai.com/v1/chat/completions'
+      # $script:endpointType = 'chat'
       $script:endpointType = 'custom'
     }
   }
