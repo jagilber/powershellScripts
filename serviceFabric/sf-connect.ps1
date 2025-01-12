@@ -76,7 +76,9 @@ function main() {
     if ($resourceGroup -and $clustername) {
         $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
         $managementEndpoint = $cluster.ManagementEndpoint
-        $thumbprint = $cluster.Certificate.Thumbprint
+        if(!$thumbprint) {
+            $thumbprint = $cluster.Certificate.Thumbprint
+        }
         $global:cluster | ConvertTo-Json -Depth 99
     }
 
