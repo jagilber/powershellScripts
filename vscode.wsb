@@ -7,6 +7,6 @@
     </MappedFolder>
   </MappedFolders>
   <LogonCommand>
-    <Command>powershell.exe -ExecutionPolicy Bypass -Command "&amp;{iwr https://aka.ms/git-vscode.ps1 -useragent 'powershell'| iex}"</Command>
+    <Command>powershell.exe -ExecutionPolicy Bypass -Command "&amp;{iwr https://aka.ms/git-vscode.ps1 -useragent 'powershell' -UseBasicParsing | iex}"</Command>
   </LogonCommand>
 </Configuration>

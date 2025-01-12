@@ -3,6 +3,12 @@ install winget on Windows Server 2022 for windbg
 
 winget search microsoft.windbg
 winget install microsoft.windbg
+https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-sos
+https://www.nuget.org/api/v2/package/dotnet-sos/9.0.553101
+dotnet tool install --global dotnet-sos
+https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-debugger-extensions
+dotnet tool install --global dotnet-debugger-extensions
+https://www.nuget.org/api/v2/package/dotnet-debugger-extensions/9.0.557512
 #>
 
 param(
@@ -22,7 +28,7 @@ $scriptParams = $MyInvocation.BoundParameters
 function main() {
   write-host "executing $script with parameters $($scriptParams | out-string)" -ForegroundColor Green
   
-  if(is-wingetInstalled) {
+  if (is-wingetInstalled) {
     write-host "winget is already installed" -ForegroundColor Green
     return
   }
@@ -68,12 +74,8 @@ function main() {
   write-host "latestWingetMsixLicense: $latestWingetMsixLicense"
 
   if (!(test-path $latestWingetMsixBundle) -or !(test-path $latestWingetMsixLicense)) {
-
-    write-host "Downloading winget to $latestWingetMsixBundle"
-    [net.webclient]::new().DownloadFile($latestWingetMsixBundleUri, $latestWingetMsixBundle)
-
-    write-host "Downloading winget license to $latestWingetMsixLicense"
-    [net.webclient]::new().DownloadFile($latestWingetMsixLicenseUri, $latestWingetMsixLicense)
+    download-file $latestWingetMsixBundleUri $latestWingetMsixBundle
+    download-file $latestWingetMsixLicenseUri $latestWingetMsixLicense
   }
 
   write-host "Add-AppxPackage $vcLibsAppx"
@@ -81,6 +83,7 @@ function main() {
 
   write-host "Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose"
   Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose
+
   write-host "sleeping for $sleepSeconds seconds"
   start-sleep -Seconds $sleepSeconds
 
@@ -96,13 +99,39 @@ function main() {
     Write-Error "winget not found. Please restart your shell."
   }
 
+  # dotnet tool is not installed by default on Windows Server and is installed with the .NET SDK
+  if ((get-command dotnet -ErrorAction SilentlyContinue) -and (dotnet --list-sdks)) {
+    write-host "dotnet found. installing dotnet-sos"
+    dotnet tool install --global dotnet-sos
+    write-host "installing dotnet-debugger-extensions"
+    dotnet tool install --global dotnet-debugger-extensions
+  }
+  else {
+    write-host "dotnet sdk not found. skipping dotnet tool installs" -ForegroundColor Yellow
+  }
+  
   write-host "finished"
+}
+
+function download-file($source, $destination) {
+  $error.Clear()
+  write-host "downloading file $source to $destination"
+  [net.webclient]::new().DownloadFile($source, $destination)
+  if ($error.Count -gt 0) {
+    write-host "error downloading file $source to $destination" -ForegroundColor Red
+    $error
+    return $false
+  }
+  else {
+    write-host "downloaded file $source to $destination" -ForegroundColor Green
+    return $true
+  }
 }
 
 function is-wingetInstalled() {
   $isInstalled = get-command winget -ErrorAction SilentlyContinue
   write-host "is-wingetInstalled: $isInstalled" -ForegroundColor Magenta
-    return $isInstalled
+  return $isInstalled
 }
 
 main
