@@ -59,7 +59,7 @@ function main() {
   }
 
   write-host "Add-AppxPackage $appPackagePath"
-  Add-AppxPackage $appPackagePath
+  Add-AppxPackage $appPackagePath -verbose
 
   $latestWingetMsixBundleUri = $(Invoke-RestMethod $wingetUrl).assets.browser_download_url | Where-Object { $psitem.EndsWith(".msixbundle") }
   $latestWingetMsixBundle = "$pwd\$($latestWingetMsixBundleUri.Split("/")[-1])"
@@ -79,7 +79,7 @@ function main() {
   }
 
   write-host "Add-AppxPackage $vcLibsAppx"
-  Add-AppxPackage $vcLibsAppx
+  Add-AppxPackage $vcLibsAppx -verbose
 
   write-host "Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose"
   Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose
