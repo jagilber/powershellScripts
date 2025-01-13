@@ -137,9 +137,9 @@ function check-module() {
             install-module az.resources
             install-module az.storage
 
-            import-module az.accounts
-            import-module az.resources
-            import-module az.storage
+            if(!(get-module az.accounts)) { import-module az.accounts }
+            if(!(get-module az.storage)) { import-module {az.storage}
+            if(!(get-module az.resources)) { import-module {az.resources}
         }
         else {
             return $false

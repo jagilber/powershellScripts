@@ -112,7 +112,7 @@ param(
   [switch]$force
 )
 
-$PSModuleAutoLoadingPreference = 'auto'
+$ErrorActionPreference = 'continue'
 $global:deployedServices = @{}
 
 function main() {
@@ -236,7 +236,10 @@ function check-module($name, $version = $null) {
       if (!(get-psRepository -name PSGallery)) { register-psRepository -Default }
       $error.clear()
       install-module $name -allowclobber -force
-      import-module $name
+      if (!(get-module $name)) {
+        import-module $name
+      }
+
     }
     else {
       return $false
@@ -781,7 +784,12 @@ function set-value($paramValue, $referenceValue) {
 function write-console($message, $foregroundColor = 'White', [switch]$verbose, [switch]$err, [switch]$warn) {
   if (!$message) { return }
   if ($message.gettype().name -ine 'string') {
-    $message = $message | convertto-json -Depth 10
+    try {
+      $message = $message | convertto-json -Depth 10
+    }
+    catch {
+      $message = $message | out-string
+    }
   }
 
   $message = "$(get-date -format 'yyyy-MM-ddTHH:mm:ss.fff')::$message"
