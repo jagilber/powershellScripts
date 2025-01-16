@@ -103,14 +103,18 @@ param (
   [string]$subscriptionId = $null,
   [string]$computerArchitectureType = "x64",
   [ValidateSet("V1", "V2", "V1,V2", "", ".")]
-  [string]$hyperVGenerations = ".",
+  [string]$hyperVGenerations = "",
   [string]$skuName = $null,
   [int]$maxMemoryGB = 0, # 64, # 0 = unlimited
   [int]$maxVCPU = 0, # 4, # 0 = unlimited
   [int]$minMemoryGB = 0, # 0 = unlimited
   [int]$minVCPU = 0, # 0 = unlimited
   [switch]$withRestrictions,
-  [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf
+  [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf and MaxResourceVolumeMB needs temp disk (10000) 10gb and vmDeploymentTypes needs "PaaS"
+  [ValidateSet("paas", "iaas", "")]
+  [int]$maxResourceVolumeMB = -1, # 0 is no local disk -1 is unlimited
+  [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
+  [string]$vmDeploymentTypes = "",
   [switch]$force
 )
 
@@ -122,6 +126,8 @@ function main() {
     if ($serviceFabric) {
       $computerArchitectureType = "x64"
       $hyperVGenerations = "V1"
+      $minResourceVolumeMB = 10000
+      $vmDeploymentTypes = "PaaS"
     }
 
     if (!$global:locations -or $force) {
@@ -132,6 +138,7 @@ function main() {
         return
       }
     }
+
     if ($location -and ($global:locations.location -inotcontains $location)) {
       write-host ($locations | out-string) -ForegroundColor Cyan
       write-error "location $location is not valid"
@@ -221,6 +228,26 @@ function main() {
       write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
 
+    if ($maxResourceVolumeMB -ne -1 -or $minResourceVolumeMB -ne -1) {
+      if ($maxResourceVolumeMB -eq -1) { $maxResourceVolumeMB = [int]::MaxValue }
+      if ($minResourceVolumeMB -eq -1) { $minResourceVolumeMB = 1 }
+      write-host "checking for local storage" -ForegroundColor Green
+      write-host "filtering skus by Capabilities.MaxResourceVolumeMB <= '$maxResourceVolumeMB' and Capabilities.MaxResourceVolumeMB >= $minResourceVolumeMB" -ForegroundColor Green
+      write-host "
+      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+        `$psitem.Capabilities | where-object {
+        `$psitem.Name -ieq 'MaxResourceVolumeMB' -and (`$psitem.Value -le $maxResourceVolumeMB -and `$psitem.Value -ge $minResourceVolumeMB)
+      }" -ForegroundColor Cyan
+      
+      $global:filteredSkus = $global:filteredSkus | Where-Object {
+        $psitem.Capabilities | where-object { 
+          $psitem.Name -ieq 'MaxResourceVolumeMB' -and ($psitem.Value -le $maxResourceVolumeMB -and $psitem.Value -ge $minResourceVolumeMB)
+        }
+      }
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+    }
+
     if ($maxMemoryGB) {
       write-host "filtering skus by Capabilities.MemoryGB <= $maxMemoryGB" -ForegroundColor Green
       write-host "
@@ -256,6 +283,24 @@ function main() {
       write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
       write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
     }
+
+    if ($vmDeploymentTypes) {
+      write-host "filtering skus by Capabilities.VMDeploymentTypes = '$vmDeploymentTypes'" -ForegroundColor Green
+      write-host "
+      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+        `$psitem.Capabilities | where-object {
+        `$psitem.Name -ieq 'VMDeploymentTypes' -and `$psitem.Value -imatch $vmDeploymentTypes
+      }" -ForegroundColor Cyan
+      
+      $global:filteredSkus = $global:filteredSkus | Where-Object {
+        $psitem.Capabilities | where-object { 
+          $psitem.Name -ieq 'VMDeploymentTypes' -and $psitem.Value -imatch $vmDeploymentTypes
+        }
+      }
+      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+    }
+
 
     if ($minMemoryGB) {
       write-host "filtering skus by Capabilities.MemoryGB >= $minMemoryGB" -ForegroundColor Green
@@ -308,6 +353,8 @@ function main() {
       maxMemoryGB: $maxMemoryGB
       maxVCPU: $maxVCPU
       skuName: $skuName
+      MaxResourceVolumeMB: $maxResourceVolumeMB
+      vmDeploymentTypes: $vmDeploymentTypes
       withRestrictions: $withRestrictions
       " -ForegroundColor DarkGray
 
@@ -315,8 +362,8 @@ function main() {
     return ($filteredSkus.Count -gt 0)
   }
   catch {
-    write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
     write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
+    write-verbose "variables:$((get-variable -scope local).value | convertto-json -WarningAction SilentlyContinue -depth 2)"
     return $false
   }
   finally {
