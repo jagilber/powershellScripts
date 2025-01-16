@@ -9,6 +9,17 @@ dotnet tool install --global dotnet-sos
 https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-debugger-extensions
 dotnet tool install --global dotnet-debugger-extensions
 https://www.nuget.org/api/v2/package/dotnet-debugger-extensions/9.0.557512
+
+
+https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-app-package--appx-or-appxbundle--servicing-command-line-options?view=windows-11
+DISM.exe /Online [/Get-ProvisionedAppxPackages | /Add-ProvisionedAppxPackage | /Remove-ProvisionedAppxPackage | /Set-ProvisionedAppxDataFile | /StubPackageOption]
+Dism /online /Get-ProvisionedAppxPackages /?
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/windbg/install-server-os-winget.ps1" -outFile "$pwd\install-server-os-winget.ps1";
+    .\install-server-os-winget.ps1
+
 #>
 
 param(
@@ -18,7 +29,9 @@ param(
   [string]$vcLibsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs\Microsoft.VCLibs.Desktop\14.0\AppX\Retail\x64\Microsoft.VCLibs.x64.14.00.Desktop.appx",
   [string]$vcLibsUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/refs/heads/master/windbg/Microsoft.VCLibs.x64.14.00.Desktop.appx",
   [string]$wingetUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest",
-  [int]$sleepSeconds = 5
+  # [int]$sleepSeconds = 600,
+  [string]$defaultWingetPath = "$env:LocalAppData\Microsoft\WindowsApps\winget.exe",
+  [string]$logPath = "$pwd\install-server-os-winget.log" # %WINDIR%\Logs\Dism\dism.log
 )
 
 $ErrorActionPreference = 'continue'
@@ -26,6 +39,8 @@ $script = $MyInvocation.MyCommand.Definition
 $scriptParams = $MyInvocation.BoundParameters
 
 function main() {
+  # write-warning "This script will install winget on Windows Server 2022 for windbg. DISM will restart the OS on completion. ctrl+c to cancel."
+  # start-sleep -Seconds 5
   write-host "executing $script with parameters $($scriptParams | out-string)" -ForegroundColor Green
   
   if (is-wingetInstalled) {
@@ -81,11 +96,42 @@ function main() {
   write-host "Add-AppxPackage $vcLibsAppx"
   Add-AppxPackage $vcLibsAppx -verbose
 
-  write-host "Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose"
-  Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose
+  # installing with Add-AppxPackage makes winget available immediately
+  write-host "Add-AppxPackage $latestWingetMsixBundle -verbose"
+  Add-AppxPackage $latestWingetMsixBundle -verbose
 
-  write-host "sleeping for $sleepSeconds seconds"
-  start-sleep -Seconds $sleepSeconds
+  # installing with Add-AppxProvisionedPackage is required to set the license
+  # using only Add-AppxProvisionedPackage will not make winget available immediately
+  write-host "Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose -LogLevel Debug -LogPath $logPath"
+  Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose -LogLevel Debug -LogPath $logPath
+  
+  #Dism /online /Get-ProvisionedAppxPackages /?
+  # write-host "
+  #   DISM.exe /Online ``
+  #     /NoRestart ``
+  #     /Add-ProvisionedAppxPackage ``
+  #     /PackagePath:$latestWingetMsixBundle ``
+  #     /LicensePath:$latestWingetMsixLicense ``
+  #     /LogPath:$logPath ``
+  #     /LogLevel:4
+  # "
+
+  # DISM.exe /Online `
+  #   /NoRestart `
+  #   /Add-ProvisionedAppxPackage `
+  #   /PackagePath:$latestWingetMsixBundle `
+  #   /LicensePath:$latestWingetMsixLicense `
+  #   /LogPath:$logPath `
+  #   /LogLevel:4
+
+
+  # write-host "sleeping for $sleepSeconds seconds"
+  # $counter = 0
+  # while(!(resolve-envPath "winget.exe") -and $counter -lt $sleepSeconds) { 
+  #   write-host "waiting for winget to be installed. this can take a while: $($counter++)" -ForegroundColor Yellow
+  #   start-sleep -Seconds 1
+  # }
+  
 
   if (is-wingetInstalled) {
   
@@ -107,7 +153,7 @@ function main() {
     dotnet tool install --global dotnet-debugger-extensions
   }
   else {
-    write-host "dotnet sdk not found. skipping dotnet tool installs" -ForegroundColor Yellow
+    write-host "dotnet sdk not found. skipping dotnet tool installs. winget install 'Microsoft.DotNet.SDK.9'" -ForegroundColor Yellow
   }
   
   write-host "finished"
@@ -132,6 +178,28 @@ function is-wingetInstalled() {
   $isInstalled = get-command winget -ErrorAction SilentlyContinue
   write-host "is-wingetInstalled: $isInstalled" -ForegroundColor Magenta
   return $isInstalled
+}
+
+function resolve-envPath($item) {
+  write-host "resolving $item"
+  $item = [environment]::ExpandEnvironmentVariables($item)
+  $sepChar = [io.path]::DirectorySeparatorChar
+
+  if ($result = Get-Item $item -ErrorAction SilentlyContinue) {
+    return $result.FullName
+  }
+
+  $paths = [collections.arraylist]@($env:Path.Split(";"))
+  [void]$paths.Add((@($psscriptroot, $pwd) | select-object -first 1))
+
+  foreach ($path in $paths) {
+    if ($result = Get-Item ($path.trimend($sepChar) + $sepChar + $item.trimstart($sepChar)) -ErrorAction SilentlyContinue) {
+      return $result.FullName
+    }
+  }
+
+  Write-Warning "unable to find $item"
+  return $null
 }
 
 main
