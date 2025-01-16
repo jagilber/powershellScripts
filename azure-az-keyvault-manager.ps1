@@ -107,13 +107,14 @@ param(
     [string]$certificateIssuer = "Self",
     [string]$certificateSubject,
     [int]$certificateValidityInMonths = 12,
+    [switch]$readSecretsFromFile,
     [switch]$saveSecretsToFile,
     [switch]$createCertificate,
     [switch]$createSecret,
     [switch]$updateSecret,
     [switch]$removeSecret,
     [switch]$createVault,
-    # [switch]$updateVault,
+    [switch]$updateVault,
     [switch]$removeVault,
     [switch]$whatif
 )
@@ -158,6 +159,9 @@ function main() {
             write-verbose "returning certificate: $($certificate | ConvertTo-Json -Depth 100)"
             return $certificate
         }
+        elseif($readSecretsFromFile -and $updateVault){
+            if (!(manage-secrets)) { return }
+        }
         else {
             get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
             write-verbose "secrets: $($script:secrets | ConvertTo-Json -Depth 100)"
@@ -167,9 +171,9 @@ function main() {
                 $secret = get-secret $secretName
                 write-verbose "returning secret: $($secret | ConvertTo-Json -Depth 100)"
                 return $secret
-            }    
-        }        
-                
+            }
+        }
+
         # convert list to keyed dictionary so we can return by name
         $secretDict = [ordered]@{}
         foreach ($secret in $script:secrets) {
@@ -377,7 +381,7 @@ function create-vaultName([string]$resourceGroup, [string]$vaultName) {
     $retval = $null
     $count = 0
     $newName = $vaultName
-    
+
     if (!$vaultName) {
         write-host "vault name is required" -ForegroundColor Red
         return $null
@@ -396,14 +400,14 @@ function create-vaultName([string]$resourceGroup, [string]$vaultName) {
             $count++
             write-host "newName: $newName"
             $newName = $newName.Substring(0, [math]::min($newName.length, 21)).ToLower()
-            
+
             if (!(is-vaultNameRegistered $newName)) {
                 break
             }
 
             if (!(is-vaultNameOwned $resourceGroup $newName)) {
                 write-verbose "vault exists in different subscription"
-                continue    
+                continue
             }
             else {
                 break
@@ -417,8 +421,8 @@ function create-vaultName([string]$resourceGroup, [string]$vaultName) {
             return $null
         }
     }
-    if (!($count -lt 100)) { 
-        $newName = $null 
+    if (!($count -lt 100)) {
+        $newName = $null
         write-host "unable to generate vault name" -ForegroundColor Red
     }
     else {
@@ -456,7 +460,7 @@ function is-vaultNameRegistered([string]$vaultName) {
     else {
         write-host "dns name $newDnsName does not exist" -ForegroundColor Yellow
     }
-    
+
     return $false
 }
 
@@ -595,7 +599,12 @@ function manage-certifcate([string]$name, [string]$subject, [string]$vaultName, 
 }
 
 function manage-secrets() {
-    if ($createSecret) {
+    if ($readSecretsFromFile) {
+        read-secretsFromFile $secretFile
+        set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets
+        get-secretsFromVault -vaultName $vaultName -vaultSecretName $vaultSecretName
+    }
+    elseif ($createSecret) {
         add-secret $secretName (new-secret $secretName $secretValue $secretNotes)
         if (!(set-secretsToVault -vaultName $vaultName -vaultSecretName $vaultSecretName -secrets $script:secrets)) {
             return $false
@@ -637,17 +646,19 @@ function manage-vault([string]$vaultName, [string]$location, [string]$resourceGr
         write-host "vault $vaultName created"
         return $true
     }
-    # elseif ($updateVault) {
-    #     write-host "updating vault $vaultName"
-    #     if(get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) {
-    #         write-host "vault $vaultName already exists"
-    #     }
-    #     else {
-    #         write-warning "vault $vaultName not found"
-    #     }
-    #     # update vault
-    #     return $true
-    # }
+    elseif ($updateVault) {
+        write-host "updating vault $vaultName"
+        if (get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) {
+            write-host "vault $vaultName exists"
+            return $false
+        }
+        else {
+            write-warning "vault $vaultName not found"
+            return $true
+        }
+        # update vault
+        return $true
+    }
     elseif ($removeVault) {
         write-host "removing vault $vaultName"
         if (get-keyVault -resourceGroup $resourceGroup -vaultName $vaultName) {
@@ -679,8 +690,10 @@ function read-secretsFromFile($secretFile) {
         write-error "secrets file not found"
         return $null
     }
-    $secrets = ConvertFrom-Json (Get-Content -Raw -Path $secretFile)
-    return $secrets
+    $secretObj = ConvertFrom-Json (Get-Content -Raw -Path $secretFile)
+    [void]$script:secrets.clear()
+    [void]$script:secrets.addrange($secretObj)
+    return $script:secrets
 }
 
 function save-secretsToFile([string]$secretFile) {
@@ -688,13 +701,6 @@ function save-secretsToFile([string]$secretFile) {
     $jsonString = "[$((convertto-json $script:secrets).trim("[]"))]"
     write-verbose "jsonString: $jsonString"
     out-file -InputObject $jsonString -FilePath $secretFile
-}
-
-function save-toFile([string]$file, [string]$content) {
-    write-host "saving $file"
-    $content = "$(Get-Date) ----------------`r`n$content"
-    write-verbose "content: $content"
-    out-file -InputObject $content -FilePath $file
 }
 
 function set-secretsToVault([string]$vaultName, [string]$vaultSecretName, [collections.arraylist]$secrets) {
