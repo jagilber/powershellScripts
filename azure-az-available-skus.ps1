@@ -158,21 +158,7 @@ function main() {
       write-host "global:skus:$($global:skus.Count)" -ForegroundColor Cyan
     }
 
-    if ($location) {
-      write-host "filtering skus by location $location" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:skus | Where-Object { 
-        `$psitem.Locations -ieq $location
-      }" -ForegroundColor Cyan
-      $global:filteredSkus = $global:skus | Where-Object { 
-        $psitem.Locations -ieq $location
-      }
-      write-verbose "available skus:`n$($global:skus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-    else {
-      $global:filteredSkus = $global:skus
-    }
+    check-location
 
     if (!$global:skus) {
       write-error "no skus found in region $location"
@@ -186,11 +172,11 @@ function main() {
     check-computerArchitectureType
     check-hyperVGenerations
     check-resourceVolumeMB # check local storage
-    check-maxMemoryGB
     check-maxvCpu
-    check-vmDeploymentTypes
-    check-minMemoryGB
     check-minvCpu
+    check-maxMemoryGB
+    check-minMemoryGB
+    check-vmDeploymentTypes # checking for no gpu on sf
     check-confidentialComputingType
 
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
@@ -274,7 +260,8 @@ function check-confidentialComputingType() {
         }
       }
     }" -ForegroundColor Cyan
-    $tempSkus = [collections.arrayList]::new($global:filteredSkus)
+
+    $tempSkus = [collections.arrayList]::new(@($global:filteredSkus))
     $global:filteredSkus | Where-Object {
       $sku = $psitem
       foreach ($capability in $sku.Capabilities) {
@@ -309,6 +296,24 @@ function check-hyperVGenerations(){
     }
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
     write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-location(){
+  if ($location) {
+    write-host "filtering skus by location $location" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:skus | Where-Object { 
+      `$psitem.Locations -ieq $location
+    }" -ForegroundColor Cyan
+    $global:filteredSkus = $global:skus | Where-Object { 
+      $psitem.Locations -ieq $location
+    }
+    write-verbose "available skus:`n$($global:skus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+  else {
+    $global:filteredSkus = $global:skus
   }
 }
 
