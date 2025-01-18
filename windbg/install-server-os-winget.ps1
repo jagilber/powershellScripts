@@ -38,9 +38,8 @@ $ErrorActionPreference = 'continue'
 $script = $MyInvocation.MyCommand.Definition
 $scriptParams = $MyInvocation.BoundParameters
 
+
 function main() {
-  # write-warning "This script will install winget on Windows Server 2022 for windbg. DISM will restart the OS on completion. ctrl+c to cancel."
-  # start-sleep -Seconds 5
   write-host "executing $script with parameters $($scriptParams | out-string)" -ForegroundColor Green
   
   if (is-wingetInstalled) {
@@ -140,11 +139,19 @@ function main() {
 
     write-host "winget install microsoft.windbg --source winget"
     winget install microsoft.windbg --source winget
+
+    write-host "winget search microsoft.timeTravelDebugging"
+    winget search microsoft.timeTravelDebugging
+
+    write-host "winget install microsoft.timeTravelDebugging --source winget"
+    winget install microsoft.timeTravelDebugging --source winget
+    
   }
   else {
     Write-Error "winget not found. Please restart your shell."
   }
 
+  if ((test-path "C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2410.11001.0_x64__8wekyb3d8bbwe\amd64\ttd.exe"))
   # dotnet tool is not installed by default on Windows Server and is installed with the .NET SDK
   if ((get-command dotnet -ErrorAction SilentlyContinue) -and (dotnet --list-sdks)) {
     write-host "dotnet found. installing dotnet-sos"
