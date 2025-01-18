@@ -115,6 +115,7 @@ param (
   [int]$maxResourceVolumeMB = -1, # 0 is no local disk -1 is unlimited
   [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
   [string]$vmDeploymentTypes = "",
+  [string]$confidentialComputingType = ".",
   [switch]$force
 )
 
@@ -128,6 +129,7 @@ function main() {
       $hyperVGenerations = "V1"
       $minResourceVolumeMB = 10000
       $vmDeploymentTypes = "PaaS"
+      $confidentialComputingType = $null
     }
 
     if (!$global:locations -or $force) {
@@ -144,7 +146,6 @@ function main() {
       write-error "location $location is not valid"
       return
     }
-
 
     if (!$global:skus -or $force) {
       $global:skus = @{}
@@ -180,163 +181,17 @@ function main() {
 
     write-host "`$global:filteredSkus = `$global:skus" -ForegroundColor Cyan
     
-    if (!$withRestrictions) {
-      write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Restrictions.Count -eq 0 }" -ForegroundColor Cyan
-      $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Restrictions.Count -eq 0 }
-      write-verbose "unrestricted skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "unrestricted skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($skuName) {
-      write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Name -imatch $skuName }" -ForegroundColor Cyan
-      $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Name -imatch $skuName }
-      write-verbose "skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($computerArchitectureType) {
-      write-host "filtering skus by Capabilities.CpuArchitectureType = '$computerArchitectureType'" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-        `$psitem.Name -ieq 'CpuArchitectureType' -and `$psitem.Value -ieq $computerArchitectureType
-      }" -ForegroundColor Cyan
-      
-      $global:filteredSkus = $global:filteredSkus | Where-Object {
-        $psitem.Capabilities | where-object { 
-          $psitem.Name -ieq 'CpuArchitectureType' -and $psitem.Value -ieq $computerArchitectureType
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($hyperVGenerations) {
-      write-host "filtering skus by Capabilities.HyperVGenerations = '$hyperVGenerations'" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-        `$psitem.Name -ieq 'HyperVGenerations' -and `$psitem.Value -imatch $hyperVGenerations
-      }" -ForegroundColor Cyan
-      
-      $global:filteredSkus = $global:filteredSkus | Where-Object {
-        $psitem.Capabilities | where-object { 
-          $psitem.Name -ieq 'HyperVGenerations' -and $psitem.Value -imatch $hyperVGenerations
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($maxResourceVolumeMB -ne -1 -or $minResourceVolumeMB -ne -1) {
-      if ($maxResourceVolumeMB -eq -1) { $maxResourceVolumeMB = [int]::MaxValue }
-      if ($minResourceVolumeMB -eq -1) { $minResourceVolumeMB = 1 }
-      write-host "checking for local storage" -ForegroundColor Green
-      write-host "filtering skus by Capabilities.MaxResourceVolumeMB <= '$maxResourceVolumeMB' and Capabilities.MaxResourceVolumeMB >= $minResourceVolumeMB" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-        `$psitem.Name -ieq 'MaxResourceVolumeMB' -and (`$psitem.Value -le $maxResourceVolumeMB -and `$psitem.Value -ge $minResourceVolumeMB)
-      }" -ForegroundColor Cyan
-      
-      $global:filteredSkus = $global:filteredSkus | Where-Object {
-        $psitem.Capabilities | where-object { 
-          $psitem.Name -ieq 'MaxResourceVolumeMB' -and ($psitem.Value -le $maxResourceVolumeMB -and $psitem.Value -ge $minResourceVolumeMB)
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($maxMemoryGB) {
-      write-host "filtering skus by Capabilities.MemoryGB <= $maxMemoryGB" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-          `$psitem.Name -ieq 'MemoryGB' -and [int]`$psitem.Value -le $maxMemoryGB
-        }
-      }" -ForegroundColor Cyan
-
-      $global:filteredSkus = $global:filteredSkus | where-object { 
-        $psitem.Capabilities | where-object {
-          $psitem.Name -ieq 'MemoryGB' -and [int]$psitem.Value -le $maxMemoryGB
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($maxVCPU) {
-      write-host "filtering skus by Capabilities.VCPUs <= $maxVCPU" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-          `$psitem.Name -ieq 'VCPUs' -and [int]`$psitem.Value -le $maxVCPU
-        }
-      }" -foregroundColor Cyan
-
-      $global:filteredSkus = $global:filteredSkus | where-object {
-        $psitem.Capabilities | where-object {
-          $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -le $maxVCPU
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($vmDeploymentTypes) {
-      write-host "filtering skus by Capabilities.VMDeploymentTypes = '$vmDeploymentTypes'" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-        `$psitem.Name -ieq 'VMDeploymentTypes' -and `$psitem.Value -imatch $vmDeploymentTypes
-      }" -ForegroundColor Cyan
-      
-      $global:filteredSkus = $global:filteredSkus | Where-Object {
-        $psitem.Capabilities | where-object { 
-          $psitem.Name -ieq 'VMDeploymentTypes' -and $psitem.Value -imatch $vmDeploymentTypes
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-
-    if ($minMemoryGB) {
-      write-host "filtering skus by Capabilities.MemoryGB >= $minMemoryGB" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-          `$psitem.Name -ieq 'MemoryGB' -and [int]`$psitem.Value -ge $minMemoryGB
-        }
-      }" -ForegroundColor Cyan
-
-      $global:filteredSkus = $global:filteredSkus | where-object { 
-        $psitem.Capabilities | where-object {
-          $psitem.Name -ieq 'MemoryGB' -and [int]$psitem.Value -ge $minMemoryGB
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
-
-    if ($minVCPU) {
-      write-host "filtering skus by Capabilities.VCPUs >= $minVCPU" -ForegroundColor Green
-      write-host "
-      `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
-        `$psitem.Capabilities | where-object {
-          `$psitem.Name -ieq 'VCPUs' -and [int]`$psitem.Value -ge $minVCPU
-        }
-      }" -foregroundColor Cyan
-
-      $global:filteredSkus = $global:filteredSkus | where-object {
-        $psitem.Capabilities | where-object {
-          $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -ge $minVCPU
-        }
-      }
-      write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-      write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
-    }
+    check-withRestrictions
+    check-skuName
+    check-computerArchitectureType
+    check-hyperVGenerations
+    check-resourceVolumeMB # check local storage
+    check-maxMemoryGB
+    check-maxvCpu
+    check-vmDeploymentTypes
+    check-minMemoryGB
+    check-minvCpu
+    check-confidentialComputingType
 
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
     write-host "filtered skus ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Magenta
@@ -367,6 +222,232 @@ function main() {
     return $false
   }
   finally {
+  }
+}
+
+function check-computerArchitectureType(){
+  if ($computerArchitectureType) {
+    write-host "filtering skus by Capabilities.CpuArchitectureType = '$computerArchitectureType'" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+      `$psitem.Name -ieq 'CpuArchitectureType' -and `$psitem.Value -ieq $computerArchitectureType
+    }" -ForegroundColor Cyan
+    
+    $global:filteredSkus = $global:filteredSkus | Where-Object {
+      $psitem.Capabilities | where-object { 
+        $psitem.Name -ieq 'CpuArchitectureType' -and $psitem.Value -ieq $computerArchitectureType
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-confidentialComputingType() {
+  if ($confidentialComputingType) {
+    write-host "filtering skus by Capabilities.ConfidentialComputingType = '$confidentialComputingType'" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+      `$psitem.Name -ieq 'ConfidentialComputingType' -and `$psitem.Value -imatch $confidentialComputingType
+    }" -ForegroundColor Cyan
+    
+    $global:filteredSkus = $global:filteredSkus | Where-Object {
+      $psitem.Capabilities | where-object { 
+        $psitem.Name -ieq 'ConfidentialComputingType' -and $psitem.Value -imatch $confidentialComputingType
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+  else {
+    write-host "removing skus by Capabilities.ConfidentialComputingType != `$null" -ForegroundColor Green
+    write-host "
+    `$tempSkus = [collections.arrayList]::new(`$global:filteredSkus)
+      `$global:filteredSkus | Where-Object { 
+      `$sku = $psitem
+      foreach (`$capability in `$sku.Capabilities) {
+        if (`$capability.Name -ieq 'ConfidentialComputingType') { 
+          [void]`$tempSkus.Remove(`$sku)
+          return
+        }
+      }
+    }" -ForegroundColor Cyan
+    $tempSkus = [collections.arrayList]::new($global:filteredSkus)
+    $global:filteredSkus | Where-Object {
+      $sku = $psitem
+      foreach ($capability in $sku.Capabilities) {
+        if ($capability.Name -ieq 'ConfidentialComputingType') { 
+          #write-host "removing sku $($capability.Name) with value $($capability.Value)" -ForegroundColor Yellow
+          [void]$tempSkus.Remove($sku)
+          #write-host "temp skus count: ($($tempSkus.Count))" -ForegroundColor Magenta
+          return
+        }
+      }
+    }
+
+    $global:filteredSkus = $tempSkus.ToArray()
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-hyperVGenerations(){
+  if ($hyperVGenerations) {
+    write-host "filtering skus by Capabilities.HyperVGenerations = '$hyperVGenerations'" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+      `$psitem.Name -ieq 'HyperVGenerations' -and `$psitem.Value -imatch $hyperVGenerations
+    }" -ForegroundColor Cyan
+    
+    $global:filteredSkus = $global:filteredSkus | Where-Object {
+      $psitem.Capabilities | where-object { 
+        $psitem.Name -ieq 'HyperVGenerations' -and $psitem.Value -imatch $hyperVGenerations
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-maxMemoryGB(){
+  if ($maxMemoryGB) {
+    write-host "filtering skus by Capabilities.MemoryGB <= $maxMemoryGB" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+        `$psitem.Name -ieq 'MemoryGB' -and [int]`$psitem.Value -le $maxMemoryGB
+      }
+    }" -ForegroundColor Cyan
+
+    $global:filteredSkus = $global:filteredSkus | where-object { 
+      $psitem.Capabilities | where-object {
+        $psitem.Name -ieq 'MemoryGB' -and [int]$psitem.Value -le $maxMemoryGB
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-maxvCpu(){
+  if ($maxVCPU) {
+    write-host "filtering skus by Capabilities.VCPUs <= $maxVCPU" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+        `$psitem.Name -ieq 'VCPUs' -and [int]`$psitem.Value -le $maxVCPU
+      }
+    }" -foregroundColor Cyan
+
+    $global:filteredSkus = $global:filteredSkus | where-object {
+      $psitem.Capabilities | where-object {
+        $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -le $maxVCPU
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-minMemoryGB(){
+  if ($minMemoryGB) {
+    write-host "filtering skus by Capabilities.MemoryGB >= $minMemoryGB" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+        `$psitem.Name -ieq 'MemoryGB' -and [int]`$psitem.Value -ge $minMemoryGB
+      }
+    }" -ForegroundColor Cyan
+
+    $global:filteredSkus = $global:filteredSkus | where-object { 
+      $psitem.Capabilities | where-object {
+        $psitem.Name -ieq 'MemoryGB' -and [int]$psitem.Value -ge $minMemoryGB
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-minvCpu(){
+  if ($minVCPU) {
+    write-host "filtering skus by Capabilities.VCPUs >= $minVCPU" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+        `$psitem.Name -ieq 'VCPUs' -and [int]`$psitem.Value -ge $minVCPU
+      }
+    }" -foregroundColor Cyan
+
+    $global:filteredSkus = $global:filteredSkus | where-object {
+      $psitem.Capabilities | where-object {
+        $psitem.Name -ieq 'VCPUs' -and [int]$psitem.Value -ge $minVCPU
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-resourceVolumeMB(){
+  if ($maxResourceVolumeMB -ne -1 -or $minResourceVolumeMB -ne -1) {
+    if ($maxResourceVolumeMB -eq -1) { $maxResourceVolumeMB = [int]::MaxValue }
+    if ($minResourceVolumeMB -eq -1) { $minResourceVolumeMB = 1 }
+    write-host "checking for local storage" -ForegroundColor Green
+    write-host "filtering skus by Capabilities.MaxResourceVolumeMB <= '$maxResourceVolumeMB' and Capabilities.MaxResourceVolumeMB >= $minResourceVolumeMB" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+      `$psitem.Name -ieq 'MaxResourceVolumeMB' -and (`$psitem.Value -le $maxResourceVolumeMB -and `$psitem.Value -ge $minResourceVolumeMB)
+    }" -ForegroundColor Cyan
+    
+    $global:filteredSkus = $global:filteredSkus | Where-Object {
+      $psitem.Capabilities | where-object { 
+        $psitem.Name -ieq 'MaxResourceVolumeMB' -and ($psitem.Value -le $maxResourceVolumeMB -and $psitem.Value -ge $minResourceVolumeMB)
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-skuName(){
+  if ($skuName) {
+    write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Name -imatch $skuName }" -ForegroundColor Cyan
+    $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Name -imatch $skuName }
+    write-verbose "skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-vmDeploymentTypes(){
+  if ($vmDeploymentTypes) {
+    write-host "filtering skus by Capabilities.VMDeploymentTypes = '$vmDeploymentTypes'" -ForegroundColor Green
+    write-host "
+    `$global:filteredSkus = `$global:filteredSkus | Where-Object { 
+      `$psitem.Capabilities | where-object {
+      `$psitem.Name -ieq 'VMDeploymentTypes' -and `$psitem.Value -imatch $vmDeploymentTypes
+    }" -ForegroundColor Cyan
+    
+    $global:filteredSkus = $global:filteredSkus | Where-Object {
+      $psitem.Capabilities | where-object { 
+        $psitem.Name -ieq 'VMDeploymentTypes' -and $psitem.Value -imatch $vmDeploymentTypes
+      }
+    }
+    write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+  }
+}
+
+function check-withRestrictions(){
+  if (!$withRestrictions) {
+    write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Restrictions.Count -eq 0 }" -ForegroundColor Cyan
+    $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Restrictions.Count -eq 0 }
+    write-verbose "unrestricted skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
+    write-host "unrestricted skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
   }
 }
 
