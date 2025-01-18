@@ -115,7 +115,7 @@ param (
   [int]$maxResourceVolumeMB = -1, # 0 is no local disk -1 is unlimited
   [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
   [string]$vmDeploymentTypes = "",
-  [string]$confidentialComputingType = ".",
+  [switch]$confidentialComputingType,
   [switch]$force
 )
 
@@ -129,7 +129,7 @@ function main() {
       $hyperVGenerations = "V1"
       $minResourceVolumeMB = 10000
       $vmDeploymentTypes = "PaaS"
-      $confidentialComputingType = $null
+      $confidentialComputingType = $false
     }
 
     if (!$global:locations -or $force) {
