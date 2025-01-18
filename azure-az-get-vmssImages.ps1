@@ -134,8 +134,8 @@ function check-module() {
             install-module az.resources
 
             if(!(get-module az.accounts)) { import-module az.accounts }
-            if(!(get-module az.compute)) { import-module {az.compute}
-            if(!(get-module az.resources)) { import-module {az.resources}
+            if(!(get-module az.compute)) { import-module az.compute}
+            if(!(get-module az.resources)) { import-module az.resources}
         }
         else {
             return $false
