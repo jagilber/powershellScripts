@@ -29,7 +29,7 @@ param(
   [string]$vcLibsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs\Microsoft.VCLibs.Desktop\14.0\AppX\Retail\x64\Microsoft.VCLibs.x64.14.00.Desktop.appx",
   [string]$vcLibsUrl = "https://raw.githubusercontent.com/jagilber/powershellScripts/refs/heads/master/windbg/Microsoft.VCLibs.x64.14.00.Desktop.appx",
   [string]$wingetUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest",
-  # [int]$sleepSeconds = 600,
+  [switch]$installCoreSdk,
   [string]$defaultWingetPath = "$env:LocalAppData\Microsoft\WindowsApps\winget.exe",
   [string]$logPath = "$pwd\install-server-os-winget.log" # %WINDIR%\Logs\Dism\dism.log
 )
@@ -103,34 +103,6 @@ function main() {
   # using only Add-AppxProvisionedPackage will not make winget available immediately
   write-host "Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose -LogLevel Debug -LogPath $logPath"
   Add-AppxProvisionedPackage -Online -PackagePath $latestWingetMsixBundle -LicensePath $latestWingetMsixLicense -Verbose -LogLevel Debug -LogPath $logPath
-  
-  #Dism /online /Get-ProvisionedAppxPackages /?
-  # write-host "
-  #   DISM.exe /Online ``
-  #     /NoRestart ``
-  #     /Add-ProvisionedAppxPackage ``
-  #     /PackagePath:$latestWingetMsixBundle ``
-  #     /LicensePath:$latestWingetMsixLicense ``
-  #     /LogPath:$logPath ``
-  #     /LogLevel:4
-  # "
-
-  # DISM.exe /Online `
-  #   /NoRestart `
-  #   /Add-ProvisionedAppxPackage `
-  #   /PackagePath:$latestWingetMsixBundle `
-  #   /LicensePath:$latestWingetMsixLicense `
-  #   /LogPath:$logPath `
-  #   /LogLevel:4
-
-
-  # write-host "sleeping for $sleepSeconds seconds"
-  # $counter = 0
-  # while(!(resolve-envPath "winget.exe") -and $counter -lt $sleepSeconds) { 
-  #   write-host "waiting for winget to be installed. this can take a while: $($counter++)" -ForegroundColor Yellow
-  #   start-sleep -Seconds 1
-  # }
-  
 
   if (is-wingetInstalled) {
   
@@ -151,7 +123,21 @@ function main() {
     Write-Error "winget not found. Please restart your shell."
   }
 
-  if ((test-path "C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2410.11001.0_x64__8wekyb3d8bbwe\amd64\ttd.exe"))
+  $hasNetCoreRuntime = (dotnet --list-runtimes) -imatch "NETCore"
+  $hasNetCoreSdk = (dotnet --list-sdks) -imatch "NETCore"
+
+  if($installCoreSdk -and !$hasNetCoreSdk -and $hasNetCoreRuntime) {
+    write-host "installing latest .NET Core SDK"
+    $latestNetCoreRuntime = @((dotnet --list-runtimes) -imatch 'netcore')[-1] #-match '\d+\.\d+\.\d+'
+    $latestNetCoreVersion = $latestNetCoreRuntime -replace '.*(\d+\.\d+\.\d+).*', '$1'
+    $lastestNetCoreMajorVersion = $latestNetCoreVersion -replace '(\d+)\.\d+\.\d+', '$1'
+    
+    write-host "winget search 'Microsoft.DotNet.SDK.$lastestNetCoreMajorVersion'"
+    winget search "Microsoft.DotNet.SDK.$lastestNetCoreMajorVersion"
+
+    write-host "winget install 'Microsoft.DotNet.SDK.$lastestNetCoreMajorVersion'"
+    winget install "Microsoft.DotNet.SDK.$lastestNetCoreMajorVersion"
+  }
   # dotnet tool is not installed by default on Windows Server and is installed with the .NET SDK
   if ((get-command dotnet -ErrorAction SilentlyContinue) -and (dotnet --list-sdks)) {
     write-host "dotnet found. installing dotnet-sos"
