@@ -52,7 +52,7 @@ param(
 
 #$cert = (dir Cert:\LocalMachine\My\$env:IDENTITY_SERVER_THUMBPRINT)
 $ErrorActionPreference = 'continue'
-$DebugPreference = $VerbosePreference = 'continue'
+#$DebugPreference = $VerbosePreference = 'continue'
 $useCore = $PSVersionTable.PSEdition -ieq 'core'
 $metadataIp = '169.254.169.254'
 $irmArgs = @{}
@@ -85,9 +85,6 @@ public class IDontCarePolicy : ICertificatePolicy {
       [System.Net.ServicePointManager]::CertificatePolicy = new-object IDontCarePolicy 
     }
 
-    $procList = (get-process) | out-string
-    write-console "process list before request: $procList"
-  
     if ($useMetadataEndpoint) {
       # container will need a static route to the host to reach the metadata endpoint
       if (!(tnc $metadataIp -p 80).TcpTestSucceeded) {
@@ -171,9 +168,6 @@ public class IDontCarePolicy : ICertificatePolicy {
       -Headers @{Authorization = $bearertoken }
 
     write-console "result $($result | convertto-json)" -ForegroundColor green
-    
-    $procList = (get-process) | out-string
-    write-console "process list after request: $procList"
   }
   catch {
     write-host "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
@@ -181,7 +175,7 @@ public class IDontCarePolicy : ICertificatePolicy {
     return $false
   }
   finally {
-    if($error) {
+    if ($error) {
       write-console "error output: $($error | out-string)" -ForegroundColor red
     }
     write-console "finished"
