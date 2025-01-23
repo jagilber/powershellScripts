@@ -131,7 +131,7 @@ function get-commandDuration() {
     }
 
     $lastCommand = get-history -count 1
-    if (!$lastCommand) {
+    if (!$lastCommand -or !$lastCommand.Duration) {
         write-debug "no last command found. returning"
         $durationMs = 0
     }
