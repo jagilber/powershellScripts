@@ -27,7 +27,8 @@ param(
     [switch]$ssh,
     [int]$sshPort = 22,
     [string]$vscodeScriptUrl = "https://raw.githubusercontent.com/PowerShell/vscode-powershell/main/scripts/Install-VSCode.ps1",
-    [string]$pwshReleaseApi = "https://api.github.com/repos/powershell/powershell/releases/latest"
+    [string]$pwshReleaseApi = "https://api.github.com/repos/powershell/powershell/releases/latest",
+    [string]$defaultVscodeBinPath = "c:\program files\Microsoft VS Code\bin"
 )
 
 [io.directory]::CreateDirectory($gitHubDir)
@@ -97,6 +98,14 @@ if (!(get-command code -errorAction SilentlyContinue)) {
     write-host "vscode not found" -ForegroundColor Yellow
     invoke-webRequest $vscodeScriptUrl -user 'powershell' -outFile  "$pwd/Install-VSCode.ps1";
     .\Install-VSCode.ps1 -additionalExtensions @($additionalExtensions) -launchWhenDone -enableContextMenus
+
+    if ((test-path $defaultVscodeBinPath)) {
+        write-host "adding vscode bin path '$defaultVscodeBinPath' to env"
+        $env:path += ";$defaultVscodeBinPath"
+    }
+    else {
+        write-host "vscode bin path not found" -ForegroundColor Red
+    }
 }
 else {
     write-host "vscode found" -ForegroundColor Green
