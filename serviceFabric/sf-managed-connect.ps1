@@ -14,16 +14,16 @@ using namespace System.Security.Cryptography.X509Certificates;
 
 [cmdletbinding()]
 param(
-    $clusterendpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
+    $clusterEndpoint = "cluster.location.cloudapp.azure.com", #"10.0.0.4:19000",
     [Parameter(Mandatory = $true)]
     $thumbprint,
     #[Parameter(Mandatory = $true)]
-    #$resourceGroup,
-    #$clustername = $resourceGroup,
+    $resourceGroup,
+    $clustername = $resourceGroup,
     [ValidateSet('LocalMachine', 'CurrentUser')]
     $storeLocation = "CurrentUser",
     $storeName = 'My',
-    $clusterendpointPort = 19000,
+    $clusterEndpointPort = 19000,
     $clusterExplorerPort = 19080,
     $subscriptionId
 )
@@ -94,8 +94,19 @@ function main() {
         }
     }
 
+    $global:cluster = $null
 
-    $global:cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")
+    if($resourceGroup -and $clustername) {
+        write-host "Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -Name $clustername" -ForegroundColor Green
+        $cluster = Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -Name $clustername
+        $managementEndpoint = $cluster.Fqdn
+    }
+    else {
+        write-host "Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")" -ForegroundColor Green
+        $cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")
+    }
+
+    # $global:cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")
     if (!$cluster) {
         write-error "unable to find cluster $clusterEndpoint"
         return
@@ -129,7 +140,7 @@ function main() {
     $VerbosePreference = "silentlycontinue"
     $DebugPreference = "silentlycontinue"
     
-    $result = Test-NetConnection -ComputerName $clusterFqdn -Port $clusterendpointPort
+    $result = Test-NetConnection -ComputerName $clusterFqdn -Port $clusterEndpointPort
     write-host ($result | out-string)
 
     if ($result.tcpTestSucceeded) {
