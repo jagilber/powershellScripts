@@ -131,9 +131,18 @@ function get-commandDuration() {
     }
 
     $lastCommand = get-history -count 1
-    if (!$lastCommand -or !$lastCommand.Duration) {
+    if (!$lastCommand) {
         write-debug "no last command found. returning"
         $durationMs = 0
+    }
+    elseif (!$lastCommand.Duration) {
+        write-debug "no duration found. returning"
+        if ($lastCommand.StartExecutionTime -and $lastCommand.EndExecutionTime) {
+            $durationMs = ($lastCommand.EndExecutionTime - $lastCommand.StartExecutionTime).TotalMilliseconds
+        }
+        else {
+            $durationMs = 0
+        }
     }
     else {
         $durationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
@@ -168,7 +177,7 @@ function get-currentBranch() {
     write-debug "get-currentBranch()"
     $currentBranch = @(git branch --show-current 2>&1)
     # if there is a configuration or security issue, git will return an error starting with 'fatal:'. check for this and return
-    if($currentBranch -imatch 'not a git repository') {
+    if ($currentBranch -imatch 'not a git repository') {
         write-verbose "not a git repository"
         return
     }
@@ -210,10 +219,10 @@ function get-remotes($gitCommand = $false) {
     write-debug "get-remotes($gitCommand)"
     $pattern = "(?<remote>\S+?)\s+(?<repo>.+?)\s+?\(\w+?\)"
     $remotes = @(git remote -v)
-    $remoteMatches = [regex]::Matches($remotes, $pattern)
+    $remoteMatches = @([regex]::Matches($remotes, $pattern))
     [void]$promptInfo.remotes.clear()
     
-    if (!$remoteMatches) {
+    if ($remoteMatches.Count -lt 1) {
         write-debug "no remotes found. returning"
         $promptInfo.repo = $null
         return $null
