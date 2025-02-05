@@ -51,7 +51,7 @@ if (!(dotnet --list-sdks)) {
   $downloadFile = "$pwd\dotnet-install.ps1"
   write-host "dotnet sdk is not installed. Please install it from https://dotnet.microsoft.com/download"
   $install = read-host "Do you want to install it now? (y/n)"
-  if ($install -ne "y") {
+  if ($install -inotlike "y") {
     return
   }
   invoke-webRequest -uri $dotnetSdkScriptUrl -outFile $downloadFile
@@ -61,7 +61,7 @@ if (!(dotnet --list-sdks)) {
 if (!(Get-Command dotnet-trace -ErrorAction SilentlyContinue)) {
   write-warning "dotnet-trace is not installed. Please install it using 'dotnet tool install --global dotnet-trace' *and* restart your shell"
   $install = read-host "Do you want to install it now? (y/n)"
-  if ($install -ne "y") {
+  if ($install -inotlike "y") {
     return
   }
   dotnet tool install --global dotnet-trace
