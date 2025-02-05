@@ -153,8 +153,7 @@ param(
     $iterations = 1,
     $logFile = "$pwd\azure-metadata-rest.log",
     $sleepMilliseconds = 1000,
-    $apiVersion = '2021-02-01',
-    $ipaddress = '10.0.0.4:2377'
+    $apiVersion = '2021-02-01' #'2024-06-11',
 )
 
 [net.servicePointManager]::Expect100Continue = $true; [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
@@ -164,25 +163,16 @@ $count = 0
 $errorCounter = 0
 
 function main() {
-    if ((whoami -inotmatch 'network service')) {
-        write-error "script has to run under 'network service' context"
-        return
-    }
-
-    $cert = Get-ChildItem -Path cert:\LocalMachine -Recurse | Where-Object Issuer -imatch 'FabricManagedIdentityTokenSvc'
 
     while ($count -le $iterations) {
         # acquire system managed identity oauth token from within node
-        $global:managementOauthResult = query-metadata -url "https://$ipAddress/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com" -Cert $cert
-        # $global:managementOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com"
+        $global:managementOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://management.azure.com"
         
         # key vault
-        $global:vaultOauthResult = query-metadata -url "https://$ipAddress/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net" -Cert $cert
-        #  $global:vaultOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net"
+        $global:vaultOauthResultAz = query-metadata -url "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$apiVersion&resource=https://vault.azure.net"
 
         # example instance rest query from within node
-        $global:instanceResult = query-metadata -url "https://$ipAddress/metadata/instance?api-version=$apiVersion" -Cert $cert
-        #  $global:instanceResultAz = query-metadata -url "http://169.254.169.254/metadata/instance?api-version=$apiVersion"
+        $global:instanceResultAz = query-metadata -url "http://169.254.169.254/metadata/instance?api-version=$apiVersion"
 
         # example scheduledEvents (repair jobs) rest query from within node
         $global:scheduledEventsResult = (Invoke-WebRequest -Method GET `
@@ -210,16 +200,25 @@ function main() {
     write-host "finished. total errors:$errorCounter logfile:$logFile"
 }
 
-function query-metadata($url, $cert) {
+function query-metadata($url) {
     $headers = @{'Metadata' = 'true' }
-    if ($cert) {
-        write-host "Invoke-RestMethod -Method GET -Uri $url -Headers $headers -certificate $cert" -ForegroundColor Green
-        $result = Invoke-RestMethod -Method GET -Uri $url -Headers $headers -Certificate $cert
+    $irmArgs = @{
+        uri     = $url
+        method  = 'GET'
+        headers = $headers
+    }
+
+    if ($PSVersionTable.PSEdition -ieq 'core') {
+        $irmArgs.Add('SkipCertificateCheck', $true)
+        $irmArgs.Add('SkipHttpErrorCheck', $true)
     }
     else {
-        write-host "Invoke-RestMethod -Method GET -Uri $url -Headers $headers" -ForegroundColor Green
-        $result = Invoke-RestMethod -Method GET -Uri $url -Headers $headers
+        $irmArgs.Add('UseBasicParsing', $true)
     }
+
+    write-host "Invoke-RestMethod $($irmArgs | convertto-json)" -ForegroundColor Green
+    $result = Invoke-RestMethod @irmArgs
+
     write-host "$($result | convertto-json -depth 99)" -ForegroundColor Cyan
     return $result
 }
