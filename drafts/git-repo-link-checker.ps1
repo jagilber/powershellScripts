@@ -18,7 +18,8 @@ param(
     'vault.azure.net',
     '127.0.0.1',
     'localhost',
-    '0.0.0.0'
+    '0.0.0.0',
+    'ipinfo.io'
   )
 )
 
@@ -33,7 +34,7 @@ foreach ($file in $files) {
   }
   Write-Host "Checking file: $($file.FullName)" -ForegroundColor Cyan
   # Write-Host "Get-Content $($file.FullName) | Select-String -Pattern 'https:\/\/[^\s\)\"",\]]+' -AllMatches"
-  $links = Get-Content $file.FullName | Select-String -Pattern 'https:\/\/[^\s\",\]\}\{]+' -AllMatches
+  $links = Get-Content $file.FullName | Select-String -Pattern "https:\/\/[^\s\`"',\]\}\{]+" -AllMatches
   foreach ($linkEntry in $links) {
     foreach ($match in $linkEntry.Matches) {
       $link = $match.Value.trim()
@@ -81,6 +82,7 @@ foreach ($file in $files) {
         $msg = "Bad link: $link"
         Write-Host $msg -ForegroundColor Red
         Add-Content -Path $OutputFile -Value $msg
+        # add a todo comment to markdown files in a comment block where the link was found
       }
     }
   }
