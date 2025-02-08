@@ -7,16 +7,18 @@ $clusterConfig.Properties.nodeTypes[0].placementProperties
 #requires -psedition core
 
 param(
+  [Parameter(Mandatory = $true)]
   [string]$resourceGroupName = "sfcluster",
   [string]$clusterName = $resourceGroupName,
   [string]$apiVersion = "2023-11-01-preview",
   [string]$subscriptionId = (get-azcontext).Subscription.Id,
   [string]$nodeType = "nodetype0",
   [string]$jsonFile = "$pwd\current-config.json",
+  [string]$deploymentName = "$resourceGroupName-$((get-date).ToString("yyyyMMdd-HHmms"))",
   [ValidateSet('add', 'remove')]
   [string]$addOrRemove = "add",
   [hashtable]$placementProperties = @{
-    "nodeFunction" = "apps"
+    "nodeFunction" = "management"
   },
   [switch]$whatIf
 )
@@ -27,6 +29,10 @@ function main() {
     return
   }
 
+  if (!(get-azresourcegroup)) {
+    Connect-AzAccount
+  }
+
   $cluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
   if ($cluster -eq $null) {
     write-error "Cluster not found"
@@ -34,12 +40,7 @@ function main() {
   }
 
   write-host "Cluster found: $($cluster.Name)"
-  if (!(get-azresourcegroup)) {
-    Connect-AzAccount
-  }
-
-  #$jsonht = $jsonConfig | ConvertFrom-Json -AsHashtable
-  #  $jsonConfig = export-resource $subscriptionId $resourceGroupName $clusterName
+  
   $resource = Get-AzResource -Name $clusterName `
     -ResourceGroupName $resourceGroupName `
     -ResourceType 'microsoft.servicefabric/clusters'
@@ -50,71 +51,79 @@ function main() {
     -SkipAllParameterization `
     -Force
 
-  $jsonConfig = ConvertFrom-Json -AsHashTable (Get-Content -Raw $jsonFile)
+  $jsonConfig = convert-fromJson (Get-Content -Raw $jsonFile)
 
-  # write-host "Configuration: $($jsonConfig | convertto-json)"
   if ($jsonConfig -eq $null) {
     write-error "Failed to get configuration"
     return
   }
 
-  # $jsonConfig = $config | ConvertTo-Json -Depth 100
-  write-host "Current configuration: $($jsonConfig | convertto-json)"
-  $jsonConfig | out-file "\temp\current-config.json" -Force
-  # code "\temp\current-config.json"
+  write-host "Current configuration: $(convert-toJson $jsonConfig)"
+  $jsonConfig | out-file $jsonFile -Force
 
-
-  # $config = update-placementConstraints $nodeType $placementProperties $config
   $config = update-jsonPlacementConstraints $nodeType $placementProperties $jsonConfig
-  write-host "Result: $($config | ConvertTo-Json -d 5)"
+  write-host "Result: $(convert-toJson $config)"
 
-  $jsonConfig = $config | ConvertTo-Json -Depth 100
+  # if ($config.resources.properties.upgradeMode -ieq 'Automatic') {
+  #   write-host "removing cluster code version since upgrade mode is Automatic" -foregroundColor 'Yellow'
+  #   $config.resources.properties.clusterCodeVersion = $null
+  # }
+
+  $jsonConfig = convert-toJson $config
   write-host "New configuration: $jsonConfig"
-  #$jsonConfig | out-file "\temp\new-config.json"
-  #code "\temp\new-config.json"
 
-  if ($whatIf) {
-    write-host "WhatIf: $whatIf"
-    return
+  $newJsonFile = $jsonFile.Replace(".json", ".new.json")
+  $jsonConfig | out-file $newJsonFile -Force
+  write-host "New configuration saved to $newJsonFile"
+
+  write-host "
+  Test-AzResourceGroupDeployment -resourceGroupName $resourceGroupName ``
+    -TemplateFile $newJsonFile ``
+    -Verbose
+  " -foregroundColor 'Cyan'
+
+  $result = test-azResourceGroupDeployment -templateFile $newJsonFile -resourceGroupName $resourceGroupName -Verbose
+
+  if ($result) {
+    write-console "error: test-azResourceGroupDeployment failed:$($result | out-string)" -err
+    return $result
   }
 
   write-host "
     New-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName ``
-      -TemplateObject $config ``
+      -DeploymentName $deploymentName ``
+      -TemplateFile $newJsonFile ``
       -Mode Incremental ``
       -Force ``
       -Verbose ``
       -DeploymentDebugLogLevel All
   "
-  $result = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
-    -TemplateObject $config `
-    -Mode Incremental `
-    -Force `
-    -Verbose `
-    -DeploymentDebugLogLevel All
+  if (!$whatIf) {
+    $result = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
+      -DeploymentName $deploymentName `
+      -TemplateFile $newJsonFile `
+      -Mode Incremental `
+      -Force `
+      -Verbose `
+      -DeploymentDebugLogLevel All
+  }
 
   write-host "Result: $result"
   write-host "finished"
 }
 
-function export-resource($subscriptionId, $resourceGroupName, $clusterName) {
-  $resourceId = "/subscriptions/$($subscriptionId)/resourcegroups/$($resourceGroupName)/providers/Microsoft.ServiceFabric/clusters/$($clusterName)"
-  $resource = export-azresourcegroup -ResourceGroupName $resourceGroupName `
-    -resource $resourceId `
-    -Path "C:\temp\exported-resource.json" `
-    -SkipAllParameterization `
-    -IncludeComments `
-    -Force
+function convert-fromJson($json) {
+  return convertFrom-json $json -AsHashtable
+}
 
-  return (get-content "C:\temp\exported-resource.json" -raw) | ConvertFrom-Json -AsHashtable
+function convert-toJson($object) {
+  return convertTo-json -d 10 $object
 }
 
 function update-jsonPlacementConstraints($nodeType, $placementProperties, $config) {
-  # $cluster = ConvertFrom-Json -AsHashTable $config
-  # $clusterResource = $config.resources | Where-Object type -ieq 'microsoft.servicefabric/clusters'
   $nodeTypesList = $config.resources.properties.nodeTypes
-  # $nodeTypeIndex = $nodeTypes | where-object { $_.name -eq $nodeType }
-  $placementJson = $placementProperties | ConvertTo-Json -d 5
+  $placementJson = convert-toJson $placementProperties
+
   write-host "current placementJson: $placementJson"
   $key = $placementProperties.Keys[0]
   $value = $placementProperties[$key]
@@ -157,37 +166,10 @@ function update-jsonPlacementConstraints($nodeType, $placementProperties, $confi
   }
 
   #$clusterResource.properties.nodeTypes = $nodeTypes
-  write-host "updated placementProperties: $($nodeTypesList.placementProperties | ConvertTo-Json -d 5)"
-  write-host "updated nodeTypes: $($nodeTypesList | ConvertTo-Json -d 5)"
+  write-host "updated placementProperties: $(convert-toJson $nodeTypesList.placementProperties)"
+  write-host "updated nodeTypes: $(convert-toJson $nodeTypesList)"
   return $config
 }
-
-# function update-placementConstraints($nodeType, $placementProperties, $config) {
-#   $nodeTypes = $config.Properties.nodeTypes
-#   $nodeTypeIndex = $nodeTypes | where-object { $_.name -eq $nodeType }
-#   if ($nodeTypeIndex -eq $null) {
-#     Write-Host "Node type not found"
-#     return $null
-#   }
-
-#   $placementJson = $placementProperties | ConvertTo-Json -d 5
-
-#   if ($nodeTypeIndex.placementProperties -eq $null) {
-#     # $nodeTypeIndex.placementProperties = @{}
-#     write-host "placementProperties not found"
-#     write-host "Add-Member -InputObject $nodeTypeIndex -MemberType NoteProperty -Name placementProperties -Value $placementProperties"
-#     # Add-Member -InputObject $config.Properties.nodeTypes -MemberType NoteProperty -Name placementProperties -Value @{}
-#     Add-Member -InputObject $nodeTypeIndex -MemberType NoteProperty -Name placementProperties -Value $placementProperties
-#   }
-#   else {
-#     write-host "current placementProperties: $($nodeTypeIndex.placementProperties | ConvertTo-Json)"
-#     $nodeTypeIndex.placementProperties = $placementProperties
-#   }
-
-#   write-host "updated placementProperties: $($nodeTypeIndex.placementProperties | ConvertTo-Json -d 5)"
-#   write-host "updated nodeTypes: $($nodeTypes | ConvertTo-Json -d 5)"
-#   return $config
-# }
 
 main
 
