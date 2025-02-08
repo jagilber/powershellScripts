@@ -120,6 +120,7 @@ param (
 )
 
 $global:filteredSkus = @{}
+$global:regions = @($location.Split(','))
 
 function main() {
   try {
@@ -141,7 +142,7 @@ function main() {
       }
     }
 
-    if ($location -and ($global:locations.location -inotcontains $location)) {
+    if ($location -and ($global:locations.Location -inotcontains $location)) {
       write-host ($locations | out-string) -ForegroundColor Cyan
       write-error "location $location is not valid"
       return
@@ -151,22 +152,13 @@ function main() {
       $global:skus = @{}
       write-host "retrieving skus" -ForegroundColor Green
       write-host "Get-AzComputeResourceSku | Where-Object { `$psitem.resourceType -ieq 'virtualMachines' }" -ForegroundColor Cyan
-      $global:skus = Get-AzComputeResourceSku | Where-Object { 
-        $psitem.resourceType -ieq 'virtualMachines' `
-          -and $global:locations.Location -icontains $psitem.LocationInfo.Location
-      }
+      $global:skus = Get-AzComputeResourceSku | Where-Object { $psitem.resourceType -ieq 'virtualMachines' }
       write-host "global:skus:$($global:skus.Count)" -ForegroundColor Cyan
     }
-
-    check-location
-
-    if (!$global:skus) {
-      write-error "no skus found in region $location"
-      return
-    }
-
-    write-host "`$global:filteredSkus = `$global:skus" -ForegroundColor Cyan
     
+    $global:filteredSkus = $global:skus
+    write-host "`$global:filteredSkus = `$global:skus" -ForegroundColor Cyan
+
     check-withRestrictions
     check-skuName
     check-computerArchitectureType
@@ -178,6 +170,24 @@ function main() {
     check-minMemoryGB
     check-vmDeploymentTypes # checking for no gpu on sf
     check-confidentialComputingType
+  
+    if (!$global:filteredSkus) {
+      write-warning "no skus found"
+      return $false
+    }
+
+    $skus = check-location $global:regions $global:filteredSkus
+    if (!$skus) {
+      $regions = check-geoRegion $global:regions
+      $skus = check-location $regions $global:filteredSkus
+      if (!$skus) {
+        write-warning "no skus found in georegion $location"
+      }
+    }
+
+    if ($skus) {
+      $global:filteredSkus = $skus
+    }
 
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
     write-host "filtered skus ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Magenta
@@ -211,7 +221,7 @@ function main() {
   }
 }
 
-function check-computerArchitectureType(){
+function check-computerArchitectureType() {
   if ($computerArchitectureType) {
     write-host "filtering skus by Capabilities.CpuArchitectureType = '$computerArchitectureType'" -ForegroundColor Green
     write-host "
@@ -280,7 +290,21 @@ function check-confidentialComputingType() {
   }
 }
 
-function check-hyperVGenerations(){
+function check-geoRegion([string[]]$regions) {
+  if (!$regions) { return $null }
+
+  $geoGroups = $global:locations.GeographyGroup | select-object -Unique
+  $geoGroups = ($global:locations | where-object Location -in $regions | select-object GeographyGroup).GeographyGroup
+  
+  write-host "searching for regions in geoGroup: $geoGroups" -ForegroundColor Cyan
+  $geoRegions = @($global:locations | where-object GeographyGroup -in $geoGroups).location | sort-object
+  
+  write-host "regions in geoGroup:`n$($geoRegions | out-string)" -ForegroundColor Cyan
+  write-host "returning regions for: $($geoGroups | out-string)"
+  return $geoRegions
+}
+
+function check-hyperVGenerations() {
   if ($hyperVGenerations) {
     write-host "filtering skus by Capabilities.HyperVGenerations = '$hyperVGenerations'" -ForegroundColor Green
     write-host "
@@ -299,25 +323,45 @@ function check-hyperVGenerations(){
   }
 }
 
-function check-location(){
-  if ($location) {
-    write-host "filtering skus by location $location" -ForegroundColor Green
+function check-location([string[]]$locations, [object[]]$skus) {
+  if ($locations.Length -gt 0) {
+    write-host "filtering skus by locations $locations" -ForegroundColor Green
     write-host "
-    `$global:filteredSkus = `$global:skus | Where-Object { 
-      `$psitem.Locations -ieq $location
+    `$skus = `$skus | Where-Object { 
+      `$psitem.Locations -in $locations
     }" -ForegroundColor Cyan
-    $global:filteredSkus = $global:skus | Where-Object { 
-      $psitem.Locations -ieq $location
+    $skus = $skus | Where-Object { 
+      $psitem.Locations -in $locations
     }
-    write-verbose "available skus:`n$($global:skus | convertto-json -depth 10)"
-    write-host "filtered skus ($($global:filteredSkus.Count))" -ForegroundColor Green
+    write-verbose "available skus:`n$($skus | convertto-json -depth 10)"
   }
   else {
-    $global:filteredSkus = $global:skus
+    # $global:filteredSkus = $global:skus
+    write-host "no location specified. returning all skus" -ForegroundColor Yellow
   }
+  write-host "filtered skus ($($skus.Count))" -ForegroundColor Green
+  return $skus
 }
 
-function check-maxMemoryGB(){
+function check-locations([string[]]$locations) {
+  $geoRegions = check-geoRegion $locations
+  if ($geoRegions) {
+    $global:filteredSkus = @($global:skus | where-object Locations -in $geoRegions)
+    write-host "skus found in geo regions $(convertto-json $geoRegions)" -ForegroundColor Green
+  }
+  else {
+    write-error "no skus found in geo region $location"
+    return $false
+  }
+
+  if (!$global:filteredSkus) {
+    write-error "no skus found in region $location"
+    return $false
+  }
+  return $true
+}
+
+function check-maxMemoryGB() {
   if ($maxMemoryGB) {
     write-host "filtering skus by Capabilities.MemoryGB <= $maxMemoryGB" -ForegroundColor Green
     write-host "
@@ -337,7 +381,7 @@ function check-maxMemoryGB(){
   }
 }
 
-function check-maxvCpu(){
+function check-maxvCpu() {
   if ($maxVCPU) {
     write-host "filtering skus by Capabilities.VCPUs <= $maxVCPU" -ForegroundColor Green
     write-host "
@@ -357,7 +401,7 @@ function check-maxvCpu(){
   }
 }
 
-function check-minMemoryGB(){
+function check-minMemoryGB() {
   if ($minMemoryGB) {
     write-host "filtering skus by Capabilities.MemoryGB >= $minMemoryGB" -ForegroundColor Green
     write-host "
@@ -377,7 +421,7 @@ function check-minMemoryGB(){
   }
 }
 
-function check-minvCpu(){
+function check-minvCpu() {
   if ($minVCPU) {
     write-host "filtering skus by Capabilities.VCPUs >= $minVCPU" -ForegroundColor Green
     write-host "
@@ -397,7 +441,7 @@ function check-minvCpu(){
   }
 }
 
-function check-resourceVolumeMB(){
+function check-resourceVolumeMB() {
   if ($maxResourceVolumeMB -ne -1 -or $minResourceVolumeMB -ne -1) {
     if ($maxResourceVolumeMB -eq -1) { $maxResourceVolumeMB = [int]::MaxValue }
     if ($minResourceVolumeMB -eq -1) { $minResourceVolumeMB = 1 }
@@ -419,7 +463,7 @@ function check-resourceVolumeMB(){
   }
 }
 
-function check-skuName(){
+function check-skuName() {
   if ($skuName) {
     write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Name -imatch $skuName }" -ForegroundColor Cyan
     $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Name -imatch $skuName }
@@ -428,7 +472,7 @@ function check-skuName(){
   }
 }
 
-function check-vmDeploymentTypes(){
+function check-vmDeploymentTypes() {
   if ($vmDeploymentTypes) {
     write-host "filtering skus by Capabilities.VMDeploymentTypes = '$vmDeploymentTypes'" -ForegroundColor Green
     write-host "
@@ -447,7 +491,7 @@ function check-vmDeploymentTypes(){
   }
 }
 
-function check-withRestrictions(){
+function check-withRestrictions() {
   if (!$withRestrictions) {
     write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Restrictions.Count -eq 0 }" -ForegroundColor Cyan
     $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Restrictions.Count -eq 0 }
