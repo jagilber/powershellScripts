@@ -11,7 +11,7 @@
 .NOTES
     File Name      : openai.ps1
     Author         : Jagilber
-    version: 240518
+    version: 250210
 
     https://platform.openai.com/docs/api-reference/models
     https://platform.openai.com/docs/guides/prompt-engineering
@@ -111,8 +111,8 @@ param(
   [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '',
-  [ValidateSet('o3-mini', 'o1-mini', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
-  [string]$model = 'o1-mini', #'o1-mini',
+  [ValidateSet('o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
+  [string]$model = 'o1-mini',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
@@ -134,7 +134,7 @@ param(
   [ValidateSet('url', 'b64_json')]
   [string]$imageResponseFormat = 'url',
   [ValidateSet('json', 'markdown')]
-  [string]$responseFileFormat = 'markdown',
+  [string]$responseFileFormat = 'json',
   [ValidateSet('json_object', 'text')]
   [string]$responseFormat = 'json_object',
   [string[]]$systemPrompts = @(
@@ -246,8 +246,8 @@ function main() {
     # Make the API request using Invoke-RestMethod
     $response = invoke-rest $endpoint $headers $jsonBody
     $message = read-messageResponse $response $script:messageRequests
-    if(!$model -ieq 'o1-mini' -and !$model -ieq 'o3-mini') {
-      # doesnt support system prompts
+    
+    if ($responseFileFormat -ieq 'markdown') {
       open-withCode (save-MessageResponse $message.content)
     }
 
@@ -266,15 +266,18 @@ function main() {
       convert-toJson $script:messageRequests | Out-File $promptsFile
       write-log "messages stored in: $promptsFile" -ForegroundColor Cyan
     }
+
     $messageContent = (convert-toJson (convert-fromJson $message.content))
-    if(!$messageContent) {
+    if (!$messageContent) {
       $messageContent = $message.content
     }
     write-log "response:$($messageContent)" -color Green
+    # write-log "response:$($message.content)" -color Green
     write-log ($global:openaiResponse | out-string) -color DarkGray
     write-log "use alias 'ai' to run script with new prompt. example:ai '$($prompts[0])'" -color DarkCyan
     write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
     write-log "===================================="
+    # return $message.content
     return $messageContent
   }
   catch {
@@ -302,13 +305,12 @@ function build-requestBody($messageRequests, $systemPrompts) {
 function build-chatRequestBody($messageRequests, $systemPrompts) {
 
   # $role = 'system'
-  if ($model -ieq 'o1-mini' -or $model -ieq 'o3-mini') {
+  if ($model -imatch 'o\d-') {
     # o1 doesnt currently support system prompts
     # https://platform.openai.com/docs/guides/reasoning#beta-limitations
-    $script:systemPromptsList.Clear()
-    $requestBody = build-o1chatRequestBody $messageRequests #$systemPrompts
-    return $requestBody
     # https://community.openai.com/t/o1-models-do-not-support-system-role-in-chat-completion/953880/8
+    $requestBody = build-o1chatRequestBody $messageRequests $systemPrompts
+    return $requestBody
     # $role = 'developer'
   }
 
@@ -344,21 +346,15 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
 }
 
 function build-o1chatRequestBody($messageRequests, $systemPrompts) {
-
-  # if (!$messageRequests) {
-  #   write-log 'no message requests found for o1 model. returning' -color Red
-  #   return $null
-  # }
-
-  # if (!$messageRequests) {
-  # foreach ($message in $systemPrompts) {
-  #   [void]$messageRequests.Add(@{
-  #       role    = 'developer'
-  #       content = $message
-  #     })
-  # }
-  # }
-
+  # o1 doesnt currently support system prompts
+  # https://platform.openai.com/docs/guides/reasoning#beta-limitations
+  # https://community.openai.com/t/o1-models-do-not-support-system-role-in-chat-completion/953880/8
+  foreach ($message in $systemPrompts) {
+    [void]$messageRequests.Add(@{
+        role    = $promptRole #'developer'
+        content = $message
+      })
+  }
 
   foreach ($message in $prompts) {
     [void]$messageRequests.Add(@{
@@ -367,6 +363,7 @@ function build-o1chatRequestBody($messageRequests, $systemPrompts) {
       })
   }
 
+  # o1 doesnt currently support response_format
   $requestBody = @{
     # response_format = @{
     #   type = $responseFormat
@@ -430,7 +427,7 @@ function build-imageRequestBody($messageRequests) {
 }
 
 function convert-fromJson([string]$json) {
-  try{
+  try {
     return convertfrom-json $json -AsHashtable
   }
   catch {
@@ -440,8 +437,8 @@ function convert-fromJson([string]$json) {
 }
 
 function convert-toJson([object]$object, [int]$depth = 5, [switch]$compress = $false) {
-  try{
-    if(!$object) {
+  try {
+    if (!$object) {
       return $null
     }
     return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue -compress:$compress
@@ -458,7 +455,7 @@ function get-endpoint() {
       $endpoint = 'https://api.openai.com/v1/chat/completions'
       $script:endpointType = 'chat'
     }
-    'o1-' {
+    'o\d-' {
       $endpoint = 'https://api.openai.com/v1/chat/completions'
       $script:endpointType = 'chat'
     }
@@ -485,15 +482,22 @@ function get-endpoint() {
 }
 
 function invoke-rest($endpoint, $headers, $jsonBody = $null) {
-  if (!$whatIf -and $jsonBody) {
-    write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Post -Body $jsonBody" -color Cyan
-    $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
+  try {
+    if (!$whatIf -and $jsonBody) {
+      write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Post -Body $jsonBody" -color Cyan
+      $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Post -Body $jsonBody
+    }
+    elseif (!$whatIf) {
+      write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Get" -color Cyan
+      $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Get
+    }
   }
-  elseif (!$whatIf) {
-    write-log "invoke-restMethod -Uri $endpoint -Headers $(convert-toJson $headers) -Method Get" -color Cyan
-    $response = invoke-restMethod -Uri $endpoint -Headers $headers -Method Get
+  catch {
+    write-log "error invoking rest method: $endpoint" -color Red
+    write-log "error: $error" -color Red
+    # return $null
   }
-
+  write-log "response: $($response)" -verbose 
   write-log (convert-toJson $response) -color Magenta
   $global:openaiResponse = $response
   return $response
@@ -517,10 +521,10 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
       if ($message.content) {
         write-log "message content: $($message.content)" -color Yellow
         $error.Clear()
-          if (($messageObject = convert-fromJson $message.content) -and !$error) {
-            write-log "converting message content from json to compressed json" -color Yellow
-            $message.content = (convert-toJson $messageObject -depth 99)
-          }
+        if (($messageObject = convert-fromJson $message.content) -and !$error) {
+          write-log "converting message content from json to compressed json" -color Yellow
+          $message.content = (convert-toJson $messageObject -depth 99)
+        }
       }
     }
     'images' {
