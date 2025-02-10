@@ -6,10 +6,12 @@
 invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/sf-rest-api.ps1" -outFile "$pwd/sf-rest-api.ps1";
 ./sf-rest-api.ps1
 
+https://10.16.140.17:19080/Nodes/_nodetype0_0/$/HostedActiveCodePackage/7a14a99d-e702-48d2-94a2-ee7003bcab6c?api-version=3.0
 #>
 param(
-    $gatewayHost = "https://localhost:19080",
+    $gatewayHostUrl = "https://localhost:19080",
     $gatewayCertThumb = "xxxxx",
+    $absolutePath = $null,
     $startTime = (get-date).AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ssZ"),
     $endTime = (get-date).ToString("yyyy-MM-ddTHH:mm:ssZ"),
     $timeoutSec = 100,
@@ -17,7 +19,9 @@ param(
     [ValidateSet('CurrentUser', 'LocalMachine')]
     $store = 'CurrentUser',
     $certificatePath = '',
-    $certificatePassword = ''
+    $certificatePassword = '',
+    [ValidateSet('GET', 'POST', 'PUT', 'DELETE')]
+    $method = 'GET'
 )
 
 Clear-Host
@@ -28,13 +32,35 @@ function main() {
     set-callback
     $error.Clear()
 
+    $gatewayHost = $gatewayHostUrl
+    # validate $gatewayHost is formatted correctly and correct port
+    if (!$gatewayHost.startsWith("http")) {
+        $gatewayHost = "https://$($gatewayHost)"
+    }
+    if (!$gatewayHost.endsWith(":19080")) {
+        $gatewayHost = "$($gatewayHost):19080"
+    }
+    if ($gatewayHost -notmatch "https://.*:19080") {
+        write-host "GatewayHostUrl must be in the format https://localhost:19080" -ForegroundColor Red
+        return
+    }
+
     if ($certificatePath -and (test-path $certificatePath)) {
         $cert = [security.cryptography.x509Certificates.x509Certificate2]::new($certificatePath, $certificatePassword);
     }
     else {
+        write-host "`$cert = Get-ChildItem -Path cert:\$store -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb"
         $cert = Get-ChildItem -Path cert:\$store -Recurse | Where-Object Thumbprint -eq $gatewayCertThumb
     }
 
+    if($absolutePath) {
+        $url = "$($gatewayHost)/$($absolutePath)?api-version=$($apiVer)"
+        #$url = "$($gatewayHost)/$($absolutePath)?api-version=$($apiVer)&timeout=$($timeoutSec)"
+        #$url = "$($gatewayHost)$($absolutePath)"
+        $result = call-rest -url $url -cert $cert
+        $result | Format-List *
+        return $result
+    }
     $eventArgs = "api-version=$($apiVer)&timeout=$($timeoutSec)&StartTimeUtc=$($startTime)&EndTimeUtc=$($endTime)"
 
     $url = "$($gatewayHost)/EventsStore/Cluster/Events?$($eventArgs)"
@@ -93,12 +119,12 @@ function main() {
 
 function call-rest($url, $cert) {
     if ($PSVersionTable.PSEdition -ieq 'core') {
-        write-host "Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $($cert.thumbprint) -SkipCertificateCheck -SkipHttpErrorCheck" -ForegroundColor Cyan
-        return Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert -SkipCertificateCheck -SkipHttpErrorCheck
+        write-host "Invoke-RestMethod -Uri '$url' -TimeoutSec 30 -UseBasicParsing -Method $method -Certificate `$cert -SkipCertificateCheck -SkipHttpErrorCheck" -ForegroundColor Cyan
+        return Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -Certificate $cert -SkipCertificateCheck -SkipHttpErrorCheck
     }
     else {
-        write-host "Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $($cert.thumbprint)" -ForegroundColor Cyan
-        return Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method Get -Certificate $cert        
+        write-host "Invoke-RestMethod -Uri '$url' -TimeoutSec 30 -UseBasicParsing -Method $method -Certificate `$cert" -ForegroundColor Cyan
+        return Invoke-RestMethod -Uri $url -TimeoutSec 30 -UseBasicParsing -Method $method -Certificate $cert        
     }
 }
 

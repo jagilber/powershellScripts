@@ -126,8 +126,8 @@ public class IDontCarePolicy : ICertificatePolicy {
         method      = 'get'
         uri         = "$($identityEndpoint)?api-version=$($identityApiVersion)&resource=$($resource)"
         headers     = $header
-        #certificateThumbprint = $identityServerThumbprint
-        certificate = $identityCertificate
+        #certificateThumbprint = $identityServerThumbprint # certs only used for callback verification
+        #certificate = $identityCertificate   # certs only used for callback verification
       }
       if ($useCore) {
         [void]$irmArgs.Add("SkipCertificateCheck", $true)
