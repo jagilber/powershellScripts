@@ -111,8 +111,8 @@ param(
   [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '',
-  [ValidateSet('o1-preview', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
-  [string]$model = 'gpt-4o', #'o1-preview',
+  [ValidateSet('o3-mini', 'o1-mini', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o', 'gpt-4o-2024-05-13')]
+  [string]$model = 'o1-mini', #'o1-mini',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
   [int]$seed = $pid,
@@ -140,7 +140,7 @@ param(
   [string[]]$systemPrompts = @(
     'use chain of thought reasoning to break down and step through the prompts thoroughly, reiterating for precision when generating a response.',
     'prefer accurate and complete responses including any references and citations',
-    'use github.com, stackoverflow.com, microsoft.com, azure.com, openai.com, grafana.com, wikipedia.com, associatedpress.com, reuters.com, referencesource.microsoft.com and other reliable sources for the response'
+    'use github.com, stackoverflow.com, microsoft.com, azure.com, openai.com, wikipedia.com, referencesource.microsoft.com and other reliable sources for the response'
   ),
   [switch]$listAssistants,
   [switch]$listModels,
@@ -211,7 +211,7 @@ function main() {
 
     if (Test-Path $promptsFile) {
       write-log "reading messages from file: $promptsFile" -color Yellow
-      [void]$script:messageRequests.AddRange(@(Get-Content $promptsFile | ConvertFrom-Json))
+      [void]$script:messageRequests.AddRange(@(ConvertFrom-Json (Get-Content $promptsFile -Raw)))
     }
 
     $headers = @{
@@ -246,7 +246,10 @@ function main() {
     # Make the API request using Invoke-RestMethod
     $response = invoke-rest $endpoint $headers $jsonBody
     $message = read-messageResponse $response $script:messageRequests
-    open-withCode (save-MessageResponse $message.content)
+    if(!$model -ieq 'o1-mini' -and !$model -ieq 'o3-mini') {
+      # doesnt support system prompts
+      open-withCode (save-MessageResponse $message.content)
+    }
 
     $global:openaiResponse = $response
     $global:message = $message
@@ -263,13 +266,16 @@ function main() {
       convert-toJson $script:messageRequests | Out-File $promptsFile
       write-log "messages stored in: $promptsFile" -ForegroundColor Cyan
     }
-
-    write-log "response:$(convert-toJson ($message.content | convertfrom-json))" -color Green
+    $messageContent = (convert-toJson (convert-fromJson $message.content))
+    if(!$messageContent) {
+      $messageContent = $message.content
+    }
+    write-log "response:$($messageContent)" -color Green
     write-log ($global:openaiResponse | out-string) -color DarkGray
     write-log "use alias 'ai' to run script with new prompt. example:ai '$($prompts[0])'" -color DarkCyan
     write-log ">>>>ending openAI chat request $(((get-date) - $startTime).TotalSeconds.ToString("0.0")) seconds<<<<" -color White
     write-log "===================================="
-    return #$message.content
+    return $messageContent
   }
   catch {
     write-log "exception::$($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -color Red
@@ -295,18 +301,21 @@ function build-requestBody($messageRequests, $systemPrompts) {
 
 function build-chatRequestBody($messageRequests, $systemPrompts) {
 
-  if ($model -ieq 'o1-preview') {
+  # $role = 'system'
+  if ($model -ieq 'o1-mini' -or $model -ieq 'o3-mini') {
     # o1 doesnt currently support system prompts
     # https://platform.openai.com/docs/guides/reasoning#beta-limitations
-    # $script:systemPromptsList.Clear()
-    $requestBody = build-o1chatRequestBody $script:messageRequests #$script:systemPromptsList
+    $script:systemPromptsList.Clear()
+    $requestBody = build-o1chatRequestBody $messageRequests #$systemPrompts
     return $requestBody
+    # https://community.openai.com/t/o1-models-do-not-support-system-role-in-chat-completion/953880/8
+    # $role = 'developer'
   }
 
   if (!$messageRequests) {
     foreach ($message in $systemPrompts) {
       [void]$messageRequests.Add(@{
-          role    = 'system'
+          role    = 'developer'
           content = $message
         })
     }
@@ -334,12 +343,22 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
   return $requestBody
 }
 
-function build-o1chatRequestBody($messageRequests) {
+function build-o1chatRequestBody($messageRequests, $systemPrompts) {
 
   # if (!$messageRequests) {
   #   write-log 'no message requests found for o1 model. returning' -color Red
   #   return $null
   # }
+
+  # if (!$messageRequests) {
+  # foreach ($message in $systemPrompts) {
+  #   [void]$messageRequests.Add(@{
+  #       role    = 'developer'
+  #       content = $message
+  #     })
+  # }
+  # }
+
 
   foreach ($message in $prompts) {
     [void]$messageRequests.Add(@{
@@ -349,13 +368,13 @@ function build-o1chatRequestBody($messageRequests) {
   }
 
   $requestBody = @{
-    response_format = @{
-      type = $responseFormat
-    }
-    model           = $model
+    # response_format = @{
+    #   type = $responseFormat
+    # }
+    model    = $model
     # seed            = $seed
     # logprobs        = $logProbabilities
-    messages        = $messageRequests.toArray()
+    messages = $messageRequests.toArray()
     # user            = $user
     # max_tokens      = $maxTokens
   }
@@ -410,8 +429,27 @@ function build-imageRequestBody($messageRequests) {
   return $requestBody
 }
 
+function convert-fromJson([string]$json) {
+  try{
+    return convertfrom-json $json -AsHashtable
+  }
+  catch {
+    write-log "error converting json: $json" -color Red
+  } 
+  return $null
+}
+
 function convert-toJson([object]$object, [int]$depth = 5, [switch]$compress = $false) {
-  return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue -compress:$compress
+  try{
+    if(!$object) {
+      return $null
+    }
+    return convertto-json -InputObject $object -depth $depth -WarningAction SilentlyContinue -compress:$compress
+  }
+  catch {
+    write-log "error converting object to json: $object" -color Red
+  }
+  return $null
 }
 
 function get-endpoint() {
@@ -442,7 +480,7 @@ function get-endpoint() {
       $script:endpointType = 'custom'
     }
   }
-  write-log "using endpoint: $endpoint" -color Yellow
+  write-log "using endpoint: $endpoint" -color Yellow -verbose
   return $endpoint
 }
 
@@ -477,11 +515,12 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
       $message = $response.choices.message
       $messageRequests += $message
       if ($message.content) {
+        write-log "message content: $($message.content)" -color Yellow
         $error.Clear()
-        if (($messageObject = convertfrom-json $message.content -AsHashtable) -and !$error) {
-          write-log "converting message content from json to compressed json" -color Yellow
-          $message.content = (convert-toJson $messageObject -depth 99)
-        }
+          if (($messageObject = convert-fromJson $message.content) -and !$error) {
+            write-log "converting message content from json to compressed json" -color Yellow
+            $message.content = (convert-toJson $messageObject -depth 99)
+          }
       }
     }
     'images' {
@@ -527,7 +566,7 @@ function save-MessageResponse($message) {
 
   if ($responseFileFormat -ieq 'markdown') {
     $responseExtension = '.md'
-    $response = convertfrom-json $message -AsHashtable
+    $response = convert-fromJson $message
     $message = $response.markdown.content
     if ($response.markdown.name) {
       $responseFile = "$responseFile-$($response.markdown.name.trimend($responseExtension))"
@@ -546,7 +585,7 @@ function set-variables() {
     $global:ai = [ordered]@{}
   }
 
-  write-log "set-alias ai $($MyInvocation.ScriptName)"
+  write-log "set-alias ai $($MyInvocation.ScriptName)" -verbose
   set-alias ai $MyInvocation.ScriptName -scope global
   set-alias openai $MyInvocation.ScriptName -scope global
   write-debug ($boundParameters | convertto-Json)
