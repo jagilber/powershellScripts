@@ -586,7 +586,8 @@ function check-storage() {
         return $false
     }
     if ($script:storageAccountName -eq "*") {
-        $base64String = [convert]::toBase64String([text.encoding]::UTF8.GetBytes($resourceGroupName)).tolower().substring(0, 20) -replace '[^a-z0-9]', ''
+        $base64String = [convert]::toBase64String([text.encoding]::UTF8.GetBytes($resourceGroupName)).tolower()
+        $base64String = $base64String.substring(0, $base64String.Length) -replace '[^a-z0-9]', ''
         $script:storageAccountName = [string]::join('', @('flow', $base64String))
         write-warning "generated storage account name: $script:storageAccountName"
     }
