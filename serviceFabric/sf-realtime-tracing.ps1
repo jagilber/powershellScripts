@@ -40,10 +40,8 @@ invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/
 [cmdletbinding()]
 param(
     $traceFilePath = "$pwd\sf.csv",
-    $maxFileSizeMb = 1024,
-    [int]$logLevel = 5,
-    [switch]$remove,
-    [string]$commandToExecuteOnMatch = 'write-host "match found $($psitem.Length)" -ForegroundColor Green',
+    # $maxFileSizeMb = 1024,
+    [string]$commandToExecuteOnMatch = 'write-host "$($matches.Count) match found. $($global:counter)" -ForegroundColor Green; $global:counter++',
     [string[]]$filters = @(
         'exception',
         'fail'
@@ -52,7 +50,10 @@ param(
         'Microsoft-Windows-HttpService',
         'Microsoft-ServiceFabric'#,
         #'Microsoft-Windows-TCPIP'
-    )
+    ),
+    # [int]$logLevel = 5,
+    [switch]$remove,
+    [bool]$showMatch = $true
 )
 
 $pktmonNotRunningStatus = 'Packet Monitor is not running.'
@@ -118,9 +119,20 @@ function start-pktmonConsumer($file, $filters, $command) {
     write-host "tailing $file with filter '$regexFilter'" -ForegroundColor Green
     get-content -Tail 100 -Path $file -Wait | Where-Object {
         if ($psitem -imatch $regexFilter) {
-            write-host  $psitem -ForegroundColor cyan;
-            # do something
-            # if ($psitem -imatch 'fail') { write-host 'fail' -ForegroundColor Red }
+            if ($showMatch) { 
+                # get match in string to highlight from $psitem $match
+                $match = $matches[0]
+                # position of match in string
+                $position = $psitem.IndexOf($match)
+                # length of match in string
+                $length = $match.Length
+                # highlight match in string
+                write-host -noNewLine $psitem.Substring(0, $position) -ForegroundColor Gray
+                $highlighted = $psitem.Substring($position, $length)
+                write-host -noNewLine $highlighted -ForegroundColor Green
+                write-host $psitem.Substring($position + $length) -ForegroundColor Gray
+                # write-host $highlighted -ForegroundColor Green
+            }
             Invoke-Expression $command
         }
     }     
