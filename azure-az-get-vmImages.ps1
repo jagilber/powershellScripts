@@ -11,7 +11,11 @@ param(
     [string]$publisher = "MicrosoftWindowsServer", #"Canonical"
     [string]$offer = "WindowsServer", #"UbuntuServer"
     [string]$imagesku = "2022-Datacenter", #"18.04-LTS"
-    [switch]$showDetail
+    [switch]$showDetail,
+    [switch]$listPublishers,
+    [switch]$listOffers,
+    [switch]$listSkus,
+    [switch]$listSizes
 )
 
 write-host "checking location $($location)"
@@ -42,6 +46,10 @@ $publisherName = ($publishers | Where-Object PublisherName -Match $publisher)[0]
 if ($showDetail) {
     $publishers | Format-List *
 }
+if($listPublishers) {
+    $publishers | sort-object PublisherName | Format-Table -Property PublisherName
+    return
+}
 
 write-host "checking vm size $($vmSize) in $($location)"
 write-host "Get-azVMSize -Location $location"
@@ -55,6 +63,28 @@ if (!($vmSizes | Where-Object Name -Like $vmSize)) {
 
 if ($showDetail) {
     $vmSizes | Format-List *
+}
+if($listSizes) {
+    $vmSizes | Format-Table -Property Name
+    return
+}
+
+write-host "checking offer $($offer)"
+write-host "Get-azVMImageOffer -Location $location -PublisherName $publisherName"
+$offers = Get-azVMImageOffer -Location $location -PublisherName $publisherName
+
+if (!($offers | Where-Object Offer -Like $offer)) {
+    $offers
+    write-warning "offer: $($offer) not found in $($location). correct -offer using one of the above options and restart script."
+    return
+}
+
+if ($showDetail) {
+    $offers | sort-object Offer | Format-Table -Property Offer
+}
+if($listOffers) {
+    $offers | Format-Table -Property Offer
+    return
 }
 
 write-host "checking sku $($publisherName) $($offer) $($imageSku)"
@@ -74,6 +104,10 @@ if (!($skus | Where-Object Skus -Like $imageSKU)) {
 
 if ($showDetail) {
     $skus | Format-List *
+}
+if($listSkus) {
+    $skus | Format-Table -Property Skus
+    return
 }
 
 foreach ($sku in $skus) {
