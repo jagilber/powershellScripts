@@ -44,6 +44,7 @@ param(
   [switch]$force,
   [switch]$remove,
   [string]$cidr = "/32",
+  [string]$server = '8.8.8.8',
   [int]$lifetimeHours = 8
 )
 
@@ -125,8 +126,8 @@ function main() {
       write-host "destinationPrefix: $destinationPrefix"
     }
     
-    write-host "Resolve-DnsName -Name $destinationPrefix -Type A"
-    $destinationPrefixes = @(Resolve-DnsName -Name $destinationPrefix -Type A).IPAddress
+    write-host "Resolve-DnsName -Name $destinationPrefix -Type A -Server $server"
+    $destinationPrefixes = @(Resolve-DnsName -Name $destinationPrefix -Type A -Server $server).IPAddress
     
     if ($destinationPrefixes.Count -eq 0) {
       Write-Warning "Could not resolve destination prefix."
