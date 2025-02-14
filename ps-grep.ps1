@@ -124,7 +124,9 @@ function main() {
                         }
                         
                         [void]$global:matchedFiles.$file.add($matchObj)
-                        write-console "  $($line):$($match | Select-Object index, length, value)"
+                        $matchInfo = $match | Select-Object index, length, value
+                        $matchInfo.value = highlight-regexMatches $match $content
+                        write-console "  $($line):$($matchInfo)"
 
                         if ($null -ne $replace) {
                             $newLine = $regex.Replace($content, $replace)
@@ -189,6 +191,21 @@ function main() {
         write-console "0 matched files" -ForegroundColor Yellow
     }
     write-console "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
+}
+
+function highlight-regexMatches([text.RegularExpressions.Match]$match, [string]$InputString) {
+    # Using ANSI escape sequences and string concatenation
+    # $red = "$([char]27)[31m"
+    $green = "$([char]27)[32m"
+    $reset = "$([char]27)[0m"
+    $output = $InputString
+
+    foreach ($m in $match.Groups) {
+        if($m.Name -eq '0' -and $match.Groups.Count -gt 1) { continue }
+        $output = $output.Substring(0, $m.Index) + $green + $m.Value + $reset + $output.Substring($m.Index + $m.Length)
+    }
+
+    return $output
 }
 
 function write-console([object]$msg, [consolecolor]$foregroundColor = [consolecolor]::White) {
