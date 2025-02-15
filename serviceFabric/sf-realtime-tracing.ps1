@@ -1,5 +1,5 @@
 <#
-.SYNOPSIS 
+.SYNOPSIS
 service fabric persistent etl tracing script
 
 .DESCRIPTION
@@ -48,12 +48,17 @@ param(
     ),
     [string[]]$traceProviders = @(
         'Microsoft-Windows-HttpService',
-        'Microsoft-ServiceFabric'#,
-        #'Microsoft-Windows-TCPIP'
+        'Microsoft-Windows-WinHttp',
+        'Microsoft-ServiceFabric',
+        # 'Microsoft-Windows-TCPIP',
+        'Microsoft-Windows-DNS-Client',
+        'Microsoft-Windows-CAPI2'
     ),
     # [int]$logLevel = 5,
     [switch]$remove,
-    [bool]$showMatch = $true
+    [bool]$showMatch = $true,
+    [switch]$listProviders,
+    [int]$processId = 0
 )
 
 $pktmonNotRunningStatus = 'Packet Monitor is not running.'
@@ -65,9 +70,25 @@ function main() {
 
     $error.Clear()
     $timer = get-date
+    $regexFilter = $filters -join '|'
+    $regex = [regex]::new($regexFilter, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
 
     if (!(get-command pktmon -ErrorAction SilentlyContinue)) {
         write-host "pktmon not found. this is only available in Windows 10 21H1 and later." -ForegroundColor Red
+        return
+    }
+
+    if ($processId -ne 0 -and $listProviders) {
+        write-host "listing providers for pid $pid..." -ForegroundColor Yellow
+        logman query providers -pid $pid | select-object -Skip 2 | Format-Table -AutoSize
+        return
+    }
+    elseif ($listProviders) {
+        if ( $global:etwProviders -eq $null) {
+            write-host "listing providers..." -ForegroundColor Yellow
+            $global:etwProviders = logman query providers
+        }
+        $global:etwProviders | select-object -Skip 2 | Format-Table -AutoSize
         return
     }
 
@@ -77,7 +98,7 @@ function main() {
     try {
         start-pktmonProvider $traceFilePath $traceProviders
 
-        start-pktmonConsumer $traceFilePath $filters $commandToExecuteOnMatch
+        start-pktmonConsumer $traceFilePath $regex $commandToExecuteOnMatch
 
     }
     catch {
@@ -89,7 +110,25 @@ function main() {
         stop-pktmon
         write-host "script completed in $((get-date) - $timer)" -ForegroundColor Green
         write-host "output file: $traceFilePath" -ForegroundColor Green
+        write-host "trace file: .\pktmon.etl" -ForegroundColor Green
+        write-host "use pktmon etl2txt to convert to csv" -ForegroundColor Green
+        write-host "pktmon etl2txt .\pktmon.etl -o .\pktmon.etl.csv -m -v 5" -ForegroundColor Green
     }
+}
+
+function highlight-regexMatches([text.RegularExpressions.Match]$match, [string]$InputString) {
+    # Using ANSI escape sequences and string concatenation
+    # $red = "$([char]27)[31m"
+    $green = "$([char]27)[32m"
+    $reset = "$([char]27)[0m"
+    $output = $InputString
+
+    foreach ($m in $match.Groups) {
+        if ($m.Name -eq '0' -and $match.Groups.Count -gt 1) { continue }
+        $output = $output.Substring(0, $m.Index) + $green + $m.Value + $reset + $output.Substring($m.Index + $m.Length)
+    }
+
+    return $output
 }
 
 function is-admin() {
@@ -97,20 +136,20 @@ function is-admin() {
         Write-Warning "restarting script as administrator..."
         $command = 'pwsh'
         $commandLine = $global:myinvocation.myCommand.definition
-  
+
         if ($psedition -eq 'Desktop') {
             $command = 'powershell'
         }
         write-host "Start-Process $command -Verb RunAs -ArgumentList `"-NoExit -File $commandLine`""
         Start-Process $command  -Verb RunAs -ArgumentList "-NoExit -File $commandLine"
-  
+
         return $false
     }
     return $true
 }
 
-function start-pktmonConsumer($file, $filters, $command) {
-    $regexFilter = $filters -join '|'
+function start-pktmonConsumer([string]$file, [regex]$regex, [string]$command) {
+    # $regexFilter = $filters -join '|'
     while (!(test-path $file)) {
         write-host "waiting for $file to be created..." -ForegroundColor Yellow
         start-sleep -seconds 5
@@ -118,31 +157,26 @@ function start-pktmonConsumer($file, $filters, $command) {
 
     write-host "tailing $file with filter '$regexFilter'" -ForegroundColor Green
     get-content -Tail 100 -Path $file -Wait | Where-Object {
-        if ($psitem -imatch $regexFilter) {
-            if ($showMatch) { 
-                # get match in string to highlight from $psitem $match
-                $match = $matches[0]
-                # position of match in string
-                $position = $psitem.IndexOf($match)
-                # length of match in string
-                $length = $match.Length
-                # highlight match in string
-                write-host -noNewLine $psitem.Substring(0, $position) -ForegroundColor Gray
-                $highlighted = $psitem.Substring($position, $length)
-                write-host -noNewLine $highlighted -ForegroundColor Green
-                write-host $psitem.Substring($position + $length) -ForegroundColor Gray
-                # write-host $highlighted -ForegroundColor Green
+        # if ($psitem -imatch $regexFilter) {
+        if (($matches = $regex.match($psitem)).Success) {
+            if ($showMatch) {
+                write-host (highlight-regexMatches $matches $psitem)
             }
             Invoke-Expression $command
         }
-    }     
+    }
 }
 
 function start-pktmonProvider($traceFilePath, $traceProviders) {
     $providers = $traceProviders -join ' -p '
     write-host "pktmon start -t -m real-time -p $providers | tee-object $traceFilePath" -ForegroundColor Cyan
+    # determine if using pwsh or powershell
+    $exe = 'pwsh.exe'
+    if ($psedition -eq 'Desktop') {
+        $exe = 'powershell.exe'
+    }
     # start in new window
-    start-process powershell -ArgumentList "-Command pktmon start -t -m real-time -p $providers | tee-object $traceFilePath"
+    start-process $exe -ArgumentList "-Command pktmon start -t -m real-time -p $providers | tee-object $traceFilePath"
     #pktmon start -t -m real-time -p $providers
 
     if ($error.Count -gt 0) {
