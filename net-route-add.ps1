@@ -201,9 +201,8 @@ function check-route($prefixParams) {
 
 function is-admin() {
   
-  if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole( `
-        [Security.Principal.WindowsBuiltInRole] "Administrator")) {   
-    Write-Warning "please restart script as administrator. exiting..."
+  if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Warning "restarting script as administrator..."
     $command = 'pwsh'
     $commandLine = $global:myinvocation.myCommand.definition
 
