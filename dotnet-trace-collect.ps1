@@ -1,13 +1,59 @@
 <#
-# needs dotnet sdk and dotnet-trace
-dotnet tool install --global dotnet-trace
-https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script
+.SYNOPSIS
+    Collects .NET Core traces using dotnet-trace.
+
+.DESCRIPTION
+    This script collects diagnostic traces for a specified .NET Core process using the dotnet-trace tool.
+    It verifies whether the .NET SDK and dotnet-trace are installed and installs them if needed.
+    The trace is then collected based on provided provider settings and other parameters.
+
+.PARAMETER processName
+    The name of the process to trace. Default: "ManagedIdentityTokenService".
+
+.PARAMETER traceFile
+    The file path to store the collected trace. Default: "$($processName).nettrace".
+
+.PARAMETER logLevel
+    The log level for trace providers. Default is 5.
+
+.PARAMETER keywords
+    The keywords filter for trace providers. Default is "0xffffffffffffffff".
+
+.PARAMETER listProcesses
+    When specified, lists all available processes for tracing and exits.
+
+.PARAMETER providers
+    A Hashtable defining provider names and their respective log levels.
+
+.PARAMETER dotnetSdkScriptUrl
+    The URL from which to download the dotnet-install script if the .NET SDK is missing.
+
+.PARAMETER version
+    The version of the .NET SDK to install if required.
+
+.PARAMETER whatIf
+    If specified, only displays the dotnet-trace command without executing it.
+
+.EXAMPLE
+    ./dotnet-trace-collect.ps1 -processName "MyApp" -traceFile "MyAppTrace.nettrace"
+
+.EXAMPLE
+    ./dotnet-trace-collect.ps1 -listProcesses
+
+.NOTES
+    Ensure that your PATH environment variable includes "$env:USERPROFILE\.dotnet\tools" after installing dotnet-trace.
+
+.LINK
+    [net.servicePointManager]::Expect100Continue = $true;
+    [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+    iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/dotnet-trace-collect.ps1 -outfile $pwd\dotnet-trace-collect.ps1;. $pwd\dotnet-trace-collect.ps1
 #>
 param(
-  [string]$name = "ManagedIdentityTokenService",
-  [string]$traceFile = "$($name).nettrace",
+  [string]$processName = "ManagedIdentityTokenService",
+  [string]$traceFile = "$($processName).nettrace",
   [int]$logLevel = 5,
   [string]$keywords = '0xffffffffffffffff',
+  [switch]$listProcesses,
   [hashtable]$providers = @{
     "Microsoft-Windows-Crypto-RSAEnh"                            = $logLevel
     "Microsoft-Windows-Crypto-BCrypt"                            = $logLevel
@@ -78,10 +124,14 @@ $providerListString = $providersList -join ","
 write-host "dotnet-trace ps"
 dotnet-trace ps
 
-Write-Host "dotnet-trace collect -n $name --output $traceFile --providers $providerListString"
+if($listProcesses) {
+  return
+}
+
+Write-Host "dotnet-trace collect -n $processName --output $traceFile --providers $providerListString"
 if ($whatIf) {
   return
 }
 else {
-  dotnet-trace collect -n $name --output $traceFile --providers $providerListString
+  dotnet-trace collect -n $processName --output $traceFile --providers $providerListString
 }
