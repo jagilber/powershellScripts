@@ -24,6 +24,18 @@ param(
     "System.Net.NameResolution"                                  = $logLevel
     "System.Net.Sockets"                                         = $logLevel
     "System.Net.Security"                                        = $logLevel
+    "System.Net.TestLogging"                                     = $logLevel
+    "Private.InternalDiagnostics.System.Net.Http"                = $logLevel
+    "Private.InternalDiagnostics.System.Net.NameResolution"      = $logLevel
+    "Private.InternalDiagnostics.System.Net.Sockets"             = $logLevel
+    "Private.InternalDiagnostics.System.Net.Security"            = $logLevel
+    "Private.InternalDiagnostics.System.Net.Quic"                = $logLevel
+    "Private.InternalDiagnostics.System.Net.Http.WinHttpHandler" = $logLevel
+    "Private.InternalDiagnostics.System.Net.HttpListener"        = $logLevel
+    "Private.InternalDiagnostics.System.Net.Mail"                = $logLevel
+    "Private.InternalDiagnostics.System.Net.NetworkInformation"  = $logLevel
+    "Private.InternalDiagnostics.System.Net.Primitives"          = $logLevel
+    "Private.InternalDiagnostics.System.Net.Requests"            = $logLevel
   },
   [string]$dotnetSdkScriptUrl = "https://dot.net/v1/dotnet-install.ps1",
   [string]$version = "6.0.428",
