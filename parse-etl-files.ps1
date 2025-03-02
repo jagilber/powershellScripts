@@ -60,7 +60,8 @@ param(
   [switch]$sort,
   [switch]$force,
   [int]$sleepSeconds = 1,
-  [switch]$loadFunctions
+  [switch]$loadFunctions,
+  [switch]$includeSubdirectories = $false
 )
 
 $global:startTime = get-date
@@ -80,7 +81,7 @@ function main() {
     }
 
     $process = if ($usepktmon) { 'pktmon' } else { 'netsh' }
-    $etlFiles = @(get-childItem -Path $etlFilesPath -Filter $etlFileFilter -Recurse)
+    $etlFiles = @(get-childItem -Path $etlFilesPath -Filter $etlFileFilter -Recurse:$includeSubdirectories)
     $usepktmon = !$useNetsh -and ($null -ne (Get-Command -Name pktmon -ErrorAction SilentlyContinue))
     $totalFiles = $etlFiles.Count
     $count = 0
