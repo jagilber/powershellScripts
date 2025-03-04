@@ -111,7 +111,7 @@ param(
   [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '',
-  [ValidateSet('o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
+  [ValidateSet('gpt-4.5-preview','o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
   [string]$model = 'o1-mini',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
@@ -153,7 +153,7 @@ param(
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
-$variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer', 'Debug', 'Verbose')
+$variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer', 'Debug', 'Verbose','quiet','whatIf')
 $parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort-object
 $boundParameters = $PSBoundParameters
 
