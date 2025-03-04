@@ -153,11 +153,12 @@ param(
 [string]$script:endpointType = 'chat'
 $script:messageRequests = [collections.arraylist]::new()
 $script:systemPromptsList = [collections.arraylist]::new($systemPrompts)
-$variableExclusions = @('apiKey', 'init', '.*Variable', '.*Action', '.*Buffer', 'Debug', 'Verbose','quiet','whatIf')
+$variableExclusions = @('apiKey', '.*Variable', '.*Action', '.*Buffer')
 $parameterNames = $psCmdlet.myInvocation.myCommand.parameters.values.name | sort-object
 $boundParameters = $PSBoundParameters
 
 function main() {
+  $error.Clear()
   try {
     $endpoint = get-endpoint
 
@@ -217,7 +218,7 @@ function main() {
     $headers = @{
       'Authorization' = "Bearer $apiKey"
       'Content-Type'  = 'application/json'
-      'OpenAI-Beta'   = 'assistants=v1'
+      'OpenAI-Beta'   = 'assistants=v2'
     }
     if ($endpointType -eq 'images') {
       $headers.'Content-Type' = 'multipart/form-data'
@@ -615,9 +616,11 @@ function set-variables() {
       write-debug "variable not found: $name"
       $value = $null
     }
-
-    $variable.value = $value
-
+    
+    if(!$value -or $value -ieq 'false') {
+      write-debug "skipping variable: $name that is 'false'"
+      continue
+    }
     write-debug "$name = $value"
     $global:ai[$name] = $value
   }
