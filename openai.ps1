@@ -134,7 +134,7 @@ param(
   [ValidateSet('url', 'b64_json')]
   [string]$imageResponseFormat = 'url',
   [ValidateSet('json', 'markdown')]
-  [string]$responseFileFormat = 'json',
+  [string]$responseFileFormat = 'markdown', #'json',
   [ValidateSet('json_object', 'text')]
   [string]$responseFormat = 'json_object',
   [string[]]$systemPrompts = @(
@@ -306,7 +306,7 @@ function build-requestBody($messageRequests, $systemPrompts) {
 function build-chatRequestBody($messageRequests, $systemPrompts) {
 
   # $role = 'system'
-  if ($model -imatch 'o\d-') {
+  if ($model -imatch 'o1-') {
     # o1 doesnt currently support system prompts
     # https://platform.openai.com/docs/guides/reasoning#beta-limitations
     # https://community.openai.com/t/o1-models-do-not-support-system-role-in-chat-completion/953880/8
@@ -340,7 +340,14 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
     logprobs        = $logProbabilities
     messages        = $messageRequests.toArray()
     user            = $user
-    max_tokens      = $maxTokens
+    # max_tokens      = $maxTokens
+  }
+
+  if ($model -imatch 'o3-') {
+    $requestBody.max_completion_tokens = $maxTokens
+  }
+  else {
+    $requestBody.max_tokens = $maxTokens
   }
 
   return $requestBody
@@ -374,7 +381,7 @@ function build-o1chatRequestBody($messageRequests, $systemPrompts) {
     # logprobs        = $logProbabilities
     messages = $messageRequests.toArray()
     # user            = $user
-    # max_tokens      = $maxTokens
+    max_completions_tokens      = $maxTokens
   }
 
   return $requestBody
