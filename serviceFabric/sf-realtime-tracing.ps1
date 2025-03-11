@@ -48,11 +48,11 @@ param(
     ),
     [string[]]$traceProviders = @(
         'Microsoft-Windows-HttpService',
-        'Microsoft-Windows-WinHttp',
-        'Microsoft-ServiceFabric',
+        #'Microsoft-Windows-WinHttp',
+        'Microsoft-ServiceFabric' #,
         # 'Microsoft-Windows-TCPIP',
-        'Microsoft-Windows-DNS-Client',
-        'Microsoft-Windows-CAPI2'
+        #'Microsoft-Windows-DNS-Client',
+        #'Microsoft-Windows-CAPI2'
     ),
     # [int]$logLevel = 5,
     [switch]$remove,
@@ -162,7 +162,10 @@ function start-pktmonConsumer([string]$file, [regex]$regex, [string]$command) {
             if ($showMatch) {
                 write-host (highlight-regexMatches $matches $psitem)
             }
-            Invoke-Expression $command
+            if($command) {
+                write-verbose "executing command: $command" -ForegroundColor Green
+                Invoke-Expression $command
+            }
         }
     }
 }
