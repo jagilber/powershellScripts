@@ -163,7 +163,7 @@ function start-pktmonConsumer([string]$file, [regex]$regex, [string]$command) {
                 write-host (highlight-regexMatches $matches $psitem)
             }
             if($command) {
-                write-verbose "executing command: $command" -ForegroundColor Green
+                write-verbose "executing command: $command"
                 Invoke-Expression $command
             }
         }
