@@ -2,7 +2,7 @@
 // It then reads the properties of a given database to verify connectivity.
 //
 // Usage Examples:
-//   dotnet script -- cosmos-test.csx "https://your-cosmos-account.documents.azure.com" "YourDatabaseName" "your-managed-identity-client-id"
+//   dotnet script cosmos-test.csx "https://your-cosmos-account.documents.azure.com" "YourDatabaseName" "your-managed-identity-client-id"
 //
 // Required NuGet packages:
 #r "nuget: Azure.Identity, 1.13.2"
