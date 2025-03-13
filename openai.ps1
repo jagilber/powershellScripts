@@ -111,7 +111,7 @@ param(
   [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '',
-  [ValidateSet('o3-mini', 'gpt-4.5-preview', 'o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
+  [ValidateSet('o3-mini', 'gpt-4o-mini-search-preview', 'gpt-4o-search-preview', 'gpt-4.5-preview', 'o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
   [string]$model = 'o3-mini',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
@@ -353,6 +353,24 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
     $requestBody.max_tokens = $maxTokens
   }
 
+  if ($model -imatch 'gpt-4o.+search') {
+    write-log "search model detected: $model" -color Yellow
+    # remove logprobs and seeds for search models
+    $requestBody.remove('logprobs')
+    $requestBody.remove('seed')
+    $requestBody.web_search_options = @{
+      user_location       = @{
+        type        = "approximate"
+        approximate = @{
+          country = "US"
+          city    = "New York"
+          region  = "New York"
+        }
+      }
+      search_context_size = "low"
+    }
+  }
+  
   return $requestBody
 }
 
@@ -443,7 +461,8 @@ function convert-fromJson([string]$json) {
     return convertfrom-json $json -AsHashtable
   }
   catch {
-    write-log "error converting json: $json" -color Red
+    write-log "error converting json: $($json.Length)" -color Red
+    write-log "error converting json: $json" -color Red -verbose
   } 
   return $null
 }
@@ -583,9 +602,10 @@ function save-MessageResponse($message) {
   if ($responseFileFormat -ieq 'markdown') {
     $responseExtension = '.md'
     $response = convert-fromJson $message
-    $message = $response.markdown.content
-    if ($response.markdown.name) {
-      $responseFile = "$responseFile-$($response.markdown.name.trimend($responseExtension))"
+
+    if($response.markdown.content -and $response.markdown.name) {
+      $message = $response.markdown.content
+      $responseFile = "$baseFileName-$($response.markdown.name.trimend($responseExtension))"
     }
   }
 
