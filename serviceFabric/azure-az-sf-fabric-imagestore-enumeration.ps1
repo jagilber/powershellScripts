@@ -34,7 +34,7 @@ function get-storeInfo([string]$relativePath = '', [switch]$recurse) {
             if($result.Type -ieq 'File') {
                 continue
             }
-           [void]$results.AddRange((get-storeInfo -relativePath $result.StoreRelativePath -recurse:$recurse))
+           [void]$results.AddRange(@(get-storeInfo -relativePath $result.StoreRelativePath -recurse:$recurse))
         }
     }
     return $results

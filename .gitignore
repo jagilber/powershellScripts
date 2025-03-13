@@ -159,7 +159,7 @@ publish/
 *.nuget.targets
 
 # Microsoft Azure Build Output
-csx/
+# csx/
 *.build.csdef
 
 # Microsoft Azure Emulator
@@ -254,4 +254,11 @@ ModelManifest.xml
 **/gather
 **/Configuration
 #.vscode
-secrets.ps1
+secrets.json
+openaiMessages.json
+**/Downloads
+**flowlog**
+**/openai*.json
+**/openai*.txt
+**/openai*.md
+**/output

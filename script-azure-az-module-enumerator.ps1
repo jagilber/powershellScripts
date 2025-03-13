@@ -48,14 +48,14 @@ function main()
             Write-Warning("$file contains -azurerm commands! use script-azure-rm-module-enumerator.ps1")
         }
 
-        $matches = ([regex]::Matches($scriptSource, "\W([a-z]+-$module[a-z]+)\W",[Text.RegularExpressions.RegexOptions]::IgnoreCase))
+        $matched = ([regex]::Matches($scriptSource, "\W([a-z]+-$module[a-z]+)\W",[Text.RegularExpressions.RegexOptions]::IgnoreCase))
         
-        foreach($match in ($matches| Sort-Object -Unique))
+        foreach($match in ($matched | Sort-Object -Unique))
         {
             $matchedValue = $match.Captures[0].Groups[1].Value 
             
             write-host "`t`t$module command: $($matchedValue)"
-            $module = $null
+            $foundModule = $null
             foreach($availableModule in $availableModules)
             {
                 write-verbose "`t`t`tavailable module: $($availableModule)"
@@ -63,27 +63,27 @@ function main()
                 if($availableModule.ExportedCmdlets.Keys -imatch $matchedValue `
                     -or $availableModule.ExportedAliases.Keys -imatch $matchedValue)
                 {
-                    $module = $availableModule.Name
+                    $foundModule = $availableModule.Name
 
-                    if($module)
+                    if($foundModule)
                     {
-                        write-verbose "`t`t`t`tchecking if module in list: $($module)"
-                        if(!$neededAzureModules.Contains($module))
+                        write-verbose "`t`t`t`tchecking if module in list: $($foundModule)"
+                        if(!$neededAzureModules.Contains($foundModule))
                         {
-                            write-host "`t`t`t`t`tadding module to list: $($module)" -ForegroundColor Green
-                            [void]$neededAzureModules.Add($module)
+                            write-host "`t`t`t`t`tadding module to list: $($foundModule)" -ForegroundColor Green
+                            [void]$neededAzureModules.Add($foundModule)
                             continue
                         }
                         else
                         {
-                            write-host "`t`t`t`t`tmodule already in list: $($module)" -ForegroundColor DarkGray
+                            write-host "`t`t`t`t`tmodule already in list: $($foundModule)" -ForegroundColor DarkGray
                         }
 
                     }
                 }
             }
 
-            if(!$module)
+            if(!$foundModule)
             {
                 Write-Warning "unable to find module for command $($matchedValue)"
             }

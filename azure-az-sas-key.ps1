@@ -21,12 +21,12 @@ foreach ($account in $accounts) {
     $blobUri = $account.Context.BlobEndPoint
     write-host "creating sas for $blobUri" -ForegroundColor Green
 
-    write-host "New-AzStorageAccountSASToken -Service $($service -join ',') `
-        -ResourceType $($resourceType -join ',') `
-        -StartTime $((get-date).AddMinutes(-1)) `
-        -ExpiryTime $((get-date).AddHours($expirationHours)) `
-        -Context [$($account.context)]$($blobUri) `
-        -Protocol HttpsOnly `
+    write-host "New-AzStorageAccountSASToken -Service $($service -join ',') ``
+        -ResourceType $($resourceType -join ',') ``
+        -StartTime $((get-date).AddMinutes(-1)) ``
+        -ExpiryTime $((get-date).AddHours($expirationHours)) ``
+        -Context [$($account.context)]$($blobUri) ``
+        -Protocol HttpsOnly ``
         -Permission $permission
     " -ForegroundColor Cyan
 
@@ -38,7 +38,7 @@ foreach ($account in $accounts) {
         -Protocol HttpsOnly `
         -Permission $permission
     $sas
-    $saskeys.Add("$blobUri$sas")
+    $saskeys.Add("$($blobUri)?$sas")
 }
 
 $global:saskeys = $saskeys

@@ -5,7 +5,14 @@
 
     https://learn.microsoft.com/en-us/azure/service-fabric/service-fabric-cluster-resource-manager-cluster-description#node-properties-and-placement-constraints
 .NOTES
-    version 231115 add connectivity check and cert validation
+    version 
+      231219 add function get-certificateFromStore to get allow checking for cert in both localmachine store and currentuser store automatically if not found in specified store
+      231210 add find-nodeType function to find vmss for reference node type
+      231128 add function get-referenceNodeTypeVMSS($referenceNodeTypeName) to get vmss for reference node type
+      231128 check for servicetype before adding to deployedServices and increment instances
+        display nodetype names in resource group if nodetype not found
+      231122 add check for az modules and version. older versions of az modules have issues with Add-AzServiceFabricNodeType
+      231115 add connectivity check and cert validation
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
     invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceFabric/drafts/azure-az-sf-add-nodetype.ps1" -outFile "$pwd/azure-az-sf-add-nodetype.ps1";
@@ -42,6 +49,8 @@
     the admin username of the new node type
 .PARAMETER adminPassword
     the admin password of the new node type
+.PARAMETER logFile
+    the log file to write to
 .EXAMPLE
     ./azure-az-sf-add-nodetype.ps1 -connectionEndpoint 'sfcluster.eastus.cloudapp.azure.com:19000' -thumbprint <thumbprint> -resourceGroupName <resource group name>
 .EXAMPLE
@@ -52,64 +61,110 @@
 
 [cmdletbinding()]
 param(
+  [Parameter(ParameterSetName = 'tp', Mandatory = $true)]
+  [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
+  [string]$connectionEndpoint = '', #'sfcluster.eastus.cloudapp.azure.com:19000',
+
+  [Parameter(ParameterSetName = 'tp', Mandatory = $true)]
+  [string]$thumbprint = '',
+
+  [Parameter(ParameterSetName = 'cn', Mandatory = $true)]
+  [string]$commonName = '',
+
+  [Parameter(ParameterSetName = 'tp')]
+  [Parameter(ParameterSetName = 'cn')]
+  [validateSet('CurrentUser', 'LocalMachine')]
+  [string]$storeLocation = 'CurrentUser',
+
   [Parameter(Mandatory = $true)]
-  $connectionEndpoint = '', #'sfcluster.eastus.cloudapp.azure.com:19000',
-  [Parameter(Mandatory = $true)]
-  $thumbprint = '',
-  [Parameter(Mandatory = $true)]
-  $resourceGroupName = '', #'sfcluster',
-  $clusterName = $resourceGroupName,
+  [string]$resourceGroupName = '', #'sfcluster',
+
+  [string]$clusterName = $resourceGroupName,
+
   #[Parameter(Mandatory = $true)]
-  $newNodeTypeName = 'nt1', #'nt1',
-  $referenceNodeTypeName = 'nt0', #'nt0',
-  $isPrimaryNodeType, # = $false,
-  $vmImagePublisher, # = 'MicrosoftWindowsServer',
-  $vmImageOffer, # = 'WindowsServer',
-  $vmImageSku, # = '2022-Datacenter',
-  $vmImageVersion, # = 'latest',
-  $vmInstanceCount, # = 5,
-  $vmSku, # = 'Standard_D2_v2',
+  [string]$newNodeTypeName = 'nt1', #'nt1',
+
+  [string]$referenceNodeTypeName = 'nt0', #'nt0',
+
+  [bool]$isPrimaryNodeType, # = $false,
+
+  [string]$vmImagePublisher, # = 'MicrosoftWindowsServer',
+
+  [string]$vmImageOffer, # = 'WindowsServer',
+
+  [string]$vmImageSku, # = '2022-Datacenter',
+
+  [string]$vmImageVersion, # = 'latest',
+
+  [int]$vmInstanceCount, # = 5,
+
+  [string]$vmSku, # = 'Standard_D2_v2',
+
   [ValidateSet('Bronze', 'Silver', 'Gold')]
-  $durabilityLevel, # = 'Silver',
-  $adminUserName, # = 'cloudadmin',
-  $adminPassword = 'P@ssw0rd!'
+  [string]$durabilityLevel, # = 'Silver',
+
+  [string]$adminUserName, # = 'cloudadmin',
+
+  [string]$adminPassword = 'P@ssw0rd!',
+
+  [string]$logFile = "$pwd\azure-az-sf-add-nodetype.log",
+
+  [switch]$force
 )
 
-$PSModuleAutoLoadingPreference = 'auto'
+$ErrorActionPreference = 'continue'
 $global:deployedServices = @{}
 
 function main() {
-  write-verbose ("main() started")
-  $error.Clear()
+  try {
+    if ($logFile) {
+      Start-Transcript -path $logFile -Force | Out-Null
+    }
 
-  if (!(Get-Module servicefabric)) {
-    Import-Module servicefabric
-    if ($error) {
-      write-error("error importing servicefabric module")
-      write-error("run from developer machine with service fabric sdk installed from from service fabric cluster node locally.")
-      return $error
+    write-verbose ("starting")
+    $error.Clear()
+  
+    if (!(Get-Module servicefabric)) {
+      Import-Module servicefabric
+      if ($error) {
+        write-error("error importing servicefabric module")
+        write-error("run from developer machine with service fabric sdk installed from from service fabric cluster node locally.")
+        return $error
+      }
+    }
+  
+    if (!(check-modules)) {
+      return
+    }
+  
+    if (!(get-clusterConnection)) {
+      return
+    }
+  
+    if (!(get-clusterInformation)) {
+      return
+    }
+  
+    if (!(set-referenceNodeTypeInformation)) {
+      return
+    }
+    add-placementConstraints
+    write-results
+  
+    if ($logFile) {
+      write-console "log file: $logFile"
+    }
+    write-console "finished"
+  
+  }
+  catch [Exception] {
+    write-console $psitem -ForegroundColor Red
+  }
+  finally {
+    if ($logFile) {
+      Stop-Transcript | Out-Null
     }
   }
-
-  if (!(check-module)) {
-    return
-  }
-
-  if (!(get-clusterConnection)) {
-    return
-  }
-
-  if (!(get-clusterInformation)) {
-    return
-  }
-
-  if (!(set-referenceNodeTypeInformation)) {
-    return
-  }
-  add-placementConstraints
-  write-results
-
-  write-console "finished"
 }
 
 function add-placementConstraints() {
@@ -160,26 +215,31 @@ function add-placementConstraints() {
   }
 }
 
-function check-module() {
+function check-module($name, $version = $null) {
+  write-host "checking module: $name version: $version" -ForegroundColor Cyan
   $error.clear()
-  get-command Connect-AzAccount -ErrorAction SilentlyContinue
-  get-command Add-AzServiceFabricNodeType -ErrorAction SilentlyContinue
-  
-  if ($error) {
+  $module = get-module $name -ListAvailable
+  if ($module) {
+    if ($version) {
+      if ($module.Version -lt $version) {
+        write-warning "module $name version $($module.Version) is less than required version $version"
+        $module = $null
+      }
+    }
+  }
+
+  if (!$module -or $error) {
     $error.clear()
-    write-warning "azure module for Connect-AzAccount not installed."
+    write-warning "azure module $name not installed."
 
-    if ((read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+    if ($force -or (read-host "is it ok to install latest azure az module?[y|n]") -imatch "y") {
+      if (!(get-psRepository -name PSGallery)) { register-psRepository -Default }
       $error.clear()
-      install-module az.accounts
-      install-module az.compute
-      install-module az.servicefabric
-      install-module az.resources
+      install-module $name -allowclobber -force
+      if (!(get-module $name)) {
+        import-module $name
+      }
 
-      import-module az.accounts
-      import-module az.compute
-      import-module az.servicefabric
-      import-module az.resources
     }
     else {
       return $false
@@ -190,6 +250,23 @@ function check-module() {
     }
   }
 
+  return $true
+}
+
+function check-modules() {
+  $retval = $true
+
+  $modules = [ordered]@{
+    'az.accounts'      = $null 
+    'az.compute'       = $null
+    'az.servicefabric' = [version]('3.2.0') # older versions have issues with Add-AzServiceFabricNodeType
+    'az.resources'     = $null
+  }
+
+  foreach ($module in $modules.GetEnumerator()) {
+    $retval = $retval -and (check-module $module.Name $module.Value)
+  }
+
   if (!(get-azResourceGroup)) {
     Connect-AzAccount
   }
@@ -197,8 +274,59 @@ function check-module() {
   if (!@(get-azResourceGroup).Count -gt 0) {
     return $false
   }
+  return $retval
+}
 
-  return $true
+function compare-sfExtensionSettings([object]$sfExtSettings, [string]$clusterEndpoint, [string]$nodeTypeRef) {
+  write-console "compare-sfExtensionSettings:`$settings, $clusterEndpoint, $nodeTypeRef"
+  if (!$sfExtSettings) {
+    write-console "settings not found" -foregroundColor 'Yellow'
+    return $null
+  }
+
+  $clusterEndpointRef = $sfExtSettings.ClusterEndpoint
+  if (!$clusterEndpointRef) {
+    write-console "cluster endpoint not found" -foregroundColor 'Yellow'
+    return $null
+  }
+
+  $nodeRef = $sfExtSettings.NodeTypeRef
+  if (!$nodeRef) {
+    write-console "node type ref not found in cluster settings" -foregroundColor 'Yellow'
+    return $null
+  }
+
+  if ($clusterEndpointRef -ieq $clusterEndpoint -and $nodeTypeRef -ieq $nodeRef) {
+    write-console "node type ref: $nodeTypeRef matches reference node type: $nodeRef" -foregroundColor 'Green'
+    write-console "cluster endpoint ref: $clusterEndpointRef matches cluster endpoint: $clusterEndpoint" -foregroundColor 'Green'
+    return $true
+  }
+  elseif ($nodeRef -ine $nodeTypeRef) {
+    write-console "node type ref: $nodeTypeRef does not match reference node type: $nodeRef" -foregroundColor 'Yellow'
+    return $false
+  }
+  else {
+    write-console "cluster endpoint ref: $clusterEndpointRef does not match cluster endpoint: $clusterEndpoint" -foregroundColor 'Yellow'
+    return $false
+  }
+}
+
+function get-certificateFromStore($store, $thumbprint, $commonName) {
+  $cert = $null
+  if ($thumbprint) {
+    write-host "Get-ChildItem cert:\$store\My -recurse | where-object Thumbprint -ieq $thumbprint"
+    $cert = Get-ChildItem cert:\$store\My -recurse | where-object Thumbprint -ieq $thumbprint
+  }
+  else {
+    write-host "Get-ChildItem cert:\$store\My -recurse | where-object Subject -ieq 'CN=$commonName'"
+    $cert = Get-ChildItem cert:\$store\My -recurse | where-object Subject -ieq "CN=$commonName"
+  }
+
+  if (!$cert) {
+    write-warning "certificate $thumbprint$commonName not found in $store store."
+    return $null
+  }
+  return $cert
 }
 
 function get-clusterConnection() {
@@ -218,8 +346,20 @@ function get-clusterConnection() {
 
   if (!$connected) {
     $error.Clear()
-    $cert = Get-ChildItem cert:\ -recurse | where-object Thumbprint -ieq $thumbprint
+    $cert = $null
+    
+    $cert = get-certificateFromStore -store $storeLocation -thumbprint $thumbprint -commonName $commonName
+    if (!$cert) {
+      if ($storeLocation -ieq 'localmachine') {
+        $storeLocation = 'currentuser'
+      }
+      else {
+        $storeLocation = 'localmachine'
+      }
 
+      $cert = get-certificateFromStore -store $storeLocation -thumbprint $thumbprint -commonName $commonName
+    }
+    
     if (!$cert) {
       write-error "certificate with thumbprint $thumbprint not found"
       return $null
@@ -227,7 +367,7 @@ function get-clusterConnection() {
 
     if (!$cert.HasPrivateKey) {
       write-warning "certificate with thumbprint $thumbprint does not have a private key"
-      #return $null
+      return $null
     }
 
     if ($cert.NotAfter -lt (get-date)) {
@@ -240,17 +380,13 @@ function get-clusterConnection() {
       return $null
     }
 
-    $storeLocation = 'CurrentUser'
-
-    if ($cert.PSParentPath -imatch 'LocalMachine') {
-      $storeLocation = 'LocalMachine'
-    }
-
     write-console "using cert: $($cert | out-string)"
     write-console "Connecting to Service Fabric cluster $connectionEndpoint"
 
     $hostname = $connectionEndpoint.split(':')[0]
     $port = ($connectionEndpoint.split(':')[1], 19000) | select-object -first 1
+    
+    write-console "test-netConnection -ComputerName $hostname -Port $port"
     $result = test-netConnection -ComputerName $hostname -Port $port
 
     # set in case port is not specified
@@ -264,7 +400,8 @@ function get-clusterConnection() {
       write-console "able to connect to service fabric cluster $connectionEndpoint"
     }
 
-    write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
+    if ($thumbprint) {
+      write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
       -KeepAliveIntervalInSec 10 ``
       -X509Credential ``
       -ServerCertThumbprint $thumbprint ``
@@ -275,16 +412,42 @@ function get-clusterConnection() {
       -Verbose
     " -foregroundColor Cyan
 
-    $error.Clear()
-    Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
-      -KeepAliveIntervalInSec 10 `
-      -X509Credential `
-      -ServerCertThumbprint $thumbprint `
-      -FindType FindByThumbprint `
-      -FindValue $thumbprint `
-      -StoreLocation $storeLocation `
-      -StoreName My `
-      -Verbose
+      $error.Clear()
+      Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
+        -KeepAliveIntervalInSec 10 `
+        -X509Credential `
+        -ServerCertThumbprint $thumbprint `
+        -FindType FindByThumbprint `
+        -FindValue $thumbprint `
+        -StoreLocation $storeLocation `
+        -StoreName My `
+        -Verbose
+    }
+    else {
+      # common name
+      write-console "Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint ``
+        -KeepAliveIntervalInSec 10 ``
+        -X509Credential ``
+        -ServerCommonName $commonName ``
+        -FindType FindBySubjectName ``
+        -FindValue $commonName ``
+        -StoreLocation $storeLocation ``
+        -StoreName My ``
+        -Verbose
+      " -foregroundColor Cyan
+  
+      $error.Clear()
+      Connect-ServiceFabricCluster -ConnectionEndpoint $connectionEndpoint `
+        -KeepAliveIntervalInSec 10 `
+        -X509Credential `
+        -ServerCommonName $commonName `
+        -FindType FindBySubjectName `
+        -FindValue $commonName `
+        -StoreLocation $storeLocation `
+        -StoreName My `
+        -Verbose
+  
+    }
     # for 5.1 compatibility 
     $global:ClusterConnection = $ClusterConnection
   }
@@ -296,50 +459,128 @@ function get-clusterConnection() {
   return $true
 }
 
+function find-nodeType([string]$resourceGroupName, [string]$clusterName, [string]$nodeTypeName) {
+  write-console "find-nodeType:$resourceGroupName,$clusterName,$nodeTypeName"
+  $serviceFabricResource = get-sfClusterResource -resourceGroupName $resourceGroupName -clusterName $clusterName
+  if (!$serviceFabricResource) {
+    write-console "service fabric cluster $clusterName not found" -err
+    return $error
+  }
+
+  $nodeType = get-referenceNodeType $nodeTypeName $serviceFabricResource
+  if (!$nodeType) {
+    write-console "reference node type $nodeTypeName does not exist"  -err
+    return $error
+  }
+
+  write-console $serviceFabricResource.ResourceId
+
+  # get vmss for reference node type by name from resource group first
+  $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+    -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+    -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName -vmssName $nodeTypeName)
+
+  # get vmss for reference node type by name from resource groups
+  if (!$currentVmss) {
+    $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+      -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+      -vmssResources @(get-vmssResources -resourceGroupName $resourceGroupName)
+  }
+
+  # get vmss for reference node type by name from all resource groups
+  if (!$currentVmss) {
+    $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+      -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+      -vmssResources @(get-vmssResources -vmssName $nodeTypeName)
+  }
+
+  # get all vmss for reference node type by name from all resource groups
+  if (!$currentVmss) {
+    $currentVmss = get-referenceNodeTypeVMSS -nodetypeName $nodeTypeName `
+      -clusterEndpoint $serviceFabricResource.properties.ClusterEndpoint `
+      -vmssResources @(get-vmssResources)
+  }
+
+  if (!$currentVmss) {
+    write-console "vmss for reference node type: $nodeTypeName not found" -foregroundColor 'Red'
+    $global:referenceNodeType = $null
+    return $null
+  }
+
+  write-console $currentVmss.ResourceId -foregroundColor 'Cyan'
+  return $currentVmss
+}
+
 function get-clusterInformation() {
+  write-console "Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName"
   $azCluster = Get-AzServiceFabricCluster -ResourceGroupName $resourceGroupName -Name $clusterName
   if (!$azCluster) {
-    write-error("cluster $clusterName not found in resource group $resourceGroupName")
+    write-error "cluster $clusterName not found in resource group $resourceGroupName"
+    if (!(get-azResourceGroup -Name $resourceGroupName)) {
+      write-error "resource group $resourceGroupName not found in tenant: $((get-azContext).tenantId)"
+      write-host "to change tenant, run 'Connect-AzAccount -TenantId <tenantId>'"
+    }
     return $false
   }
   $manifest = Get-ServiceFabricClusterManifest
-  write-console ($manifest) -Verbose
+  write-console $manifest -Verbose
 
   $xmlManifest = [xml]::new()
   $xmlManifest.LoadXml($manifest)
-  write-console ($xmlManifest) -Verbose
+  write-console $xmlManifest -Verbose
 
   $global:nodeTypePlbNames = ($xmlManifest.ClusterManifest.NodeTypes.NodeType.PlacementProperties.Property | Select-Object Name, Value)
   write-console ($global:nodeTypePlbNames | convertto-json -depth 5) -Verbose
-
+  
+  write-console "`$global:applications = Get-ServiceFabricApplication" -foregroundColor magenta
   $global:applications = Get-ServiceFabricApplication
   write-console ($global:applications | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:applicationTypes = `$global:applications | Get-ServiceFabricApplicationType" -foregroundColor magenta
+  $global:applicationTypes = $global:applications | Get-ServiceFabricApplicationType
+  write-console ($global:applicationTypes | convertto-json -depth 5) -Verbose
+
+  write-console "`$global:services = $global:applications | Get-ServiceFabricService" -foregroundColor magenta
   $global:services = $global:applications | Get-ServiceFabricService
   write-console ($global:services | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:serviceDescriptions = `$global:services | Get-ServiceFabricServiceDescription" -foregroundColor magenta
   $global:serviceDescriptions = $global:services | Get-ServiceFabricServiceDescription
   write-console ($global:serviceDescriptions | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:serviceTypes = `$global:services | Get-ServiceFabricServiceType" -foregroundColor magenta
+  $global:serviceTypes = $global:applicationTypes | Get-ServiceFabricServiceType
+  write-console ($global:serviceTypes | convertto-json -depth 5) -Verbose
+
+  write-console "`$global:placementConstraints = `$global:serviceDescriptions | Select-Object PlacementConstraints" -foregroundColor magenta
   $global:placementConstraints = $global:serviceDescriptions | Select-Object PlacementConstraints
   write-console ($global:placementConstraints | convertto-json -depth 5) -Verbose
 
+  write-console "`$global:nodes = Get-ServiceFabricNode" -foregroundColor magenta
   $global:nodes = Get-ServiceFabricNode
   write-console ($global:nodes | convertto-json -depth 5) -Verbose
 
   foreach ($service in $global:serviceDescriptions) {
-    write-console "Creating deployed service for service type $($service.ServiceTypeName)"
-    $global:deployedServices.Add($service.ServiceTypeName , @{
-        serviceTypeName               = $service.ServiceTypeName
-        deployedNodeTypes             = @()
-        deployedNodes                 = @()
-        placementConstraints          = $service.PlacementConstraints
-        serviceKind                   = $service.ServiceKind.ToString()
-        serviceName                   = $service.ServiceName
-        temporaryPlacementConstraints = ""
-        revertPlacementConstraints    = ""
-      }
-    )
+
+    if (!($global:deployedServices.ContainsKey($service.ServiceTypeName))) {
+      write-console "Creating deployed service for service type $($service.ServiceTypeName)"
+      $global:deployedServices.Add($service.ServiceTypeName , @{
+          serviceTypeName               = $service.ServiceTypeName
+          deployedNodeTypes             = @()
+          deployedNodes                 = @()
+          placementConstraints          = $service.PlacementConstraints
+          serviceKind                   = $service.ServiceKind.ToString()
+          serviceName                   = $service.ServiceName
+          temporaryPlacementConstraints = ""
+          revertPlacementConstraints    = ""
+          instances                     = 0
+        }
+      )
+    }
+    else {
+      write-console "Adding deployed service instance for service type $($service.ServiceTypeName)"
+      $global:deployedServices[$service.ServiceTypeName].instances++
+    }
   }
   return $true
 }
@@ -350,8 +591,10 @@ function get-deployedServices() {
 
     foreach ($node in $global:nodes) {
       write-console "Getting deployed applications for $($node.NodeName)"
+      write-console "$deployedApplications = @(Get-ServiceFabricDeployedApplication -NodeName $node.NodeName)"
       $deployedApplications = @(Get-ServiceFabricDeployedApplication -NodeName $node.NodeName)
       if (!($deployedApplications.ApplicationName -contains $application.ApplicationName)) {
+        write-console "Application $($application.ApplicationName) not deployed on node $($node.NodeName)"
         continue
       }
       
@@ -371,6 +614,106 @@ function get-deployedServices() {
   }
 
   return $global:deployedServices
+}
+
+function get-referenceNodeType([string]$nodeTypeName, $clusterResource) {
+  write-console "get-referenceNodeType:$nodeTypeName,$clusterResource"
+
+  $nodetypes = @($clusterResource.Properties.NodeTypes)
+  $nodeType = $nodetypes | where-object name -ieq $nodeTypeName
+
+  write-console "returning: $($nodeType.Name)"
+  return $nodeType
+}
+
+function get-referenceNodeTypeVMSS([string]$nodetypeName, [string]$clusterEndpoint, $vmssResources) {
+  # nodetype name should match vmss name but not always the case
+  # get-azvmss returning jobject 23-11-29 mitigation to use get-azresource
+  #$referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -ErrorAction SilentlyContinue
+  $referenceVmss = $null
+
+  if (!$vmssResources) {
+    write-console "vmss for reference node type: $nodetypeName not found" -warn
+    return $null
+  }
+
+  foreach ($vmss in $vmssResources) {
+    $sfExtSettings = get-sfExtensionSettings $vmss
+    $isNodeTypeRef = compare-sfExtensionSettings -sfExtSettings $sfExtSettings -clusterEndpoint $clusterEndpoint -nodeTypeRef $nodeTypeName
+  
+    if ($isNodeTypeRef) {
+      write-console "found vmss: $($vmss.Name) for node type: $nodetypeName" -ForegroundColor Green
+      $referenceVmss = $vmss
+      break
+    }
+  }
+
+  if (!$referenceVmss) {
+    write-console "vmss for reference node type: $nodetypeName not found" -warn
+    return $null
+  }
+
+  write-console "returning $($referenceVmss.ResourceId)"
+  return $referenceVmss
+}
+
+function get-sfClusterResource([string]$resourceGroupName, [string]$clusterName) {
+  write-console "get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties"
+  $serviceFabricResource = get-azresource -ResourceGroupName $resourceGroupName -ResourceType Microsoft.ServiceFabric/clusters -Name $clusterName -ExpandProperties
+  if (!$serviceFabricResource) {
+    write-console "service fabric cluster $clusterName not found" -warn
+  }
+  else {
+    write-console "cluster endpoint: $($serviceFabricResource.Properties.ClusterEndpoint)"
+  }
+
+  return $serviceFabricResource
+}
+
+function  get-sfExtensionSettings($vmss) {
+  write-console "get-sfExtensionSettings $($vmss.Name)"
+  #check extension
+  $sfExtension = $vmss.properties.virtualMachineProfile.extensionProfile.extensions.properties | where-object publisher -imatch 'ServiceFabric'
+  $settings = $sfExtension.settings
+  if (!$settings) {
+    write-console "service fabric extension not found for node type: $($vmss.Name)" -warn
+  }
+  else {
+    write-console "service fabric extension found for node type: $($vmss.Name)"
+  }
+  return $settings
+}
+
+function get-vmssResources([string]$resourceGroupName, [string]$vmssName) {
+  write-console "get-vmssResources -resourceGroupName $resourceGroupName -vmssName $vmssName"
+  $paramValues = @{
+    resourceType     = 'Microsoft.Compute/virtualMachineScaleSets'
+    expandProperties = $true
+  }
+
+  if ($resourceGroupName) { [void]$paramValues.Add('resourceGroupName', $resourceGroupName) }
+  if ($vmssName) { [void]$paramValues.Add('name', $vmssName) }
+
+  write-console "get-azresource $($paramValues | convertto-json)" -foregroundColor cyan
+  try {
+    $vmssResources = @(get-azresource @paramValues -ErrorAction SilentlyContinue)
+  }
+  catch {
+    write-console "exception:vmss $vmssName $($error | out-string)" -err
+    return $null
+  }
+
+  if (!$vmssResources) {
+    write-console "vmss $vmssName not found"
+    return $null
+  }
+  elseif ($vmssResources.Count -gt 1) {
+    write-console "returning: $($vmssResources.Count) vmss resource(s)"
+  }
+  else {
+    write-console "returning: $(@($vmssResources)[0].ResourceId)"
+  }
+  return $vmssResources
 }
 
 function modify-placementConstraints($placementConstraints, $plbNodeTypePattern, $temporaryNodeTypeExclusion) {
@@ -398,22 +741,22 @@ function modify-placementConstraints($placementConstraints, $plbNodeTypePattern,
 
 function set-referenceNodeTypeInformation() {
   if ($referenceNodeTypeName) {
-    $referenceVmss = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $referenceNodeTypeName
+    $referenceVmss = find-nodeType -resourceGroupName $resourceGroupName -clusterName $clusterName -nodeTypeName $referenceNodeTypeName
+    $global:referenceVmss = $referenceVmss
     if (!$referenceVmss) {
-      write-error("reference node type $referenceNodeTypeName not found")
       return $false
     }
     write-console "using reference node type $referenceNodeTypeName"
-    $global:sfExtension = ($referenceVmss.virtualMachineProfile.ExtensionProfile.Extensions | where-object Publisher -ieq 'Microsoft.Azure.ServiceFabric')
-    $global:durabilityLevel = set-value $durabilityLevel $sfExtension.Settings.durabilityLevel.Value
+    $global:sfExtension = ($referenceVmss.Properties.virtualMachineProfile.ExtensionProfile.Extensions.properties | where-object publisher -imatch 'ServiceFabric')
+    $global:durabilityLevel = set-value $durabilityLevel $sfExtension.Settings.durabilityLevel
     #$global:isPrimaryNodeType = set-value $isPrimaryNodeType $referenceNodeType.IsPrimary
-    $global:vmImageSku = set-value $vmImageSku $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Sku
+    $global:vmImageSku = set-value $vmImageSku $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Sku
     $global:vmSku = set-value $vmSku $referenceVmss.Sku.Name
-    $global:adminUserName = set-value $adminUserName $referenceVmss.VirtualMachineProfile.OsProfile.AdminUsername
+    $global:adminUserName = set-value $adminUserName $referenceVmss.Properties.VirtualMachineProfile.OsProfile.AdminUsername
     $global:vmInstanceCount = set-value $vmInstanceCount $referenceVmss.Sku.Capacity
-    $global:vmImagePublisher = set-value $vmImagePublisher $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
-    $global:vmImageOffer = set-value $vmImageOffer $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Offer
-    $global:vmImageVersion = set-value $vmImageVersion $referenceVmss.VirtualMachineProfile.StorageProfile.ImageReference.Version
+    $global:vmImagePublisher = set-value $vmImagePublisher $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Publisher
+    $global:vmImageOffer = set-value $vmImageOffer $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Offer
+    $global:vmImageVersion = set-value $vmImageVersion $referenceVmss.Properties.VirtualMachineProfile.StorageProfile.ImageReference.Version
   }
   else {
     write-console "using default values for reference node type"
@@ -422,21 +765,48 @@ function set-referenceNodeTypeInformation() {
 }
 
 function set-value($paramValue, $referenceValue) {
+  write-console "comparing values '$paramValue' and '$referenceValue'"
+  $returnValue = $paramValue
   if ($paramValue -eq $null) {
-    return $referenceValue
+    $returnValue = $referenceValue
   }
-  if ($paramValue -eq 0) {
-    return $referenceValue
+  elseif ([string]::IsNullOrEmpty($paramValue) -and ![string]::IsNullOrEmpty($referenceValue)) {
+    $returnValue = $referenceValue
   }
+  elseif ($paramValue -eq 0) {
+    $returnValue = $referenceValue
+  }
+
+  write-console "returning value: '$returnValue'"
+  return $returnValue
 }
 
-function write-console($message, $foregroundColor = 'White', [switch]$verbose) {
+function write-console($message, $foregroundColor = 'White', [switch]$verbose, [switch]$err, [switch]$warn) {
   if (!$message) { return }
+  if ($message.gettype().name -ine 'string') {
+    try {
+      $message = $message | convertto-json -Depth 10
+    }
+    catch {
+      $message = $message | out-string
+    }
+  }
+
+  $message = "$(get-date -format 'yyyy-MM-ddTHH:mm:ss.fff')::$message"
+
   if ($verbose) {
     write-verbose($message)
   }
   else {
     write-host($message) -ForegroundColor $foregroundColor
+  }
+
+  if ($warn) {
+    write-warning($message)
+  }
+  elseif ($err) {
+    write-error($message)
+    throw
   }
 }
 
@@ -502,3 +872,4 @@ function write-results() {
 }
 
 main
+

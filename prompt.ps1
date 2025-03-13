@@ -1,23 +1,34 @@
 <#
 .SYNOPSIS
-    Custom prompt for powershell
+Custom prompt for powershell
 .DESCRIPTION
-    Custom prompt for powershell
-    in ps open $PROFILE and add the following:
-    code $PROFILE
-    version 231116
+Custom prompt for powershell
+in ps open $PROFILE and add the following:
+code $PROFILE
+version 231121 add stashes list
 
 .LINK
-    [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/prompt.ps1" -outFile "$pwd\prompt.ps1";
-    code $PROFILE
-    code .\prompt.ps1
+[net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/prompt.ps1" -outFile "$pwd\prompt.ps1";
+code $PROFILE
+code .\prompt.ps1
 #>
 
 # autoload modules
 $PSModuleAutoLoadingPreference = 2
 #$DebugPreference = "Continue"
 $global:promptInfo = $null
+# set terminal tab completion same as editor
+#Set-PSReadLineKeyHandler -Chord Tab -Function TabCompleteNext # default
+#Set-PSReadLineKeyHandler -Chord Tab -Function AcceptSuggestion
+#Set-PSReadLineKeyHandler -Chord Tab -Function MenuComplete
+
+# symbols
+$branchSymbol = [char]0x2325
+$deltaSymbol = [char]0x0394
+$downArrow = [char]0x2193
+$upArrow = [char]0x2191
+$stashSymbol = [char]0x21B2
 
 function prompt() {
     $path = "'$pwd'"#.ToLower()
@@ -33,17 +44,26 @@ function prompt() {
             $promptInfo.cacheTimer = get-date
             $promptInfo.path = $path
             $promptInfo.status = get-gitInfo -newPath $newPath -gitCommand $isGitCommand -cacheTimeout $cacheTimeout
+            $promptInfo.ps = get-psEnv
         }
 
         $date = (get-date).ToString('HH:mm:ss')
-        write-host "$($promptInfo.ps) $date" -ForegroundColor DarkGray -NoNewline
-        write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
-        write-host " $path" -ForegroundColor White
-        return ">"
+        write-host "$($promptInfo.ps)$(get-commandDuration) $date" -ForegroundColor DarkGray -NoNewline
+
+        if ($promptInfo.enablePathOnPromptLine) {
+            $path = $path.trim("'")
+            write-host "$($promptInfo.status)" -ForegroundColor DarkCyan
+            return "$path>"
+        }
+        else {
+            write-host "$($promptInfo.status)" -ForegroundColor DarkCyan -NoNewline
+            write-host " $path" -ForegroundColor White
+            return ">"
+        }
     }
     catch {
-        write-host "Error: $($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red
-        return ">"
+        write-host "Error: $($psitem.Exception.Message)`r`n$($psitem.scriptStackTrace)" -ForegroundColor Red -NoNewline
+        return "$path>"
     }
 }
 
@@ -80,6 +100,7 @@ function get-branches() {
             $additionalBranchInfo = "(+$additionalBranches) additional branches. all branches in `$promptInfo.branches"
         }
         write-host "local branches:`n$($promptInfo.branches | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalBranchInfo" -ForegroundColor DarkYellow
+        write-debug "changed branches:`n$($branchesChanged | out-string)"
     }
     else {
         write-debug "branches are the same"
@@ -93,17 +114,78 @@ function get-branches() {
             $additionalBranchInfo = "(+$additionalBranches) additional remote branches. all remote branches in `$promptInfo.remoteBranches"
         }
         write-host "remote branches:`n$($promptInfo.remoteBranches | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalBranchInfo" -ForegroundColor DarkCyan
+        write-debug "changed branches:`n$($remoteBranchesChanged | out-string)"
     }    
     else {
         write-debug "remote branches are the same"
     }
+}
 
-    return $promptInfo.branches
+function get-commandDuration() {
+    $precision = 'ms'
+
+    write-debug "get-commandDuration()"
+    if (!$promptInfo.enableCommandDuration) {
+        write-debug "command duration disabled. returning"
+        return $null
+    }
+
+    $lastCommand = get-history -count 1
+    if (!$lastCommand -or !$lastCommand.Duration) {
+        write-debug "no last command found. returning"
+        $durationMs = 0
+    }
+    elseif (!$lastCommand.Duration) {
+        write-debug "no duration found. returning"
+        if ($lastCommand.StartExecutionTime -and $lastCommand.EndExecutionTime) {
+            $durationMs = ($lastCommand.EndExecutionTime - $lastCommand.StartExecutionTime).TotalMilliseconds
+        }
+        else {
+            $durationMs = 0
+        }
+    }
+    else {
+        $durationMs = [int]$lastCommand.Duration.TotalMilliseconds.toString('.')
+    }
+
+    if ($promptInfo.forceDurationMs) {
+        # add commas to the number
+        $durationMs = "{0:N0}" -f $durationMs
+    }
+    else {
+        if ($durationMs -gt 1000) {
+            $durationMs = [math]::Round($durationMs / 1000, 2)
+            $precision = 's'
+        
+            if ($durationMs -gt 60) {
+                $durationMs = [math]::Round($durationMs / 60, 2)
+                $precision = 'm'
+        
+                if ($durationMs -gt 60) {
+                    $durationMs = [math]::Round($durationMs / 60, 2)
+                    $precision = 'h'
+                }
+            }
+        }    
+    }
+
+    $promptInfo.commandDurationMs = "$($deltaSymbol)$($durationMs)$($precision)"
+    return " $($promptInfo.commandDurationMs)"
 }
 
 function get-currentBranch() {
     write-debug "get-currentBranch()"
-    $currentBranch = @(git branch --show-current)
+    $currentBranch = @(git branch --show-current 2>&1)
+    # if there is a configuration or security issue, git will return an error starting with 'fatal:'. check for this and return
+    if ($currentBranch -imatch 'not a git repository') {
+        write-verbose "not a git repository"
+        return
+    }
+    elseif ($currentBranch -match '^fatal:') {
+        write-host "git error: $($currentBranch)" -ForegroundColor Red
+        return
+    }
+    
     $currentBranchChanged = compare-object $currentBranch $promptInfo.branch
 
     if ($currentBranchChanged) {
@@ -121,16 +203,15 @@ function get-currentBranch() {
         return $null
     }
 
-    add-status " $([char]0x2325)($($promptInfo.branch))"
+    add-status " $($branchSymbol) ($($promptInfo.branch))"
     return $promptInfo.branch
 }
 
 function get-diffs() {
     write-debug "get-diffs()"
-    $diff = @(git status --porcelain).count
-    
+    $diff = @(git status --porcelain).Count
     if ($diff -gt 0) {
-        add-status " $([char]0x2325)($($promptInfo.branch)*$diff)" -reset
+        add-status " $($branchSymbol) ($($promptInfo.branch)*$($diff))" -reset
     }
 }
 
@@ -138,10 +219,10 @@ function get-remotes($gitCommand = $false) {
     write-debug "get-remotes($gitCommand)"
     $pattern = "(?<remote>\S+?)\s+(?<repo>.+?)\s+?\(\w+?\)"
     $remotes = @(git remote -v)
-    $remoteMatches = [regex]::Matches($remotes, $pattern)
+    $remoteMatches = @([regex]::Matches($remotes, $pattern))
     [void]$promptInfo.remotes.clear()
     
-    if (!$remoteMatches) {
+    if ($remoteMatches.Count -lt 1) {
         write-debug "no remotes found. returning"
         $promptInfo.repo = $null
         return $null
@@ -159,7 +240,7 @@ function get-remotes($gitCommand = $false) {
 
     foreach ($remoteMatch in $remoteMatches) {
         $remote = $remoteMatch.groups['remote'].value
-        $repoRemote = "$repo/$remote/$($promptInfo.branch)"
+        $repoRemote = "($remote/$($promptInfo.branch)) $repo"
         
         if (!($promptInfo.remotes.contains($remote))) {
             [void]$promptInfo.remotes.add($remote)
@@ -168,12 +249,10 @@ function get-remotes($gitCommand = $false) {
         # only do this once per repo
         if (!($promptInfo.fetchedRepos.contains($repoRemote))) {
             [void]$promptInfo.fetchedRepos.add($repoRemote)
-            write-host "fetching $repoRemote" -ForegroundColor DarkMagenta
+            write-host "fetching:$repoRemote" -ForegroundColor DarkMagenta
             git fetch $remote
         }
     }
-
-    return $promptInfo.remotes
 }
 
 function get-revisions() {
@@ -186,7 +265,7 @@ function get-revisions() {
             $aheadBehind = "0 0"
         }
         if ($aheadBehind) {
-            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', "$([char]0x2193)`$1/$([char]0x2191)`$2")
+            $aheadBehind = [regex]::replace($aheadBehind, '(\d+)\s+(\d+)', "$($downArrow)`$1/$($upArrow)`$2")
             add-status "[$($remote):$($aheadBehind)]"
         }
     }
@@ -195,9 +274,26 @@ function get-revisions() {
 function get-stashes() {
     write-debug "get-stashes()"
     $stashes = @(git stash list)
-    if ($stashes) {
+    $stashesChanged = compare-object $stashes $promptInfo.stashes
+    
+    if ($stashesChanged) {
+        write-debug "stashes changed. $($stashes) -ne $($promptInfo.stashes)"
+        $promptInfo.stashes = $stashes
+        
+        $additionalStashes = $promptInfo.stashes.count - $promptInfo.defaultBranchCount
+        $additionalStashInfo = ""
+        if ($additionalStashes -gt 0) {
+            $additionalStashInfo = "(+$additionalStashes) additional stashes. all stashes in `$promptInfo.stashes"
+        }
+        write-host "stashes:`n$($promptInfo.stashes | Select-Object -First $promptInfo.defaultBranchCount | Out-String)$additionalStashInfo" -ForegroundColor Yellow
+    }
+    else {
+        write-debug "stashes are the same"
+    }
+
+    if ($promptInfo.stashes) {
         write-debug "stashes found. adding to status"
-        add-status "{$([char]0x21B2)$($stashes.count)}"
+        add-status "{$($stashSymbol)$($promptInfo.stashes.count)}"
     }
 }
 
@@ -214,32 +310,59 @@ function get-gitInfo([bool]$newPath = $false, [bool]$gitCommand = $false, [bool]
         return (add-status -reset)
     }
 
-    $null = get-remotes -gitCommand $gitCommand
     get-diffs
     get-stashes
+    get-remotes -gitCommand $gitCommand
     get-revisions
 
     write-debug "returning status: $status"
     return $promptInfo.status
 }
 
+function get-psEnv() {
+    write-debug "get-psEnv()"
+    if ($env:VSCMD_VER) {
+        $psEnv = "vs$($env:VSCMD_VER) "
+    }
+    $psEnv += if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
+    return $psEnv
+}
+
+function init-promptInfoEnv() {
+    write-debug "init-promptInfo()"
+    $openai = '\github\jagilber\powershellscripts\openai.ps1'
+    if ((test-path $openai -WarningAction SilentlyContinue)) {
+        . $openai -init -quiet
+    }
+    else {
+        write-debug "openai.ps1 not found"
+    }
+
+}
+
 function new-promptInfo() {
     if (!$global:promptInfo) {
+        init-promptInfoEnv
         write-debug "new-promptInfo()"
         $global:promptInfo = @{
-            path               = ""
-            branch             = ""
-            defaultBranchCount = 20
-            branches           = @()
-            remoteBranches     = @()
-            remotes            = [collections.arraylist]::new()
-            repo               = ""
-            status             = ""
-            ps                 = if ($IsCoreCLR) { 'pwsh' } else { 'ps' }
-            cacheTimer         = [datetime]::MinValue
-            enableGit          = $true
-            cacheMinutes       = 1
-            fetchedRepos       = [collections.arraylist]::new()
+            path                   = ""
+            branch                 = ""
+            cacheMinutes           = 1
+            branches               = @()
+            defaultBranchCount     = 20
+            remoteBranches         = @()
+            remotes                = [collections.arraylist]::new()
+            stashes                = [collections.arraylist]::new()
+            repo                   = ""
+            status                 = ""
+            ps                     = get-psEnv
+            cacheTimer             = [datetime]::MinValue
+            enableGit              = $true
+            enableCommandDuration  = $true
+            enablePathOnPromptLine = $false
+            fetchedRepos           = [collections.arraylist]::new()
+            commandDurationMs      = 0
+            forceDurationMs        = $false
         }
     }
 }

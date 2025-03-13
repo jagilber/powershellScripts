@@ -27,74 +27,88 @@ param(
     [switch]$ssh,
     [int]$sshPort = 22,
     [string]$vscodeScriptUrl = "https://raw.githubusercontent.com/PowerShell/vscode-powershell/main/scripts/Install-VSCode.ps1",
-    [string]$pwshReleaseApi = "https://api.github.com/repos/powershell/powershell/releases/latest"
+    [string]$pwshReleaseApi = "https://api.github.com/repos/powershell/powershell/releases/latest",
+    [string]$defaultVscodeBinPath = "c:\program files\Microsoft VS Code\bin"
 )
 
 [io.directory]::CreateDirectory($gitHubDir)
 if (!(test-path "$pwd\download-git-client.ps1")) {
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -outFile  "$pwd/download-git-client.ps1";
+    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -user 'powershell' -outFile  "$pwd/download-git-client.ps1";
 }
 
 $error.Clear()
 
 if (!$user) {
- $user = [regex]::Match((whoami /fqdn), "CN=(.+?),").Groups[1].Value
+    $whoami = (whoami /fqdn)
+    if ($whoami -match "CN=(.+?),") {
+        $user = [regex]::Match($whoami, "CN=(.+?),").Groups[1].Value
+    }
+    else {
+        $user = $env:USERNAME
+    }
 }
 
-if ($error) {
-    $error.Clear()
-    $user = $env:USERNAME
-}
 
 if (!$email) {
-    $email = (whoami /upn)
+    $whoami = (whoami /upn)
+    if ($whoami -match "CN=(.+?),") {
+        $email = [regex]::Match($whoami, "CN=(.+?),").Groups[1].Value
+    }
+    else {
+        $email = "$env:USERNAME@$env:userdomain"
+    }
 }
 
-if ($error) {
-    $error.Clear()
-    $email = "$env:USERNAME@$env:userdomain"
-}
-
-# git
-$error.clear()
-(git) | out-null
-
-if ($error) {    
+write-host "checking git"
+if (!(get-command git -errorAction SilentlyContinue)) {
+    write-host "git not found" -ForegroundColor Yellow
     .\download-git-client.ps1
 }
+else {
+    write-host "git found" -ForegroundColor Green
+}
 
-# git config
-git config --global user.name $user
-git config --global user.email $email
-git config --global core.editor "code --wait"
-
-# hub git wrapper
-# $error.clear()
-# (hub) | out-null
-
-# if ($error) {
-#     .\download-git-client.ps1 -hub -setpath
-# }
+if ((get-command git -errorAction SilentlyContinue)) {
+    # git config
+    git config --global user.name $user
+    git config --global user.email $email
+    git config --global core.editor "code --wait"
+}
+else {
+    write-host "git not found. skipping config" -ForegroundColor Red
+}
 
 Set-Location $gitHubDir
 
-$error.clear()
-(pwsh /?) | out-null
-
-if ($error) {
+write-host "checking pwsh"
+if (!(get-command pwsh -errorAction SilentlyContinue)) {
+    write-host "pwsh not found" -ForegroundColor Yellow
     $outputFile = "$pwd\pwsh.msi"
     $apiResults = convertfrom-json (Invoke-WebRequest $pwshReleaseApi -UseBasicParsing)
     $downloadUrl = @($apiResults.assets -imatch 'PowerShell-.+?-win-x64.msi')[0].browser_download_url
     [net.webclient]::new().DownloadFile($downloadUrl, $outputFile)
     msiexec /i $outputFile /qn /norestart
 }
+else {
+    write-host "pwsh found" -ForegroundColor Green
+}
 
-$error.clear()
-(code /?) | out-null
-
-if ($error) {
-    invoke-webRequest $vscodeScriptUrl -outFile  "$pwd/Install-VSCode.ps1";
+write-host "checking vscode"
+if (!(get-command code -errorAction SilentlyContinue)) {
+    write-host "vscode not found" -ForegroundColor Yellow
+    invoke-webRequest $vscodeScriptUrl -user 'powershell' -outFile  "$pwd/Install-VSCode.ps1";
     .\Install-VSCode.ps1 -additionalExtensions @($additionalExtensions) -launchWhenDone -enableContextMenus
+
+    if ((test-path $defaultVscodeBinPath)) {
+        write-host "adding vscode bin path '$defaultVscodeBinPath' to env"
+        $env:path += ";$defaultVscodeBinPath"
+    }
+    else {
+        write-host "vscode bin path not found" -ForegroundColor Red
+    }
+}
+else {
+    write-host "vscode found" -ForegroundColor Green
 }
 
 if ($ssh) {

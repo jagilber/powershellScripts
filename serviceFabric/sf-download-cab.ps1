@@ -10,12 +10,13 @@ iwr https://raw.githubusercontent.com/jagilber/powershellScripts/master/serviceF
 param(
     [string]$sfversion,
     [switch]$all,
+    [switch]$latest,
     [string]$sfPackageUrl = "https://go.microsoft.com/fwlink/?LinkID=824848&clcid=0x409",
     [string]$programDir = "c:\Program Files\Microsoft Service Fabric",
     [switch]$force,
     [bool]$removeCab = $false,
     [string]$outputFolder = $pwd,
-    [bool]$extract = $true,
+    [bool]$extract = $false,
     [bool]$install = $false
 )
 
@@ -24,11 +25,19 @@ $allPackages = @(invoke-restmethod $sfPackageUrl).Packages
 if ($sfversion) {
     $packages = @($allPackages -imatch $sfversion)
 }
-elseif (!$all) {
+elseif ($all) {
+    $packages = @($allPackages)
+}
+elseif ($latest) {
     $packages = @($allPackages[-1])
 }
+else {
+    write-host ($allPackages | out-string)
+    write-host "specify -sfversion or -all or -latest"
+    return
+}
 
-if(!$packages) {
+if (!$packages) {
     write-host ($allPackages | out-string)
     write-warning "no packages found for $sfversion"
     return
@@ -45,9 +54,9 @@ foreach ($package in $packages) {
     }
 
     mkdir "$outputFolder\$($package.Version)"
-    [net.webclient]::new().DownloadFile($package.TargetPackageLocation,"$outputFolder\$($package.Version).cab")
+    [net.webclient]::new().DownloadFile($package.TargetPackageLocation, "$outputFolder\$($package.Version).cab")
 
-    if($extract -or $install) {
+    if ($extract -or $install) {
         expand "$outputFolder\$($package.Version).cab" -F:* "$outputFolder\$($package.Version)"
     }
 
@@ -56,7 +65,7 @@ foreach ($package in $packages) {
     }
 }
 
-if($install){
+if ($install) {
     $sfBinDir = "$programDir\bin\Fabric\Fabric.Code"
     write-host "Copy-Item `"$outputFolder\$($package.Version)`" $programDir -Recurse -Force"
     Copy-Item "$outputFolder\$($package.Version)" $programDir -Recurse -Force

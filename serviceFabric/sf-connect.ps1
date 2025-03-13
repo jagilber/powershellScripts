@@ -44,7 +44,7 @@ function main() {
     write-host "starting:$startTime"
     set-callback
     $error.Clear()
-    if (!(get-command Connect-ServiceFabricCluster)) {
+    if (!(get-command Connect-ServiceFabricCluster -errorAction SilentlyContinue)) {
         import-module servicefabric
         if (!(get-command Connect-ServiceFabricCluster)) {
             write-error "unable to import servicefabric powershell module. try executing script from a working node."
@@ -52,8 +52,14 @@ function main() {
         }
     }
 
-    $certCollection = get-clientCert -thumbprint $thumbprint -storeLocation $storeLocation -storeName $storeName
-    if(!$certCollection) {
+    if ($subjectName) {
+        $certCollection = get-clientCert -subjectName $subjectName -storeLocation $storeLocation -storeName $storeName
+    }
+    else {
+        $certCollection = get-clientCert -thumbprint $thumbprint -storeLocation $storeLocation -storeName $storeName
+    }
+
+    if (!$certCollection) {
         return
     }
 
@@ -70,7 +76,9 @@ function main() {
     if ($resourceGroup -and $clustername) {
         $cluster = Get-azServiceFabricCluster -ResourceGroupName $resourceGroup -Name $clustername
         $managementEndpoint = $cluster.ManagementEndpoint
-        $thumbprint = $cluster.Certificate.Thumbprint
+        if(!$thumbprint) {
+            $thumbprint = $cluster.Certificate.Thumbprint
+        }
         $global:cluster | ConvertTo-Json -Depth 99
     }
 
@@ -109,7 +117,30 @@ function main() {
         write-error "unable to connect to $($clusterFqdn):$($clusterExplorerPort)"
     }
     
-    write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $managementEndpoint ``
+    if ($subjectName) {
+        write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $managementEndpoint ``
+        -ServerCommonName '$subjectName' ``
+        -StoreLocation $storeLocation ``
+        -StoreName $storeName ``
+        -X509Credential ``
+        -FindType FindBySubjectName ``
+        -FindValue '$subjectName' ``
+        -verbose" -ForegroundColor Green
+    
+        $error.Clear()
+        # this sets wellknown local variable $ClusterConnection
+        $result = Connect-ServiceFabricCluster `
+            -ConnectionEndpoint $managementEndpoint `
+            -ServerCommonName $subjectName `
+            -StoreLocation $storeLocation `
+            -StoreName $storeName `
+            -X509Credential `
+            -FindType FindBySubjectName `
+            -FindValue $subjectName `
+            -Verbose
+    }
+    else {
+        write-host "Connect-ServiceFabricCluster -ConnectionEndpoint $managementEndpoint ``
         -ServerCertThumbprint $thumbprint ``
         -StoreLocation $storeLocation ``
         -StoreName $storeName ``
@@ -119,16 +150,17 @@ function main() {
         -verbose" -ForegroundColor Green
     
         $error.Clear()
-    # this sets wellknown local variable $ClusterConnection
-    $result = Connect-ServiceFabricCluster `
-        -ConnectionEndpoint $managementEndpoint `
-        -ServerCertThumbprint $thumbprint `
-        -StoreLocation $storeLocation `
-        -StoreName $storeName `
-        -X509Credential `
-        -FindType FindByThumbprint `
-        -FindValue $thumbprint `
-        -Verbose
+        # this sets wellknown local variable $ClusterConnection
+        $result = Connect-ServiceFabricCluster `
+            -ConnectionEndpoint $managementEndpoint `
+            -ServerCertThumbprint $thumbprint `
+            -StoreLocation $storeLocation `
+            -StoreName $storeName `
+            -X509Credential `
+            -FindType FindByThumbprint `
+            -FindValue $thumbprint `
+            -Verbose
+    }
 
     $result
     write-host "Get-ServiceFabricClusterConnection" -ForegroundColor Green
@@ -239,6 +271,39 @@ function get-certValidationTcp([string] $url, [int]  $port, [object]$certCollect
     }
 }
 
+function get-clientCert($thumbprint, $storeLocation, $storeName, $subjectName) {
+    write-host "get-clientCert:$($thumbprint) $storeLocation $storeName" -ForegroundColor Green
+    $pscerts = $null
+    $certCol = [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]]::new()
+
+    if ($subjectName) {
+        write-host "Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Subject -ilike $subjectName" -ForegroundColor Cyan
+        $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Subject -ilike $subjectName)
+    }
+    else {
+        write-host "Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Thumbprint -ieq $thumbprint" -ForegroundColor Cyan
+        $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Thumbprint -ieq $thumbprint)
+    }
+
+    foreach ($cert in $pscerts) {
+        write-host "adding cert:$($cert | Format-List * |out-string)" -ForegroundColor Cyan
+        if(!$cert.HasPrivateKey) {
+            write-warning "certificate with thumbprint:$thumbprint does not have private key"
+        }
+        [void]$certCol.Add([System.Security.Cryptography.X509Certificates.X509Certificate]::new($cert))
+    }
+
+    write-host "certcol: $($certCol | convertto-json)"
+
+    if (!$certCol) {
+        write-error "certificate with thumbprint:$thumbprint not found in certstore:$storeLocation\$storeName"
+        return $null
+    }
+
+    Write-host "certificate with thumbprint:$thumbprint found in certstore:$storeLocation\$storeName" -ForegroundColor Green
+    return $certCol.ToArray()
+}
+
 function get-systemFabric([string] $url, [int]  $port) {
     # creates $nuget object
     invoke-webRequest 'https://aka.ms/nuget-functions.ps1' | Invoke-Expression
@@ -269,25 +334,6 @@ function get-systemFabric([string] $url, [int]  $port) {
     [string[]]$hosts = @("$($url):$port")
     [fabric.fabricclient]$global:fc = [fabric.fabricclient]::new($sfcredentials, $hosts)
     $global:fc.ClusterManager.GetClusterManifestAsync().Result
-}
-
-function get-clientCert($thumbprint, $storeLocation, $storeName) {
-    $pscerts = @(Get-ChildItem -Path Cert:\$storeLocation\$storeName -Recurse | Where-Object Thumbprint -eq $thumbprint)
-    [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]] $certCol = [collections.generic.list[System.Security.Cryptography.X509Certificates.X509Certificate]]::new()
-
-    foreach ($cert in $pscerts) {
-        [void]$certCol.Add([System.Security.Cryptography.X509Certificates.X509Certificate]::new($cert))
-    }
-
-    write-host "certcol: $($certCol | convertto-json)"
-
-    if(!$certCol){
-        write-error "certificate with thumbprint:$thumbprint not found in certstore:$storeLocation\$storeName"
-        return $null
-    }
-
-    Write-host "certificate with thumbprint:$thumbprint found in certstore:$storeLocation\$storeName" -ForegroundColor Green
-    return $certCol.ToArray()
 }
 
 function set-callback() {

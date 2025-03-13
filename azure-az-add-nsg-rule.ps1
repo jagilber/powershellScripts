@@ -63,7 +63,7 @@ function get-nsg($name) {
 }
 
 function modify-nsgRule($nsg) {
-    $currentRule = Get-AzNetworkSecurityRuleConfig -Name $nsgRuleName -NetworkSecurityGroup $nsg
+    $currentRule = Get-AzNetworkSecurityRuleConfig -Name $nsgRuleName -NetworkSecurityGroup $nsg -ErrorAction SilentlyContinue
 
     if ($currentRule -and ($force -or $remove)) {
         Write-Warning "deleting existing rule`r`n$($currentRule | convertto-json -depth 5)"

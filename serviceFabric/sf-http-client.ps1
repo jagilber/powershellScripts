@@ -236,9 +236,9 @@ function check-module() {
             install-module az.resources
             install-module az.keyvault
 
-            import-module az.accounts
-            import-module az.resources
-            import-module az.keyvault
+            if(!(get-module az.accounts)) { import-module az.accounts }
+            if(!(get-module az.keyvault)) { import-module az.keyvault}
+            if(!(get-module az.resources)) { import-module az.resources}
         }
         else {
             return $false

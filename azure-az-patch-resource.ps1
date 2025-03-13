@@ -58,6 +58,7 @@ param (
     [ValidateSet('Incremental', 'Complete')]
     [string]$mode = 'Incremental',
     [switch]$useLatestApiVersion,
+    [switch]$pre,
     [switch]$detail
 )
 
@@ -124,6 +125,24 @@ function main () {
         $global:configuredRGResources = $global:configuredRGResources.clone() | where-object Name -NotMatch "$($excludeResourceNames -join "|")"
     }
 
+    # service fabric managed cluster has a bug where it does not return nodetypes.  this is a workaround
+    # check if there are any Microsoft.ServiceFabric/managedclusters in configuredRGResources and if so, get-azresource for nodetypes
+    $sfmcs = $global:configuredRGResources | where-object ResourceType -imatch 'Microsoft.ServiceFabric/managedclusters'
+    if ($sfmcs) {
+        $sfmcNodeTypes = $sfmcs | where-object ResourceType -imatch 'Microsoft.ServiceFabric/managedclusters/nodeTypes'
+        if (!$sfmcNodeTypes) {
+            write-host "getting sfmc node types manually since these are not currently returned by get-azresource" -ForegroundColor Yellow
+            foreach($sfmc in $sfmcs) {
+
+                $sfmcNodeTypes = @(get-azresource -Id "$($sfmc.ResourceId)/nodeTypes")
+                foreach($sfmcNodeType in $sfmcNodeTypes) {
+                    $sfmcNodeType.Name = "$($sfmc.Name)/$($sfmcNodeType.Name)"
+                }
+                $global:configuredRGResources.AddRange($sfmcNodeTypes)
+            }
+        }
+    }
+
     display-settings -resources $global:configuredRGResources
 
     if ($global:configuredRGResources.count -lt 1) {
@@ -183,8 +202,8 @@ function check-module() {
             install-module az.accounts
             install-module az.resources
 
-            import-module az.accounts
-            import-module az.resources
+            if(!(get-module az.accounts)) { import-module az.accounts }
+            if(!(get-module az.resources)) { import-module az.resources}
         }
         else {
             return $false
@@ -262,6 +281,18 @@ function deploy-template() {
         $outputs.Add($jsonParameter.name, $jsonParameter.value)
     }
 
+    # remove provisioningstate as it is not a valid property for deploy and will cause validation error if state is not equal to current state
+    foreach ($resource in $resources) {
+        $resourceProperties = $resource.properties.psobject.properties
+        foreach ($resourceProperty in $resourceProperties) {
+            if ($resourceProperty.Name -ieq 'provisioningState') {
+                $resourceProperty.Value = $null
+                write-host "removing provisioningState from resource: $($resource.id)" -ForegroundColor Yellow
+                continue
+            }
+        }
+    }
+
     create-jsonTemplate -resources $resources -jsonFile $tempJsonFile -parameters $parameters -variables $variables -outputs $outputs | Out-Null
 
     $error.Clear()
@@ -333,7 +364,7 @@ function export-template($configuredResources) {
     $azResourceGroupLocation = @($configuredResources)[0].Location
     
     write-host "getting latest api versions" -ForegroundColor yellow
-    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation
+    $resourceProviders = Get-AzResourceProvider -Location $azResourceGroupLocation -Pre:$pre
 
     write-host "getting configured api versions" -ForegroundColor green
     Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $templateJsonFile -Force
@@ -360,7 +391,7 @@ function export-template($configuredResources) {
             write-host "using latest schema api version: $resourceApiVersion to enumerate and save resource: `r`n`t$($azResource.ResourceId)" -ForegroundColor yellow
         }
 
-        $azResource = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
+        $azResourceExpanded = get-azresource -Id $azResource.ResourceId -ExpandProperties -ApiVersion $resourceApiVersion
         write-verbose "azresource by id and version: $($azResource | format-list * | out-string)"
         $resource = @{
             apiVersion = $resourceApiVersion
@@ -370,15 +401,15 @@ function export-template($configuredResources) {
             id         = $azResource.ResourceId
             name       = $azResource.Name 
             tags       = $azResource.Tags
-            properties = $azResource.properties
+            properties = $azResourceExpanded.properties
         }
 
         # add other arm objects. vmss sku is an example
-        foreach ($item in $azResource.psobject.properties) {
+        foreach ($item in $azResourceExpanded.psobject.properties) {
             write-verbose "searching psobject for resourcemanager objects: item: $item"
             if ($item.TypeNameOfValue -imatch 'Microsoft.Azure.Management.ResourceManager') {
                 write-verbose "adding psobject for resourcemanager objects: item: $item"
-                [void]$resource.Add($item.Name, $azresource."$($item.Name)")
+                [void]$resource.Add($item.Name, $azResourceExpanded."$($item.Name)")
             }
         }
 
@@ -392,8 +423,8 @@ function export-template($configuredResources) {
 function remove-jobs() {
     try {
         foreach ($job in get-job) {
-            write-host "removing job $($job.Name)" -report $global:scriptName
-            write-host $job -report $global:scriptName
+            write-host "removing job $($job.Name)"
+            write-host $job
             $job.StopJob()
             Remove-Job $job -Force
         }

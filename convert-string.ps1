@@ -8,7 +8,10 @@ param(
     [switch]$stringToRegexEscaped,
     [switch]$regexToStringUnescaped,
     [switch]$stringToCharArray,
-    [switch]$charArrayToString
+    [switch]$charArrayToString,
+    [switch]$rsaDecrypt,
+    [switch]$rsaEncrypt,
+    $certThumbprint
 )
 
 
@@ -58,6 +61,26 @@ if($charArrayToString) {
     write-host "charArrayToString: [string]::new(`$inputString)" -ForegroundColor Green
     $global:output = [string]::new($inputString)
     write-host "charArrayToString: $($global:output)"
+}
+
+if($certThumbprint) {
+    write-host "certThumbprint: $certThumbprint" -ForegroundColor Green
+    $cert = Get-ChildItem -Path cert:\ -Recurse | where-object thumbprint -eq $certThumbprint
+    if(!$cert) {
+        write-host "certThumbprint: $certThumbprint not found" -ForegroundColor Red
+    }
+}
+
+if($rsaDecrypt -and $cert) {
+    write-host "rsaDecrypt: [text.encoding]::UTF8.GetString(`$cert.PrivateKey.Decrypt([convert]::FromBase64String($inputString),[security.cryptography.RSAEncryptionPadding]::OaepSHA256))" -ForegroundColor Green
+    $global:output = [text.encoding]::UTF8.GetString($cert.PrivateKey.Decrypt([convert]::FromBase64String($inputString),[security.cryptography.RSAEncryptionPadding]::OaepSHA256))
+    write-host "rsaDecrypt: $($global:output)"
+}
+
+if($rsaEncrypt -and $cert) {
+    write-host "rsaEncrypt: [convert]::ToBase64String(`$cert.PublicKey.Key.Encrypt([text.encoding]::UTF8.GetBytes($inputString),[security.cryptography.RSAEncryptionPadding]::OaepSHA256))" -ForegroundColor Green
+    $global:output = [convert]::ToBase64String($cert.PublicKey.Key.Encrypt([text.encoding]::UTF8.GetBytes($inputString),[security.cryptography.RSAEncryptionPadding]::OaepSHA256))
+    write-host "rsaEncrypt: $($global:output)"
 }
 
 write-host "output stored in `$global:output" -ForegroundColor Cyan
