@@ -54,7 +54,7 @@ param(
   [string]$etlFileFilter = "*.etl",
   [switch]$useNetsh, # Using pktmon to parse the ETL files is about 33% faster than netsh but not available on all systems
   # [string]$outputFile, #= "$pwd\WindowsUpdate.csv" # if specified, the script will save the parsed entries to a CSV file or JSON file
-  [string]$outputDir,
+  [string]$outputDir = $etlFilesPath,
   [int]$etlMaxProcessorInstance = 4,
   [string]$tmfPath = 'C:\users\Public\TMF',
   [switch]$sort,
@@ -81,6 +81,7 @@ function main() {
     }
 
     $process = if ($usepktmon) { 'pktmon' } else { 'netsh' }
+    write-log "@(get-childItem -Path $etlFilesPath -Filter $etlFileFilter -Recurse:$includeSubdirectories)"
     $etlFiles = @(get-childItem -Path $etlFilesPath -Filter $etlFileFilter -Recurse:$includeSubdirectories)
     $usepktmon = !$useNetsh -and ($null -ne (Get-Command -Name pktmon -ErrorAction SilentlyContinue))
     $totalFiles = $etlFiles.Count
@@ -194,7 +195,7 @@ function format-etlFile([string]$fileName, [string]$outputFileName, [bool]$usepk
 
   write-log -data $job -ForegroundColor Green
 
-  if ($errror -or $LASTEXITCODE -ne 0) {
+  if ($error -or $LASTEXITCODE -ne 0) {
     write-log -data  "Failed to parse ETL file: $fileName" -ForegroundColor Red
     return $null
   }
@@ -225,8 +226,8 @@ function monitor-processes([int]$maxCount, [string]$process) {
 function remove-jobs() {
   try {
     foreach ($job in get-job) {
-      write-log -data "removing job $($job.Name)" -report $global:scriptName
-      write-log -data $job -report $global:scriptName
+      write-log -data "removing job $($job.Name)"
+      write-log -data $job
       $job.StopJob()
       Remove-Job $job -Force
     }
