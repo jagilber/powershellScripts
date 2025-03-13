@@ -111,7 +111,7 @@ param(
   [string]$promptRole = 'user',
   [ValidateSet('https://api.openai.com/v1/chat/completions', 'https://api.openai.com/v1/images/completions', 'https://api.openai.com/v1/davinci-codex/completions')]
   [string]$endpoint = '',
-  [ValidateSet('o3-mini','gpt-4.5-preview','o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
+  [ValidateSet('o3-mini', 'gpt-4.5-preview', 'o1-mini', 'gpt-4o', 'gpt-3.5-turbo-1106', 'gpt-4-turbo', 'dall-e-2', 'dall-e-3', 'davinci-codex-003', 'gpt-4o-2024-05-13')]
   [string]$model = 'o3-mini',
   [string]$logFile = "$psscriptroot\openai.log",
   [string]$promptsFile = "$psscriptroot\openaiMessages.json",
@@ -128,7 +128,9 @@ param(
   [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
   [string]$imageStyle = 'vivid',
-  [int]$maxTokens = 4096,
+  [int]$maxTokens = 4096, # o3 is 100k
+  [ValidateSet('low', 'medium', 'high')]
+  [string]$oReasoningEffort = 'medium',
   [string]$outputPath = "$psscriptroot\output",
   [string]$user = 'default',
   [ValidateSet('url', 'b64_json')]
@@ -345,6 +347,7 @@ function build-chatRequestBody($messageRequests, $systemPrompts) {
 
   if ($model -imatch 'o3-') {
     $requestBody.max_completion_tokens = $maxTokens
+    $requestBody.reasoning_effort = $oReasoningEffort
   }
   else {
     $requestBody.max_tokens = $maxTokens
@@ -376,12 +379,13 @@ function build-o1chatRequestBody($messageRequests, $systemPrompts) {
     # response_format = @{
     #   type = $responseFormat
     # }
-    model    = $model
+    model                  = $model
     # seed            = $seed
     # logprobs        = $logProbabilities
-    messages = $messageRequests.toArray()
+    messages               = $messageRequests.toArray()
     # user            = $user
-    max_completions_tokens      = $maxTokens
+    max_completions_tokens = $maxTokens
+    reasoning_effort       = $oReasoningEffort
   }
 
   return $requestBody
@@ -624,7 +628,7 @@ function set-variables() {
       $value = $null
     }
     
-    if(!$value -or $value -ieq 'false') {
+    if (!$value -or $value -ieq 'false') {
       write-debug "skipping variable: $name that is 'false'"
       continue
     }
