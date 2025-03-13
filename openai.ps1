@@ -125,7 +125,7 @@ param(
   [switch]$imageEdit, # edit image
   [string]$imageFilePng = "$psscriptroot\downloads\openai.png",
   [ValidateSet('256x256', '512x512', '1024x1024', '1792x1024', '1024x1792')]
-  [string]$imageSize = '1024x1024', # dall-e 2 only supports up to 512x512
+  [string]$imageSize = '1792x1024', # dall-e 2 only supports up to 512x512
   [ValidateSet('vivid', 'natural')]
   [string]$imageStyle = 'vivid',
   [int]$maxTokens = 4096, # o3 is 100k
@@ -222,10 +222,10 @@ function main() {
       'Content-Type'  = 'application/json'
       'OpenAI-Beta'   = 'assistants=v2'
     }
-    if ($endpointType -eq 'images') {
-      $headers.'Content-Type' = 'multipart/form-data'
-      #$headers.Add('Accept', 'image/png')
-    }
+    # if ($endpointType -eq 'images') {
+    #   $headers.'Content-Type' = 'multipart/form-data'
+    #   #$headers.Add('Accept', 'image/png')
+    # }
 
     $requestBody = build-requestBody $script:messageRequests $script:systemPromptsList
 
@@ -418,7 +418,7 @@ function build-imageRequestBody($messageRequests) {
       response_format = $imageResponseFormat
       size            = $imageSize
       user            = $user
-      max_tokens      = $maxTokens
+      # max_tokens      = $maxTokens
       image           = $imageFilePng # to-base64StringFromFile $imageFilePng
     }
   }
@@ -432,7 +432,7 @@ function build-imageRequestBody($messageRequests) {
       size            = $imageSize
       style           = $imageStyle
       user            = $user
-      max_tokens      = $maxTokens
+      # max_tokens      = $maxTokens
     }
   }
   return $requestBody
@@ -552,7 +552,7 @@ function read-messageResponse($response, [collections.arraylist]$messageRequests
         invoke-webRequest -Uri $response.data.url -OutFile $imageFilePng
 
         $tempImageFile = $imageFilePng.replace(".png", "$(get-date -f 'yyMMdd-HHmmss').png")
-        writ-log "copying image to $tempImageFile" -color Yellow
+        write-log "copying image $imageFilePng to $tempImageFile" -color Yellow
         Copy-Item $imageFilePng $tempImageFile
         code $tempImageFile
       }
