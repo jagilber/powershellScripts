@@ -74,3 +74,16 @@ Request is blocked because principal [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 [Microsoft.DocumentDB/databaseAccounts/readMetadata] on resource [/]. 
 Learn more: https://aka.ms/cosmos-native-rbac.\r\nActivityId: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, Microsoft.Azure.Documents.Common/2.14.0"}
 */
+
+/*
+if uami is not added to vmss, the following error will be thrown:
+TestCosmosClientAsync: cosmosEndpoint=https://sfmjagilber1nt5d.documents.azure.com, databaseName=cosmicworks, managedIdentityClientId=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Starting TestCosmosClientAsync...
+Failed to connect to Cosmos DB: DefaultAzureCredential failed to retrieve a token from the included credentials. See the troubleshooting guide for more information. https://aka.ms/azsdk/net/identity/defaultazurecredential/troubleshoot- EnvironmentCredential authentication unavailable. Environment variables are not fully configured. See the troubleshooting guide for more information. https://aka.ms/azsdk/net/identity/environmentcredential/troubleshoot
+- WorkloadIdentityCredential authentication unavailable. The workload options are not fully configured. See the troubleshooting guide for more information. https://aka.ms/azsdk/net/identity/workloadidentitycredential/troubleshoot     
+- ManagedIdentityCredential authentication unavailable. The requested identity has not been assigned to this resource.
+- VisualStudioCredential authentication failed: Visual Studio Token provider can't be accessed at C:\Users\cloudadmin\AppData\Local\.IdentityService\AzureServiceAuth\tokenprovider.json
+- AzureCliCredential authentication failed: Azure CLI not installed
+- AzurePowerShellCredential authentication failed: Az.Accounts module >= 2.2.0 is not installed.
+- AzureDeveloperCliCredential authentication failed: Azure Developer CLI could not be found.
+*/
