@@ -72,7 +72,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$templateFile,
     [string]$templateParameterFile,
-    [ValidateSet('incremental','complete')]
+    [ValidateSet('incremental', 'complete')]
     [string]$mode = 'incremental',
     [hashtable]$additionalParameters = @{},
     [switch]$clean,
@@ -134,8 +134,11 @@ function main() {
 
     write-host "checking location"
 
-    if (!(get-azLocation | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location)) {
-        (get-azLocation).Location
+    if(!$global:locations) {
+        $global:locations = get-azLocation
+    }
+    if (!($global:locations | Where-Object Location -Like $location) -or [string]::IsNullOrEmpty($location)) {
+        ($global:locations).Location
         write-warning "location: $($location) not found. supply -location using one of the above locations and restart script."
         return 1
     }
@@ -278,8 +281,8 @@ function main() {
         @additionalParameters
 
     if ($ret) {
-        Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)`n`n$($ret | convertto-json)"
-        return 1
+            Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)`n`n$($ret | convertto-json)"
+            return 1
     }
 
     write-host "
