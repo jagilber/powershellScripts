@@ -35,6 +35,19 @@
                 "<node_internals>/**"
             ],
             "port": 9229
+        },
+        {
+            "name": "Dotnet Script Debug Launch",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "dotnet",
+            "args": [
+                "exec",
+                "C:\\Users\\jagilber\\.dotnet\\tools\\.store\\dotnet-script\\1.5.0\\dotnet-script\\1.5.0\\tools\\net8.0\\any\\dotnet-script.dll",
+                "${file}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false
         }
     ]
 }
