@@ -79,8 +79,8 @@ function main() {
     }
 
     if ($processId -ne 0 -and $listProviders) {
-        write-host "listing providers for pid $pid..." -ForegroundColor Yellow
-        logman query providers -pid $pid | select-object -Skip 2 | Format-Table -AutoSize
+        write-host "listing providers for pid $processId" -ForegroundColor Yellow
+        logman query providers -pid $processId | select-object -Skip 2 | Format-Table -AutoSize
         return
     }
     elseif ($listProviders) {
