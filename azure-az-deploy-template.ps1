@@ -283,7 +283,7 @@ function main() {
     if ($ret) {
             Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)`n`n$($ret | convertto-json)"
             return 1
-    }
+        }
 
     write-host "
         New-azResourceGroupDeployment -Name $deploymentName ``
@@ -293,10 +293,11 @@ function main() {
             -TemplateParameterObject $templateParameters ``
             -Mode $mode ``
             -Verbose ``
+            -WhatIf:$test ``
             @additionalParameters
     " -ForegroundColor Cyan
 
-    if (!$test) {
+    # if (!$test) {
         write-host "$([DateTime]::Now) creating deployment"
         $error.Clear() 
     
@@ -307,8 +308,9 @@ function main() {
             -TemplateParameterObject $templateParameters `
             -Mode $mode `
             -Verbose `
+            -WhatIf:$test `
             @additionalParameters
-    }
+    # }
 }
 
 main
