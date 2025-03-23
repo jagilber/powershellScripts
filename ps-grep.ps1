@@ -1,20 +1,27 @@
 <#
 .SYNOPSIS
-    powershell script to search (grep) files in given path for regex pattern and optionally replace with new string.
+powershell script to search (grep) files in given path for regex pattern and optionally replace with new string.
 
 .LINK
-    invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/ps-grep.ps1" -outFile "$pwd\ps-grep.ps1";
-    .\ps-grep.ps1 [-path] [-pattern]
+invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/ps-grep.ps1" -outFile "$pwd\ps-grep.ps1";
+.\ps-grep.ps1 [-path] [-pattern]
 
 .EXAMPLE
-    example to search clustermanifest.xml files for old thumbprint and replace with new thumbprint
-    .\ps-grep.ps1 -pattern '%old thumbprint%' `
-        -path 'd:\svcfab' `
-        -filePattern 'clustermanifest.*.xml' `
-        -includeSubDirs `
-        -replace '%new thumbprint%' `
-        -createBackup `
-        -whatIf
+example to search clustermanifest.xml files for old thumbprint and replace with new thumbprint
+.\ps-grep.ps1 -pattern '<old thumbprint>' `
+    -path 'd:\svcfab' `
+    -filePattern 'clustermanifest.*.xml' `
+    -includeSubDirs `
+    -replace '<new thumbprint>' `
+    -createBackup `
+    -whatIf
+
+.EXAMPLE
+example to search files for old html link and replace with new html link
+.\ps-grep.ps1 -includeSubDirs `
+    -regexOptions Singleline,IgnoreCase `
+    -pattern '<a\s+?href="(?<href>.+?)".+?http://azuredeploy.net/deploybutton.png.+?</a>' `
+    -replace '[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](${href})'
 #>
 
 [cmdletbinding()]
@@ -23,7 +30,8 @@ param(
     [string]$path = $pwd,
     [string]$filePattern = '.*',
     [switch]$includeSubDirs,
-    [object]$replace = $null,
+    [text.regularExpressions.regexOptions[]] $regexOptions, # = @([text.regularExpressions.regexOptions]::IgnoreCase, [text.regularExpressions.regexOptions]::Compiled),
+    [string]$replace = $null,
     [switch]$createBackup,
     [switch]$matchLine,
     [switch]$whatIf,
@@ -47,7 +55,22 @@ function main() {
     }
     
     $fileCount = 0
-    $regex = [regex]::new($pattern, [text.regularexpressions.regexoptions]::Compiled -bor [text.regularexpressions.regexoptions]::IgnoreCase)
+    $options = $null
+
+    if ($regexOptions -eq $null) {
+        $regexOptions = @([text.regularExpressions.regexOptions]::IgnoreCase, [text.regularExpressions.regexOptions]::Compiled)
+    }
+    
+    foreach ($option in $regexOptions) {
+        if ($options -eq $null) {
+            $options = $option
+        }
+        else {
+            $options = $options -bor $option
+        }
+    }
+
+    $regex = [regex]::new($pattern, $options)
     $files = @(@(get-childitem -recurse:$includeSubDirs -file -path $path) | Where-Object Name -match $filePattern).FullName
     
     write-verbose "filtered files: $($files | Format-List * | out-string)"
@@ -96,49 +119,89 @@ function main() {
 
             $sr.basestream.position = 0
             [text.stringbuilder]$replaceContent = [text.stringbuilder]::new()
-            while ($null -ne ($content = $sr.ReadLine())) {
-                $line++
+            # if regexOption is Singleline, then we need to use $content instead of ReadLine()
+            # else we need to read line by line
+            if ($regexOptions -contains [text.regularExpressions.regexOptions]::Singleline) {
+                write-console "Singleline regex option" -ForegroundColor Green
+                $matches = $regex.Matches($content)
+                foreach ($match in $matches) {
+                    if ($match.Length -lt 1) { continue }
+                    
+                    $groupsTable = @{}
+                    foreach ($g in $match.groups) {
+                        [void]$groupsTable.add($g.name, $g.value)
+                    }
 
-                if ($content.Length -lt 1) { continue }
+                    $matchCount++
+                    $matchObj = [ordered]@{
+                        file   = $file
+                        line   = 0
+                        index  = $match.index
+                        length = $match.Length
+                        value  = $match.value
+                        #captures = $match.captures
+                        groups = $groupsTable
+                    }
+                    
+                    [void]$global:matchedFiles.$file.add($matchObj)
+                    write-console "  match:$($match.value)"
 
-                if ($regex.IsMatch($content)) {
-                    $matches = $regex.Matches($content)
-
-                    foreach ($match in $matches) {
-                        if ($match.Length -lt 1) { continue }
-                        
-                        $groupsTable = @{}
-                        foreach ($g in $match.groups) {
-                            [void]$groupsTable.add($g.name, $g.value)
-                        }
-
-                        $matchCount++
-                        $matchObj = [ordered]@{
-                            file   = $file
-                            line   = $line
-                            index  = $match.index
-                            length = $match.Length
-                            value  = $match.value
-                            #captures = $match.captures
-                            groups = $groupsTable
-                        }
-                        
-                        [void]$global:matchedFiles.$file.add($matchObj)
-                        $matchInfo = $match | Select-Object index, length, value
-                        $matchInfo.value = highlight-regexMatches $match $content
-                        write-console "  $($line):$($matchInfo)"
-
-                        if ($null -ne $replace) {
-                            $newLine = $regex.Replace($content, $replace)
-                            write-console "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$newLine'" -ForegroundColor Cyan
-                            [void]$replaceContent.AppendLine($newLine)
-                        }
+                    if ($null -ne $replace) {
+                        write-console "replacing match:'$($match.value)' with '$replace'" -ForegroundColor Cyan
+                        $replacementString = $regex.Replace($content, $replace)
+                        # write-console "replacing match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$replacementString'" -ForegroundColor Cyan
+                        [void]$replaceContent.Append($replacementString)
                     }
                 }
-                elseif ($null -ne $replace) {
-                    [void]$replaceContent.AppendLine($content)
+            }
+            else {
+                # not Singleline, so we need to read line by line
+                # [text.stringbuilder]$replaceContent = [text.stringbuilder]::new()
+                while ($null -ne ($content = $sr.ReadLine())) {
+                    $line++
+
+                    if ($content.Length -lt 1) { continue }
+
+                    if ($regex.IsMatch($content)) {
+                        $matches = $regex.Matches($content)
+
+                        foreach ($match in $matches) {
+                            if ($match.Length -lt 1) { continue }
+                        
+                            $groupsTable = @{}
+                            foreach ($g in $match.groups) {
+                                [void]$groupsTable.add($g.name, $g.value)
+                            }
+
+                            $matchCount++
+                            $matchObj = [ordered]@{
+                                file   = $file
+                                line   = $line
+                                index  = $match.index
+                                length = $match.Length
+                                value  = $match.value
+                                #captures = $match.captures
+                                groups = $groupsTable
+                            }
+                        
+                            [void]$global:matchedFiles.$file.add($matchObj)
+                            $matchInfo = $match | Select-Object index, length, value
+                            $matchInfo.value = highlight-regexMatches $match $content
+                            write-console "  $($line):$($matchInfo)"
+
+                            if ($null -ne $replace) {
+                                $newLine = $regex.Replace($content, $replace)
+                                write-console "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$newLine'" -ForegroundColor Cyan
+                                [void]$replaceContent.AppendLine($newLine)
+                            }
+                        }
+                    }
+                    elseif ($null -ne $replace) {
+                        [void]$replaceContent.AppendLine($content)
+                    }
                 }
             }
+            
             if ($null -ne $replace) {
                 if ($sr -ne $null) {
                     $sr.close()
@@ -193,7 +256,7 @@ function main() {
     write-console "finished: total files:$($filecount) total matched files:$($global:matchedFiles.count) total matches:$($matchCount) total minutes:$((get-date).Subtract($startTime).TotalMinutes)" -ForegroundColor Magenta
 }
 
-function highlight-regexMatches([text.RegularExpressions.Match]$match, [string]$InputString) {
+function highlight-regexMatches([text.regularExpressions.Match]$match, [string]$InputString) {
     # Using ANSI escape sequences and string concatenation
     # $red = "$([char]27)[31m"
     $green = "$([char]27)[32m"
@@ -201,7 +264,7 @@ function highlight-regexMatches([text.RegularExpressions.Match]$match, [string]$
     $output = $InputString
 
     foreach ($m in $match.Groups) {
-        if($m.Name -eq '0' -and $match.Groups.Count -gt 1) { continue }
+        if ($m.Name -eq '0' -and $match.Groups.Count -gt 1) { continue }
         $output = $output.Substring(0, $m.Index) + $green + $m.Value + $reset + $output.Substring($m.Index + $m.Length)
     }
 
