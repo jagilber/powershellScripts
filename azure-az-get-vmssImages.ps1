@@ -43,6 +43,7 @@ function main() {
         $nodeTypeName = $cluster.Properties.nodeTypes[0].name
     }
 
+    write-host "Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName -OSUpgradeHistory" -ForegroundColor Cyan
     $vmssHistory = @(Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName -OSUpgradeHistory)[0]
 
     if ($vmssHistory) {
@@ -50,6 +51,7 @@ function main() {
     }
     else {
         write-host "vmssHistory not found. checking current image reference"
+        write-host "Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName" -ForegroundColor Cyan
         $vmssHistory = Get-AzVmss -ResourceGroupName $resourceGroupName -Name $nodeTypeName
         $targetImageReference = $vmssHistory.VirtualMachineProfile.StorageProfile.ImageReference
     }
@@ -58,12 +60,14 @@ function main() {
 
     if (!$targetImageReference -or $instanceId -gt -1) {
         write-host "checking instance $instanceId"
+        write-host "Get-AzVmssVm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId" -ForegroundColor Cyan
         $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId
         $targetImageReference = $vmssVmInstance.StorageProfile.ImageReference
     }
     elseif (!$targetImageReference.ExactVersion) {
         if ($instanceId -lt 0) { $instanceId = 0 }
         write-host "targetImageReference ExactVersion not found. checking instance $instanceId"
+        write-host "Get-AzVmssVm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId" -ForegroundColor Cyan
         $vmssVmInstance = get-azvmssvm -ResourceGroupName $resourceGroupName -VMScaleSetName $nodeTypeName -InstanceId $instanceId
         $targetImageReference.ExactVersion = @($vmssVmInstance.StorageProfile.ImageReference.ExactVersion)[0]
     }
