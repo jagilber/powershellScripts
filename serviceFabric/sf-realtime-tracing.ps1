@@ -48,11 +48,12 @@ param(
     ),
     [string[]]$traceProviders = @(
         'Microsoft-Windows-HttpService',
-        #'Microsoft-Windows-WinHttp',
+        'Microsoft-Windows-WinHttp',
         'Microsoft-ServiceFabric' #,
-        # 'Microsoft-Windows-TCPIP',
-        #'Microsoft-Windows-DNS-Client',
-        #'Microsoft-Windows-CAPI2'
+        'Microsoft-Windows-TCPIP',
+        'Microsoft-Windows-DNS-Client',
+        'Microsoft-Windows-CAPI2',
+        'Microsoft-Windows-Schannel-Events'
     ),
     # [int]$logLevel = 5,
     [switch]$remove,
