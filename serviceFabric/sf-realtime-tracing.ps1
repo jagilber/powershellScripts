@@ -172,15 +172,24 @@ function start-pktmonConsumer([string]$file, [regex]$regex, [string]$command) {
 }
 
 function start-pktmonProvider($traceFilePath, $traceProviders) {
-    $providers = $traceProviders -join ' -p '
-    write-host "pktmon start -t -m real-time -p $providers | tee-object $traceFilePath" -ForegroundColor Cyan
+    $providers = $traceProviders -join "' -p '"
+    write-host "pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath" -ForegroundColor Cyan
     # determine if using pwsh or powershell
     $exe = 'pwsh.exe'
     if ($psedition -eq 'Desktop') {
         $exe = 'powershell.exe'
     }
+
+    $error.clear()
     # start in new window
-    start-process $exe -ArgumentList "-Command pktmon start -t -m real-time -p $providers | tee-object $traceFilePath"
+    $rso = new-item -ItemType File -Path "$pwd\rso.log" -Force
+    $rse = new-item -ItemType File -Path "$pwd\rse.log" -Force
+    # $rsi = new-item -ItemType File -Path "$pwd\rso.log"
+    # write-host "start-process $exe -RedirectStandardError $($rse.FullName) -RedirectStandardOutput $($rso.FullName) -passthru -ArgumentList `"-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath`""
+    # $global:process = start-process $exe -RedirectStandardError $rse.FullName -RedirectStandardOutput $rso.FullName -passthru -ArgumentList "-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath"
+    write-host "start-process $exe -passthru -ArgumentList `"-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath`""
+    $global:process = start-process $exe -passthru -ArgumentList "-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath"
+    
     #pktmon start -t -m real-time -p $providers
 
     if ($error.Count -gt 0) {
