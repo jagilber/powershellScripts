@@ -32,7 +32,7 @@ param(
     [switch]$includeSubDirs,
     [text.regularExpressions.regexOptions[]] $regexOptions, # = @([text.regularExpressions.regexOptions]::IgnoreCase, [text.regularExpressions.regexOptions]::Compiled),
     [string]$replace = $null,
-    [switch]$createBackup,
+    [switch]$createBackup = $replace,
     [switch]$matchLine,
     [switch]$whatIf,
     [string]$backupExtension = '.bak',
@@ -146,7 +146,7 @@ function main() {
                     [void]$global:matchedFiles.$file.add($matchObj)
                     write-console "  match:$($match.value)"
 
-                    if ($null -ne $replace) {
+                    if ($replace) {
                         write-console "replacing match:'$($match.value)' with '$replace'" -ForegroundColor Cyan
                         $replacementString = $regex.Replace($content, $replace)
                         # write-console "replacing match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$replacementString'" -ForegroundColor Cyan
@@ -189,20 +189,20 @@ function main() {
                             $matchInfo.value = highlight-regexMatches $match $content
                             write-console "  $($line):$($matchInfo)"
 
-                            if ($null -ne $replace) {
+                            if ($replace) {
                                 $newLine = $regex.Replace($content, $replace)
                                 write-console "replacing line:$($line) match:'$($match.value)' with '$replace'`n`toldLine:'$content'`n`tnewLine:'$newLine'" -ForegroundColor Cyan
                                 [void]$replaceContent.AppendLine($newLine)
                             }
                         }
                     }
-                    elseif ($null -ne $replace) {
+                    elseif ($replace) {
                         [void]$replaceContent.AppendLine($content)
                     }
                 }
             }
             
-            if ($null -ne $replace) {
+            if ($replace) {
                 if ($sr -ne $null) {
                     $sr.close()
                     $sr.dispose()
