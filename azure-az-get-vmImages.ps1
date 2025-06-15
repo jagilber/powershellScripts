@@ -52,8 +52,8 @@ if($listPublishers) {
 }
 
 write-host "checking vm size $($vmSize) in $($location)"
-write-host "Get-azVMSize -Location $location"
-$vmSizes = Get-azVMSize -Location $location
+write-host "Get-AzComputeResourceSku -Location $location"
+$vmSizes = Get-AzComputeResourceSku -Location $location
 
 if (!($vmSizes | Where-Object Name -Like $vmSize)) {
     $vmSizes
