@@ -32,7 +32,7 @@ param(
     [switch]$includeSubDirs,
     [text.regularExpressions.regexOptions[]] $regexOptions, # = @([text.regularExpressions.regexOptions]::IgnoreCase, [text.regularExpressions.regexOptions]::Compiled),
     [string]$replace = $null,
-    [switch]$createBackup = $replace,
+    [switch]$createBackup,
     [switch]$matchLine,
     [switch]$whatIf,
     [string]$backupExtension = '.bak',
@@ -208,7 +208,7 @@ function main() {
                     $sr.dispose()
                 }
 
-                if ($createBackup) {
+                if ($createBackup) {            
                     write-console "saving backup file $file$backupExtension" -ForegroundColor Green
                     if (!$whatIf) {
                         [io.file]::copy($file, "$file$backupExtension", $true)
@@ -226,9 +226,19 @@ function main() {
                     }
                 }
     
-                write-console "saving replacements in file $file" -ForegroundColor Green
+                # write-console "saving replacements in file $file" -ForegroundColor Green
+                # get base filename without extension, then remove .replace. and .bak if present.
+                $fileName = [io.path]::GetFileNameWithoutExtension($file) -replace '\.replace\.', '' -replace '\.bak$', ''
+                $fileExt = [io.path]::GetExtension($file)
+                # add .replace to extension
+                $fileExt = $fileExt -replace '\.replace\.', '' -replace '\.bak$', ''
+                $fileExt = '.replace' + $fileExt
+                $fileName = [io.path]::GetFileNameWithoutExtension($file) + $fileExt
+                $filePath = [io.path]::GetDirectoryName($file)
+                $newfile = [io.path]::Combine($filePath, $fileName)
+                write-console "saving file $newfile" -ForegroundColor Green
                 if (!$whatIf) {
-                    [io.file]::WriteAllText($file, $replaceContent.ToString())
+                    [io.file]::WriteAllText($newfile, $replaceContent.ToString())
                 }
             }    
         }
