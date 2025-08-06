@@ -228,9 +228,8 @@ $registrySettings = @{
         }
         Description = "LSA (Local Security Authority) Debug Logging (ETW Recommended)"
         LogDestinations = @{
-            FileLocation = "%SystemRoot%\debug\lsass.log"
-            AdditionalFiles = @(
-                "%SystemRoot%\debug\lsp.log"
+            FileLocation = "%SystemRoot%\debug\lsp.log"
+            AdditionalFiles = @(          
             )
             EventLog = "System"
             ETWProviders = @(
@@ -536,7 +535,7 @@ function remove-registryValue($path, $name) {
 # ----------------------------------------------------------------------------------------------------------------
 function enable-lsaDebugging {
     log-info "Enabling LSA debugging..."
-    log-info "This will create log file: %SystemRoot%\debug\lsass.log"
+    log-info "This will create log file: %SystemRoot%\debug\lsp.log"
     log-info "Note: The debug directory must exist for logging to work"
     $settings = $registrySettings.LSA
     
@@ -559,7 +558,7 @@ function enable-lsaDebugging {
     }
     
     log-info "LSA debugging enabled. Restart required for full effect."
-    log-info "Expected log file location: $debugDir\lsass.log"
+    log-info "Expected log file location: $debugDir\lsp.log"
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -1048,14 +1047,12 @@ function collect-diagnosticLogs {
             return
         }
         
-        # Create zip archive
+        # Create zip archive using Compress-Archive
         if (Test-Path $zipFile) {
             Remove-Item -Path $zipFile -Force
         }
         
-        # Use .NET compression to create zip file
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::CreateFromDirectory($tempCollectionDir, $zipFile)
+        Compress-Archive -Path "$tempCollectionDir\*" -DestinationPath $zipFile -Force
         
         $zipSize = (Get-Item $zipFile).Length / 1MB
         log-info "Successfully created diagnostic logs archive: $zipFile"
