@@ -20,7 +20,14 @@ param(
     [bool]$install = $false
 )
 
-$allPackages = @(invoke-restmethod $sfPackageUrl).Packages
+write-host "invoke-restmethod $sfPackageUrl"
+$global:allPackages = @(invoke-restmethod $sfPackageUrl).Packages
+if (!$allPackages) {
+    write-warning "no packages found at $sfPackageUrl"
+    return
+}
+write-host "found $($allPackages.Count) packages at $sfPackageUrl"
+write-host "all packages: $($allPackages | Format-Table * -AutoSize -Wrap| out-string)"
 
 if ($sfversion) {
     $packages = @($allPackages -imatch $sfversion)
@@ -53,14 +60,22 @@ foreach ($package in $packages) {
         continue
     }
 
+    write-host "downloading package $($package.Version) to $outputFolder\$($package.Version).cab"
+    if (!(test-path $outputFolder)) {
+        write-host "creating output folder $outputFolder"
+        new-item -ItemType Directory -Path $outputFolder | out-null
+    }
     mkdir "$outputFolder\$($package.Version)"
+    write-host "[net.webclient]::new().DownloadFile($($package.TargetPackageLocation), $outputFolder\$($package.Version).cab)"
     [net.webclient]::new().DownloadFile($package.TargetPackageLocation, "$outputFolder\$($package.Version).cab")
 
     if ($extract -or $install) {
+        write-host "extracting package $($package.Version) to $outputFolder\$($package.Version)"
         expand "$outputFolder\$($package.Version).cab" -F:* "$outputFolder\$($package.Version)"
     }
 
     if ($removeCab) {
+        write-host "removing cab file $outputFolder\$($package.Version).cab"
         remove-item "$outputFolder\$($package.Version).cab" -Force -Recurse
     }
 }

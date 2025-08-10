@@ -180,6 +180,11 @@ function main() {
                 -Uri "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01" `
                 -Headers @{'Metadata' = 'true' }).content | convertfrom-json #| convertto-json
 
+        # example management role (mr) rest query from within node
+        $global:managementRoleResult = (Invoke-WebRequest -Method GET `
+                -UseBasicParsing `
+                -Uri "http://168.63.129.16:80/mrzerosdk").content | convertfrom-json #| convertto-json
+
         if ($error) {
             if ($logFile) {
                 Out-File -InputObject "$(get-date) $($error | Format-List * | out-string)`r`n$result" -FilePath $logFile -Append
@@ -192,11 +197,12 @@ function main() {
         write-host $global:managementOauthResult
         write-host ($global:instanceResult | convertto-json -Depth 99)
         write-host ($global:scheduledEventsResult | convertto-json -Depth 99)
+        write-host ($global:managementRoleResult | convertto-json -Depth 99)
         start-sleep -Milliseconds $sleepMilliseconds
         $count++
     }
 
-    write-host "objects stored in `$global:managementOauthResult `$global:managementOauthResultAz `$global:vaultOauthResult `$global:vaultOauthResultAz `$global:instanceResult `$global:scheduledeventsresult and `$global:instanceResultAz"
+    write-host "objects stored in `$global:managementOauthResult `$global:managementOauthResultAz `$global:vaultOauthResult `$global:vaultOauthResultAz `$global:instanceResult `$global:scheduledeventsresult `$global:managementRoleResult and `$global:instanceResultAz"
     write-host "finished. total errors:$errorCounter logfile:$logFile"
 }
 
