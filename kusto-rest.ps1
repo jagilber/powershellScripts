@@ -946,7 +946,7 @@ class KustoObj {
 
     [bool] ResolveCluster() {
         if($this.cluster.startswith('https://')) {
-            $this.cluster = $this.cluster.trimstart('https://')
+            $this.cluster = $this.cluster.substring(8)
         }
 
         if(!(test-netConnection $this.cluster -p 443).TcpTestSucceeded) {
