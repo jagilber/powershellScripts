@@ -70,6 +70,10 @@
     .\create-test-certificates.ps1 -subjectName "CN=ExportAndUpload" -exportPath "C:\temp" -uploadToKeyVault -keyVaultName "my-kv" -numberOfCerts 3
     Creates 3 certificates, exports them locally AND uploads them to Key Vault
 
+.EXAMPLE
+    .\create-test-certificates.ps1 -subjectName "CN=NetworkTest" -uploadToKeyVault -keyVaultName "my-kv" -enablePublicAccess
+    Creates a certificate and uploads it to Key Vault, automatically enabling public network access if needed
+
 .PARAMETER subjectName
     The subject name for the certificate. Default is "CN=TestCert"
 
@@ -134,6 +138,10 @@
     - Rename: Upload with a timestamped name
     - Prompt: Ask user what to do for each conflict (default)
 
+.PARAMETER enablePublicAccess
+    Switch to automatically enable public network access on the Key Vault if it's currently disabled. 
+    This is required when the Key Vault has network restrictions that block access from public networks.
+
 .PARAMETER WhatIf
     Show what would be done without actually performing the action
 
@@ -168,6 +176,7 @@ param(
     [string]$azureSubscription,
     [ValidateSet("Skip", "Overwrite", "Rename", "Prompt")]
     [string]$conflictAction = "Prompt",
+    [switch]$enablePublicAccess,
     [switch]$WhatIf
 )
 
@@ -264,7 +273,7 @@ function Add-Certs {
                 
                 try {
                     Write-Host "Uploading certificate to Key Vault: $keyVaultName as $kvCertName" -ForegroundColor Green
-                    Upload-CertificateToKeyVault -Certificate $cert -KeyVaultName $keyVaultName -CertificateName $kvCertName -SecurePassword $SecurePassword
+                    Upload-CertificateToKeyVault -Certificate $cert -KeyVaultName $keyVaultName -CertificateName $kvCertName -SecurePassword $SecurePassword -EnablePublicAccess:$enablePublicAccess
                     Write-Host "Certificate uploaded to Key Vault successfully." -ForegroundColor Green
                 }
                 catch {
@@ -380,19 +389,68 @@ function Initialize-AzureContext {
         try {
             $keyVault = Get-AzKeyVault -VaultName $keyVaultName -ErrorAction Stop
             Write-Host "Successfully validated access to Key Vault: $($keyVault.VaultName)" -ForegroundColor Green
-            $keyVaultCertificates = Get-AzKeyVaultCertificate -VaultName $keyVaultName
-            if($error) {
-                Write-Error "Failed to retrieve certificates from Key Vault: $($_.Exception.Message)"
-                return $false
-            }
-            if ($keyVaultCertificates) {
-                Write-Host "Found existing certificates in Key Vault '$keyVaultName':" -ForegroundColor Cyan
-                $keyVaultCertificates | ForEach-Object {
-                    Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires)" -ForegroundColor Cyan
+            
+            # Try to get certificates with proper error handling for network access issues
+            try {
+                $keyVaultCertificates = Get-AzKeyVaultCertificate -VaultName $keyVaultName -ErrorAction Stop
+                if ($keyVaultCertificates) {
+                    Write-Host "Found existing certificates in Key Vault '$keyVaultName':" -ForegroundColor Cyan
+                    $keyVaultCertificates | ForEach-Object {
+                        Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires)" -ForegroundColor Cyan
+                    }
+                }
+                else {
+                    Write-Host "No certificates found in Key Vault '$keyVaultName'." -ForegroundColor Yellow
                 }
             }
-            else {
-                Write-Host "No certificates found in Key Vault '$keyVaultName'." -ForegroundColor Yellow
+            catch {
+                if ($_.Exception.Message -like "*Public network access is disabled*" -or 
+                    $_.Exception.Message -like "*Forbidden*" -and $_.Exception.Message -like "*not from a trusted service*") {
+                    Write-Warning "Key Vault '$keyVaultName' has public network access disabled."
+                    
+                    if ($enablePublicAccess) {
+                        Write-Host "Attempting to enable public network access..." -ForegroundColor Yellow
+                        if (Enable-KeyVaultPublicAccess -KeyVaultName $keyVaultName) {
+                            Write-Host "Public access enabled. Retrying certificate check..." -ForegroundColor Green
+                            try {
+                                $keyVaultCertificates = Get-AzKeyVaultCertificate -VaultName $keyVaultName -ErrorAction Stop
+                                if ($keyVaultCertificates) {
+                                    Write-Host "Found existing certificates in Key Vault '$keyVaultName':" -ForegroundColor Cyan
+                                    $keyVaultCertificates | ForEach-Object {
+                                        Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires)" -ForegroundColor Cyan
+                                    }
+                                }
+                                else {
+                                    Write-Host "No certificates found in Key Vault '$keyVaultName'." -ForegroundColor Yellow
+                                }
+                            }
+                            catch {
+                                Write-Error "Still unable to access Key Vault after enabling public access: $($_.Exception.Message)"
+                                return $false
+                            }
+                        }
+                        else {
+                            Write-Host "Failed to enable public access automatically." -ForegroundColor Red
+                            Write-Host "Please enable it manually and run the script again." -ForegroundColor Yellow
+                            return $false
+                        }
+                    }
+                    else {
+                        Write-Host "To enable public network access, you can:" -ForegroundColor Yellow
+                        Write-Host "1. Use Azure Portal: Key Vault > Networking > Allow access from 'All networks'" -ForegroundColor Cyan
+                        Write-Host "2. Use Azure CLI: az keyvault update --name $keyVaultName --public-network-access Enabled" -ForegroundColor Cyan
+                        Write-Host "3. Use PowerShell: Update-AzKeyVault -VaultName '$keyVaultName' -PublicNetworkAccess 'Enabled'" -ForegroundColor Cyan
+                        Write-Host "4. Or add -enablePublicAccess parameter to automatically enable it" -ForegroundColor Cyan
+                        Write-Host "5. Or configure private endpoints/trusted services if you prefer to keep public access disabled" -ForegroundColor Cyan
+                        Write-Host ""
+                        Write-Host "Note: The script will continue, but Key Vault operations will be skipped." -ForegroundColor Yellow
+                        return $true  # Allow script to continue without Key Vault verification
+                    }
+                }
+                else {
+                    Write-Error "Failed to retrieve certificates from Key Vault: $($_.Exception.Message)"
+                    return $false
+                }
             }
             return $true
         }
@@ -408,6 +466,28 @@ function Initialize-AzureContext {
     }
 }
 
+function Enable-KeyVaultPublicAccess {
+    <#
+    .SYNOPSIS
+    Enable public network access for an Azure Key Vault
+    #>
+    param(
+        [string]$KeyVaultName
+    )
+    
+    try {
+        Write-Host "Enabling public network access for Key Vault '$KeyVaultName'..." -ForegroundColor Yellow
+        Update-AzKeyVault -VaultName $KeyVaultName -PublicNetworkAccess 'Enabled' -ErrorAction Stop
+        Write-Host "Successfully enabled public network access for Key Vault '$KeyVaultName'" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Error "Failed to enable public network access: $($_.Exception.Message)"
+        Write-Host "You may need to use the Azure Portal or CLI if PowerShell doesn't have sufficient permissions." -ForegroundColor Yellow
+        return $false
+    }
+}
+
 function Upload-CertificateToKeyVault {
     <#
     .SYNOPSIS
@@ -417,13 +497,50 @@ function Upload-CertificateToKeyVault {
         [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
         [string]$KeyVaultName,
         [string]$CertificateName,
-        [System.Security.SecureString]$SecurePassword
+        [System.Security.SecureString]$SecurePassword,
+        [switch]$EnablePublicAccess
     )
     
     try {
         # Check if certificate already exists in Key Vault
         Write-Host "Checking for existing certificate '$CertificateName' in Key Vault..." -ForegroundColor Yellow
-        $existingKvCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $CertificateName -ErrorAction SilentlyContinue
+        
+        $existingKvCert = $null
+        try {
+            $existingKvCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $CertificateName -ErrorAction Stop
+        }
+        catch {
+            if ($_.Exception.Message -like "*Public network access is disabled*" -or 
+                ($_.Exception.Message -like "*Forbidden*" -and $_.Exception.Message -like "*not from a trusted service*")) {
+                Write-Warning "Cannot check existing certificates due to Key Vault network access restrictions."
+                Write-Host "Key Vault '$KeyVaultName' has public network access disabled." -ForegroundColor Yellow
+                
+                if ($EnablePublicAccess) {
+                    Write-Host "Attempting to enable public network access..." -ForegroundColor Yellow
+                    if (Enable-KeyVaultPublicAccess -KeyVaultName $KeyVaultName) {
+                        Write-Host "Public access enabled. Retrying certificate check..." -ForegroundColor Green
+                        try {
+                            $existingKvCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $CertificateName -ErrorAction Stop
+                        }
+                        catch {
+                            # Certificate might not exist, which is fine
+                            Write-Verbose "Certificate check after enabling public access: $($_.Exception.Message)"
+                        }
+                    }
+                    else {
+                        Write-Host "Failed to enable public access automatically." -ForegroundColor Red
+                        throw "Could not enable Key Vault public network access. Please enable it manually."
+                    }
+                }
+                else {
+                    Write-Host "To enable public network access:" -ForegroundColor Yellow
+                    Write-Host "  Update-AzKeyVault -VaultName '$KeyVaultName' -PublicNetworkAccess 'Enabled'" -ForegroundColor Cyan
+                    throw "Key Vault public network access is disabled. Please enable it and try again."
+                }
+            }
+            # For other errors (like certificate not found), continue with $existingKvCert = $null
+            Write-Verbose "Certificate check failed (this may be normal if certificate doesn't exist): $($_.Exception.Message)"
+        }
         
         if ($existingKvCert) {
             Write-Host "Certificate '$CertificateName' already exists in Key Vault '$KeyVaultName'" -ForegroundColor Yellow
@@ -502,7 +619,16 @@ function Upload-CertificateToKeyVault {
         Write-Error "Failed to upload certificate to Key Vault: $($_.Exception.Message)"
         
         # Provide specific guidance based on common errors
-        if ($_.Exception.Message -like "*403*" -or $_.Exception.Message -like "*Forbidden*") {
+        if ($_.Exception.Message -like "*Public network access is disabled*" -or 
+            ($_.Exception.Message -like "*Forbidden*" -and $_.Exception.Message -like "*not from a trusted service*")) {
+            Write-Host "Key Vault '$KeyVaultName' has public network access disabled." -ForegroundColor Yellow
+            Write-Host "To enable public network access, you can:" -ForegroundColor Yellow
+            Write-Host "1. Use Azure Portal: Key Vault > Networking > Allow access from 'All networks'" -ForegroundColor Cyan
+            Write-Host "2. Use Azure CLI: az keyvault update --name $KeyVaultName --public-network-access Enabled" -ForegroundColor Cyan
+            Write-Host "3. Use PowerShell: Update-AzKeyVault -VaultName '$KeyVaultName' -PublicNetworkAccess 'Enabled'" -ForegroundColor Cyan
+            Write-Host "4. Or configure private endpoints/trusted services if you prefer to keep public access disabled" -ForegroundColor Cyan
+        }
+        elseif ($_.Exception.Message -like "*403*" -or $_.Exception.Message -like "*Forbidden*") {
             Write-Host "Access denied. Please ensure you have the following permissions on Key Vault '$KeyVaultName':" -ForegroundColor Yellow
             Write-Host "  - Certificate permissions: Import, Get, List" -ForegroundColor Yellow
             Write-Host "  - Key permissions: Get, Create, Import" -ForegroundColor Yellow
