@@ -395,8 +395,11 @@ function Initialize-AzureContext {
                 $keyVaultCertificates = Get-AzKeyVaultCertificate -VaultName $keyVaultName -ErrorAction Stop
                 if ($keyVaultCertificates) {
                     Write-Host "Found existing certificates in Key Vault '$keyVaultName':" -ForegroundColor Cyan
+                    $keyVaultResourceId = $keyVault.ResourceId
+                    Write-Host "  Key Vault Resource ID: $keyVaultResourceId" -ForegroundColor Cyan
                     $keyVaultCertificates | ForEach-Object {
-                        Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires)" -ForegroundColor Cyan
+                        $secretId = if ($_.SecretId) { $_.SecretId } else { "https://$($keyVaultName).vault.azure.net/secrets/$($_.Name)" }
+                        Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires), Secret ID: $secretId" -ForegroundColor Cyan
                     }
                 }
                 else {
@@ -416,8 +419,11 @@ function Initialize-AzureContext {
                                 $keyVaultCertificates = Get-AzKeyVaultCertificate -VaultName $keyVaultName -ErrorAction Stop
                                 if ($keyVaultCertificates) {
                                     Write-Host "Found existing certificates in Key Vault '$keyVaultName':" -ForegroundColor Cyan
+                                    $keyVaultResourceId = $keyVault.ResourceId
+                                    Write-Host "  Key Vault Resource ID: $keyVaultResourceId" -ForegroundColor Cyan
                                     $keyVaultCertificates | ForEach-Object {
-                                        Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires)" -ForegroundColor Cyan
+                                        $secretId = if ($_.SecretId) { $_.SecretId } else { "https://$($keyVaultName).vault.azure.net/secrets/$($_.Name)" }
+                                        Write-Host "  - Name: $($_.Name), Thumbprint: $($_.Thumbprint), Expires: $($_.Expires), Secret ID: $secretId" -ForegroundColor Cyan
                                     }
                                 }
                                 else {
@@ -544,7 +550,18 @@ function Upload-CertificateToKeyVault {
         
         if ($existingKvCert) {
             Write-Host "Certificate '$CertificateName' already exists in Key Vault '$KeyVaultName'" -ForegroundColor Yellow
+            
+            # Get Key Vault resource details
+            $keyVaultResource = Get-AzKeyVault -VaultName $KeyVaultName -ErrorAction SilentlyContinue
+            $keyVaultResourceId = if ($keyVaultResource) { $keyVaultResource.ResourceId } else { "N/A" }
+            
+            # Build Secret ID
+            $secretId = if ($existingKvCert.SecretId) { $existingKvCert.SecretId } else { "https://$($KeyVaultName).vault.azure.net/secrets/$($existingKvCert.Name)" }
+            
             Write-Host "Existing certificate details:" -ForegroundColor Cyan
+            Write-Host "  Key Vault Resource ID: $keyVaultResourceId" -ForegroundColor Cyan
+            Write-Host "  Certificate ID: $($existingKvCert.Id)" -ForegroundColor Cyan
+            Write-Host "  Secret ID: $secretId" -ForegroundColor Cyan
             Write-Host "  Thumbprint: $($existingKvCert.Thumbprint)" -ForegroundColor Cyan
             Write-Host "  Created: $($existingKvCert.Created)" -ForegroundColor Cyan
             Write-Host "  Expires: $($existingKvCert.Expires)" -ForegroundColor Cyan
@@ -599,10 +616,19 @@ function Upload-CertificateToKeyVault {
             Write-Host "Importing certificate '$CertificateName' to Key Vault..." -ForegroundColor Yellow
             $result = Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $CertificateName -FilePath $tempPfxFile -Password $SecurePassword -ErrorAction Stop
             
+            # Get Key Vault resource details
+            $keyVaultResource = Get-AzKeyVault -VaultName $KeyVaultName -ErrorAction SilentlyContinue
+            $keyVaultResourceId = if ($keyVaultResource) { $keyVaultResource.ResourceId } else { "N/A" }
+            
+            # Build Secret ID (Key Vault certificates are stored as secrets)
+            $secretId = if ($result.SecretId) { $result.SecretId } else { "https://$($KeyVaultName).vault.azure.net/secrets/$($CertificateName)" }
+            
             Write-Host "Certificate imported successfully:" -ForegroundColor Green
             Write-Host "  Key Vault: $KeyVaultName" -ForegroundColor Cyan
+            Write-Host "  Key Vault Resource ID: $keyVaultResourceId" -ForegroundColor Cyan
             Write-Host "  Certificate Name: $CertificateName" -ForegroundColor Cyan
             Write-Host "  Certificate ID: $($result.Id)" -ForegroundColor Cyan
+            Write-Host "  Secret ID: $secretId" -ForegroundColor Cyan
             Write-Host "  Thumbprint: $($result.Thumbprint)" -ForegroundColor Cyan
             Write-Host "  Expires: $($result.Expires)" -ForegroundColor Cyan
             
