@@ -21,11 +21,16 @@ foreach ($account in $accounts) {
     $blobUri = $account.Context.BlobEndPoint
     write-host "creating sas for $blobUri" -ForegroundColor Green
 
+    # Get storage account keys to create proper context
+    write-host "Getting storage account keys for $($account.StorageAccountName)" -ForegroundColor Yellow
+    $keys = Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $account.StorageAccountName
+    $storageContext = New-AzStorageContext -StorageAccountName $account.StorageAccountName -StorageAccountKey $keys[0].Value
+
     write-host "New-AzStorageAccountSASToken -Service $($service -join ',') ``
         -ResourceType $($resourceType -join ',') ``
         -StartTime $((get-date).AddMinutes(-1)) ``
         -ExpiryTime $((get-date).AddHours($expirationHours)) ``
-        -Context [$($account.context)]$($blobUri) ``
+        -Context [StorageContext]$($blobUri) ``
         -Protocol HttpsOnly ``
         -Permission $permission
     " -ForegroundColor Cyan
@@ -34,7 +39,7 @@ foreach ($account in $accounts) {
         -ResourceType $resourceType `
         -StartTime (get-date).AddMinutes(-1) `
         -ExpiryTime (get-date).AddHours($expirationHours) `
-        -Context $account.context `
+        -Context $storageContext `
         -Protocol HttpsOnly `
         -Permission $permission
     $sas
