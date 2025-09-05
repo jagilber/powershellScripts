@@ -42,8 +42,16 @@ foreach ($account in $accounts) {
         -Context $storageContext `
         -Protocol HttpsOnly `
         -Permission $permission
-    $sas
-    $saskeys.Add("$($blobUri)?$sas")
+    
+    # Ensure proper URL formatting with ? separator
+    if ($sas.StartsWith('?')) {
+        $sasUrl = "$($blobUri)$sas"
+    } else {
+        $sasUrl = "$($blobUri)?$sas"
+    }
+    
+    write-host "Generated SAS URL: $sasUrl" -ForegroundColor Green
+    $saskeys.Add($sasUrl)
 }
 
 $global:saskeys = $saskeys
