@@ -51,6 +51,9 @@ Can also be executed from https://shell.azure.com
 .PARAMETER ShowRestricted
   When not using -withRestrictions, show a sample of excluded SKUs that had Location restrictions.
 
+.PARAMETER showQuotas
+  Display Azure subscription quota limits for the specified location and analyze quota usage for filtered SKUs
+
 .EXAMPLE
   .\azure-az-available-skus.ps1 -location "eastus"
   Get available skus in eastus for service fabric clusters
@@ -87,6 +90,14 @@ Can also be executed from https://shell.azure.com
   .\azure-az-available-skus.ps1 -Location "eastus" -computerArchitectureType "ARM64" -withRestrictions
   Get available skus in eastus for ARM64 architecture including skus with restrictions
 
+.EXAMPLE
+  .\azure-az-available-skus.ps1 -Location "eastus2" -showQuotas
+  Get available skus in eastus2 and display quota information for the location
+
+.EXAMPLE
+  .\azure-az-available-skus.ps1 -Location "eastus2" -skuName "Standard_D" -showQuotas
+  Get Standard_D family skus in eastus2 and show detailed quota analysis for those SKU families
+
 .OUTPUTS
   [bool] $true if skus are found, $false if no skus are found
 
@@ -116,7 +127,8 @@ param (
   [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
   [string]$vmDeploymentTypes = "",
   [switch]$confidentialComputingType,
-  [switch]$force
+  [switch]$force,
+  [switch]$showQuotas
 )
 
 $global:filteredSkus = @{}
@@ -201,6 +213,11 @@ function main() {
       vmDeploymentTypes: $vmDeploymentTypes
       withRestrictions: $withRestrictions
       " -ForegroundColor DarkGray
+
+    # Show quota information if requested
+    if ($showQuotas -and $global:regions) {
+      Get-AzureQuotaLimits -Location $global:regions[0] -ShowSkuFamilyQuotas -FilteredSkus $global:filteredSkus
+    }
 
     write-host "use variable `$filteredSkus to get details on available skus. example `$filteredSkus | out-gridview" -ForegroundColor Green
     return ($filteredSkus.Count -gt 0)
@@ -549,6 +566,217 @@ function check-withRestrictions() {
           ($_.Restrictions | Where-Object { $_.Type -ieq 'Location' } | ForEach-Object { @($_.RestrictionInfo.Locations)+@($_.Locations)+@($_.Values) } | Where-Object { $_ } | Select-Object -Unique) -join ',' }}
       write-host "excluded:`n$($sample | Format-Table -AutoSize | Out-String)" -ForegroundColor DarkYellow
     }
+  }
+}
+
+function Get-AzureQuotaLimits {
+  <#
+  .SYNOPSIS
+  Get Azure subscription quota limits for compute, network, and storage resources
+  
+  .DESCRIPTION
+  Retrieves quota limits and current usage for Azure resources in specified locations.
+  Can show quota information for specific SKU families and provide detailed breakdown.
+  
+  .PARAMETER Location
+  The Azure location to get quota information for. If not specified, uses the global location from script.
+  
+  .PARAMETER ShowSkuFamilyQuotas
+  Show detailed quota information for specific VM SKU families
+  
+  .PARAMETER FilteredSkus
+  Array of SKU objects to analyze for quota usage
+  
+  .EXAMPLE
+  Get-AzureQuotaLimits -Location "eastus2"
+  
+  .EXAMPLE
+  Get-AzureQuotaLimits -Location "eastus2" -ShowSkuFamilyQuotas -FilteredSkus $global:filteredSkus
+  #>
+  param(
+    [Parameter(Mandatory = $false)]
+    [string]$Location = $global:regions[0],
+    [switch]$ShowSkuFamilyQuotas,
+    [object[]]$FilteredSkus = @()
+  )
+  
+  if (!$Location) {
+    Write-Warning "No location specified for quota check"
+    return
+  }
+  
+  Write-Host "`n=== Azure Quota Limits for Location: $Location ===" -ForegroundColor Cyan
+  
+  try {
+    # Get VM/Compute quotas
+    Write-Host "`nCompute Quotas:" -ForegroundColor Yellow
+    $vmQuotas = Get-AzVMUsage -Location $Location -ErrorAction SilentlyContinue
+    if ($vmQuotas) {
+      $vmQuotas | Where-Object { $_.Limit -gt 0 } | 
+        Sort-Object Name | 
+        Format-Table @{
+          Name = 'Quota Name'; Expression = { $_.Name.LocalizedValue }; Width = 40
+        }, @{
+          Name = 'Current'; Expression = { $_.CurrentValue }; Width = 10
+        }, @{
+          Name = 'Limit'; Expression = { $_.Limit }; Width = 10
+        }, @{
+          Name = 'Available'; Expression = { 
+            try {
+              [int]$_.Limit - [int]$_.CurrentValue 
+            } catch { 
+              'N/A' 
+            }
+          }; Width = 12
+        }, @{
+          Name = 'Usage %'; Expression = { 
+            if ($_.Limit -gt 0) { 
+              [math]::Round(($_.CurrentValue / $_.Limit) * 100, 1) 
+            } else { 0 }
+          }; Width = 10
+        } -AutoSize
+      
+      # Highlight high usage quotas
+      $highUsage = $vmQuotas | Where-Object { 
+        $_.Limit -gt 0 -and ($_.CurrentValue / $_.Limit) -gt 0.8 
+      }
+      if ($highUsage) {
+        Write-Host "`nHigh Usage Quotas (>80%):" -ForegroundColor Red
+        $highUsage | Format-Table @{
+          Name = 'Quota Name'; Expression = { $_.Name.LocalizedValue }
+        }, CurrentValue, Limit, @{
+          Name = 'Usage %'; Expression = { 
+            [math]::Round(($_.CurrentValue / $_.Limit) * 100, 1) 
+          }
+        } -AutoSize
+      }
+    } else {
+      Write-Warning "Unable to retrieve VM quotas for location $Location"
+    }
+    
+    # Get Network quotas
+    Write-Host "`nNetwork Quotas:" -ForegroundColor Yellow
+    $networkQuotas = Get-AzNetworkUsage -Location $Location -ErrorAction SilentlyContinue
+    if ($networkQuotas) {
+      $networkQuotas | Where-Object { $_.Limit -gt 0 } | 
+        Sort-Object Name |
+        Format-Table @{
+          Name = 'Resource Type'; Expression = { $_.Name.LocalizedValue }; Width = 40
+        }, @{
+          Name = 'Current'; Expression = { $_.CurrentValue }; Width = 10
+        }, @{
+          Name = 'Limit'; Expression = { $_.Limit }; Width = 10
+        }, @{
+          Name = 'Available'; Expression = { 
+            if ($_.Limit -is [int] -and $_.CurrentValue -is [int]) {
+              $_.Limit - $_.CurrentValue 
+            } else { 'N/A' }
+          }; Width = 12
+        } -AutoSize
+    }
+    
+    # Get Storage quotas
+    Write-Host "`nStorage Quotas:" -ForegroundColor Yellow
+    $storageQuotas = Get-AzStorageUsage -Location $Location -ErrorAction SilentlyContinue
+    if ($storageQuotas) {
+      $storageQuotas | Format-Table @{
+        Name = 'Resource Type'; Expression = { $_.Name.LocalizedValue }; Width = 40
+      }, @{
+        Name = 'Current'; Expression = { $_.CurrentValue }; Width = 10
+      }, @{
+        Name = 'Limit'; Expression = { $_.Limit }; Width = 10
+      }, @{
+        Name = 'Available'; Expression = { 
+          if ($_.Limit -is [int] -and $_.CurrentValue -is [int]) {
+            $_.Limit - $_.CurrentValue 
+          } else { 'N/A' }
+        }; Width = 12
+      } -AutoSize
+    }
+    
+    # Analyze SKU family quotas if FilteredSkus provided
+    if ($ShowSkuFamilyQuotas -and $FilteredSkus.Count -gt 0) {
+      Write-Host "`nSKU Family Quota Analysis:" -ForegroundColor Yellow
+      
+      # Group SKUs by family
+      $skuFamilies = @{}
+      foreach ($sku in $FilteredSkus) {
+        # Extract family from SKU name (e.g., Standard_D2s_v3 -> Standard_D)
+        if ($sku.Name -match '^(Standard_[A-Z]+)') {
+          $familyName = $matches[1]
+        } else {
+          $familyName = $sku.Name -replace '_.*$', ''
+        }
+        
+        if (!$skuFamilies.ContainsKey($familyName)) {
+          $skuFamilies[$familyName] = @()
+        }
+        $skuFamilies[$familyName] += $sku
+      }
+      
+      # Find matching quota entries for each family
+      $familyQuotas = @()
+      foreach ($family in $skuFamilies.Keys) {
+        # Look for exact family match first
+        $matchingQuota = $vmQuotas | Where-Object { 
+          $_.Name.LocalizedValue -like "*$family*" -and $_.Name.LocalizedValue -like "*Family*"
+        } | Select-Object -First 1
+        
+        if ($matchingQuota) {
+          try {
+            $available = [int]$matchingQuota.Limit - [int]$matchingQuota.CurrentValue
+          } catch {
+            $available = 'N/A'
+          }
+          
+          $familyQuotas += [PSCustomObject]@{
+            Family = $family
+            SKUCount = $skuFamilies[$family].Count
+            QuotaName = $matchingQuota.Name.LocalizedValue
+            Current = $matchingQuota.CurrentValue
+            Limit = $matchingQuota.Limit
+            Available = $available
+            SampleSKUs = ($skuFamilies[$family].Name | Sort-Object | Select-Object -First 3) -join ', '
+          }
+        }
+      }
+      
+      # Add general quota info if no specific families found
+      if ($familyQuotas.Count -eq 0) {
+        $generalQuota = $vmQuotas | Where-Object { 
+          $_.Name.LocalizedValue -like "*total*vcpu*" -or
+          $_.Name.LocalizedValue -like "*regional*vcpu*"
+        } | Select-Object -First 1
+        
+        if ($generalQuota) {
+          try {
+            $available = [int]$generalQuota.Limit - [int]$generalQuota.CurrentValue
+          } catch {
+            $available = 'N/A'
+          }
+          
+          $familyQuotas += [PSCustomObject]@{
+            Family = "All Families"
+            SKUCount = $FilteredSkus.Count
+            QuotaName = $generalQuota.Name.LocalizedValue
+            Current = $generalQuota.CurrentValue
+            Limit = $generalQuota.Limit
+            Available = $available
+            SampleSKUs = ($FilteredSkus.Name | Sort-Object | Select-Object -First 5) -join ', '
+          }
+        }
+      }
+      
+      if ($familyQuotas) {
+        $familyQuotas | Format-Table -AutoSize
+      } else {
+        Write-Host "No specific quota information found for the filtered SKU families." -ForegroundColor Yellow
+      }
+    }
+    
+  } catch {
+    Write-Error "Error getting quota information: $($_.Exception.Message)"
+    Write-Verbose $_.Exception.StackTrace
   }
 }
 
