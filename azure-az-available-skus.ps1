@@ -4,7 +4,7 @@ Get available virtual machine skus in a region
 
 .DESCRIPTION
 Get available skus in a region for a virtual machine. 
-Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions, and serviceFabric. 
+Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions
 If no skus are found, script returns $false to indicate no skus found else returns $true
 Use the $filteredSkus variable to get details on available skus. example $filteredSkus | out-gridview
 Can also be executed from https://shell.azure.com
@@ -48,11 +48,11 @@ Can also be executed from https://shell.azure.com
 .PARAMETER withRestrictions
   Include skus with restrictions
 
-.PARAMETER serviceFabric
-  Filter for service fabric skus
+.PARAMETER ShowRestricted
+  When not using -withRestrictions, show a sample of excluded SKUs that had Location restrictions.
 
 .EXAMPLE
-  .\azure-az-available-skus.ps1 -location "eastus" -serviceFabric
+  .\azure-az-available-skus.ps1 -location "eastus"
   Get available skus in eastus for service fabric clusters
 
 .EXAMPLE
@@ -110,7 +110,7 @@ param (
   [int]$minMemoryGB = 0, # 0 = unlimited
   [int]$minVCPU = 0, # 0 = unlimited
   [switch]$withRestrictions,
-  [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf and MaxResourceVolumeMB needs temp disk (10000) 10gb and vmDeploymentTypes needs "PaaS"
+  [switch]$ShowRestricted,
   [ValidateSet("paas", "iaas", "")]
   [int]$maxResourceVolumeMB = -1, # 0 is no local disk -1 is unlimited
   [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
@@ -125,13 +125,6 @@ $global:regions = @($location.Split(','))
 function main() {
   try {
     if (!(connect-az)) { return }
-    if ($serviceFabric) {
-      $computerArchitectureType = "x64"
-      $hyperVGenerations = "V1"
-      $minResourceVolumeMB = 10000
-      $vmDeploymentTypes = "PaaS"
-      $confidentialComputingType = $false
-    }
 
     if (!$global:locations -or $force) {
       write-host "Get-AzLocation | Where-Object Providers -imatch 'Microsoft.Compute'" -ForegroundColor Cyan
@@ -493,10 +486,69 @@ function check-vmDeploymentTypes() {
 
 function check-withRestrictions() {
   if (!$withRestrictions) {
-    write-host "`$global:filteredSkus = `$global:filteredSkus | Where-Object { `$psitem.Restrictions.Count -eq 0 }" -ForegroundColor Cyan
-    $global:filteredSkus = $global:filteredSkus | Where-Object { $psitem.Restrictions.Count -eq 0 }
-    write-verbose "unrestricted skus in region:`n$($global:filteredSkus | convertto-json -depth 10)"
-    write-host "unrestricted skus in region ($($global:filteredSkus.Count))" -ForegroundColor Green
+    # Drop any SKU that has a Location restriction that includes the requested location(s)
+    # A Location restriction means the SKU is NOT AVAILABLE in those locations for this subscription
+    $requested = @($global:regions | Where-Object { $_ })
+    $requestedSet = $requested | ForEach-Object { $_.ToLower() } | Select-Object -Unique
+    $before = $global:filteredSkus.Count
+    $excluded = New-Object System.Collections.Generic.List[object]
+
+    $result = New-Object System.Collections.Generic.List[object]
+    foreach ($sku in $global:filteredSkus) {
+      $restrictions = @($sku.Restrictions)
+      if ($restrictions.Count -eq 0) { 
+        $null = $result.Add($sku); continue 
+      }
+
+      $locationRestrictions = @($restrictions | Where-Object { $_.Type -ieq 'Location' })
+      if ($locationRestrictions.Count -eq 0) { 
+        $null = $result.Add($sku); continue 
+      }
+
+      if ($requestedSet.Count -eq 0) {
+        # No specific location requested -> exclude all SKUs with Location restriction
+        $null = $excluded.Add($sku)
+        continue
+      }
+
+      # Collect restricted locations for this SKU
+      # These are locations where the SKU is NOT AVAILABLE
+      $restrictedLocations = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::OrdinalIgnoreCase)
+      foreach ($r in $locationRestrictions) {
+        # Only consider restrictions that make the SKU unavailable
+        if ($r.ReasonCode -ieq 'NotAvailableForSubscription') {
+          foreach ($c in @($r.RestrictionInfo.Locations) + @($r.Locations) + @($r.Values)) {
+            if ($c) { 
+              [void]$restrictedLocations.Add($c.ToString().Trim()) 
+            }
+          }
+        }
+      }
+
+      # If any requested location is in the restricted locations, exclude this SKU
+      $isRestricted = $false
+      foreach ($loc in $requestedSet) { 
+        if ($restrictedLocations.Contains($loc)) { 
+          $isRestricted = $true
+          break 
+        } 
+      }
+      
+      if ($isRestricted) { 
+        $null = $excluded.Add($sku)
+        continue 
+      }
+      $null = $result.Add($sku)
+    }
+
+    $global:filteredSkus = $result
+    $removed = $before - $global:filteredSkus.Count
+    write-host "removed $removed skus due to location restrictions (remaining: $($global:filteredSkus.Count))" -ForegroundColor Green
+    if ($ShowRestricted -and $removed -gt 0) {
+      $sample = $excluded | Select-Object -Property Name, Locations, @{n='RestrictedLocations';e={
+          ($_.Restrictions | Where-Object { $_.Type -ieq 'Location' } | ForEach-Object { @($_.RestrictionInfo.Locations)+@($_.Locations)+@($_.Values) } | Where-Object { $_ } | Select-Object -Unique) -join ',' }}
+      write-host "excluded:`n$($sample | Format-Table -AutoSize | Out-String)" -ForegroundColor DarkYellow
+    }
   }
 }
 
