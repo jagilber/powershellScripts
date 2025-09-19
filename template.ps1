@@ -23,11 +23,14 @@
 #  - PSScriptAnalyzer: Run Invoke-ScriptAnalyzer -Severity Warning,Error; resolve or explicitly document suppressions with justification.
 #  - Verification Checklist (internal, may remove in final):
 #     [ ] Help complete  [ ] Examples valid  [ ] Parameters validated  [ ] Idempotent  [ ] Tests added  [ ] Version bumped  [ ] Analyzer clean
+#  - Keep main first. Add new functions alphabetically below placeholder section.
+#  - Add all declarations to top of script (param, variables, constants).
 #
 # WHEN EXTENDING:
 #  - Keep main first. Add new functions alphabetically below placeholder section.
 #  - If adding new external dependencies, note them in .NOTES Requires line.
 #  - For breaking changes, add a short MIGRATION NOTE comment near the changelog entry.
+#  - Move all declarations to top of script (param, variables, constants).
 #
 # DO NOT:
 #  - Invent custom progress or color wrappers if write-console already covers need.
@@ -81,10 +84,10 @@ Microsoft Privacy Statement: https://privacy.microsoft.com/en-US/privacystatemen
     .\template.ps1 -examples
 #>
 
-#requires -version 6
-[CmdletBinding()]
+#requires -version 5.1
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [switch]$whatIf
+    [switch]$examples
 )
 
 $PSModuleAutoLoadingPreference = 2
@@ -139,6 +142,10 @@ function main() {
 }
 
 # alphabetical list of functions
+# ** ENSURE FUNCTIONS ARE REORGANIZED ALPHABETICALLY EXCEPT FOR main() **
+# ** ENSURE ALL FUNCTIONS THROW ERRORS, DO NOT CATCH THEM **
+# ** ONLY main() CATCHES ERRORS AND HANDLES LOGGING / EXIT CODES **
+
 # function new-functionDefinition([type]$argument,...) {
     # write-console 'enter new-functionDefinition'
         
