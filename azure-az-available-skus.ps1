@@ -4,7 +4,7 @@ Get available virtual machine skus in a region
 
 .DESCRIPTION
 Get available skus in a region for a virtual machine. 
-Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions
+Filter by location, sku name, max memory, max vcpu, computer architecture type, hyperVGenerations, withRestrictions, and serviceFabric
 If no skus are found, script returns $false to indicate no skus found else returns $true
 Use the $filteredSkus variable to get details on available skus. example $filteredSkus | out-gridview
 Can also be executed from https://shell.azure.com
@@ -51,11 +51,14 @@ Can also be executed from https://shell.azure.com
 .PARAMETER ShowRestricted
   When not using -withRestrictions, show a sample of excluded SKUs that had Location restrictions.
 
+.PARAMETER serviceFabric
+  Filter for service fabric skus
+
 .PARAMETER showQuotas
   Display Azure subscription quota limits for the specified location and analyze quota usage for filtered SKUs
 
 .EXAMPLE
-  .\azure-az-available-skus.ps1 -location "eastus"
+  .\azure-az-available-skus.ps1 -location "eastus" -serviceFabric
   Get available skus in eastus for service fabric clusters
 
 .EXAMPLE
@@ -122,6 +125,7 @@ param (
   [int]$minVCPU = 0, # 0 = unlimited
   [switch]$withRestrictions,
   [switch]$ShowRestricted,
+  [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf and MaxResourceVolumeMB needs temp disk (10000) 10gb and vmDeploymentTypes needs "PaaS"
   [ValidateSet("paas", "iaas", "")]
   [int]$maxResourceVolumeMB = -1, # 0 is no local disk -1 is unlimited
   [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
@@ -137,6 +141,14 @@ $global:regions = @($location.Split(','))
 function main() {
   try {
     if (!(connect-az)) { return }
+
+    if ($serviceFabric) {
+      # $script:computerArchitectureType = "x64"
+      # $script:hyperVGenerations = "V1"
+      $script:minResourceVolumeMB = 10000
+      # $script:vmDeploymentTypes = "PaaS"
+      $script:confidentialComputingType = $null
+    }
 
     if (!$global:locations -or $force) {
       write-host "Get-AzLocation | Where-Object Providers -imatch 'Microsoft.Compute'" -ForegroundColor Cyan
