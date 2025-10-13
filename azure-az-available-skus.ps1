@@ -48,6 +48,9 @@ Can also be executed from https://shell.azure.com
 .PARAMETER withRestrictions
   Include skus with restrictions
 
+.PARAMETER withNoRestrictions
+  Show only skus with no location or zone restrictions at all
+
 .PARAMETER ShowRestricted
   When not using -withRestrictions, show a sample of excluded SKUs that had Location restrictions.
 
@@ -101,6 +104,14 @@ Can also be executed from https://shell.azure.com
   .\azure-az-available-skus.ps1 -Location "eastus2" -skuName "Standard_D" -showQuotas
   Get Standard_D family skus in eastus2 and show detailed quota analysis for those SKU families
 
+.EXAMPLE
+  .\azure-az-available-skus.ps1 -Location "southeastasia" -withNoRestrictions
+  Get all skus in southeastasia that have no location or zone restrictions
+
+.EXAMPLE
+  .\azure-az-available-skus.ps1 -skuName "Standard_D4ads_v5" -withNoRestrictions
+  Get Standard_D4ads_v5 skus across all regions that have no restrictions
+
 .OUTPUTS
   [bool] $true if skus are found, $false if no skus are found
 
@@ -124,6 +135,7 @@ param (
   [int]$minMemoryGB = 0, # 0 = unlimited
   [int]$minVCPU = 0, # 0 = unlimited
   [switch]$withRestrictions,
+  [switch]$withNoRestrictions,
   [switch]$ShowRestricted,
   [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf and MaxResourceVolumeMB needs temp disk (10000) 10gb and vmDeploymentTypes needs "PaaS"
   [ValidateSet("paas", "iaas", "")]
@@ -177,6 +189,7 @@ function main() {
     write-host "`$global:filteredSkus = `$global:skus" -ForegroundColor Cyan
 
     check-withRestrictions
+    check-withNoRestrictions
     check-skuName
     check-computerArchitectureType
     check-hyperVGenerations
@@ -207,7 +220,19 @@ function main() {
     }
 
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
-    write-host "filtered skus ($($global:filteredSkus.Count)):`n$($global:filteredSkus | sort-object | out-string)" -ForegroundColor Magenta
+    
+    # Sort SKUs by name and format with sorted zones
+    $sortedOutput = $global:filteredSkus | Sort-Object Name | Select-Object Name, 
+      @{Name='Location';Expression={$_.LocationInfo.Location}},
+      @{Name='Zones';Expression={($_.LocationInfo.Zones | Sort-Object) -join ', '}},
+      @{Name='RestrictionInfo';Expression={
+        if ($_.Restrictions) {
+          $r = $_.Restrictions
+          "type: $($r.Type), locations: $($r.RestrictionInfo.Locations -join ','), zones: $(($r.RestrictionInfo.Zones | Sort-Object) -join ',')"
+        }
+      }} | Format-Table -AutoSize | Out-String
+    
+    write-host "filtered skus ($($global:filteredSkus.Count)):`n$sortedOutput" -ForegroundColor Magenta
 
     $locationGroup = $filteredSkus.LocationInfo.Location | group-object
     if ($locationGroup.Count -gt 1) {
@@ -224,6 +249,7 @@ function main() {
       MaxResourceVolumeMB: $maxResourceVolumeMB
       vmDeploymentTypes: $vmDeploymentTypes
       withRestrictions: $withRestrictions
+      withNoRestrictions: $withNoRestrictions
       " -ForegroundColor DarkGray
 
     # Show quota information if requested
@@ -578,6 +604,22 @@ function check-withRestrictions() {
           ($_.Restrictions | Where-Object { $_.Type -ieq 'Location' } | ForEach-Object { @($_.RestrictionInfo.Locations)+@($_.Locations)+@($_.Values) } | Where-Object { $_ } | Select-Object -Unique) -join ',' }}
       write-host "excluded:`n$($sample | Format-Table -AutoSize | Out-String)" -ForegroundColor DarkYellow
     }
+  }
+}
+
+function check-withNoRestrictions() {
+  if ($withNoRestrictions) {
+    write-host "filtering skus to show only those with NO restrictions (no location or zone restrictions)" -ForegroundColor Green
+    $before = $global:filteredSkus.Count
+    
+    # Keep only SKUs with no restrictions at all
+    $global:filteredSkus = $global:filteredSkus | Where-Object { 
+      $null -eq $_.Restrictions -or @($_.Restrictions).Count -eq 0 
+    }
+    
+    $removed = $before - $global:filteredSkus.Count
+    write-host "removed $removed skus with restrictions (remaining: $($global:filteredSkus.Count))" -ForegroundColor Green
+    write-verbose "filtered skus with no restrictions:`n$($global:filteredSkus | convertto-json -depth 10)"
   }
 }
 
