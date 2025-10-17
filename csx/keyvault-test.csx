@@ -3,65 +3,64 @@
 //
 // dotnet tool install --global dotnet-script
 // Usage Examples:
-//   dotnet script cosmos-test.csx "https://your-cosmos-account.documents.azure.com" "YourDatabaseName" "your-managed-identity-client-id"
+//   dotnet script keyvault-test.csx "https://your-cosmos-account.documents.azure.com" "YourDatabaseName" "your-managed-identity-client-id"
 //
 // Required NuGet packages:
 #r "nuget: Azure.Identity, 1.13.2"
-#r "nuget: Microsoft.Azure.Cosmos, 3.47.2"
+#r "nuget: using Azure.Security.KeyVault.Secrets, 4.7.0"
 
 using System;
 using System.Threading.Tasks;
 using Azure.Identity;
 using Microsoft.Azure.Cosmos;
 
-// Function: TestCosmosClientAsync
-// Parameters:
-//   cosmosEndpoint: your Cosmos DB account endpoint (e.g., https://your-account.documents.azure.com:443/)
-//   databaseName: the Cosmos DB database to test connection with
-//   managedIdentityClientId: the client id of your user-assigned managed identity
-// Description:
-//   Creates a CosmosClient using DefaultAzureCredential configured with the provided managed identity.
-//   It then attempts to read the specified database's properties to verify that the connection is successful.
-async Task TestCosmosClientAsync(string cosmosEndpoint, string databaseName, string managedIdentityClientId)
+async Task TestManagedIdentityClient(string endpoint, string resource, string secret, string managedIdentityClientId)
 {
-    // Set up the managed identity credential options.
-    var credentialOptions = new DefaultAzureCredentialOptions { ManagedIdentityClientId = managedIdentityClientId };
-    var credential = new DefaultAzureCredential(credentialOptions);
+  // Set up the managed identity credential options.
+  var credentialOptions = new DefaultAzureCredentialOptions { ManagedIdentityClientId = managedIdentityClientId };
+  var credential = new DefaultAzureCredential(credentialOptions);
 
-    // Create the CosmosClient with the specified endpoint and credential.
-    CosmosClientOptions clientOptions = new CosmosClientOptions()
-    {
-        ConnectionMode = ConnectionMode.Gateway
-    };
-    CosmosClient cosmosClient = new CosmosClient(cosmosEndpoint, credential, clientOptions);
+  try
+  {
+    // Load the service fabric application managed identity assigned to the service
+    ManagedIdentityCredential creds = new ManagedIdentityCredential();
 
-    try
-    {
-        // Attempt to read database properties.
-        Database database = cosmosClient.GetDatabase(databaseName);
-        var response = await database.ReadAsync();
-        Console.WriteLine("Connected successfully to Cosmos DB.");
-        Console.WriteLine($"Database Id: {response.Resource.Id}");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Failed to connect to Cosmos DB: {ex.Message}");
-    }
+    // Create a client to keyvault using that identity
+    SecretClient client = new SecretClient(new Uri(resource), creds);
+
+    // Fetch a secret
+    KeyVaultSecret secret = (await client.GetSecretAsync(secret, cancellationToken: cancellationToken)).Value;
+    Console.WriteLine($"Secret: {secret.Name} = {secret.Value}");
+
+  }
+  catch (CredentialUnavailableException e)
+  {
+    Console.WriteLine($"Failed to connect to Key Vault: {e.Message}");
+  }
+  catch (RequestFailedException re)
+  {
+    Console.WriteLine($"Failed to connect to Key Vault: {re.Message}");
+  }
+  catch (Exception ex)
+  {
+    Console.WriteLine($"Failed to connect to Cosmos DB: {ex.Message}");
+  }
 }
 
 // Parse command-line arguments from dotnet script.
 if (Args.Count < 3)
 {
-    Console.WriteLine("Usage: dotnet script -- cosmos-test.csx <cosmosEndpoint> <databaseName> <managedIdentityClientId>");
-    return;
+  Console.WriteLine("Usage: dotnet script -- keyvault-test.csx <cosmosEndpoint> <databaseName> <managedIdentityClientId>");
+  return;
 }
 
 string cosmosEndpointArg = Args[0];
-string databaseNameArg = Args[1];
-string managedIdentityClientIdArg = Args[2];
-Console.WriteLine($"TestCosmosClientAsync: cosmosEndpoint={cosmosEndpointArg}, databaseName={databaseNameArg}, managedIdentityClientId={managedIdentityClientIdArg}");
-Console.WriteLine("Starting TestCosmosClientAsync...");
-await TestCosmosClientAsync(cosmosEndpointArg, databaseNameArg, managedIdentityClientIdArg);
+string resource = Args[1];
+string secret = Args[2];
+string managedIdentityClientIdArg = Args[3];
+Console.WriteLine($"TestManagedIdentityClient: cosmosEndpoint={cosmosEndpointArg}, databaseName={resource}, managedIdentityClientId={managedIdentityClientIdArg}");
+Console.WriteLine("Starting TestManagedIdentityClient...");
+await TestManagedIdentityClient(cosmosEndpointArg, resource, managedIdentityClientIdArg);
 
 
 /*
