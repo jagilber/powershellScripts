@@ -40,4 +40,18 @@ if(!(test-path $sysinternalsCustomExe)){
 if(!$noExecute) {
     . .\$sysinternalsCustomExe -accepteula
 }
+
+# Display usage examples for psexec
+if($sysinternalsCustomExe -ieq 'psexec.exe') {
+    write-host "`nPsExec Usage Examples:" -ForegroundColor Cyan
+    write-host "  Run as SYSTEM account:" -ForegroundColor Yellow
+    write-host "    .\psexec.exe -s -i cmd.exe" -ForegroundColor Green
+    write-host "    .\psexec.exe -s powershell.exe" -ForegroundColor Green
+    write-host "`n  Run as NETWORK SERVICE account:" -ForegroundColor Yellow
+    write-host "    .\psexec.exe -i -u `"NT AUTHORITY\NETWORK SERVICE`" cmd.exe" -ForegroundColor Green
+    write-host "    .\psexec.exe -i -u `"NT AUTHORITY\NETWORK SERVICE`" powershell.exe" -ForegroundColor Green
+    write-host "`n  Run on remote computer:" -ForegroundColor Yellow
+    write-host "    .\psexec.exe \\\\computername -u domain\username cmd.exe" -ForegroundColor Green
+    write-host "`n  Note: -i runs interactively with session 1 (console), -s runs as SYSTEM" -ForegroundColor Gray
+}
   
