@@ -49,7 +49,20 @@ function main() {
 
   if ($PSVersionTable.PSVersion.Major -gt 5) {
     Write-Warning "This script requires PowerShell 5. switching to powershell.exe"
-    powershell $script @scriptParams
+    $params = @()
+    foreach ($key in $scriptParams.Keys) {
+      $value = $scriptParams[$key]
+      if ($value -is [switch]) {
+        if ($value) {
+          $params += "-$key"
+        }
+      }
+      else {
+        $params += "-$key"
+        $params += $value
+      }
+    }
+    powershell $script @params
     return
   }
 
