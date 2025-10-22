@@ -110,6 +110,9 @@
 .PARAMETER provider
     Cryptographic provider to use. Default is "Microsoft Enhanced RSA and AES Cryptographic Provider"
 
+.PARAMETER keyExportable
+    Switch to make the private key exportable. This is required if you plan to export the certificate with its private key to a PFX file.
+
 .PARAMETER exportPath
     Directory path to export certificates as PFX files
 
@@ -117,7 +120,10 @@
     Switch to remove certificates from store after successful export
 
 .PARAMETER password
-    Password for PFX export. If not provided and exportPath is specified, a random password will be generated
+    Password for PFX export. If not provided and exportPath is specified, a random password will be generated. Ignored if noPassword is specified.
+
+.PARAMETER noPassword
+    Switch to create certificate with private key but no password protection. Use with caution as the private key will be unprotected.
 
 .PARAMETER keyVaultName
     Name of the Azure Key Vault to upload certificates to. Required when uploadToKeyVault is specified.
@@ -167,9 +173,11 @@ param(
     [ValidateSet("SHA256", "SHA384", "SHA512")]
     [string]$hashAlgorithm = "SHA256",
     [string]$provider = "Microsoft Enhanced RSA and AES Cryptographic Provider",
+    [switch]$keyExportable,
     [string]$exportPath,
     [switch]$removeExportedCerts,
     [string]$password,
+    [switch]$noPassword,
     [string]$keyVaultName,
     [string]$certificateName,
     [switch]$uploadToKeyVault,
@@ -203,7 +211,16 @@ function main() {
     }
 
     if ($exportPath -or $uploadToKeyVault) {
-        if ($password) {
+        # Auto-enable keyExportable when exporting or uploading to Key Vault
+        if (-not $keyExportable) {
+            Write-Host "Auto-enabling keyExportable flag since exportPath or uploadToKeyVault is specified" -ForegroundColor Yellow
+            $keyExportable = $true
+        }
+        if ($noPassword) {
+            Write-Host "No password protection will be used (private key will be unprotected)" -ForegroundColor Yellow
+            $securePassword = New-Object System.Security.SecureString
+        }
+        elseif ($password) {
             $securePassword = ConvertTo-SecureString -String $password -AsPlainText -Force
         }
         else {
@@ -228,39 +245,48 @@ function main() {
 function Add-Certs {
     param($store, $location, $subjectName, $numberOfCerts, $WhatIf, $SecurePassword)
     for ($i = 1; $i -le $numberOfCerts; $i++) {
-        $subject = "$subjectName-$i"
+        $subject = $subjectName #"$subjectName-$i"
         Write-Host "Creating certificate: $subject"
         if (-not $WhatIf) {
             #cng
             # $cert = New-SelfSignedCertificate -Subject $subject -CertStoreLocation "Cert:\$Location\$Store"
             #csp
-            write-host "New-SelfSignedCertificate -Subject $subject ``
-                -CertStoreLocation 'Cert:\$location\$store' ``
-                -NotBefore $notBefore ``
-                -NotAfter $notAfter ``
-                -HashAlgorithm $hashAlgorithm ``
-                -KeyAlgorithm $keyAlgorithm ``
-                -KeyLength $keyLength ``
-                -Provider $provider
-            "
+            $certParams = @{
+                Subject = $subject
+                CertStoreLocation = "Cert:\$location\$store"
+                NotBefore = $notBefore
+                NotAfter = $notAfter
+                HashAlgorithm = $hashAlgorithm
+                KeyAlgorithm = $keyAlgorithm
+                KeyLength = $keyLength
+                Provider = $provider
+            }
+            
+            if ($keyExportable) {
+                $certParams['KeyExportPolicy'] = 'Exportable'
+                Write-Host "Creating certificate with exportable private key" -ForegroundColor Cyan
+            }
+            
+            $paramString = ($certParams.GetEnumerator() | ForEach-Object { "-$($_.Key) $($_.Value)" }) -join " `"`
+            write-host "New-SelfSignedCertificate $paramString"
 
-            $cert = New-SelfSignedCertificate -Subject $subject `
-                -CertStoreLocation "Cert:\$location\$store" `
-                -NotBefore $notBefore `
-                -NotAfter $notAfter `
-                -HashAlgorithm $hashAlgorithm `
-                -KeyAlgorithm $keyAlgorithm `
-                -KeyLength $keyLength `
-                -Provider $provider
+            $cert = New-SelfSignedCertificate @certParams
             Write-Host "Created: $($cert.Thumbprint)"
             
             # Export to PFX file if exportPath is specified
             if ($exportPath) {
                 $certPath = Join-Path -Path $exportPath -ChildPath "$($cert.Thumbprint).pfx"
                 Write-Host "Exporting certificate to: $certPath"
-                write-host "Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $SecurePassword -Force"
-                Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $SecurePassword -Force
-                Write-Host "Certificate exported successfully."
+                if ($noPassword) {
+                    write-host "Export-PfxCertificate -Cert $cert -FilePath $certPath -Password [Empty] -Force"
+                    Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $SecurePassword -Force
+                    Write-Host "Certificate exported without password protection." -ForegroundColor Yellow
+                }
+                else {
+                    write-host "Export-PfxCertificate -Cert $cert -FilePath $certPath -Password [SecureString] -Force"
+                    Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $SecurePassword -Force
+                    Write-Host "Certificate exported successfully."
+                }
             }
             
             # Upload to Key Vault if specified
