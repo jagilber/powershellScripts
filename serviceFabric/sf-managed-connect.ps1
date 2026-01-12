@@ -18,7 +18,7 @@ The thumbprint of the client certificate used for authentication.
 The resource group that contains the managed Service Fabric cluster.
 
 .PARAMETER clustername 
-The name of the Service Fabric cluster. Defaults to the value provided for resourceGroup if not specified.
+The name of the Service Fabric cluster. If not specified, the script will auto-detect the cluster in the resource group (if only one exists) or try to match by endpoint.
 
 .PARAMETER storeLocation 
 The certificate store location to search for the client certificate. Acceptable values: 'LocalMachine', 'CurrentUser'. Default: "CurrentUser".
@@ -74,7 +74,7 @@ param(
     $thumbprint,
     #[Parameter(Mandatory = $true)]
     $resourceGroup,
-    $clustername = $resourceGroup,
+    $clustername,
     [ValidateSet('LocalMachine', 'CurrentUser')]
     $storeLocation = "CurrentUser",
     $storeName = 'My',
@@ -156,13 +156,48 @@ function main() {
 
     $global:cluster = $null
 
-    if ($resourceGroup -and $clustername) {
+    if ($resourceGroup -and $clustername -and $clustername -ne $resourceGroup) {
+        # clustername was explicitly provided and is different from resourceGroup
         write-host "Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -Name $clustername" -ForegroundColor Green
         $cluster = Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -Name $clustername
         $managementEndpoint = $cluster.Fqdn
     }
+    elseif ($resourceGroup) {
+        # Try to find cluster by resourceGroup first
+        write-host "Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup" -ForegroundColor Green
+        $clusters = @(Get-azServiceFabricManagedCluster -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue)
+        
+        if ($clusters.Count -eq 1) {
+            # Only one cluster in the resource group, use it
+            $cluster = $clusters[0]
+            write-host "Found single cluster in resource group: $($cluster.Name)" -ForegroundColor Green
+            $managementEndpoint = $cluster.Fqdn
+        }
+        elseif ($clusters.Count -gt 1) {
+            # Multiple clusters, try to match by clusterEndpoint
+            write-host "Multiple clusters found in resource group. Attempting to match by endpoint: $clusterEndpoint" -ForegroundColor Yellow
+            $cluster = $clusters | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "").replace("https://", "")
+            
+            if (!$cluster) {
+                write-warning "Multiple clusters found in resource group but none matched the endpoint. Available clusters:"
+                $clusters | Select-Object Name, Fqdn | Format-Table | Out-String | Write-Host
+                write-error "Please specify the clustername parameter explicitly"
+                return
+            }
+            else {
+                write-host "Matched cluster: $($cluster.Name)" -ForegroundColor Green
+                $managementEndpoint = $cluster.Fqdn
+            }
+        }
+        else {
+            # No clusters found in resource group, try global search by endpoint
+            write-host "No clusters found in resource group. Searching all clusters by endpoint..." -ForegroundColor Yellow
+            write-host "Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $($clusterEndpoint.replace(':19000', ''))" -ForegroundColor Green
+            $cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")
+        }
+    }
     else {
-        write-host "Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")" -ForegroundColor Green
+        write-host "Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $($clusterEndpoint.replace(':19000', ''))" -ForegroundColor Green
         $cluster = Get-azServiceFabricManagedCluster | Where-Object Fqdn -imatch $clusterEndpoint.replace(":19000", "")
     }
 
