@@ -85,6 +85,11 @@ Can also be executed from https://shell.azure.com
   Get available skus in eastus for x64 architecture
 
 .EXAMPLE
+  .\azure-az-available-skus.ps1 -Location "centralus" -serviceFabric
+  $rawNvmeSkus = $filteredSkus | Where-Object { ($_.Capabilities | Where-Object {$_.Name -eq 'NvmeDiskSizeInMiB'}).Value }
+  Find Service Fabric compatible SKUs with NVMe support. L-series (Lsv3) provides raw NVMe disks that require initialization.
+
+.EXAMPLE
   .\azure-az-available-skus.ps1 -Location "eastus" -computerArchitectureType "x64" -verbose
   Get available skus in eastus for x64 architecture with verbose output
 
@@ -114,6 +119,19 @@ Can also be executed from https://shell.azure.com
 
 .OUTPUTS
   [bool] $true if skus are found, $false if no skus are found
+
+.NOTES
+  Understanding NVMe Temp Disk Properties:
+  - MaxResourceVolumeMB: Size of legacy SCSI-based temp disk (D: on Windows, /dev/sdb on Linux)
+  - NvmeDiskSizeInMiB: Size of NVMe-based local storage
+  
+  NVMe Disk States by Series:
+  - D/E/F v6 series: MaxResourceVolumeMB=0, has NvmeDiskSizeInMiB = RAW unformatted NVMe (requires initialization)
+  - L-series v3 (Lsv3): Has BOTH MaxResourceVolumeMB>0 (SCSI temp) AND NvmeDiskSizeInMiB = RAW NVMe for application use
+  - NG-series v6: MaxResourceVolumeMB>0, has NvmeDiskSizeInMiB = Pre-formatted NVMe (legacy compatibility)
+  
+  For raw NVMe disks requiring initialization (v6 D/E/F, Lsv3):
+  See: https://learn.microsoft.com/en-us/azure/virtual-machines/enable-nvme-temp-faqs
 
 .LINK
     [net.servicePointManager]::Expect100Continue = $true;[net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
