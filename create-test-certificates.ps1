@@ -74,6 +74,14 @@
     .\create-test-certificates.ps1 -subjectName "CN=NetworkTest" -uploadToKeyVault -keyVaultName "my-kv" -enablePublicAccess
     Creates a certificate and uploads it to Key Vault, automatically enabling public network access if needed
 
+.EXAMPLE
+    .\create-test-certificates.ps1 -subjectName "CN=ServerOnly" -serverAuth -clientAuth:$false
+    Creates a certificate with only Server Authentication EKU
+
+.EXAMPLE
+    .\create-test-certificates.ps1 -subjectName "CN=ClientOnly" -clientAuth -serverAuth:$false
+    Creates a certificate with only Client Authentication EKU
+
 .PARAMETER subjectName
     The subject name for the certificate. Default is "CN=TestCert"
 
@@ -148,6 +156,14 @@
     Switch to automatically enable public network access on the Key Vault if it's currently disabled. 
     This is required when the Key Vault has network restrictions that block access from public networks.
 
+.PARAMETER clientAuth
+    Switch to enable Client Authentication EKU (1.3.6.1.5.5.7.3.2). Default is enabled.
+    Use -clientAuth:$false to disable.
+
+.PARAMETER serverAuth
+    Switch to enable Server Authentication EKU (1.3.6.1.5.5.7.3.1). Default is enabled.
+    Use -serverAuth:$false to disable.
+
 .PARAMETER WhatIf
     Show what would be done without actually performing the action
 
@@ -185,6 +201,8 @@ param(
     [ValidateSet("Skip", "Overwrite", "Rename", "Prompt")]
     [string]$conflictAction = "Prompt",
     [switch]$enablePublicAccess,
+    [switch]$clientAuth = $true,
+    [switch]$serverAuth = $true,
     [switch]$WhatIf
 )
 
@@ -235,7 +253,7 @@ function main() {
     }
 
     switch ($action) {
-        "Add" { Add-Certs -store $store -location $location -subjectName $subjectName -numberOfCerts $numberOfCerts -WhatIf:$WhatIf -SecurePassword $securePassword }
+        "Add" { Add-Certs -store $store -location $location -subjectName $subjectName -numberOfCerts $numberOfCerts -WhatIf:$WhatIf -SecurePassword $securePassword -ClientAuth $clientAuth -ServerAuth $serverAuth }
         "List" { List-Certs -store $store -location $location -subjectName $subjectName -thumbprint $thumbprint -notAfter $notAfter }
         "Remove" { Remove-Certs -store $store -location $location -subjectName $subjectName -thumbprint $thumbprint -notAfter $notAfter -WhatIf:$WhatIf }
     }
@@ -243,7 +261,7 @@ function main() {
 }
 
 function Add-Certs {
-    param($store, $location, $subjectName, $numberOfCerts, $WhatIf, $SecurePassword)
+    param($store, $location, $subjectName, $numberOfCerts, $WhatIf, $SecurePassword, $ClientAuth, $ServerAuth)
     for ($i = 1; $i -le $numberOfCerts; $i++) {
         $subject = $subjectName #"$subjectName-$i"
         Write-Host "Creating certificate: $subject"
@@ -262,12 +280,27 @@ function Add-Certs {
                 Provider = $provider
             }
             
+            # Add Enhanced Key Usage based on parameters
+            $ekuOids = @()
+            if ($ServerAuth) {
+                $ekuOids += "1.3.6.1.5.5.7.3.1"  # Server Authentication
+                Write-Host "Including Server Authentication EKU" -ForegroundColor Cyan
+            }
+            if ($ClientAuth) {
+                $ekuOids += "1.3.6.1.5.5.7.3.2"  # Client Authentication
+                Write-Host "Including Client Authentication EKU" -ForegroundColor Cyan
+            }
+            
+            if ($ekuOids.Count -gt 0) {
+                $certParams['TextExtension'] = @("2.5.29.37={text}$($ekuOids -join ',')")
+            }
+            
             if ($keyExportable) {
                 $certParams['KeyExportPolicy'] = 'Exportable'
                 Write-Host "Creating certificate with exportable private key" -ForegroundColor Cyan
             }
             
-            $paramString = ($certParams.GetEnumerator() | ForEach-Object { "-$($_.Key) $($_.Value)" }) -join " `"`
+            $paramString = ($certParams.GetEnumerator() | ForEach-Object { "-$($_.Key) $($_.Value)" }) -join " "
             write-host "New-SelfSignedCertificate $paramString"
 
             $cert = New-SelfSignedCertificate @certParams
