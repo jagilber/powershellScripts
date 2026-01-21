@@ -161,6 +161,20 @@ function main() {
         return 1
     }
 
+    # Merge additional parameters into template parameters
+    if ($additionalParameters -and $additionalParameters.Count -gt 0) {
+        write-host "merging additional parameters into template parameters: $($additionalParameters | ConvertTo-Json -Compress)"
+        foreach ($key in $additionalParameters.Keys) {
+            if ($templateParameters.ContainsKey($key)) {
+                write-host "overriding template parameter '$key' with value from additionalParameters"
+                $templateParameters[$key] = $additionalParameters[$key]
+            } else {
+                write-host "adding template parameter '$key' from additionalParameters"
+                $templateParameters.Add($key, $additionalParameters[$key])
+            }
+        }
+    }
+
     if ($jsonParameters.parameters.adminUserName -and $jsonParameters.parameters.adminPassword -and !$test) {
         write-host "checking password"
 
@@ -271,14 +285,12 @@ function main() {
         Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup ``
             -TemplateFile $templateFile ``
             -Mode $mode ``
-            -TemplateParameterObject $templateParameters ``
-            @additionalParameters
+            -TemplateParameterObject $templateParameters 
     " -ForegroundColor Cyan
     $ret = Test-azResourceGroupDeployment -ResourceGroupName $resourceGroup `
         -TemplateFile $templateFile `
         -Mode $mode `
-        -TemplateParameterObject $templateParameters `
-        @additionalParameters
+        -TemplateParameterObject $templateParameters
 
     if ($ret) {
             Write-Error "template validation failed. error: `n`n$($ret.Code)`n`n$($ret.Message)`n`n$($ret.Details)`n`n$($ret | convertto-json)"
@@ -293,8 +305,7 @@ function main() {
             -TemplateParameterObject $templateParameters ``
             -Mode $mode ``
             -Verbose ``
-            -WhatIf:$test ``
-            @additionalParameters
+            -WhatIf:$test 
     " -ForegroundColor Cyan
 
     # if (!$test) {
@@ -308,8 +319,7 @@ function main() {
             -TemplateParameterObject $templateParameters `
             -Mode $mode `
             -Verbose `
-            -WhatIf:$test `
-            @additionalParameters
+            -WhatIf:$test
     # }
 }
 
