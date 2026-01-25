@@ -12,6 +12,7 @@ This directory contains AI agent instructions organized according to the P1 work
 
 ### `.instructions/shared/`
 **Content candidates for MCP Index Server promotion** - valuable patterns that could benefit other workspaces:
+- `github-repository-setup.md` - GitHub repository setup with security best practices including pre-commit hooks ⭐
 - `spec-kit-integration.md` - GitHub Spec-Kit integration guide for Spec-Driven Development (⚠️ requires monthly update checks)
 - `powershell-best-practices.md` - PowerShell coding standards and conventions
 - `script-structure-patterns.md` - Reusable script templates and patterns
