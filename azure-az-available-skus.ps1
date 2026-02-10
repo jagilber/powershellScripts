@@ -166,7 +166,7 @@ param (
 )
 
 $global:filteredSkus = @{}
-$global:regions = @($location.Split(','))
+$global:regions = @($location.Split(',') | Where-Object { $_ })
 
 function main() {
   try {
@@ -579,8 +579,8 @@ function check-withRestrictions() {
       }
 
       if ($requestedSet.Count -eq 0) {
-        # No specific location requested -> exclude all SKUs with Location restriction
-        $null = $excluded.Add($sku)
+        # No specific location requested -> keep SKU (it is available in some locations)
+        $null = $result.Add($sku)
         continue
       }
 
