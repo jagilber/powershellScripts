@@ -248,6 +248,11 @@ ModelManifest.xml
 
 *.txt
 *.ini
+
+# VS Code / Copilot local folders
+.vscode/
+.instructions/
+.github/prompts/
 *.req
 *.cer
 *.pfx
