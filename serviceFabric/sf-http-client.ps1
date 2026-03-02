@@ -37,6 +37,9 @@
 .PARAMETER apiVersion
         the api version to use. default: 9.1
 
+.PARAMETER validateOnly
+        validates certificate EKU, chain, expiration, and private key without connecting to the cluster.
+
 .EXAMPLE
     ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName
@@ -66,6 +69,10 @@
 
 .EXAMPLE
     ./sf-http-client.ps1 -absolutePath "/EventsStore/Nodes/Events" -queryParameters @{StartTimeUtc=$eventStartTime;EndTimeUtc=$eventStopTime}
+
+.EXAMPLE
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert -validateOnly
+    validates certificate EKU (server/client authentication), chain, expiration, and private key access without connecting to cluster.
 
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;
@@ -109,7 +116,9 @@ param(
 
     [string]$timeoutSeconds = '10',
 
-    [switch]$examples
+    [switch]$examples,
+
+    [switch]$validateOnly
 )
 
 $global:sfHttpModule = 'Microsoft.ServiceFabric.Powershell.Http'
@@ -163,6 +172,11 @@ function main() {
         throw "$global:sfHttpModule not found"
     }
 
+    if ($validateOnly) {
+        write-host "certificate validation complete. exiting." -foregroundColor cyan
+        return
+    }
+
     if ($absolutePath) {
         invoke-request -absolutePath $absolutePath -queryParameters $queryParameters
         return
@@ -177,19 +191,79 @@ function main() {
 
     $error.clear()
     if (!(Test-SFClusterConnection)) {
-        Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint `
-            -ServerCertThumbprint $global:x509Certificate.Thumbprint `
-            -X509Credential `
-            -ClientCertificate $global:x509Certificate `
-            -verbose
+        # get the actual server certificate from the endpoint
+        $serverCert = get-serverCertificate -endpoint $clusterHttpConnectionEndpoint
+        $serverCertThumbprint = $global:x509Certificate.Thumbprint
+
+        if ($serverCert) {
+            $serverCertThumbprint = $serverCert.Thumbprint
+            write-host "server certificate thumbprint: $serverCertThumbprint" -foregroundColor cyan
+            write-host "server certificate subject: $($serverCert.Subject)" -foregroundColor cyan
+
+            if ($serverCertThumbprint -ne $global:x509Certificate.Thumbprint) {
+                write-host "NOTE: server certificate thumbprint differs from client certificate thumbprint." -foregroundColor yellow
+            }
+
+            # for self-signed server certificates, install to trusted root store using certutil (non-interactive)
+            if ($serverCert.Subject -eq $serverCert.Issuer) {
+                $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new("Root", "CurrentUser")
+                $rootStore.Open("ReadOnly")
+                $inStore = $rootStore.Certificates | Where-Object Thumbprint -eq $serverCertThumbprint
+                $rootStore.Close()
+
+                if (!$inStore) {
+                    write-host "self-signed server certificate not in trusted root store. adding to CurrentUser\Root for TLS validation." -ForegroundColor Yellow
+                    $tempCer = [System.IO.Path]::GetTempFileName() + ".cer"
+                    try {
+                        [System.IO.File]::WriteAllBytes($tempCer, $serverCert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+                        $certutilResult = certutil -user -addstore Root $tempCer 2>&1
+                        write-host "certutil result: $certutilResult" -ForegroundColor Gray
+                    }
+                    finally {
+                        if (Test-Path $tempCer) { Remove-Item $tempCer -Force }
+                    }
+                }
+            }
+        }
+
+        $connectParams = @{
+            ConnectionEndpoint   = $clusterHttpConnectionEndpoint
+            ServerCertThumbprint = $serverCertThumbprint
+            X509Credential       = $true
+            FindType             = 'FindByThumbprint'
+            FindValue            = $global:x509Certificate.Thumbprint
+            StoreLocation        = 'CurrentUser'
+            StoreName            = 'My'
+            Verbose              = $true
+        }
+
+        if ($serverCert) {
+            $serverCommonName = $serverCert.GetNameInfo('SimpleName', $false)
+            write-host "using ServerCommonName: $serverCommonName" -foregroundColor cyan
+            $connectParams['ServerCommonName'] = $serverCommonName
+        }
+
+        Connect-SFCluster @connectParams
         if ($error -or !(Test-SFClusterConnection)) {
-            write-host "error connecting to cluster: $error"
+            write-host "Connect-SFCluster failed. falling back to direct REST calls." -foregroundColor yellow
+            write-host "use: .\sf-http-client.ps1 -absolutePath '/`$/GetClusterHealth'" -foregroundColor cyan
+            $error.clear()
+            $healthResult = invoke-request -absolutePath '/$/GetClusterHealth'
+            if ($healthResult) {
+                write-host "direct REST connection successful. cluster health:" -foregroundColor green
+                $healthResult | convertto-json -depth 5
+            }
             return
         }
     }
 
     if (!($global:SFHttpClusterConnection)) {
         $global:SFHttpClusterConnection = $SFHttpClusterConnection
+    }
+
+    # retrieve server cert for reconnect example if not already fetched
+    if (!$serverCert) {
+        $serverCert = get-serverCertificate -endpoint $clusterHttpConnectionEndpoint
     }
 
     $global:sfHttpCommands = (get-command -module $global:sfHttpModule | Where-Object name -inotmatch 'mesh' | Select-Object name).name
@@ -213,13 +287,41 @@ function main() {
     write-host "`t`$replicas = @(`$partitions).ForEach{Get-SFReplica -PartitionId `$psitem.partitionId}" -foregroundColor Blue
     write-host
     write-host "successfully connected to cluster. use function 'Connect-SFCluster' to reconnect to cluster if needed. example:" -foregroundcolor White
-    write-host "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
-        -ServerCertThumbprint $($global:x509Certificate.Thumbprint) ``
+    $reconnectExample = "Connect-SFCluster -ConnectionEndpoint $clusterHttpConnectionEndpoint ``
+        -ServerCertThumbprint $(if ($serverCert) { $serverCert.Thumbprint } else { $global:x509Certificate.Thumbprint }) ``
         -X509Credential ``
-        -ClientCertificate `$global:x509Certificate ``
+        -FindType FindByThumbprint ``
+        -FindValue $($global:x509Certificate.Thumbprint) ``
+        -StoreLocation CurrentUser ``
+        -StoreName My"
+    if ($serverCert) {
+        $reconnectExample += " ``
+        -ServerCommonName $($serverCert.GetNameInfo('SimpleName', $false))"
+    }
+    write-host "$reconnectExample ``
         -verbose
         "  -foregroundcolor Gray
     write-host "enter 'help *-SF*' to see list of available commands" -foregroundcolor White
+}
+
+function get-serverCertificate($endpoint) {
+    try {
+        $match = [regex]::match($endpoint, '^(?:http.?://)?(?<hostName>[^:]+?):(?<port>\d+)$')
+        $hostName = $match.Groups['hostName'].Value
+        $port = $match.Groups['port'].Value
+
+        $tcpClient = [Net.Sockets.TcpClient]::new($hostName, [int]$port)
+        $sslStream = [Net.Security.SslStream]::new($tcpClient.GetStream(), $false, { $true })
+        $sslStream.AuthenticateAsClient($hostName)
+        $serverCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($sslStream.RemoteCertificate)
+        $sslStream.Dispose()
+        $tcpClient.Dispose()
+        return $serverCert
+    }
+    catch {
+        write-host "unable to retrieve server certificate: $($_.Exception.Message)" -foregroundColor yellow
+        return $null
+    }
 }
 
 function check-module() {
@@ -262,8 +364,9 @@ function check-module() {
 
 function get-certificateInfo() {
     write-host "getting certificate info"
+    $global:x509Certificate = $null
 
-    if (!$x509Certificate -and !$global:x509Certificate) {
+    if (!$x509Certificate) {
         if ($certificateBase64) {
             write-host "certificateBase64 specified. converting to certificate object"
             $secretByte = [System.Convert]::FromBase64String($certificateBase64)
@@ -311,16 +414,31 @@ function get-certificateInfo() {
             }
             else {
                 write-host "not cloud shell"
-                write-host "get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName"
-                $x509Certificate = Get-ChildItem -Path Cert:\ -Recurse | Where-Object Subject -ieq "CN=$certificateName"
+                write-host "get-childitem -Path Cert:\ -Recurse | Where-Object Subject -ieq CN=$certificateName"
+                $certs = @(Get-ChildItem -Path Cert:\ -Recurse | Where-Object Subject -ieq "CN=$certificateName")
+                if ($certs.Count -gt 1) {
+                    write-host "found $($certs.Count) certificates matching CN=$certificateName. selecting most recent non-expired cert with private key." -foregroundColor yellow
+                    $x509Certificate = $certs | Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } | Sort-Object NotBefore -Descending | Select-Object -First 1
+                    if (!$x509Certificate) {
+                        write-host "no non-expired certificates with private key found. selecting most recent with private key." -foregroundColor yellow
+                        $x509Certificate = $certs | Where-Object { $_.HasPrivateKey } | Sort-Object NotBefore -Descending | Select-Object -First 1
+                    }
+                    if (!$x509Certificate) {
+                        write-host "no certificates with private key found. selecting most recent non-expired." -foregroundColor yellow
+                        $x509Certificate = $certs | Where-Object { $_.NotAfter -gt (Get-Date) } | Sort-Object NotBefore -Descending | Select-Object -First 1
+                    }
+                    if (!$x509Certificate) {
+                        $x509Certificate = $certs | Sort-Object NotBefore -Descending | Select-Object -First 1
+                    }
+                }
+                elseif ($certs.Count -eq 1) {
+                    $x509Certificate = $certs[0]
+                }
                 if (!$x509Certificate) {
-                    write-host "failed to get certificate for thumbprint from local store: $certificateName" -foregroundColor red
+                    write-host "failed to get certificate from local store: CN=$certificateName" -foregroundColor red
                 }
             }
         }
-    }
-    elseif (!$x509Certificate) {
-        $x509Certificate = $global:x509Certificate
     }
 
     write-host "found certificate for: $certificateName" -foregroundColor yellow
@@ -333,8 +451,80 @@ function get-certificateInfo() {
         throw "failed to get certificate for thumbprint from keyvault: $certificateName"
     }
 
+    validate-certificate -cert $x509Certificate
     $global:x509Certificate = $x509Certificate
     return $true
+}
+
+function validate-certificate([System.Security.Cryptography.X509Certificates.X509Certificate2]$cert) {
+    $hasErrors = $false
+    $serverAuthOid = '1.3.6.1.5.5.7.3.1'
+    $clientAuthOid = '1.3.6.1.5.5.7.3.2'
+
+    # check expiration
+    if ($cert.NotAfter -lt (Get-Date)) {
+        write-warning "CERTIFICATE EXPIRED: $($cert.NotAfter). thumbprint: $($cert.Thumbprint)"
+        $hasErrors = $true
+    }
+    elseif ($cert.NotAfter -lt (Get-Date).AddDays(30)) {
+        write-warning "CERTIFICATE EXPIRES SOON: $($cert.NotAfter). thumbprint: $($cert.Thumbprint)"
+    }
+
+    # check EKU
+    $ekuExtension = $cert.Extensions | Where-Object { $_ -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension] }
+    if ($ekuExtension) {
+        $ekuOids = @($ekuExtension.EnhancedKeyUsages | ForEach-Object { $_.Value })
+        $hasServerAuth = $ekuOids -contains $serverAuthOid
+        $hasClientAuth = $ekuOids -contains $clientAuthOid
+
+        write-host "EKU: $($ekuExtension.EnhancedKeyUsages | ForEach-Object { "$($_.FriendlyName) ($($_.Value))" })" -foregroundColor yellow
+
+        if (!$hasClientAuth) {
+            write-host "NOTE: certificate does not have Client Authentication EKU ($clientAuthOid). SF supports server-only EKU configs but some client operations may require Client Authentication EKU. thumbprint: $($cert.Thumbprint)" -foregroundColor darkyellow
+        }
+        if (!$hasServerAuth) {
+            write-host "NOTE: certificate does not have Server Authentication EKU ($serverAuthOid). thumbprint: $($cert.Thumbprint)" -foregroundColor darkyellow
+        }
+    }
+    else {
+        write-host "EKU: (none - all purposes allowed)" -foregroundColor yellow
+    }
+
+    # check certificate chain
+    $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
+    $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::Online
+    $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::NoFlag
+    $chainBuilt = $chain.Build($cert)
+
+    write-host "certificate chain valid: $chainBuilt" -foregroundColor $(if ($chainBuilt) { 'green' } else { 'red' })
+    foreach ($element in $chain.ChainElements) {
+        write-host "  chain element: $($element.Certificate.Subject) (thumbprint: $($element.Certificate.Thumbprint))" -foregroundColor yellow
+    }
+
+    if (!$chainBuilt) {
+        foreach ($status in $chain.ChainStatus) {
+            write-warning "CHAIN ERROR: $($status.StatusInformation.Trim()) ($($status.Status))"
+        }
+        $hasErrors = $true
+    }
+
+    # check private key access
+    if (!$cert.HasPrivateKey) {
+        write-warning "CERTIFICATE HAS NO PRIVATE KEY. client certificate authentication requires a private key. thumbprint: $($cert.Thumbprint)"
+        $hasErrors = $true
+    }
+    else {
+        write-host "private key: present" -foregroundColor green
+    }
+
+    $chain.Dispose()
+
+    if ($hasErrors) {
+        write-host "certificate validation completed with errors. review warnings above." -foregroundColor red
+    }
+    else {
+        write-host "certificate validation passed." -foregroundColor green
+    }
 }
 
 function test-connection($tcpEndpoint) {
