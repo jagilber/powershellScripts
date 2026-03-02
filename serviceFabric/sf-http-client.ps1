@@ -74,6 +74,36 @@
     ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert -validateOnly
     validates certificate EKU (server/client authentication), chain, expiration, and private key access without connecting to cluster.
 
+.EXAMPLE
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert
+    example connection where server certificate differs from client certificate.
+    the script automatically retrieves the server certificate from the cluster endpoint via TLS handshake.
+    if the server cert thumbprint differs from the client cert, the server cert thumbprint is used for -ServerCertThumbprint
+    and -ServerCommonName is set to the server certificate CN for proper TLS validation.
+    EKU requirements: client certificate needs 'Client Authentication' (1.3.6.1.5.5.7.3.2).
+    server certificate needs 'Server Authentication' (1.3.6.1.5.5.7.3.1). certificates with no EKU extension allow all purposes.
+
+.EXAMPLE
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert
+    example connection where the cluster uses a self-signed server certificate.
+    the script detects self-signed certificates (subject == issuer) and automatically adds the server certificate
+    to CurrentUser\Root trusted store via certutil for TLS validation. this avoids certificate chain trust errors
+    when the server certificate is not signed by a well-known CA.
+
+.EXAMPLE
+    Connect-SFCluster -ConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 `
+        -ServerCertThumbprint <serverCertThumbprint> `
+        -X509Credential `
+        -FindType FindByThumbprint `
+        -FindValue <clientCertThumbprint> `
+        -StoreLocation CurrentUser `
+        -StoreName My `
+        -ServerCommonName mycluster.eastus.cloudapp.azure.com
+    example reconnect command using Connect-SFCluster directly after initial connection.
+    use -ServerCertThumbprint with the server certificate thumbprint (not client) when they differ.
+    use -ServerCommonName with the server certificate CN for TLS hostname validation.
+    the script outputs this reconnect command with actual values after a successful connection.
+
 .LINK
 [net.servicePointManager]::Expect100Continue = $true;
 [net.servicePointManager]::SecurityProtocol = [net.SecurityProtocolType]::Tls12;
