@@ -14,7 +14,7 @@
         231011 - fix rest query
         
 .PARAMETER clusterHttpConnectionEndpoint
-        the cluster endpoint to connect to. example: https://mycluster.eastus.cloudapp.azure.com:19080
+        the cluster endpoint to connect to. example: https://mycluster.region.cloudapp.azure.com:19080
 
 .PARAMETER certificateName
         the certificate name stored in keyvault. example: sfclustercert
@@ -41,26 +41,26 @@
         validates certificate EKU, chain, expiration, and private key without connecting to the cluster.
 
 .EXAMPLE
-    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080
+    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -clusterHttpConnectionEndpoint https://mycluster.region.cloudapp.azure.com:19080
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName
 
 .EXAMPLE
-    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com
+    ./sf-http-client.ps1 -keyVaultName sfclusterkeyvault -certificateName sfclustercert -keyvaultSecretVersion "96e530c3d22b4322..." -clusterHttpConnectionEndpoint mycluster.region.cloudapp.azure.com
     example connection to a cluster using a certificate stored in keyvault. requires -keyVaultName, -certificateName, -keyvaultSecretVersion
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -certificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.region.cloudapp.azure.com:19080 -certificateBase64 "MIIKQAIBAzCCCfwGCSqGSIb3DQEHAaCCCe0Eggnp..."
     example connection to a cluster using a base64 encoded certificate. this is useful for cloud shell since it doesn't have access to local certificate store.
     example command to create base64 string from powershell: [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\path\to\certificate.pfx"))
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -x509Certificate $x509Certificate
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.region.cloudapp.azure.com -x509Certificate $x509Certificate
     example connection to a cluster using a certificate object. this is useful for cloud shell since it doesn't have access to local certificate store.
     example command to create certificate object from local cert store in powershell:
         $x509Certificate = get-childitem -Path Cert:\CurrentUser -Recurse | Where-Object Subject -ieq CN=$certificateName
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 -certificateName sfclustercert
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint https://mycluster.region.cloudapp.azure.com:19080 -certificateName sfclustercert
     example connection to a cluster using a certificate stored in local certificate store on windows. requires -certificateName
 
 .EXAMPLE
@@ -68,14 +68,14 @@
     example rest request to the cluster. requires -clusterHttpConnectionEndpoint to be set in a previous command.
 
 .EXAMPLE
-    ./sf-http-client.ps1 -absolutePath "/EventsStore/Nodes/Events" -queryParameters @{StartTimeUtc=$eventStartTime;EndTimeUtc=$eventStopTime}
+    ./sf-http-client.ps1 -absolutePath "/EventsStore/Nodes/Events" -queryParameters @{StartTimeUtc=$eventStartTimeUtc;EndTimeUtc=$eventEndTimeUtc}
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert -validateOnly
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.region.cloudapp.azure.com -certificateName sfclustercert -validateOnly
     validates certificate EKU (server/client authentication), chain, expiration, and private key access without connecting to cluster.
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.region.cloudapp.azure.com -certificateName sfclustercert
     example connection where server certificate differs from client certificate.
     the script automatically retrieves the server certificate from the cluster endpoint via TLS handshake.
     if the server cert thumbprint differs from the client cert, the server cert thumbprint is used for -ServerCertThumbprint
@@ -84,21 +84,21 @@
     server certificate needs 'Server Authentication' (1.3.6.1.5.5.7.3.1). certificates with no EKU extension allow all purposes.
 
 .EXAMPLE
-    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.eastus.cloudapp.azure.com -certificateName sfclustercert
+    ./sf-http-client.ps1 -clusterHttpConnectionEndpoint mycluster.region.cloudapp.azure.com -certificateName sfclustercert
     example connection where the cluster uses a self-signed server certificate.
     the script detects self-signed certificates (subject == issuer) and automatically adds the server certificate
     to CurrentUser\Root trusted store via certutil for TLS validation. this avoids certificate chain trust errors
     when the server certificate is not signed by a well-known CA.
 
 .EXAMPLE
-    Connect-SFCluster -ConnectionEndpoint https://mycluster.eastus.cloudapp.azure.com:19080 `
+    Connect-SFCluster -ConnectionEndpoint https://mycluster.region.cloudapp.azure.com:19080 `
         -ServerCertThumbprint <serverCertThumbprint> `
         -X509Credential `
         -FindType FindByThumbprint `
         -FindValue <clientCertThumbprint> `
         -StoreLocation CurrentUser `
         -StoreName My `
-        -ServerCommonName mycluster.eastus.cloudapp.azure.com
+        -ServerCommonName mycluster.region.cloudapp.azure.com
     example reconnect command using Connect-SFCluster directly after initial connection.
     use -ServerCertThumbprint with the server certificate thumbprint (not client) when they differ.
     use -ServerCommonName with the server certificate CN for TLS hostname validation.
@@ -117,7 +117,7 @@ param(
     [Parameter(ParameterSetName = "keyvault")]
     [Parameter(ParameterSetName = "local")]
     [Parameter(ParameterSetName = "default")]
-    [string]$clusterHttpConnectionEndpoint, # = $null, #'https://mycluster.eastus.cloudapp.azure.com:19080',
+    [string]$clusterHttpConnectionEndpoint, # = $null, #'https://mycluster.region.cloudapp.azure.com:19080',
 
     [Parameter(ParameterSetName = "keyvault")]
     [Parameter(ParameterSetName = "local")]
@@ -136,9 +136,15 @@ param(
     [Parameter(ParameterSetName = "keyvault")]
     [string]$keyvaultSecretVersion = $null, # 96e530c3d22b43228eb1d...
 
+    [Parameter(ParameterSetName = "keyvault")]
+    [Parameter(ParameterSetName = "local")]
+    [Parameter(ParameterSetName = "default")]
     [Parameter(ParameterSetName = "rest")]
     [string]$absolutePath = '', #'/$/GetClusterHealth',
 
+    [Parameter(ParameterSetName = "keyvault")]
+    [Parameter(ParameterSetName = "local")]
+    [Parameter(ParameterSetName = "default")]
     [Parameter(ParameterSetName = "rest")]
     [hashtable]$queryParameters = @{},
 
@@ -287,7 +293,7 @@ function main() {
         }
     }
 
-    if (!($global:SFHttpClusterConnection)) {
+    if (!(Get-Variable -Name SFHttpClusterConnection -Scope Global -ValueOnly -ErrorAction SilentlyContinue)) {
         $global:SFHttpClusterConnection = $SFHttpClusterConnection
     }
 
@@ -306,7 +312,7 @@ function main() {
     Get-SFClusterVersion | convertto-json
 
     write-host "example commands:" -ForegroundColor Blue
-    write-host "`t.\sf-http-client.ps1 -absolutePath '/EventsStore/Nodes/Events' -queryParameters @{StartTimeUtc='$eventStartTime';EndTimeUtc='$eventStopTime'}" -foregroundColor Blue
+    write-host "`t.\sf-http-client.ps1 -absolutePath '/EventsStore/Nodes/Events' -queryParameters @{StartTimeUtc='$eventStartTimeUtc';EndTimeUtc='$eventEndTimeUtc'}" -foregroundColor Blue
     write-host "`tGet-SFClusterEventList -StartTimeUtc '$eventStartTimeUtc' -EndTimeUtc '$eventEndTimeUtc'" -foregroundColor Blue
     write-host "`tRestart-SFNode -NodeName _nt0_2 -NodeInstanceId 0 # <-always 0" -foregroundColor Blue
     write-host "`tDisable-SFNode -NodeName _nt0_2 -DeactivationIntent Restart -Force" -foregroundColor Blue
@@ -636,14 +642,40 @@ function invoke-request($absolutePath,
 
     $baseUrl = "$($endpoint)/$($absolutePath)?api-version=$($apiVersion)&timeout=$($timeoutSeconds)$($queryParameterString)"
 
-    write-host "Invoke-RestMethod -Uri '$baseUrl' -certificate `$x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds" -ForegroundColor Cyan #-SkipHttpErrorCheck"
-    $result = Invoke-RestMethod -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
+    write-host "REST: $baseUrl" -ForegroundColor Cyan
+    try {
+        $result = Invoke-RestMethod -Uri $baseUrl -certificate $x509Certificate -SkipCertificateCheck -timeoutSec $timeoutSeconds
+    }
+    catch {
+        write-host "Invoke-RestMethod failed ($($_.Exception.Message)). using HttpClient fallback." -ForegroundColor Yellow
+        $handler = [System.Net.Http.HttpClientHandler]::new()
+        $handler.ClientCertificates.Add($x509Certificate)
+        $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
+        $handler.SslProtocols = [System.Security.Authentication.SslProtocols]::Tls12
+        $client = [System.Net.Http.HttpClient]::new($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds($timeoutSeconds)
+        try {
+            $response = $client.GetAsync($baseUrl).GetAwaiter().GetResult()
+            $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ($response.IsSuccessStatusCode) {
+                $result = $body | ConvertFrom-Json
+            }
+            else {
+                write-error "HTTP $($response.StatusCode): $body"
+                return $null
+            }
+        }
+        finally {
+            if ($client) { $client.Dispose() }
+            if ($handler) { $handler.Dispose() }
+        }
+    }
 
-    write-verbose $result | convertfrom-json | convertto-json -depth 99
+    write-verbose ($result | convertto-json -depth 99)
     return $result
 }
 
-if ($global:clusterHttpConnectionEndpoint -and $absolutePath) {
+if ((Get-Variable -Name clusterHttpConnectionEndpoint -Scope Global -ValueOnly -ErrorAction SilentlyContinue) -and $absolutePath) {
     invoke-request -absolutePath $absolutePath -queryParameters $queryParameters
 }
 else {
