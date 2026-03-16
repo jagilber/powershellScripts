@@ -13,10 +13,8 @@ todo set "security.workspace.trust.untrustedFiles": "open",
 param(
     [string]$gitHubDir = "c:\github",
     [string[]]$additionalExtensions = @(
-        'msazurermtools.azurerm-vscode-tools',
         'wengerk.highlight-bad-chars',
         'rsbondi.highlight-words',
-        'sandcastle.vscode-open',
         'mechatroner.rainbow-csv',
         'ms-dotnettools.csharp',
         'humao.rest-client',
@@ -76,6 +74,18 @@ if ((get-command git -errorAction SilentlyContinue)) {
 }
 else {
     write-host "git not found. skipping config" -ForegroundColor Red
+}
+
+write-host "checking gh"
+if (!(get-command gh -errorAction SilentlyContinue)) {
+    write-host "gh not found" -ForegroundColor Yellow
+    if (!(test-path "$pwd\download-git-client.ps1")) {
+        invoke-webRequest "https://raw.githubusercontent.com/jagilber/powershellScripts/master/download-git-client.ps1" -outFile  "$pwd/download-git-client.ps1";
+    }
+    .\download-git-client.ps1 -hub -setpath
+}
+else {
+    write-host "gh found" -ForegroundColor Green
 }
 
 Set-Location $gitHubDir
