@@ -80,10 +80,13 @@ function main() {
       return $null
     }
 
+    $usepktmon = !$useNetsh -and ($null -ne (Get-Command -Name pktmon -ErrorAction SilentlyContinue))
     $process = if ($usepktmon) { 'pktmon' } else { 'netsh' }
+    if ((test-path -PathType Leaf $etlFilesPath) -and ($outputDir -eq $etlFilesPath)) {
+      $outputDir = split-path -Parent $etlFilesPath
+    }
     write-log "@(get-childItem -Path $etlFilesPath -Filter $etlFileFilter -Recurse:$includeSubdirectories)"
     $etlFiles = @(get-childItem -Path $etlFilesPath -Filter $etlFileFilter -Recurse:$includeSubdirectories)
-    $usepktmon = !$useNetsh -and ($null -ne (Get-Command -Name pktmon -ErrorAction SilentlyContinue))
     $totalFiles = $etlFiles.Count
     $count = 0
     remove-jobs
