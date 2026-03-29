@@ -33,7 +33,7 @@
     Author     : jagilber
     Requires   : PowerShell 5.1 or higher
     Disclaimer : Provided AS-IS without warranty.
-    Version    : 2.0
+    Version    : 2.1 fix for ps 5.1
     Changelog  : 1.0 - Initial release (06/26/2014)
                  2.0 - Updated to template standards: added proper help, error handling, ShouldProcess support,
                        alphabetized functions, added write-console helper, improved parameter validation
@@ -115,7 +115,7 @@ param(
     [string]$debugProcess = 'procdump.exe',
     
     [Parameter()]
-    [string]$debugArguments = '-accepteula -ma -e -t -n 10 ',
+    [string]$debugArguments = '-accepteula -ma -l -e -t -n 10 ',
     
     [Parameter()]
     [switch]$listOnly,
@@ -177,7 +177,7 @@ function main() {
             foreach ($id in $newList.GetEnumerator()) {
                 if (!$script:currentProcessList.ContainsKey($id.Key)) {
                     $script:currentDiffCount++
-                    $newLine = if ([console]::GetCursorPosition().Left -ne 0) { "`r" } else { $null }
+                    $newLine = if ([console]::CursorLeft -ne 0) { "`r" } else { $null }
                     write-console "$($newLine)$((Get-Date).ToString('HH:mm:ss.fff')):>>>add:$($script:currentDiffCount) $($id.Value.Name):$($id.Key)" -ForegroundColor Green
                     $script:currentProcessList.Add($id.Key, $id.Value)
 
@@ -202,7 +202,7 @@ function main() {
             foreach ($id in $tempList.GetEnumerator()) {
                 if (!$newList.ContainsKey($id.Key)) {
                     $script:currentDiffCount--
-                    $newLine = if ([console]::GetCursorPosition().Left -ne 0) { "`r" } else { $null }
+                    $newLine = if ([console]::CursorLeft -ne 0) { "`r" } else { $null }
                     write-console "$($newLine)$((Get-Date).ToString('HH:mm:ss.fff')):<<<remove:$($script:currentDiffCount) $($id.Value.Name):$($id.Key)" -ForegroundColor Red
                     $script:currentProcessList.Remove($id.Key)
                 }
