@@ -156,9 +156,9 @@ param (
   [switch]$withNoRestrictions,
   [switch]$ShowRestricted,
   [switch]$serviceFabric, # hyperVGenerations needs "V1" or "V1,V2" for sf and MaxResourceVolumeMB needs temp disk (10000) 10gb and vmDeploymentTypes needs "PaaS"
-  [ValidateSet("paas", "iaas", "")]
   [int]$maxResourceVolumeMB = -1, # 0 is no local disk -1 is unlimited
   [int]$minResourceVolumeMB = -1, # 0 is no local disk -1 is minimum (1)
+  [ValidateSet("paas", "iaas", "")]
   [string]$vmDeploymentTypes = "",
   [switch]$confidentialComputingType,
   [switch]$force,
@@ -226,10 +226,15 @@ function main() {
 
     $skus = check-location $global:regions $global:filteredSkus
     if (!$skus) {
+      write-warning "no skus found in location: $location. searching geo region for alternatives..."
       $regions = check-geoRegion $global:regions
       $skus = check-location $regions $global:filteredSkus
       if (!$skus) {
         write-warning "no skus found in georegion $location"
+      }
+      else {
+        write-host "NOTE: the following skus are from the geo region, NOT the requested location '$location'." -ForegroundColor Yellow
+        write-host "the sku may not be available in '$location'. check each sku location below." -ForegroundColor Yellow
       }
     }
 
@@ -239,10 +244,22 @@ function main() {
 
     write-verbose "filtered skus:`n$($global:filteredSkus | convertto-json -depth 10)"
     
-    # Sort SKUs by name and format with sorted zones
+    # Sort SKUs by name and format with sorted zones (showing only unrestricted zones when not using -withRestrictions)
     $sortedOutput = $global:filteredSkus | Sort-Object Name | Select-Object Name, 
       @{Name='Location';Expression={$_.LocationInfo.Location}},
-      @{Name='Zones';Expression={($_.LocationInfo.Zones | Sort-Object) -join ', '}},
+      @{Name='Zones';Expression={
+        $allZones = @($_.LocationInfo.Zones | Sort-Object)
+        if (!$withRestrictions) {
+          $zoneRestrictions = @($_.Restrictions | Where-Object { $_.Type -ieq 'Zone' -and $_.ReasonCode -ieq 'NotAvailableForSubscription' })
+          if ($zoneRestrictions.Count -gt 0) {
+            $restrictedZoneSet = @($zoneRestrictions | ForEach-Object { $_.RestrictionInfo.Zones } | Where-Object { $_ })
+            if ($restrictedZoneSet.Count -gt 0) {
+              $allZones = @($allZones | Where-Object { $_ -notin $restrictedZoneSet })
+            }
+          }
+        }
+        ($allZones | Sort-Object) -join ', '
+      }},
       @{Name='RestrictionInfo';Expression={
         if ($_.Restrictions) {
           $r = $_.Restrictions
@@ -559,10 +576,8 @@ function check-vmDeploymentTypes() {
 
 function check-withRestrictions() {
   if (!$withRestrictions) {
-    # Drop any SKU that has a Location restriction that includes the requested location(s)
+    # Drop any SKU that has a Location restriction for its own location
     # A Location restriction means the SKU is NOT AVAILABLE in those locations for this subscription
-    $requested = @($global:regions | Where-Object { $_ })
-    $requestedSet = $requested | ForEach-Object { $_.ToLower() } | Select-Object -Unique
     $before = $global:filteredSkus.Count
     $excluded = New-Object System.Collections.Generic.List[object]
 
@@ -578,11 +593,8 @@ function check-withRestrictions() {
         $null = $result.Add($sku); continue 
       }
 
-      if ($requestedSet.Count -eq 0) {
-        # No specific location requested -> keep SKU (it is available in some locations)
-        $null = $result.Add($sku)
-        continue
-      }
+      # Get the SKU's own location
+      $skuLocation = ($sku.Locations | Select-Object -First 1).ToString().Trim()
 
       # Collect restricted locations for this SKU
       # These are locations where the SKU is NOT AVAILABLE
@@ -598,16 +610,8 @@ function check-withRestrictions() {
         }
       }
 
-      # If any requested location is in the restricted locations, exclude this SKU
-      $isRestricted = $false
-      foreach ($loc in $requestedSet) { 
-        if ($restrictedLocations.Contains($loc)) { 
-          $isRestricted = $true
-          break 
-        } 
-      }
-      
-      if ($isRestricted) { 
+      # If the SKU's own location is in the restricted locations, exclude it
+      if ($restrictedLocations.Contains($skuLocation)) { 
         $null = $excluded.Add($sku)
         continue 
       }
@@ -621,6 +625,54 @@ function check-withRestrictions() {
       $sample = $excluded | Select-Object -Property Name, Locations, @{n='RestrictedLocations';e={
           ($_.Restrictions | Where-Object { $_.Type -ieq 'Location' } | ForEach-Object { @($_.RestrictionInfo.Locations)+@($_.Locations)+@($_.Values) } | Where-Object { $_ } | Select-Object -Unique) -join ',' }}
       write-host "excluded:`n$($sample | Format-Table -AutoSize | Out-String)" -ForegroundColor DarkYellow
+    }
+
+    # Also handle Zone restrictions: exclude SKUs where ALL zones are restricted for the SKU's own location
+    $beforeZone = $global:filteredSkus.Count
+    $zoneResult = New-Object System.Collections.Generic.List[object]
+    foreach ($sku in $global:filteredSkus) {
+      $zoneRestrictions = @($sku.Restrictions | Where-Object { $_.Type -ieq 'Zone' -and $_.ReasonCode -ieq 'NotAvailableForSubscription' })
+      if ($zoneRestrictions.Count -eq 0) {
+        $null = $zoneResult.Add($sku)
+        continue
+      }
+
+      $skuLocation = ($sku.Locations | Select-Object -First 1).ToString().Trim().ToLower()
+
+      # Collect restricted zones for the SKU's own location
+      $restrictedZones = New-Object System.Collections.Generic.HashSet[string]
+      foreach ($r in $zoneRestrictions) {
+        $rLocs = @(@($r.RestrictionInfo.Locations) + @($r.Values)) | Where-Object { $_ } | ForEach-Object { $_.ToString().Trim().ToLower() }
+        if (@($rLocs | Where-Object { $_ -ieq $skuLocation }).Count -gt 0) {
+          foreach ($z in @($r.RestrictionInfo.Zones)) {
+            if ($z) { [void]$restrictedZones.Add($z.ToString().Trim()) }
+          }
+        }
+      }
+
+      if ($restrictedZones.Count -eq 0) {
+        $null = $zoneResult.Add($sku)
+        continue
+      }
+
+      # Get all available zones for this SKU in its own location
+      $allZones = @($sku.LocationInfo | Where-Object { $_.Location.ToString().Trim().ToLower() -ieq $skuLocation } | ForEach-Object { $_.Zones } | Where-Object { $_ })
+      if ($allZones.Count -eq 0) { $allZones = @($sku.LocationInfo.Zones | Where-Object { $_ }) }
+      $availableZones = @($allZones | Where-Object { !$restrictedZones.Contains($_.ToString().Trim()) })
+
+      if ($allZones.Count -gt 0 -and $availableZones.Count -eq 0) {
+        # All zones restricted for this subscription - exclude SKU
+        $null = $excluded.Add($sku)
+      }
+      else {
+        $null = $zoneResult.Add($sku)
+      }
+    }
+
+    $zoneRemoved = $beforeZone - $zoneResult.Count
+    if ($zoneRemoved -gt 0) {
+      $global:filteredSkus = $zoneResult
+      write-host "removed $zoneRemoved skus due to zone restrictions - all zones restricted (remaining: $($global:filteredSkus.Count))" -ForegroundColor Green
     }
   }
 }
