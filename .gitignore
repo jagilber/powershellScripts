@@ -273,3 +273,5 @@ openaiMessages.json
 # Azure cost analysis output folders
 azure-cost-reports/
 csv/
+# Added by ggshield
+.cache_ggshield
