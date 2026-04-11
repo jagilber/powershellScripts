@@ -55,7 +55,9 @@ param(
         'Microsoft-Windows-CAPI2',
         'Microsoft-Windows-Schannel-Events'
     ),
-    # [int]$logLevel = 5,
+    [ValidateRange(1, 5)]
+    [int]$logLevel = 4,
+    [string]$keywords = '',
     [switch]$remove,
     [bool]$showMatch = $true,
     [switch]$listProviders,
@@ -97,7 +99,7 @@ function main() {
 
     if ($remove) { return }
     try {
-        start-pktmonProvider $traceFilePath $traceProviders
+        start-pktmonProvider $traceFilePath $traceProviders $logLevel $keywords
 
         start-pktmonConsumer $traceFilePath $regex $commandToExecuteOnMatch
 
@@ -171,9 +173,21 @@ function start-pktmonConsumer([string]$file, [regex]$regex, [string]$command) {
     }
 }
 
-function start-pktmonProvider($traceFilePath, $traceProviders) {
-    $providers = $traceProviders -join "' -p '"
-    write-host "pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath" -ForegroundColor Cyan
+function start-pktmonProvider($traceFilePath, $traceProviders, $logLevel, $keywords) {
+    # build provider args with per-provider -l and -k flags
+    $providerArgs = ''
+    foreach ($provider in $traceProviders) {
+        $providerArgs += " -p '$provider'"
+        if ($logLevel -gt 0) {
+            $providerArgs += " -l $logLevel"
+        }
+        if ($keywords) {
+            $providerArgs += " -k $keywords"
+        }
+    }
+    $providerArgs = $providerArgs.TrimStart()
+
+    write-host "pktmon start -t -m real-time $providerArgs | tee-object $traceFilePath" -ForegroundColor Cyan
     # determine if using pwsh or powershell
     $exe = 'pwsh.exe'
     if ($psedition -eq 'Desktop') {
@@ -185,10 +199,10 @@ function start-pktmonProvider($traceFilePath, $traceProviders) {
     $rso = new-item -ItemType File -Path "$pwd\rso.log" -Force
     $rse = new-item -ItemType File -Path "$pwd\rse.log" -Force
     # $rsi = new-item -ItemType File -Path "$pwd\rso.log"
-    # write-host "start-process $exe -RedirectStandardError $($rse.FullName) -RedirectStandardOutput $($rso.FullName) -passthru -ArgumentList `"-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath`""
-    # $global:process = start-process $exe -RedirectStandardError $rse.FullName -RedirectStandardOutput $rso.FullName -passthru -ArgumentList "-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath"
-    write-host "start-process $exe -passthru -ArgumentList `"-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath`""
-    $global:process = start-process $exe -passthru -ArgumentList "-Command pktmon start -t -m real-time -p '$providers' | tee-object $traceFilePath"
+    # write-host "start-process $exe -RedirectStandardError $($rse.FullName) -RedirectStandardOutput $($rso.FullName) -passthru -ArgumentList `"-Command pktmon start -t -m real-time $providerArgs | tee-object $traceFilePath`""
+    # $global:process = start-process $exe -RedirectStandardError $rse.FullName -RedirectStandardOutput $rso.FullName -passthru -ArgumentList "-Command pktmon start -t -m real-time $providerArgs | tee-object $traceFilePath"
+    write-host "start-process $exe -passthru -ArgumentList `"-Command pktmon start -t -m real-time $providerArgs | tee-object $traceFilePath`""
+    $global:process = start-process $exe -passthru -ArgumentList "-Command pktmon start -t -m real-time $providerArgs | tee-object $traceFilePath"
     
     #pktmon start -t -m real-time -p $providers
 
