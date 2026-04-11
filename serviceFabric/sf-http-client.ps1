@@ -607,6 +607,160 @@ function test-connection($tcpEndpoint) {
     }
 }
 
+function compress-sfapplicationpackage {
+    <#
+    .SYNOPSIS
+        Compresses a Service Fabric application package by zipping Code, Config, and Data directories.
+    .DESCRIPTION
+        Pure PowerShell replacement for Copy-ServiceFabricApplicationPackage -CompressPackage.
+        For each service package, zips Code/, Config/, and Data/ subdirectories into .zip files.
+        ApplicationManifest.xml and ServiceManifest.xml files are NOT compressed.
+        Uses System.IO.Compression (built-in .NET, no external dependencies).
+    .PARAMETER applicationPackagePath
+        Path to the application package directory (e.g., pkg/Debug or ApplicationPackageRoot).
+    .PARAMETER outputPath
+        Optional output path. If not specified, compresses in-place (replaces dirs with .zip files).
+    .EXAMPLE
+        compress-sfapplicationpackage -applicationPackagePath ./pkg/Debug
+    .EXAMPLE
+        compress-sfapplicationpackage -applicationPackagePath ./ApplicationPackageRoot -outputPath ./pkg/Compressed
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$applicationPackagePath,
+        [string]$outputPath = ''
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
+
+    $compressibleDirs = @('Code', 'Config', 'Data')
+
+    if (!(Test-Path $applicationPackagePath)) {
+        write-error "application package path not found: $applicationPackagePath"
+        return $null
+    }
+
+    $resolvedPath = (Resolve-Path $applicationPackagePath).Path
+    $targetPath = $resolvedPath
+
+    if ($outputPath) {
+        $targetPath = $outputPath
+        if (!(Test-Path $targetPath)) {
+            New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+        }
+        # Copy top-level files (ApplicationManifest.xml)
+        Get-ChildItem -Path $resolvedPath -File | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination (Join-Path $targetPath $_.Name) -Force
+        }
+    }
+
+    $originalFileCount = 0
+    $compressedFileCount = 0
+    $originalBytes = 0
+    $compressedBytes = 0
+
+    foreach ($svcPkgDir in (Get-ChildItem -Path $resolvedPath -Directory)) {
+        $svcSrcDir = $svcPkgDir.FullName
+        $svcDstDir = Join-Path $targetPath $svcPkgDir.Name
+
+        if ($outputPath -and !(Test-Path $svcDstDir)) {
+            New-Item -ItemType Directory -Path $svcDstDir -Force | Out-Null
+        }
+
+        # Copy ServiceManifest.xml (and other top-level files in service pkg)
+        foreach ($svcFile in (Get-ChildItem -Path $svcSrcDir -File)) {
+            if ($outputPath) {
+                Copy-Item -Path $svcFile.FullName -Destination (Join-Path $svcDstDir $svcFile.Name) -Force
+            }
+            $originalFileCount++
+            $compressedFileCount++
+            $originalBytes += $svcFile.Length
+            $compressedBytes += $svcFile.Length
+        }
+
+        # Process Code, Config, Data directories
+        foreach ($subDir in (Get-ChildItem -Path $svcSrcDir -Directory)) {
+            $subDirName = $subDir.Name
+
+            if ($compressibleDirs -contains $subDirName) {
+                $zipFileName = "$subDirName.zip"
+                $zipFilePath = Join-Path $svcDstDir $zipFileName
+                $subDirPath = $subDir.FullName
+
+                # Count original files
+                $dirFiles = Get-ChildItem -Path $subDirPath -Recurse -File
+                $dirFileCount = @($dirFiles).Count
+                $dirBytes = ($dirFiles | Measure-Object -Property Length -Sum).Sum
+                if (!$dirBytes) { $dirBytes = 0 }
+                $originalFileCount += $dirFileCount
+                $originalBytes += $dirBytes
+
+                # Check if already compressed (zip exists instead of dir)
+                if ((Test-Path $zipFilePath) -and !(Test-Path $subDirPath -PathType Container)) {
+                    write-host "  $($svcPkgDir.Name)/$subDirName already compressed" -ForegroundColor Gray
+                    $zipSize = (Get-Item $zipFilePath).Length
+                    $compressedFileCount++
+                    $compressedBytes += $zipSize
+                    continue
+                }
+
+                write-host "  compressing $($svcPkgDir.Name)/$subDirName ($dirFileCount files, $([math]::Round($dirBytes / 1024))KB)..." -ForegroundColor Gray
+
+                # Remove existing zip if present
+                if (Test-Path $zipFilePath) { Remove-Item $zipFilePath -Force }
+
+                # Create zip using .NET compression
+                [System.IO.Compression.ZipFile]::CreateFromDirectory(
+                    $subDirPath,
+                    $zipFilePath,
+                    [System.IO.Compression.CompressionLevel]::Optimal,
+                    $false  # don't include base directory name
+                )
+
+                $zipSize = (Get-Item $zipFilePath).Length
+                $compressedFileCount++
+                $compressedBytes += $zipSize
+                $savings = if ($dirBytes -gt 0) { [math]::Round((1 - $zipSize / $dirBytes) * 100) } else { 0 }
+                write-host "  -> $zipFileName ($([math]::Round($zipSize / 1024))KB, ${savings}% savings)" -ForegroundColor Green
+
+                # If compressing in-place, remove the original directory
+                if (!$outputPath) {
+                    Remove-Item -Path $subDirPath -Recurse -Force
+                }
+            }
+            else {
+                # Non-compressible directory — copy if using output path
+                if ($outputPath) {
+                    Copy-Item -Path $subDir.FullName -Destination (Join-Path $svcDstDir $subDirName) -Recurse -Force
+                }
+                $dirFiles = Get-ChildItem -Path $subDir.FullName -Recurse -File
+                $dirFileCount = @($dirFiles).Count
+                $dirBytes = ($dirFiles | Measure-Object -Property Length -Sum).Sum
+                if (!$dirBytes) { $dirBytes = 0 }
+                $originalFileCount += $dirFileCount
+                $compressedFileCount += $dirFileCount
+                $originalBytes += $dirBytes
+                $compressedBytes += $dirBytes
+            }
+        }
+    }
+
+    $savedBytes = $originalBytes - $compressedBytes
+    $savingsPercent = if ($originalBytes -gt 0) { [math]::Round(($savedBytes / $originalBytes) * 100) } else { 0 }
+
+    write-host "compression complete: $originalFileCount files -> $compressedFileCount files. $([math]::Round($originalBytes / 1024 / 1024, 1))MB -> $([math]::Round($compressedBytes / 1024 / 1024, 1))MB (saved $([math]::Round($savedBytes / 1024 / 1024, 1))MB, ${savingsPercent}%)" -ForegroundColor Cyan
+
+    return @{
+        OriginalFileCount  = $originalFileCount
+        CompressedFileCount = $compressedFileCount
+        OriginalBytes      = $originalBytes
+        CompressedBytes    = $compressedBytes
+        SavedBytes         = $savedBytes
+        OutputPath         = $(if ($outputPath) { $targetPath } else { $resolvedPath })
+    }
+}
+
 function invoke-request($absolutePath,
     $queryParameters = @{},
     $endpoint = $global:clusterHttpConnectionEndpoint,
